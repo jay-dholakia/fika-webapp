@@ -37,23 +37,50 @@ export default function Home() {
         <section id="how" data-animate className="section section-how">
           <div className="section-inner">
             <h2 className="section-title">How it works</h2>
+            <p className="section-lead">Three steps to your first fika.</p>
             <ol className="steps">
               <li className="step">
                 <span className="step-num">1</span>
-                <h3 className="step-title">Share a bit about you</h3>
-                <p className="step-text">Quick questions about what you care about, how you spend your time, and what kind of conversation you’re looking for.</p>
+                <div className="step-content">
+                  <h3 className="step-title">Share a bit about you</h3>
+                  <p className="step-text">Quick questions about what you care about, how you spend your time, and what kind of conversation you’re looking for. Takes a few minutes—no long forms.</p>
+                </div>
               </li>
               <li className="step">
                 <span className="step-num">2</span>
-                <h3 className="step-title">Get your weekly intros</h3>
-                <p className="step-text">We send you a few intros each week. You pick who you’d like to meet.</p>
+                <div className="step-content">
+                  <h3 className="step-title">Get your weekly intros</h3>
+                  <p className="step-text">Each week we send you a small set of people we think you’ll click with—based on what you share and what you don’t. You pick who you’d like to meet. No endless feed, no swiping.</p>
+                </div>
               </li>
               <li className="step">
                 <span className="step-num">3</span>
-                <h3 className="step-title">Opt in and meet in real life</h3>
-                <p className="step-text">Say yes and meet in person—coffee, a walk, or a spot that works.</p>
+                <div className="step-content">
+                  <h3 className="step-title">Opt in and meet in real life</h3>
+                  <p className="step-text">Say yes to one or more. Meet for coffee, a walk, or wherever works. Face to face, the conversation actually goes somewhere.</p>
+                </div>
               </li>
             </ol>
+          </div>
+        </section>
+
+        <section id="faq" data-animate className="section section-faq">
+          <div className="section-inner">
+            <h2 className="section-title">FAQ</h2>
+            <dl className="faq-list">
+              <div className="faq-item">
+                <dt className="faq-q">How often do I get intros?</dt>
+                <dd className="faq-a">Once a week. Opt in each week to get your intros—skip a week and you’re out until you opt in again. You can jump back in anytime.</dd>
+              </div>
+              <div className="faq-item">
+                <dt className="faq-q">Do I have to meet in person?</dt>
+                <dd className="faq-a">Yes. Fika is built for real-life conversation. That’s the whole point—face to face, when and where it works for you.</dd>
+              </div>
+              <div className="faq-item">
+                <dt className="faq-q">What if we don’t click?</dt>
+                <dd className="faq-a">No pressure. It’s one conversation. You can stay in touch or leave it at that—your call.</dd>
+              </div>
+            </dl>
           </div>
         </section>
 

@@ -5,6 +5,7 @@ import { useState } from 'react'
 const navLinks = [
   { href: '#what', label: 'What is Fika' },
   { href: '#how', label: 'How it works' },
+  { href: '#faq', label: 'FAQ' },
   { href: '#cta', label: 'Get notified', cta: true },
 ]
 
