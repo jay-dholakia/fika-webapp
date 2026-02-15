@@ -21,7 +21,7 @@ const faqItems = [
   },
   {
     q: 'What if we don’t click?',
-    a: 'No pressure. It’s one conversation. You can stay in touch or leave it at that—your call. Either way, you showed up for a real fika.',
+    a: 'No pressure. It’s one conversation. After that, you can stay in touch or leave it at one great fika. Your call.',
   },
 ]
 
