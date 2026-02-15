@@ -307,6 +307,9 @@ a {
   color: var(--color-text);
   font-weight: 500;
 }
+.section-body-follow {
+  margin-top: 1.25rem;
+}
 
 .section-how {
   background: var(--color-bg-soft);
