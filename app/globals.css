@@ -180,6 +180,21 @@ a {
   margin-bottom: 1rem;
   color: var(--color-text);
 }
+.section-headword {
+  margin-bottom: 0.25rem;
+  font-weight: 600;
+}
+.section-pos {
+  font-size: 0.95rem;
+  color: var(--color-textSecondary);
+  font-style: italic;
+  margin-bottom: 0.75rem;
+}
+.section-def-num {
+  font-weight: 600;
+  color: var(--color-text);
+  margin-right: 0.25em;
+}
 .section-lead {
   font-size: 1.2rem;
   color: var(--color-textSecondary);

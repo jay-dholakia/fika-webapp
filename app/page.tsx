@@ -21,7 +21,7 @@ export default function Home() {
               <span className="hero-title-accent">Real conversation.</span>
             </h1>
             <p className="hero-sub">
-              Each week you get a small set of intros. Choose who you’d like to meet for a real-life conversation—based on what you share and what you don’t. Coffee, walk, or a bench. Just the two of you.
+              Meet people in person for real conversation—based on what you share and what you don’t. You choose who to meet. Coffee, a walk, or a bench.
             </p>
             <a href="#cta" className="btn btn-primary">Join the waitlist</a>
           </div>
@@ -30,12 +30,11 @@ export default function Home() {
 
         <section id="what" className="section section-what">
           <div className="section-inner">
-            <h2 className="section-title">What is Fika?</h2>
-            <p className="section-lead">
-              In Sweden, <em>fika</em> means taking a break with someone—coffee, something sweet, and real talk. No agenda. Just connection.
-            </p>
+            <h2 className="section-title section-headword">Fika</h2>
+            <p className="section-pos"><em>noun</em></p>
             <p className="section-body">
-              We built Fika to bring that idea back. You’re not swiping. You’re not building a friend list. Each week you get a handful of intros—people we think you’ll click with. You choose who you’d like to meet for an in-person conversation. We use what you share—and what you don’t—so when you meet, the conversation actually goes somewhere. After that, you can stay in touch or leave it at one great fika. Your call.
+              <span className="section-def-num">1.</span> In Swedish, a break with someone—coffee, something sweet, and real conversation. No agenda. Just connection.<br />
+              <span className="section-def-num">2.</span> The platform we built to bring that idea back. No swiping, no friend list. Each week you get a handful of intros—people we think you’ll click with, based on what you share and what you don’t. You choose who you’d like to meet. In person, the conversation actually goes somewhere. After that, you can stay in touch or leave it at one great fika. Your call.
             </p>
           </div>
         </section>
@@ -52,12 +51,12 @@ export default function Home() {
               <li className="step">
                 <span className="step-num">2</span>
                 <h3 className="step-title">Get your weekly intros</h3>
-                <p className="step-text">Each week we send you a small set of people we think you’ll click with—aligned enough to connect, different enough to make it interesting. Not one person, not a feed. You choose who you’d like to meet.</p>
+                <p className="step-text">We send you a few intros each week. You pick who you’d like to meet.</p>
               </li>
               <li className="step">
                 <span className="step-num">3</span>
                 <h3 className="step-title">Opt in and meet in real life</h3>
-                <p className="step-text">Say yes to one (or more) and meet in person. Coffee, a walk, or a spot that works. Real conversation, face to face.</p>
+                <p className="step-text">Say yes and meet in person—coffee, a walk, or a spot that works.</p>
               </li>
             </ol>
           </div>
