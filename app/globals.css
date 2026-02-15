@@ -70,6 +70,7 @@ a {
   font-weight: 600;
   font-size: 1.35rem;
   color: var(--color-text);
+  text-transform: lowercase;
 }
 .nav {
   display: flex;
@@ -547,6 +548,7 @@ a {
 .footer .logo {
   display: inline-block;
   margin-bottom: 0.5rem;
+  text-transform: lowercase;
 }
 .footer-tagline {
   font-size: 0.9rem;

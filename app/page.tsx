@@ -53,21 +53,21 @@ export default function Home() {
                 <span className="step-num">1</span>
                 <div className="step-content">
                   <h3 className="step-title">Share a bit about you</h3>
-                  <p className="step-text">Quick questions about what you care about, how you spend your time, and what kind of conversation you’re looking for. Takes a few minutes—no long forms.</p>
+                  <p className="step-text">Answer a few quick questions about what you care about, how you spend your time, and the kind of conversation you want. No essays. No long forms.</p>
                 </div>
               </li>
               <li className="step">
                 <span className="step-num">2</span>
                 <div className="step-content">
-                  <h3 className="step-title">Get your weekly intros</h3>
-                  <p className="step-text">Each week we send you a small set of people we think you’ll click with—aligned enough to connect, different enough to make it interesting. You pick who you’d like to meet. No endless feed, no swiping.</p>
+                  <h3 className="step-title">Get your weekly introductions</h3>
+                  <p className="step-text">Each week, you'll receive a small set of thoughtful introductions—people aligned enough to connect, different enough to make it interesting. You choose who you'd like to meet. No endless feed. No swiping.</p>
                 </div>
               </li>
               <li className="step">
                 <span className="step-num">3</span>
                 <div className="step-content">
                   <h3 className="step-title">Opt in and meet in real life</h3>
-                  <p className="step-text">Say yes to one or more. It requires mutual opt-in—when you both opt in, a chat is created so you can schedule a time and place to meet for your fika. Face to face, the conversation actually goes somewhere.</p>
+                  <p className="step-text">Say yes to one or more. If they say yes too, a chat opens so you can set a time and place to meet. Face to face, the conversation actually goes somewhere.</p>
                 </div>
               </li>
             </ol>
