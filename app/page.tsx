@@ -1,5 +1,6 @@
 import Header from './components/Header'
 import ScrollReveal from './components/ScrollReveal'
+import FaqAccordion from './components/FaqAccordion'
 
 export default function Home() {
   return (
@@ -57,7 +58,7 @@ export default function Home() {
                 <span className="step-num">3</span>
                 <div className="step-content">
                   <h3 className="step-title">Opt in and meet in real life</h3>
-                  <p className="step-text">Say yes to one or more. Meet for coffee, a walk, or wherever works. Face to face, the conversation actually goes somewhere.</p>
+                  <p className="step-text">Say yes to one or more. It requires mutual opt-in—when you both opt in, a chat is created so you can schedule a time and place to meet for your fika. Face to face, the conversation actually goes somewhere.</p>
                 </div>
               </li>
             </ol>
@@ -67,20 +68,7 @@ export default function Home() {
         <section id="faq" data-animate className="section section-faq">
           <div className="section-inner">
             <h2 className="section-title">FAQ</h2>
-            <dl className="faq-list">
-              <div className="faq-item">
-                <dt className="faq-q">How often do I get intros?</dt>
-                <dd className="faq-a">Once a week. Opt in each week to get your intros—skip a week and you’re out until you opt in again. You can jump back in anytime.</dd>
-              </div>
-              <div className="faq-item">
-                <dt className="faq-q">Do I have to meet in person?</dt>
-                <dd className="faq-a">Yes. Fika is built for real-life conversation. That’s the whole point—face to face, when and where it works for you.</dd>
-              </div>
-              <div className="faq-item">
-                <dt className="faq-q">What if we don’t click?</dt>
-                <dd className="faq-a">No pressure. It’s one conversation. You can stay in touch or leave it at that—your call.</dd>
-              </div>
-            </dl>
+            <FaqAccordion />
           </div>
         </section>
 
