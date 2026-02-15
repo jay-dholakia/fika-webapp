@@ -11,13 +11,12 @@ export default function Home() {
         <main>
           <section className="hero">
           <div className="hero-inner">
-            <p className="hero-label">In-person connection, the way it used to be</p>
             <h1 className="hero-title">
               Real people.<br />
               <span className="hero-title-accent">Real conversation.</span>
             </h1>
             <p className="hero-sub">
-              Meet people in person for real conversation—based on what you share and what you don’t. You choose who to meet. Face to face—when and where it works.
+              Meet people in person for real conversation. You choose who to meet. Face to face—when and where it works.
             </p>
             <a href="#cta" className="btn btn-primary">Join the waitlist</a>
           </div>
@@ -27,7 +26,7 @@ export default function Home() {
         <section id="what" data-animate className="section section-what">
           <div className="section-inner">
             <p className="section-definition">
-              <span className="section-headword">Fika</span><span className="section-pronunciation"> \ˈfē-kə\</span> <em>noun</em> — In Swedish, the daily pause for connection—a coffee and pastry break with someone, and real conversation. No agenda. Just connection.
+              <span className="section-headword">Fika</span><span className="section-pronunciation"> \ˈfē-kə\</span> <em>noun</em> — In Swedish, the daily pause for connection—a coffee and pastry break with someone, and real conversation. No agenda. That's it.
             </p>
             <p className="section-body section-body-follow">
               We built Fika to bring that idea back. No swiping, no friend list. Each week you get a handful of intros—people we think you’ll click with, based on what you share and what you don’t. You choose who you’d like to meet. In person, the conversation actually goes somewhere. After that, you can stay in touch or leave it at one great fika. Your call.
@@ -51,7 +50,7 @@ export default function Home() {
                 <span className="step-num">2</span>
                 <div className="step-content">
                   <h3 className="step-title">Get your weekly intros</h3>
-                  <p className="step-text">Each week we send you a small set of people we think you’ll click with—based on what you share and what you don’t. You pick who you’d like to meet. No endless feed, no swiping.</p>
+                  <p className="step-text">Each week we send you a small set of people we think you’ll click with—aligned enough to connect, different enough to make it interesting. You pick who you’d like to meet. No endless feed, no swiping.</p>
                 </div>
               </li>
               <li className="step">
