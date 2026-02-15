@@ -277,6 +277,21 @@ a {
   margin-bottom: 1rem;
   color: var(--color-text);
 }
+.section-definition {
+  font-size: 1.05rem;
+  line-height: 1.7;
+  color: var(--color-textSecondary);
+}
+.section-definition .section-headword {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 1.25rem;
+  color: var(--color-text);
+}
+.section-definition em {
+  color: var(--color-textSecondary);
+  font-style: italic;
+}
 .section-headword {
   margin-bottom: 0.25rem;
   font-weight: 600;
