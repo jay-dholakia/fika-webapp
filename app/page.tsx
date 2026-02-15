@@ -1,19 +1,14 @@
+import Header from './components/Header'
+import ScrollReveal from './components/ScrollReveal'
+
 export default function Home() {
   return (
     <>
-      <header className="header">
-        <div className="header-inner">
-          <a href="/" className="logo">Fika</a>
-          <nav className="nav">
-            <a href="#what">What is Fika</a>
-            <a href="#how">How it works</a>
-            <a href="#cta" className="nav-cta">Get notified</a>
-          </nav>
-        </div>
-      </header>
+      <Header />
 
-      <main>
-        <section className="hero">
+      <ScrollReveal>
+        <main>
+          <section className="hero">
           <div className="hero-inner">
             <p className="hero-label">In-person connection, the way it used to be</p>
             <h1 className="hero-title">
@@ -28,7 +23,7 @@ export default function Home() {
           <div className="hero-blob" aria-hidden />
         </section>
 
-        <section id="what" className="section section-what">
+        <section id="what" data-animate className="section section-what">
           <div className="section-inner">
             <h2 className="section-title section-headword">Fika</h2>
             <p className="section-pos"><em>noun</em></p>
@@ -39,7 +34,7 @@ export default function Home() {
           </div>
         </section>
 
-        <section id="how" className="section section-how">
+        <section id="how" data-animate className="section section-how">
           <div className="section-inner">
             <h2 className="section-title">How it works</h2>
             <ol className="steps">
@@ -62,30 +57,7 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="section section-why">
-          <div className="section-inner">
-            <h2 className="section-title">Why Fika?</h2>
-            <ul className="benefits">
-              <li className="benefit">
-                <span className="benefit-icon">☕</span>
-                <h3 className="benefit-title">Real, not virtual</h3>
-                <p className="benefit-text">Conversations happen face to face. Real-life fikas—no DMs that fizzle.</p>
-              </li>
-              <li className="benefit">
-                <span className="benefit-icon">↔️</span>
-                <h3 className="benefit-title">Similarities & differences</h3>
-                <p className="benefit-text">We match on what you share and what you don’t, so there’s something to talk about—and something to learn.</p>
-              </li>
-              <li className="benefit">
-                <span className="benefit-icon">🎯</span>
-                <h3 className="benefit-title">Curated, not endless</h3>
-                <p className="benefit-text">No swiping, no endless feed. You get a small set of intros each week and choose who to meet. Quality over quantity.</p>
-              </li>
-            </ul>
-          </div>
-        </section>
-
-        <section id="cta" className="section section-cta">
+        <section id="cta" data-animate className="section section-cta">
           <div className="section-inner cta-inner">
             <h2 className="cta-title">Ready for a real fika?</h2>
             <p className="cta-sub">We’re opening up soon. Leave your email and we’ll tell you when you can get your first weekly intros.</p>
@@ -102,7 +74,8 @@ export default function Home() {
             <p className="cta-note">No spam. Just one email when we launch.</p>
           </div>
         </section>
-      </main>
+        </main>
+      </ScrollReveal>
 
       <footer className="footer">
         <div className="footer-inner">
