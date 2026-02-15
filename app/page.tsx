@@ -26,10 +26,20 @@ export default function Home() {
         <section id="what" data-animate className="section section-what">
           <div className="section-inner">
             <p className="section-definition">
-              <span className="section-headword">Fika</span><span className="section-pronunciation"> \ˈfē-kə\</span> <em>noun</em> — Swedish for a coffee and pastry break in good company and good conversation—the daily pause to slow down, relax, and appreciate the small things. Simple as that.
+              <span className="section-headword">Fika</span><span className="section-pronunciation"> \ˈfē-kə\</span> <em>noun</em> — Swedish for a coffee break in good company, built around real conversation. A daily pause to slow down, relax, and appreciate the small things.
             </p>
             <p className="section-body section-body-follow">
-              We built Fika to bring that idea back. No swiping, no friend list. Each week you get a handful of intros—people we think you’ll click with, based on what you share and what you don’t. You choose who you’d like to meet. In person, the conversation actually goes somewhere. After that, you can stay in touch or leave it at one great fika. Your call.
+              We built Fika to bring that back.
+            </p>
+            <p className="section-body section-body-follow">
+              No swiping. No endless feeds.<br />
+              Each week, you get a handful of thoughtful introductions—people who align with what you share and what you don’t.
+            </p>
+            <p className="section-body section-body-follow">
+              You choose who to meet.
+            </p>
+            <p className="section-body section-body-follow">
+              In person, the conversation actually goes somewhere. After that, stay in touch—or let it be one great fika. Your call.
             </p>
           </div>
         </section>
