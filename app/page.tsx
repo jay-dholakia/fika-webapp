@@ -16,7 +16,7 @@ export default function Home() {
               <span className="hero-title-accent">Real conversation.</span>
             </h1>
             <p className="hero-sub">
-              Meet people in person for real conversation. You choose who to meet. Face to face—when and where it works.
+              Meet people around you, IRL—when and where it works.
             </p>
             <a href="#cta" className="btn btn-primary">Join the waitlist</a>
           </div>
@@ -93,7 +93,7 @@ export default function Home() {
 
       <footer className="footer">
         <div className="footer-inner">
-          <span className="logo">Fika</span>
+          <span className="logo">fika</span>
           <p className="footer-tagline">Real connection, one conversation at a time.</p>
         </div>
       </footer>

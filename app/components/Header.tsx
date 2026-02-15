@@ -18,7 +18,7 @@ export default function Header() {
     <header className="header">
       <div className="header-inner">
         <a href="/" className="logo">
-          Fika
+          fika
         </a>
         <nav className="nav" aria-label="Main">
           {navLinks.map(({ href, label, cta }) => (
