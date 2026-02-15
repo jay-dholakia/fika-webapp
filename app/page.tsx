@@ -26,7 +26,7 @@ export default function Home() {
         <section id="what" data-animate className="section section-what">
           <div className="section-inner">
             <p className="section-definition">
-              <span className="section-headword">Fika</span> <em>noun</em> — In Swedish, the daily pause for connection—a coffee and pastry break with someone, and real conversation. No agenda. Just connection.
+              <span className="section-headword">Fika</span><span className="section-pronunciation"> \ˈfē-kə\</span> <em>noun</em> — In Swedish, the daily pause for connection—a coffee and pastry break with someone, and real conversation. No agenda. Just connection.
             </p>
             <p className="section-body section-body-follow">
               We built Fika to bring that idea back. No swiping, no friend list. Each week you get a handful of intros—people we think you’ll click with, based on what you share and what you don’t. You choose who you’d like to meet. In person, the conversation actually goes somewhere. After that, you can stay in touch or leave it at one great fika. Your call.
