@@ -16,7 +16,7 @@ export default function Home() {
               <span className="hero-title-accent">Real conversation.</span>
             </h1>
             <p className="hero-sub">
-              Meet people in person for real conversation—based on what you share and what you don’t. You choose who to meet. Coffee, a walk, or a bench.
+              Meet people in person for real conversation—based on what you share and what you don’t. You choose who to meet. Face to face—when and where it works.
             </p>
             <a href="#cta" className="btn btn-primary">Join the waitlist</a>
           </div>
@@ -28,7 +28,7 @@ export default function Home() {
             <h2 className="section-title section-headword">Fika</h2>
             <p className="section-pos"><em>noun</em></p>
             <p className="section-body">
-              <span className="section-def-num">1.</span> In Swedish, a break with someone—coffee, something sweet, and real conversation. No agenda. Just connection.<br />
+              <span className="section-def-num">1.</span> In Swedish, the daily pause for connection—a coffee and pastry break with someone, and real conversation. No agenda. Just connection.<br />
               <span className="section-def-num">2.</span> The platform we built to bring that idea back. No swiping, no friend list. Each week you get a handful of intros—people we think you’ll click with, based on what you share and what you don’t. You choose who you’d like to meet. In person, the conversation actually goes somewhere. After that, you can stay in touch or leave it at one great fika. Your call.
             </p>
           </div>
