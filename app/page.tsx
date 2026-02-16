@@ -9,22 +9,23 @@ export default function Home() {
 
       <ScrollReveal>
         <main>
-          <section className="hero">
-          <div className="hero-inner">
-            <h1 className="hero-title">
-              Real people.<br />
-              <span className="hero-title-accent">Real conversation.</span>
-            </h1>
-            <p className="hero-sub">
-              Meet people around you, IRL—when and where it works.
-            </p>
-            <a href="#cta" className="btn btn-primary">Join the waitlist</a>
-          </div>
-          <div className="hero-blob" aria-hidden />
-        </section>
+          <div className="hero-what-wrapper">
+            <section className="hero">
+              <div className="hero-inner">
+                <h1 className="hero-title">
+                  Real people.<br />
+                  <span className="hero-title-accent">Real conversation.</span>
+                </h1>
+                <p className="hero-sub">
+                  Meet people around you, IRL—when and where it works.
+                </p>
+                <a href="#cta" className="btn btn-primary">Join the waitlist</a>
+              </div>
+              <div className="hero-blob" aria-hidden />
+            </section>
 
-        <section id="what" data-animate className="section section-what">
-          <div className="section-inner">
+            <section id="what" data-animate className="section section-what">
+              <div className="section-inner">
             <p className="section-definition">
               <span className="section-headword">Fika</span><span className="section-pronunciation"> \ˈfē-kə\</span> <em>noun</em> — Swedish for a coffee break in good company, built around real conversation. A daily pause to slow down, relax, and appreciate the small things.
             </p>
@@ -43,6 +44,7 @@ export default function Home() {
             </p>
           </div>
         </section>
+          </div>
 
         <section id="how" data-animate className="section section-how">
           <div className="section-inner">
