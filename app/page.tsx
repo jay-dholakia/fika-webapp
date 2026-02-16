@@ -27,19 +27,22 @@ export default function Home() {
             <section id="what" data-animate className="section section-what">
               <div className="section-inner">
             <p className="section-definition">
-              <span className="section-headword">Fika</span><span className="section-pronunciation"> \ˈfē-kə\</span> <em>noun</em> — Swedish for a coffee break in good company, built around real conversation. A daily pause to slow down, relax, and appreciate the small things.
+              <span className="section-headword">Fika</span><span className="section-pronunciation"> \ˈfē-kə\</span> <em>noun</em> — A Swedish coffee break shared in good company, centered around real conversation. A daily pause to slow down and appreciate the small things.
             </p>
             <p className="section-body section-body-follow">
-              We built Fika to bring that back.
+              We built Fika to bring that feeling back.
             </p>
             <p className="section-body section-body-follow">
-              Each week, you get a handful of thoughtful introductions—people who align with what you share and what you don't.
+              No swiping. No endless chats.
             </p>
             <p className="section-body section-body-follow">
-              You choose who to meet.
+              Each week, you'll receive a small set of thoughtful introductions—people aligned enough to connect, different enough to make it interesting.
             </p>
             <p className="section-body section-body-follow">
-              In person, the conversation actually goes somewhere. After that, stay in touch—or let it be one great fika. Your call.
+              You decide who to meet.
+            </p>
+            <p className="section-body section-body-follow">
+              Meet in person. See where the conversation goes. After that, stay in touch — or let it be one great fika. Your call.
             </p>
           </div>
         </section>
@@ -61,7 +64,7 @@ export default function Home() {
                 <span className="step-num">2</span>
                 <div className="step-content">
                   <h3 className="step-title">Get your weekly introductions</h3>
-                  <p className="step-text">Each week, you'll receive a small set of thoughtful introductions—people aligned enough to connect, different enough to make it interesting. You choose who you'd like to meet. No endless feed. No swiping.</p>
+                  <p className="step-text">Each week, you're introduced to a small group of people — filtered for conversation, not just profiles. You choose who you'd like to meet. No endless feed. No swiping.</p>
                 </div>
               </li>
               <li className="step">
