@@ -10,6 +10,7 @@ export default function Home() {
       <ScrollReveal>
         <main>
           <div className="hero-what-wrapper">
+            <div className="hero-what-blob" aria-hidden />
             <section className="hero">
               <div className="hero-inner">
                 <h1 className="hero-title">
@@ -21,7 +22,6 @@ export default function Home() {
                 </p>
                 <a href="#cta" className="btn btn-primary">Join the waitlist</a>
               </div>
-              <div className="hero-blob" aria-hidden />
             </section>
 
             <section id="what" data-animate className="section section-what">
