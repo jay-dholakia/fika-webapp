@@ -64,14 +64,14 @@ export default function Home() {
                 <span className="step-num">2</span>
                 <div className="step-content">
                   <h3 className="step-title">Get your weekly introductions</h3>
-                  <p className="step-text">Each week, you're introduced to a small group of people — filtered for conversation, not just profiles. You choose who you'd like to meet. No endless feed. No swiping.</p>
+                  <p className="step-text">Each week, you're introduced to a small group of people — filtered for conversation, not just profiles. You choose who you'd like to meet.</p>
                 </div>
               </li>
               <li className="step">
                 <span className="step-num">3</span>
                 <div className="step-content">
                   <h3 className="step-title">Opt in and meet in real life</h3>
-                  <p className="step-text">Say yes to one or more. If they say yes too, a chat opens so you can set a time and place to meet. Face to face, the conversation actually goes somewhere.</p>
+                  <p className="step-text">Say yes to one or more of your intros. If they say yes too, a chat opens so you can set a time and place to meet. Face to face, the conversation actually goes somewhere.</p>
                 </div>
               </li>
             </ol>
