@@ -33,7 +33,7 @@ export default function Home() {
               We built Fika to bring that back.
             </p>
             <p className="section-body section-body-follow">
-              Each week, you receive a small set of thoughtful introductions—people aligned enough to connect, different enough to make it interesting.
+              Each week, you get a handful of thoughtful introductions—people who align with what you share and what you don't.
             </p>
             <p className="section-body section-body-follow">
               You choose who to meet.
