@@ -571,6 +571,16 @@ a {
   .cta-form-row .cta-input {
     flex: 1;
   }
+  .cta-form-row .cta-place-wrapper {
+    flex: 1;
+    min-width: 0;
+  }
+}
+.cta-place-wrapper {
+  position: relative;
+}
+.cta-place-wrapper input.cta-input {
+  width: 100%;
 }
 .cta-success {
   font-size: 1.05rem;
