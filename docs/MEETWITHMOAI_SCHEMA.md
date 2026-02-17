@@ -20,6 +20,22 @@ Use `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (or an
 
 ## Public tables
 
+### `waitlist`
+
+Landing-page waitlist signups (Fika webapp). Anonymous insert allowed; read via service_role.
+
+| Column | Type | Nullable | Notes |
+|--------|------|----------|--------|
+| `id` | uuid | NO | PK, default gen_random_uuid() |
+| `email` | text | NO | Unique (lowercase) |
+| `city` | text | YES | From Google Places or free text |
+| `state` | text | YES | |
+| `created_at` | timestamptz | YES | default now() |
+
+**RLS:** anon can INSERT; service_role can SELECT.
+
+---
+
 ### `profiles`
 
 User profile (extends `auth.users` via `id`).

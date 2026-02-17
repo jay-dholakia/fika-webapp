@@ -559,6 +559,31 @@ a {
   flex-direction: column;
   gap: 0.75rem;
 }
+.cta-form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+@media (min-width: 500px) {
+  .cta-form-row {
+    flex-direction: row;
+  }
+  .cta-form-row .cta-input {
+    flex: 1;
+  }
+}
+.cta-success {
+  font-size: 1.05rem;
+  color: var(--color-success);
+  font-weight: 500;
+}
+.cta-message {
+  font-size: 0.9rem;
+  color: var(--color-textSecondary);
+}
+.cta-message-error {
+  color: var(--color-error);
+}
 .cta-input {
   width: 100%;
   padding: 0.9rem 1.25rem;

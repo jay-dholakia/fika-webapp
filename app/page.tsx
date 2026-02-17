@@ -1,6 +1,7 @@
 import Header from './components/Header'
 import ScrollReveal from './components/ScrollReveal'
 import FaqAccordion from './components/FaqAccordion'
+import WaitlistForm from './components/WaitlistForm'
 
 export default function Home() {
   return (
@@ -89,16 +90,7 @@ export default function Home() {
           <div className="section-inner cta-inner">
             <h2 className="cta-title">Ready for a real fika?</h2>
             <p className="cta-sub">We’re opening up soon. Leave your email and we’ll tell you when you can get your first weekly intros.</p>
-            <form className="cta-form" action="#" method="post">
-              <input
-                type="email"
-                name="email"
-                placeholder="you@example.com"
-                className="cta-input"
-                required
-              />
-              <button type="submit" className="btn btn-primary btn-block">Notify me</button>
-            </form>
+            <WaitlistForm />
             <p className="cta-note">No spam. Just one email when we launch.</p>
           </div>
         </section>
