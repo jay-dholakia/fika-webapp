@@ -32,11 +32,27 @@ export default function WaitlistForm() {
   const placeContainerRef = useRef<HTMLDivElement>(null)
   const fallbackInputRef = useRef<HTMLInputElement>(null)
   const autocompleteElementRef = useRef<HTMLElement | null>(null)
+  const [usePlainCityInput, setUsePlainCityInput] = useState(true)
 
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
 
   useEffect(() => {
-    if (!apiKey || !placeContainerRef.current) return
+    const update = () => {
+      const plain = !apiKey || (typeof window !== 'undefined' && window.innerWidth <= 768)
+      setUsePlainCityInput(plain)
+      if (plain && autocompleteElementRef.current && placeContainerRef.current) {
+        placeContainerRef.current.removeChild(autocompleteElementRef.current)
+        autocompleteElementRef.current = null
+      }
+    }
+    update()
+    window.addEventListener('resize', update)
+    return () => window.removeEventListener('resize', update)
+  }, [apiKey])
+
+  useEffect(() => {
+    const isNarrow = typeof window !== 'undefined' && window.innerWidth <= 768
+    if (!apiKey || !placeContainerRef.current || isNarrow) return
 
     const bootstrap = () => {
       if (window.google?.maps?.importLibrary) {
@@ -158,7 +174,7 @@ export default function WaitlistForm() {
             className="cta-input"
             defaultValue=""
             disabled={status === 'loading'}
-            style={apiKey ? { position: 'absolute' as const, left: '-9999px', width: 1, height: 1, opacity: 0, pointerEvents: 'none' as const } : undefined}
+            style={apiKey && !usePlainCityInput ? { position: 'absolute' as const, left: '-9999px', width: 1, height: 1, opacity: 0, pointerEvents: 'none' as const } : undefined}
           />
         </div>
       </div>
