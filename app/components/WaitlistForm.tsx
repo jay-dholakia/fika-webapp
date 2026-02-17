@@ -1,11 +1,23 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { supabase } from '@/lib/supabase'
+import { getSupabase } from '@/lib/supabase'
 
 declare global {
   interface Window {
-    google?: typeof google
+    google?: {
+      maps?: {
+        places?: {
+          Autocomplete: new (
+            input: HTMLInputElement,
+            opts?: { types?: string[]; fields?: string[] }
+          ) => {
+            addListener: (event: string, cb: () => void) => void
+            getPlace: () => { address_components?: Array<{ long_name: string; short_name: string; types: string[] }> }
+          }
+        }
+      }
+    }
     initPlacesAutocomplete?: () => void
   }
 }
@@ -17,7 +29,7 @@ export default function WaitlistForm() {
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [message, setMessage] = useState('')
   const cityStateInputRef = useRef<HTMLInputElement>(null)
-  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null)
+  const autocompleteRef = useRef<unknown>(null)
 
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
 
@@ -79,7 +91,7 @@ export default function WaitlistForm() {
       stateVal = parts[1] ?? stateVal
     }
 
-    const { error } = await supabase.from('waitlist').insert({
+    const { error } = await getSupabase().from('waitlist').insert({
       email: email.trim(),
       city: cityVal || null,
       state: stateVal || null,
