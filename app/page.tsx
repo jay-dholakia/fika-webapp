@@ -1,4 +1,5 @@
 import Header from './components/Header'
+import Footer from './components/Footer'
 import ScrollReveal from './components/ScrollReveal'
 import FaqAccordion from './components/FaqAccordion'
 import WaitlistForm from './components/WaitlistForm'
@@ -97,12 +98,7 @@ export default function Home() {
         </main>
       </ScrollReveal>
 
-      <footer className="footer">
-        <div className="footer-inner">
-          <span className="logo">fika</span>
-          <p className="footer-tagline">Real connection, one conversation at a time.</p>
-        </div>
-      </footer>
+      <Footer />
     </>
   )
 }
