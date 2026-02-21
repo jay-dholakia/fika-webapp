@@ -1,0 +1,111 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { useRouter, usePathname } from 'next/navigation'
+import Link from 'next/link'
+import { getSupabase } from '@/lib/supabase'
+import { useOnboardingStatus } from '@/lib/use-onboarding'
+import { authLog } from '@/lib/auth-log'
+
+export default function AppLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  const router = useRouter()
+  const pathname = usePathname()
+  const [userId, setUserId] = useState<string | null>(null)
+  const [sessionChecked, setSessionChecked] = useState(false)
+  const { loading, isComplete } = useOnboardingStatus(userId ?? undefined)
+
+  useEffect(() => {
+    authLog('app-layout:mount')
+    const supabase = getSupabase()
+    if (!supabase) {
+      authLog('app-layout:no-supabase')
+      setSessionChecked(true)
+      return
+    }
+    let mounted = true
+    function setSession(session: { user: { id: string } } | null) {
+      if (mounted) {
+        const id = session?.user?.id ?? null
+        authLog('app-layout:setSession', { userId: id?.slice(0, 8) ?? null })
+        setUserId(id)
+      }
+    }
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (mounted) {
+        authLog('app-layout:getSession', { hasSession: !!session, userId: session?.user?.id?.slice(0, 8) })
+        setSession(session)
+        setSessionChecked(true)
+      }
+    })
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      authLog('app-layout:onAuthStateChange', { event, hasSession: !!session })
+      if (mounted) setSession(session)
+    })
+    return () => {
+      mounted = false
+      subscription.unsubscribe()
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!sessionChecked) return
+    authLog('app-layout:redirect-check', { sessionChecked, userId: userId?.slice(0, 8) ?? null, loading, isComplete })
+    if (userId == null) {
+      authLog('app-layout:redirect', { to: '/login', reason: 'no-session' })
+      router.replace('/login')
+      return
+    }
+    if (!loading && !isComplete) {
+      authLog('app-layout:redirect', { to: '/onboarding', reason: 'onboarding-incomplete' })
+      router.replace('/onboarding')
+    }
+  }, [sessionChecked, userId, loading, isComplete, router])
+
+  async function handleSignOut() {
+    await getSupabase()?.auth.signOut()
+    router.replace('/')
+  }
+
+  if (!sessionChecked || loading || (userId && !isComplete)) {
+    authLog('app-layout:render', { show: 'Loading', sessionChecked, loading, hasUserId: !!userId, isComplete })
+    return (
+      <div style={{ padding: '2rem', textAlign: 'center' }}>
+        Loading…
+      </div>
+    )
+  }
+
+  authLog('app-layout:render', { show: 'dashboard' })
+  return (
+    <div className="app-shell">
+      <header className="app-header">
+        <div className="app-header-inner">
+          <Link href="/app" className="logo">
+            fika
+          </Link>
+          <nav className="app-nav">
+            <Link href="/app" className={pathname === '/app' ? 'app-nav-active' : ''}>
+              Introductions
+            </Link>
+            <Link href="/app/chats" className={pathname === '/app/chats' ? 'app-nav-active' : ''}>
+              Chats
+            </Link>
+            <Link href="/app/profile" className={pathname === '/app/profile' ? 'app-nav-active' : ''}>
+              Profile
+            </Link>
+            <button type="button" className="nav-link-button" onClick={handleSignOut}>
+              Log out
+            </button>
+          </nav>
+        </div>
+      </header>
+      <main className="app-main">
+        {children}
+      </main>
+    </div>
+  )
+}

@@ -51,8 +51,7 @@ export default function WaitlistForm() {
   }, [apiKey])
 
   useEffect(() => {
-    const isNarrow = typeof window !== 'undefined' && window.innerWidth <= 768
-    if (!apiKey || !placeContainerRef.current || isNarrow) return
+    if (usePlainCityInput || !apiKey || !placeContainerRef.current) return
 
     const bootstrap = () => {
       if (window.google?.maps?.importLibrary) {
@@ -71,6 +70,7 @@ export default function WaitlistForm() {
     async function initPlaceAutocomplete() {
       const container = placeContainerRef.current
       if (!container || !window.google?.maps?.importLibrary) return
+      if (autocompleteElementRef.current && container.contains(autocompleteElementRef.current)) return
       try {
         const places = await window.google.maps.importLibrary('places') as { PlaceAutocompleteElement?: new (opts?: object) => HTMLElement & { addEventListener: (ev: string, cb: (e: { placePrediction?: { toPlace: () => Promise<PlaceLike> } }) => void) => void } }
         const El = places?.PlaceAutocompleteElement
@@ -108,7 +108,7 @@ export default function WaitlistForm() {
     }
 
     bootstrap()
-  }, [apiKey])
+  }, [apiKey, usePlainCityInput])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -124,7 +124,13 @@ export default function WaitlistForm() {
       stateVal = parts[1] ?? stateVal
     }
 
-    const { error } = await getSupabase().from('waitlist').insert({
+    const supabase = getSupabase()
+    if (!supabase) {
+      setStatus('error')
+      setMessage('Unable to submit. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to .env.local.')
+      return
+    }
+    const { error } = await supabase.from('waitlist').insert({
       email: email.trim(),
       city: cityVal || null,
       state: stateVal || null,
@@ -156,26 +162,31 @@ export default function WaitlistForm() {
     <form className="cta-form" onSubmit={handleSubmit}>
       <div className="cta-form-row">
         <input
-          type="email"
+          id="waitlist-email"
           name="email"
+          type="email"
           placeholder="you@example.com"
           className="cta-input"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
           disabled={status === 'loading'}
+          autoComplete="email"
         />
         <div className="cta-place-wrapper" ref={placeContainerRef}>
-          <input
-            ref={fallbackInputRef}
-            type="text"
-            name="city_state"
-            placeholder="City, State"
-            className="cta-input"
-            defaultValue=""
-            disabled={status === 'loading'}
-            style={apiKey && !usePlainCityInput ? { position: 'absolute' as const, left: '-9999px', width: 1, height: 1, opacity: 0, pointerEvents: 'none' as const } : undefined}
-          />
+          {(usePlainCityInput || !apiKey) && (
+            <input
+              ref={fallbackInputRef}
+              id="waitlist-city"
+              name="city_state"
+              type="text"
+              placeholder="City, State"
+              className="cta-input"
+              defaultValue=""
+              disabled={status === 'loading'}
+              autoComplete="address-level2"
+            />
+          )}
         </div>
       </div>
       {message && (

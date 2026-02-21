@@ -89,6 +89,19 @@ a {
   color: var(--color-primary) !important;
   font-weight: 500;
 }
+.nav-link-button {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 0.95rem;
+  font-family: var(--font-body);
+  color: var(--color-textSecondary);
+  cursor: pointer;
+  transition: color 0.2s;
+}
+.nav-link-button:hover {
+  color: var(--color-text);
+}
 
 .nav-toggle {
   display: none;
@@ -690,4 +703,373 @@ a {
 }
 .legal-page a:hover {
   text-decoration: none;
+}
+
+/* Auth pages (login, signup) */
+.auth-page {
+  padding: 2rem 1.5rem 3rem;
+  min-height: 60vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-top: calc(4rem + 2rem);
+}
+.auth-card {
+  width: 100%;
+  max-width: 420px;
+  margin: 0 auto;
+}
+.auth-title {
+  font-family: var(--font-heading);
+  font-size: 1.75rem;
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: 0.35rem;
+}
+.auth-sub {
+  font-size: 1rem;
+  color: var(--color-textSecondary);
+  margin-bottom: 1.75rem;
+}
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.auth-label {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--color-text);
+}
+.auth-input {
+  width: 100%;
+  padding: 0.9rem 1.25rem;
+  font-family: var(--font-body);
+  font-size: 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.auth-input::placeholder {
+  color: var(--color-textSecondary);
+  opacity: 0.8;
+}
+.auth-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-soft);
+}
+.auth-input:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+.auth-message {
+  font-size: 0.9rem;
+  color: var(--color-success);
+}
+.auth-message-error {
+  color: var(--color-error);
+}
+.auth-message-hint {
+  font-size: 0.8rem;
+  color: var(--color-textSecondary);
+  margin-top: 0.5rem;
+}
+.auth-submit {
+  margin-top: 0.25rem;
+  padding: 0.9rem 1.25rem;
+  font-size: 1rem;
+  border-radius: 10px;
+}
+.auth-switch {
+  margin-top: 1.5rem;
+  font-size: 0.95rem;
+  color: var(--color-textSecondary);
+  text-align: center;
+}
+.auth-switch a {
+  color: var(--color-primary);
+  font-weight: 500;
+}
+.auth-switch a:hover {
+  text-decoration: underline;
+}
+
+/* Onboarding (Typeform-style) */
+.onboarding-wrap {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  padding: 2rem 1.5rem 4rem;
+  max-width: 560px;
+  margin: 0 auto;
+}
+.onboarding-progress {
+  height: 4px;
+  background: var(--color-border);
+  border-radius: 2px;
+  margin-bottom: 2rem;
+  overflow: hidden;
+}
+.onboarding-progress-inner {
+  height: 100%;
+  background: var(--color-primary);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+.onboarding-question {
+  font-family: var(--font-heading);
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: 1.5rem;
+  line-height: 1.35;
+}
+.onboarding-body {
+  margin-bottom: 1.5rem;
+  color: var(--color-textSecondary);
+  font-size: 1rem;
+  line-height: 1.6;
+}
+.onboarding-body p {
+  margin-bottom: 0.75rem;
+}
+.onboarding-body p:last-child {
+  margin-bottom: 0;
+}
+.onboarding-actions {
+  margin-top: 2rem;
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.onboarding-actions .btn {
+  min-width: 140px;
+}
+.onboarding-logout {
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--color-border);
+  text-align: center;
+}
+.onboarding-logout-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  color: var(--color-textSecondary);
+  cursor: pointer;
+}
+.onboarding-logout-btn:hover {
+  color: var(--color-text);
+}
+.onboarding-chip {
+  display: inline-block;
+  padding: 0.6rem 1rem;
+  margin: 0.35rem;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+.onboarding-chip:hover {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+.onboarding-chip.selected {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: #fff;
+}
+.onboarding-chip.multi-selected {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+  color: var(--color-text);
+}
+.onboarding-slider-wrap {
+  margin-top: 1rem;
+}
+.onboarding-slider {
+  width: 100%;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--color-border);
+  appearance: none;
+  -webkit-appearance: none;
+}
+.onboarding-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+}
+.onboarding-slider-label {
+  margin-top: 0.5rem;
+  font-size: 1rem;
+  color: var(--color-primary);
+  font-weight: 500;
+}
+.onboarding-location-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.9rem 1.5rem;
+  border-radius: 10px;
+  border: 1px solid var(--color-primary);
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.onboarding-location-btn:hover {
+  background: rgba(91, 155, 213, 0.3);
+}
+.onboarding-location-btn:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+.onboarding-error {
+  margin-top: 1rem;
+  font-size: 0.9rem;
+  color: var(--color-error);
+}
+
+/* App portal (/app) */
+.app-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-background);
+}
+.app-header {
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+.app-header-inner {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 1rem 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.app-nav {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+.app-nav a {
+  font-size: 0.95rem;
+  color: var(--color-textSecondary);
+}
+.app-nav a:hover,
+.app-nav-active {
+  color: var(--color-primary) !important;
+  font-weight: 500;
+}
+.app-main {
+  flex: 1;
+  max-width: 720px;
+  margin: 0 auto;
+  width: 100%;
+  padding: 2rem 1.5rem;
+}
+.app-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+.app-card h2 {
+  font-family: var(--font-heading);
+  font-size: 1.25rem;
+  margin-bottom: 0.75rem;
+}
+.app-intro-balance {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1rem;
+  color: var(--color-textSecondary);
+}
+.app-intro-balance span {
+  font-weight: 600;
+  color: var(--color-text);
+}
+.app-opt-in-toggle {
+  margin-top: 1rem;
+}
+.app-empty {
+  color: var(--color-textSecondary);
+  padding: 2rem 0;
+  text-align: center;
+}
+
+/* Profile edit page */
+.profile-edit .app-card {
+  max-width: 720px;
+}
+.profile-section {
+  margin-bottom: 2rem;
+}
+.profile-section-title {
+  font-family: var(--font-heading);
+  font-size: 1.1rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--color-border);
+}
+.profile-field {
+  margin-bottom: 1.25rem;
+}
+.profile-label {
+  display: block;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--color-text);
+  margin-bottom: 0.5rem;
+}
+.profile-required {
+  color: var(--color-error);
+}
+.profile-hint {
+  font-weight: 400;
+  color: var(--color-textSecondary);
+}
+.profile-input {
+  margin-top: 0.25rem;
+}
+.profile-input .auth-input,
+.profile-input textarea.auth-input {
+  width: 100%;
+  box-sizing: border-box;
+}
+.profile-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.profile-actions {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--color-border);
+}
+.profile-edit .onboarding-body {
+  font-size: 0.9rem;
+  color: var(--color-textSecondary);
+  margin-bottom: 0.5rem;
+}
+.profile-edit .onboarding-body p {
+  margin: 0 0 0.25rem;
 }
