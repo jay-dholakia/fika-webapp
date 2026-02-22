@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { getSupabase } from '@/lib/supabase'
 import { authLog } from '@/lib/auth-log'
 import Footer from '../components/Footer'
+import CtaWithLocation from '../components/CtaWithLocation'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -13,6 +14,8 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState<{ type: 'error' | 'success'; text: string } | null>(null)
+  const [showCtaSection, setShowCtaSection] = useState(false)
+
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -63,63 +66,90 @@ export default function LoginPage() {
         </div>
       </header>
 
-      <main className="auth-page">
-        <div className="auth-card">
-          <h1 className="auth-title">Welcome back</h1>
-          <p className="auth-sub">Sign in to your Fika account.</p>
+      <main className={showCtaSection ? 'auth-page auth-page-cta' : 'auth-page'}>
+        {showCtaSection ? (
+          <section id="cta" className="section section-cta section-cta-full">
+            <div className="section-inner cta-inner">
+              <h2 className="cta-title">Ready for a real Fika?</h2>
+              <p className="cta-sub">Enter your location to see if we&apos;re in your city—or join the waitlist and we&apos;ll let you know when Fika comes to you.</p>
+              <CtaWithLocation redirectToSignupWhenInLA />
+              <p className="auth-switch auth-switch-cta">
+                Already have an account?{' '}
+                <button
+                  type="button"
+                  className="auth-switch-link"
+                  onClick={() => setShowCtaSection(false)}
+                >
+                  Log in
+                </button>
+              </p>
+            </div>
+          </section>
+        ) : (
+          <div className="auth-card">
+            <h1 className="auth-title">Welcome back</h1>
+            <p className="auth-sub">Sign in to your Fika account.</p>
 
-          <form className="auth-form" onSubmit={handleSubmit}>
-            <label className="auth-label" htmlFor="login-email">
-              Email
-            </label>
-            <input
-              id="login-email"
-              name="email"
-              type="email"
-              className="auth-input"
-              placeholder="you@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              disabled={loading}
-              autoComplete="email"
-            />
-            <label className="auth-label" htmlFor="login-password">
-              Password
-            </label>
-            <input
-              id="login-password"
-              name="password"
-              type="password"
-              className="auth-input"
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              disabled={loading}
-              autoComplete="current-password"
-            />
-            {message && (
-              <div role="alert">
-                <p className={`auth-message ${message.type === 'error' ? 'auth-message-error' : ''}`}>
-                  {message.text}
-                </p>
-                {message.type === 'error' && (
-                  <p className="auth-message-hint">
-                    If sign-in keeps failing, check that email sign-in is enabled in Supabase (Auth → Providers) and that your email is confirmed.
+            <form className="auth-form" onSubmit={handleSubmit}>
+              <label className="auth-label" htmlFor="login-email">
+                Email
+              </label>
+              <input
+                id="login-email"
+                name="email"
+                type="email"
+                className="auth-input"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                disabled={loading}
+                autoComplete="email"
+              />
+              <label className="auth-label" htmlFor="login-password">
+                Password
+              </label>
+              <input
+                id="login-password"
+                name="password"
+                type="password"
+                className="auth-input"
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                disabled={loading}
+                autoComplete="current-password"
+              />
+              {message && (
+                <div role="alert">
+                  <p className={`auth-message ${message.type === 'error' ? 'auth-message-error' : ''}`}>
+                    {message.text}
                   </p>
-                )}
-              </div>
-            )}
-            <button type="submit" className="btn btn-primary btn-block auth-submit" disabled={loading}>
-              {loading ? 'Signing in…' : 'Sign in'}
-            </button>
-          </form>
+                  {message.type === 'error' && (
+                    <p className="auth-message-hint">
+                      If sign-in keeps failing, check that email sign-in is enabled in Supabase (Auth → Providers) and that your email is confirmed.
+                    </p>
+                  )}
+                </div>
+              )}
+              <button type="submit" className="btn btn-primary btn-block auth-submit" disabled={loading}>
+                {loading ? 'Signing in…' : 'Sign in'}
+              </button>
+            </form>
 
-          <p className="auth-switch">
-            Don’t have an account? <Link href="/signup">Sign up</Link>
-          </p>
-        </div>
+            <p className="auth-switch">
+              Don&apos;t have an account?{' '}
+              <button
+                type="button"
+                className="auth-switch-link"
+                onClick={() => setShowCtaSection(true)}
+              >
+                Sign up
+              </button>
+            </p>
+          </div>
+        )}
       </main>
 
       <Footer />

@@ -7,10 +7,7 @@ import { getSupabase } from '@/lib/supabase'
 import type { User } from '@supabase/supabase-js'
 
 const navLinks = [
-  { href: '#what', label: 'What is Fika' },
   { href: '#how', label: 'How it works' },
-  { href: '#faq', label: 'FAQ' },
-  { href: '#cta', label: 'Get notified', cta: true },
 ]
 
 export default function Header() {
@@ -65,7 +62,7 @@ export default function Header() {
           ) : (
             <>
               <Link href="/login" onClick={closeMenu}>Log in</Link>
-              <Link href="/signup" className="nav-cta" onClick={closeMenu}>Sign up</Link>
+              <Link href="#cta" className="nav-cta" onClick={closeMenu}>Sign up</Link>
             </>
           )}
         </nav>
@@ -108,7 +105,7 @@ export default function Header() {
           ) : (
             <>
               <Link href="/login" onClick={closeMenu}>Log in</Link>
-              <Link href="/signup" className="nav-mobile-cta" onClick={closeMenu}>Sign up</Link>
+              <Link href="#cta" className="nav-mobile-cta" onClick={closeMenu}>Sign up</Link>
             </>
           )}
         </nav>

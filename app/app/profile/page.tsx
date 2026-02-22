@@ -287,7 +287,6 @@ export default function AppProfilePage() {
                 disabled={saving || (atMax && !selected)}
               >
                 {opt}
-                {selected && step.maxSelections ? ` (${arr.length}/${step.maxSelections})` : ''}
               </button>
             )
           })}
@@ -344,7 +343,7 @@ export default function AppProfilePage() {
 
         <section className="profile-section">
           <h3 className="profile-section-title">Profile</h3>
-          {PROFILE_STEPS.map((step) => (
+          {PROFILE_STEPS.filter((step) => step.id !== 'confirm_intent').map((step) => (
             <div key={step.id} className="profile-field">
               <label htmlFor={`profile-${step.id}`} className="profile-label">
                 {step.question}

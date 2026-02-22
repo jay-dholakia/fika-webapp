@@ -75,7 +75,7 @@ export const PROFILE_STEPS: ProfileStep[] = [
   },
   {
     id: 'confirm_intent',
-    question: "I'm in — I'd like to get weekly intros.",
+    question: "I'd like to have real conversations.",
     body: "Fika is built for thoughtful, platonic connection.\n\nWe're here to meet new people for real conversation, shared interests, and meaningful experiences — clearly and respectfully.",
     type: 'chips_single',
     options: ["I'm in"],

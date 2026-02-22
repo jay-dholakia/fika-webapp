@@ -16,7 +16,7 @@ export default function AppLayout({
   const pathname = usePathname()
   const [userId, setUserId] = useState<string | null>(null)
   const [sessionChecked, setSessionChecked] = useState(false)
-  const { loading, isComplete } = useOnboardingStatus(userId ?? undefined)
+  const { loading, isComplete, profile } = useOnboardingStatus(userId ?? undefined)
 
   useEffect(() => {
     authLog('app-layout:mount')
@@ -82,27 +82,34 @@ export default function AppLayout({
   authLog('app-layout:render', { show: 'dashboard' })
   return (
     <div className="app-shell">
-      <header className="app-header">
-        <div className="app-header-inner">
-          <Link href="/app" className="logo">
+      <aside className="app-sidebar" aria-label="App navigation">
+        <div className="app-sidebar-header">
+          <Link href="/app" className="app-sidebar-logo">
             fika
           </Link>
-          <nav className="app-nav">
-            <Link href="/app" className={pathname === '/app' ? 'app-nav-active' : ''}>
-              Introductions
-            </Link>
-            <Link href="/app/chats" className={pathname === '/app/chats' ? 'app-nav-active' : ''}>
-              Chats
-            </Link>
-            <Link href="/app/profile" className={pathname === '/app/profile' ? 'app-nav-active' : ''}>
-              Profile
-            </Link>
-            <button type="button" className="nav-link-button" onClick={handleSignOut}>
-              Log out
-            </button>
-          </nav>
         </div>
-      </header>
+        <nav className="app-sidebar-nav">
+          <Link href="/app" className={pathname === '/app' ? 'app-sidebar-link active' : 'app-sidebar-link'}>
+            Introductions
+          </Link>
+          <Link href="/app/chats" className={pathname === '/app/chats' ? 'app-sidebar-link active' : 'app-sidebar-link'}>
+            Chats
+          </Link>
+          <Link href="/app/profile" className={pathname === '/app/profile' ? 'app-sidebar-link active' : 'app-sidebar-link'}>
+            Profile
+          </Link>
+        </nav>
+        <div className="app-sidebar-footer">
+          <div className="app-sidebar-intros" aria-label="Intro balance">
+            <span className="app-sidebar-intros-icon">☕</span>
+            <span className="app-sidebar-intros-label">Intros</span>
+            <span className="app-sidebar-intros-count">{profile?.intro_balance ?? 0}</span>
+          </div>
+          <button type="button" className="app-sidebar-logout" onClick={handleSignOut}>
+            Log out
+          </button>
+        </div>
+      </aside>
       <main className="app-main">
         {children}
       </main>

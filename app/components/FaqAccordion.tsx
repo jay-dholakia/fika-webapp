@@ -9,7 +9,7 @@ const faqItems = [
   },
   {
     q: 'How does matching work?',
-    a: 'It requires mutual opt-in. When you say yes to an intro and they say yes to you, a chat is created so you can schedule a time and place to meet for your fika. No chat until you both opt in.',
+    a: 'It requires mutual opt-in. When you say yes to an intro and they say yes to you, a chat is created so you can schedule a time and place to meet for your Fika. No chat until you both opt in.',
   },
   {
     q: 'What does it cost?',
@@ -21,7 +21,7 @@ const faqItems = [
   },
   {
     q: 'What if we don’t click?',
-    a: 'No pressure. It’s one conversation. After that, you can stay in touch or leave it at one great fika. Your call.',
+    a: 'No pressure. It’s one conversation. After that, you can stay in touch or leave it at one great Fika. Your call.',
   },
 ]
 

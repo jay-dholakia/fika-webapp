@@ -82,6 +82,8 @@ export default function OnboardingPage() {
   const { loading: statusLoading, isComplete, profile, intake } = useOnboardingStatus(sessionUserId ?? undefined)
 
   const [stepIndex, setStepIndex] = useState(0)
+  const [displayStepIndex, setDisplayStepIndex] = useState(0)
+  const [isExiting, setIsExiting] = useState(false)
   const [answers, setAnswers] = useState<AnswersState>({})
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -109,6 +111,7 @@ export default function OnboardingPage() {
     if (statusLoading || isComplete || sessionUserId == null) return
     const { stepIndex: first, answers: prefilled } = getFirstUnansweredStepAndAnswers(profile ?? null, intake ?? null)
     setStepIndex(first)
+    setDisplayStepIndex(first)
     setAnswers(prefilled)
     if (first < PROFILE_STEPS.length && PROFILE_STEPS[first].id === 'location' && prefilled.location) {
       setLocationStatus('done')
@@ -132,6 +135,7 @@ export default function OnboardingPage() {
   }, [sessionUserId])
 
   const step = ALL_STEPS[stepIndex]
+  const displayStep = ALL_STEPS[displayStepIndex] ?? step
   const isProfileStep = stepIndex < PROFILE_STEPS.length
   const isLastStep = stepIndex === ALL_STEPS.length - 1
 
@@ -260,8 +264,13 @@ export default function OnboardingPage() {
           router.replace('/app')
           return
         }
-        setStepIndex((i) => i + 1)
         setAnswers((a) => ({ ...a, [step.id]: raw }))
+        setIsExiting(true)
+        setTimeout(() => {
+          setStepIndex((i) => i + 1)
+          setDisplayStepIndex((i) => i + 1)
+          setIsExiting(false)
+        }, 280)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Something went wrong.')
       } finally {
@@ -271,8 +280,37 @@ export default function OnboardingPage() {
   }
 
   function handleBack() {
-    if (stepIndex > 0) setStepIndex((i) => i - 1)
+    if (stepIndex > 0) {
+      setStepIndex((i) => i - 1)
+      setDisplayStepIndex((i) => i - 1)
+    }
     setError(null)
+  }
+
+  async function reverseGeocodeWithGoogle(lat: number, lng: number): Promise<{ city: string; state: string } | null> {
+    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+    if (!apiKey) return null
+    try {
+      const res = await fetch(
+        `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${apiKey}`
+      )
+      const data = (await res.json()) as {
+        results?: Array<{
+          address_components?: Array<{ long_name: string; short_name: string; types: string[] }>
+        }>
+      }
+      const comps = data.results?.[0]?.address_components
+      if (!comps) return null
+      let cityVal = ''
+      let stateVal = ''
+      for (const c of comps) {
+        if (c.types?.includes('locality')) cityVal = c.long_name ?? ''
+        if (c.types?.includes('administrative_area_level_1')) stateVal = c.short_name ?? ''
+      }
+      return { city: cityVal, state: stateVal }
+    } catch {
+      return null
+    }
   }
 
   function handleLocation() {
@@ -288,13 +326,21 @@ export default function OnboardingPage() {
         const lat = pos.coords.latitude
         const lng = pos.coords.longitude
         try {
-          const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`
-          )
-          const data = await res.json()
-          const city = data.address?.city || data.address?.town || data.address?.village || data.address?.county || 'Unknown'
-          const region = data.address?.state || data.address?.region
-          const cityStr = region ? `${city}, ${region}` : city
+          // Prefer Google Geocoding (same as Ready for Fika) when key is set; no CORS
+          const googleResult = await reverseGeocodeWithGoogle(lat, lng)
+          if (googleResult) {
+            const cityStr = googleResult.state
+              ? `${googleResult.city}, ${googleResult.state}`
+              : googleResult.city || 'Unknown'
+            setAnswers((a) => ({ ...a, location: { city: cityStr, lat, lng } }))
+            setLocationStatus('done')
+            return
+          }
+          // Fallback: our API proxy calls Nominatim server-side (avoids CORS/403)
+          const res = await fetch(`/api/geocode?lat=${lat}&lng=${lng}`)
+          const data = (await res.json()) as { city?: string; error?: string }
+          if (!res.ok || data.error) throw new Error(data.error ?? 'Geocode failed')
+          const cityStr = data.city ?? 'Unknown'
           setAnswers((a) => ({ ...a, location: { city: cityStr, lat, lng } }))
           setLocationStatus('done')
         } catch {
@@ -347,7 +393,7 @@ export default function OnboardingPage() {
 
   authLog('onboarding:render', { show: 'form', stepId: step.id, stepIndex })
   const progress = ((stepIndex + 1) / TOTAL_ONBOARDING_STEPS) * 100
-  const value = answers[step.id]
+  const value = answers[displayStep.id]
 
   return (
     <div className="onboarding-wrap">
@@ -358,150 +404,167 @@ export default function OnboardingPage() {
         <div className="onboarding-progress-inner" style={{ width: `${progress}%` }} />
       </div>
 
-      <h2 className="onboarding-question">{step.question}</h2>
+      <div
+        className={`onboarding-step ${isExiting ? 'onboarding-step-exit' : 'onboarding-step-enter'}`}
+        key={displayStepIndex}
+      >
+        <h2 className="onboarding-question">{displayStep.question}</h2>
 
-      {step.body && (
-        <div className="onboarding-body">
-          {step.body.split(/\n\n+/).map((p, i) => (
-            <p key={i}>{p}</p>
-          ))}
-        </div>
-      )}
+        {displayStep.body && (
+          <div className="onboarding-body">
+            {displayStep.body.split(/\n\n+/).map((p, i) => (
+              <p key={i}>{p}</p>
+            ))}
+          </div>
+        )}
 
-      {step.type === 'text' && (
-        <input
-          id={`onboarding-${step.id}`}
-          name={step.id}
-          type="text"
-          className="auth-input"
-          placeholder={step.placeholder || ''}
-          value={(value as string) ?? ''}
-          onChange={(e) => setAnswers((a) => ({ ...a, [step.id]: e.target.value }))}
-          disabled={saving}
-          autoFocus
-          autoComplete={step.id === 'first_name' ? 'given-name' : 'off'}
-        />
-      )}
+        {displayStep.type === 'text' && (
+          <input
+            id={`onboarding-${displayStep.id}`}
+            name={displayStep.id}
+            type="text"
+            className="auth-input"
+            placeholder={displayStep.placeholder || ''}
+            value={(value as string) ?? ''}
+            onChange={(e) => setAnswers((a) => ({ ...a, [displayStep.id]: e.target.value }))}
+            disabled={saving}
+            autoFocus
+            autoComplete={displayStep.id === 'first_name' ? 'given-name' : 'off'}
+          />
+        )}
 
-      {step.type === 'date' && (
-        <input
-          id={`onboarding-${step.id}`}
-          name={step.id}
-          type="date"
-          className="auth-input"
-          value={(value as string) ?? ''}
-          onChange={(e) => setAnswers((a) => ({ ...a, [step.id]: e.target.value }))}
-          disabled={saving}
-          autoFocus
-          autoComplete={step.id === 'birthdate' ? 'bday' : 'off'}
-        />
-      )}
+        {displayStep.type === 'date' && (
+          <input
+            id={`onboarding-${displayStep.id}`}
+            name={displayStep.id}
+            type="date"
+            className="auth-input"
+            value={(value as string) ?? ''}
+            onChange={(e) => setAnswers((a) => ({ ...a, [displayStep.id]: e.target.value }))}
+            disabled={saving}
+            autoFocus
+            autoComplete={displayStep.id === 'birthdate' ? 'bday' : 'off'}
+          />
+        )}
 
-      {step.type === 'chips_single' && step.options && (
-        <div>
-          {step.options.map((opt) => (
-            <button
-              key={opt}
-              type="button"
-              className={`onboarding-chip ${value === opt ? 'selected' : ''}`}
-              onClick={() => setAnswers((a) => ({ ...a, [step.id]: opt }))}
-              disabled={saving}
-            >
-              {opt}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {step.type === 'location_permission' && (
-        <div>
-          <button
-            type="button"
-            className="onboarding-location-btn"
-            onClick={handleLocation}
-            disabled={locationStatus === 'loading'}
-          >
-            {locationStatus === 'loading' ? 'Getting location…' : locationStatus === 'done' ? '✓ Location set' : 'Use My Location'}
-          </button>
-        </div>
-      )}
-
-      {step.type === 'multi_select' && step.options && (
-        <div>
-          {step.options.map((opt) => {
-            const arr = (Array.isArray(value) ? value : []) as string[]
-            const selected = arr.includes(opt)
-            const atMax = step.maxSelections != null && arr.length >= step.maxSelections && !selected
-            const toggle = () => {
-              if (selected) setAnswers((a) => ({ ...a, [step.id]: arr.filter((x) => x !== opt) }))
-              else if (!atMax) setAnswers((a) => ({ ...a, [step.id]: [...arr, opt] }))
-            }
-            return (
+        {displayStep.type === 'chips_single' && displayStep.options && (
+          <div>
+            {displayStep.options.map((opt) => (
               <button
                 key={opt}
                 type="button"
-                className={`onboarding-chip ${selected ? 'multi-selected' : ''}`}
-                onClick={toggle}
-                disabled={saving || atMax}
+                className={`onboarding-chip ${value === opt ? 'selected' : ''}`}
+                onClick={() => {
+                  if (value === opt) {
+                    setAnswers((a) => {
+                      const next = { ...a }
+                      delete next[displayStep.id]
+                      return next
+                    })
+                  } else {
+                    setAnswers((a) => ({ ...a, [displayStep.id]: opt }))
+                  }
+                }}
+                disabled={saving}
               >
                 {opt}
-                {selected && step.maxSelections && ` (${arr.length}/${step.maxSelections})`}
               </button>
-            )
-          })}
-        </div>
-      )}
+            ))}
+          </div>
+        )}
 
-      {step.type === 'slider' && step.sliderRange && (
-        <div className="onboarding-slider-wrap">
-          <input
-            id={`onboarding-${step.id}`}
-            name={step.id}
-            type="range"
-            className="onboarding-slider"
-            min={step.sliderRange[0]}
-            max={step.sliderRange[1]}
-            value={typeof value === 'number' ? value : step.sliderDefault ?? step.sliderRange[0]}
-            onChange={(e) => setAnswers((a) => ({ ...a, [step.id]: Number(e.target.value) }))}
+        {displayStep.type === 'location_permission' && (
+          <div>
+            <button
+              type="button"
+              className="onboarding-location-btn"
+              onClick={handleLocation}
+              disabled={locationStatus === 'loading'}
+            >
+              {locationStatus === 'loading'
+                ? 'Getting location…'
+                : locationStatus === 'done' && value && typeof value === 'object' && 'city' in (value as object)
+                  ? `✓ ${(value as { city: string }).city}`
+                  : 'Use My Location'}
+            </button>
+          </div>
+        )}
+
+        {displayStep.type === 'multi_select' && displayStep.options && (
+          <div>
+            {displayStep.options.map((opt) => {
+              const arr = (Array.isArray(value) ? value : []) as string[]
+              const selected = arr.includes(opt)
+              const atMax = displayStep.maxSelections != null && arr.length >= displayStep.maxSelections && !selected
+              return (
+                <button
+                  key={opt}
+                  type="button"
+                  className={`onboarding-chip ${selected ? 'multi-selected' : ''}`}
+                  onClick={() => {
+                    if (selected) setAnswers((a) => ({ ...a, [displayStep.id]: arr.filter((x) => x !== opt) }))
+                    else if (!atMax) setAnswers((a) => ({ ...a, [displayStep.id]: [...arr, opt] }))
+                  }}
+                  disabled={saving || atMax}
+                >
+                  {opt}
+                </button>
+              )
+            })}
+          </div>
+        )}
+
+        {displayStep.type === 'slider' && displayStep.sliderRange && (
+          <div className="onboarding-slider-wrap">
+            <input
+              id={`onboarding-${displayStep.id}`}
+              name={displayStep.id}
+              type="range"
+              className="onboarding-slider"
+              min={displayStep.sliderRange[0]}
+              max={displayStep.sliderRange[1]}
+              value={typeof value === 'number' ? value : displayStep.sliderDefault ?? displayStep.sliderRange[0]}
+              onChange={(e) => setAnswers((a) => ({ ...a, [displayStep.id]: Number(e.target.value) }))}
+              disabled={saving}
+              autoComplete="off"
+            />
+            {displayStep.sliderLabel && (
+              <p className="onboarding-slider-label">
+                {displayStep.sliderLabel(typeof value === 'number' ? value : displayStep.sliderDefault ?? displayStep.sliderRange[0])}
+              </p>
+            )}
+          </div>
+        )}
+
+        {displayStep.type === 'open_ended' && (
+          <textarea
+            id={`onboarding-${displayStep.id}`}
+            name={displayStep.id}
+            className="auth-input"
+            placeholder={displayStep.placeholder || ''}
+            value={(value as string) ?? ''}
+            onChange={(e) => setAnswers((a) => ({ ...a, [displayStep.id]: e.target.value }))}
             disabled={saving}
+            rows={4}
+            style={{ resize: 'vertical' }}
             autoComplete="off"
           />
-          {step.sliderLabel && (
-            <p className="onboarding-slider-label">
-              {step.sliderLabel(typeof value === 'number' ? value : step.sliderDefault ?? step.sliderRange[0])}
-            </p>
-          )}
-        </div>
-      )}
-
-      {step.type === 'open_ended' && (
-        <textarea
-          id={`onboarding-${step.id}`}
-          name={step.id}
-          className="auth-input"
-          placeholder={step.placeholder || ''}
-          value={(value as string) ?? ''}
-          onChange={(e) => setAnswers((a) => ({ ...a, [step.id]: e.target.value }))}
-          disabled={saving}
-          rows={4}
-          style={{ resize: 'vertical' }}
-          autoComplete="off"
-        />
-      )}
+        )}
+      </div>
 
       {error && <p className="onboarding-error" role="alert">{error}</p>}
 
-      <div className="onboarding-actions">
+      <div className={`onboarding-actions ${isExiting ? 'onboarding-actions-disabled' : ''}`}>
         {stepIndex > 0 && (
-          <button type="button" className="btn" onClick={handleBack} disabled={saving}>
+          <button type="button" className="btn" onClick={handleBack} disabled={saving || isExiting}>
             Back
           </button>
         )}
         <button
           type="button"
-          className="btn btn-primary"
+          className={`btn btn-primary ${step.id === 'confirm_intent' && !value ? 'btn-primary-muted' : ''}`}
           onClick={handleNext}
-          disabled={saving || (step.type === 'location_permission' && locationStatus !== 'done' && !value)}
+          disabled={saving || isExiting || (step.type === 'location_permission' && locationStatus !== 'done' && !value) || (step.id === 'confirm_intent' && !value)}
         >
           {saving ? 'Saving…' : isLastStep ? 'Finish' : 'Continue'}
         </button>

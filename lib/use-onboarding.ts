@@ -53,7 +53,5 @@ export function useOnboardingStatus(userId: string | undefined) {
   }, [userId])
 
   const isComplete = checkComplete(profile, intake)
-  // When we have userId but no data yet, we're still loading (avoids redirect race before effect runs)
-  const effectiveLoading = userId ? loading || (profile === null && intake === null) : loading
-  return { loading: effectiveLoading, profile, intake, isComplete }
+  return { loading, profile, intake, isComplete }
 }
