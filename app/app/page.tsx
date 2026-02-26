@@ -96,9 +96,9 @@ export default function AppHomePage() {
           return
         }
         const matchIds = matches.map((m: { id: string }) => m.id)
-        const otherIds = [...new Set(
+        const otherIds = Array.from(new Set(
           matches.map((m: { user_a: string; user_b: string }) => m.user_a === userId ? m.user_b : m.user_a)
-        )]
+        ))
         Promise.allSettled([
           supabase.from('profiles').select('id, first_name, city, birthdate').in('id', otherIds),
           supabase.from('opt_ins').select('match_id, decision').eq('user_id', userId).in('match_id', matchIds),

@@ -197,7 +197,7 @@ export function IntroDetailModal({
       }
     }
   }
-  const displayInterests = sharedInterestsFromReasons.length > 0 ? sharedInterestsFromReasons : [...new Set(parsedInterests)]
+  const displayInterests = sharedInterestsFromReasons.length > 0 ? sharedInterestsFromReasons : Array.from(new Set(parsedInterests))
 
   // Fika preference (q4) and typical availability (q9) for bottom of modal
   const fikaPreference = detail?.intakeResponses?.find((r) => r.question_id === 'q4_where_most_yourself')
