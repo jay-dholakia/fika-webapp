@@ -17,8 +17,11 @@ export function getAnswersFromProfileAndIntake(
   for (const s of PROFILE_STEPS) {
     if (s.id === 'first_name') answers.first_name = profile?.first_name?.trim() ?? ''
     else if (s.id === 'birthdate') answers.birthdate = profile?.birthdate ?? ''
+    else if (s.id === 'gender') answers.gender = profile?.gender ?? ''
+    else if (s.id === 'gender_preference') answers.gender_preference = profile?.gender_preference ?? ''
     else if (s.id === 'pronouns') answers.pronouns = profile?.pronouns ?? ''
     else if (s.id === 'relationship_status') answers.relationship_status = profile?.relationship_status ?? ''
+    else if (s.id === 'languages') answers.languages = Array.isArray(profile?.languages) ? profile.languages : []
     else if (s.id === 'location' && profile?.city != null)
       answers.location = { city: profile.city, lat: profile.lat ?? 0, lng: profile.lng ?? 0 }
     else if (s.id === 'confirm_intent') answers.confirm_intent = profile?.intent_confirmed_at ? "I'm in" : ''

@@ -32,7 +32,7 @@ export default function TermsPage() {
         <p>You must be at least 18 years old and able to form a binding contract to use Fika. By using the service, you represent that you meet these requirements.</p>
 
         <h2>Your account</h2>
-        <p>You must provide accurate, current information and keep it up to date. One account per person. You’re responsible for everything that happens on your account. Keep your password secure.</p>
+        <p>You must provide accurate, current information and keep it up to date. One account per person. You create and access your account by providing your phone number and completing verification via SMS each time you sign in. You’re responsible for everything that happens on your account. Keep your phone and account access secure. By signing up, you agree to receive verification codes via SMS when you sign in; message and data rates may apply, and you may opt out by replying STOP (see our <Link href="/privacy">Privacy Policy</Link> for details).</p>
 
         <h2>Acceptable use</h2>
         <p>You agree to use Fika in a respectful, lawful way. You will not:</p>
@@ -77,10 +77,10 @@ export default function TermsPage() {
         <p>These terms are governed by the laws of the State of Delaware (or the state/country specified in the app for your region). Any dispute will be resolved in the courts of that jurisdiction, or by binding arbitration if we agree to it.</p>
 
         <h2>Changes</h2>
-        <p>We may change these terms from time to time. We’ll post the new version here and notify you of material changes. Continued use of the service after changes means you accept the new terms.</p>
+        <p>We may change these terms from time to time. We’ll post the new version here and notify you of material changes (e.g. by SMS, in the app, or by other contact details we have). Continued use of the service after changes means you accept the new terms.</p>
 
         <h2>Contact</h2>
-        <p>Questions about these terms? Contact us at the email or address provided in the app or on our website.</p>
+        <p>Questions about these terms? Contact us at the email, phone, or address provided in the app or on our website.</p>
       </main>
 
       <Footer />

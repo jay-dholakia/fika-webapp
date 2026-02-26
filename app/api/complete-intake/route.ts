@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 
-const OPEN_ENDED_IDS = ['q3_work_study', 'q11_season_of_life', 'q12_first_conversation']
+const OPEN_ENDED_IDS = ['q3_work_study_detail', 'q12_first_conversation']
 
 interface IntakeResponseItem {
   question_id: string

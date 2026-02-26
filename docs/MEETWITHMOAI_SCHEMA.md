@@ -60,7 +60,8 @@ User profile (extends `auth.users` via `id`).
 | `created_at` | timestamptz | YES | |
 | `updated_at` | timestamptz | YES | |
 
-**RLS:** Users can SELECT own profile; SELECT other profiles only if they share a `match_candidates` row; INSERT/UPDATE own profile only.
+**RLS:** Users can SELECT own profile; SELECT other profiles only if they share a `match_candidates` row; INSERT/UPDATE own profile only.  
+To allow the intro modal to read a matched user’s profile, apply `docs/RLS_PROFILES_MATCHED_USERS.sql` in the SQL Editor (same pattern as `docs/RLS_INTAKE_MATCHED_USERS.sql` for intake).
 
 ---
 
@@ -79,7 +80,8 @@ Onboarding / intake with embeddings for similarity-based matching.
 | `created_at` | timestamptz | YES | |
 | `updated_at` | timestamptz | YES | |
 
-**RLS:** Users can SELECT/INSERT/UPDATE own row; service_role has full access (e.g. for matching jobs).
+**RLS:** Users can SELECT/INSERT/UPDATE own row; service_role has full access (e.g. for matching jobs).  
+To let the Fika app show a match’s questionnaire in the intro modal, add a policy that allows SELECT on another user’s row when the two users share an active `match_candidates` row—see `docs/RLS_INTAKE_MATCHED_USERS.sql`.
 
 ---
 
@@ -240,5 +242,20 @@ Use these from the Fika app (via RPC or by wrapping in Edge Functions) for match
 - **Accept/decline:** Insert/update `opt_ins` for the chosen `match_id`.
 - **Chat:** List `conversations` where user is participant; for each, list `messages`; send new messages (insert into `messages`).
 - **Vercel:** Use env vars `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` pointing at this project; optional server-side use with service role for admin or matching jobs.
+
+---
+
+## Edge functions (match opt-in flow)
+
+The meetwithmoai backend exposes Edge Functions the Fika app uses for per-intro opt-in and pass. The app calls these via `supabase.functions.invoke()`.
+
+| Function | Purpose | Request body | Response |
+|----------|---------|--------------|----------|
+| **opt-in-to-match** | User opts in to an intro. Writes to `opt_ins`; if the other user already opted in, creates a `conversations` row and returns its id. | `{ match_id: string }` | `{ conversation_id?: string }` when mutual; otherwise `{}`. |
+| **pass-on-match** | User passes on an intro. Writes to `opt_ins` with `decision: 'no'`. | `{ match_id: string }` | `{}` or `{ ok: true }`. |
+
+If your backend uses different function names, set them in `lib/edge-functions.ts`.
+
+---
 
 This schema already supports “in-person one-on-one connection and conversation between two people based on their similarities and differences” via `match_candidates.reasons`, intake embeddings, and match → opt-in → conversation flow.

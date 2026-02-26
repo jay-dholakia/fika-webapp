@@ -16,7 +16,12 @@ export default function AppLayout({
   const pathname = usePathname()
   const [userId, setUserId] = useState<string | null>(null)
   const [sessionChecked, setSessionChecked] = useState(false)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const { loading, isComplete, profile } = useOnboardingStatus(userId ?? undefined)
+
+  useEffect(() => {
+    setMobileMenuOpen(false)
+  }, [pathname])
 
   useEffect(() => {
     authLog('app-layout:mount')
@@ -82,21 +87,44 @@ export default function AppLayout({
   authLog('app-layout:render', { show: 'dashboard' })
   return (
     <div className="app-shell">
-      <aside className="app-sidebar" aria-label="App navigation">
-        <div className="app-sidebar-header">
-          <Link href="/app" className="app-sidebar-logo">
+      <header className="app-mobile-header" aria-label="Mobile menu">
+        <Link href="/app" className="app-sidebar-logo" onClick={() => setMobileMenuOpen(false)}>
+          fika
+        </Link>
+        <button
+          type="button"
+          className="app-mobile-menu-btn"
+          onClick={() => setMobileMenuOpen((o) => !o)}
+          aria-expanded={mobileMenuOpen}
+          aria-controls="app-sidebar"
+          aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
+        >
+          <span className="app-mobile-menu-icon" aria-hidden />
+        </button>
+      </header>
+      {mobileMenuOpen && (
+        <div
+          className="app-sidebar-backdrop"
+          aria-hidden
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      )}
+      <aside
+        id="app-sidebar"
+        className={`app-sidebar ${mobileMenuOpen ? 'app-sidebar-open' : ''}`}
+        aria-label="App navigation"
+      >
+        <div className="app-sidebar-header app-sidebar-header-desktop">
+          <Link href="/app" className="app-sidebar-logo" onClick={() => setMobileMenuOpen(false)}>
             fika
           </Link>
         </div>
         <nav className="app-sidebar-nav">
-          <Link href="/app" className={pathname === '/app' ? 'app-sidebar-link active' : 'app-sidebar-link'}>
+          <Link href="/app" className={pathname === '/app' ? 'app-sidebar-link active' : 'app-sidebar-link'} onClick={() => setMobileMenuOpen(false)}>
             Introductions
           </Link>
-          <Link href="/app/chats" className={pathname === '/app/chats' ? 'app-sidebar-link active' : 'app-sidebar-link'}>
+          <Link href="/app/chats" className={pathname?.startsWith('/app/chats') ? 'app-sidebar-link active' : 'app-sidebar-link'} onClick={() => setMobileMenuOpen(false)}>
             Chats
-          </Link>
-          <Link href="/app/profile" className={pathname === '/app/profile' ? 'app-sidebar-link active' : 'app-sidebar-link'}>
-            Profile
           </Link>
         </nav>
         <div className="app-sidebar-footer">
@@ -105,6 +133,12 @@ export default function AppLayout({
             <span className="app-sidebar-intros-label">Intros</span>
             <span className="app-sidebar-intros-count">{profile?.intro_balance ?? 0}</span>
           </div>
+          <Link href="/app/settings/profile" className={pathname === '/app/settings/profile' ? 'app-sidebar-link active' : 'app-sidebar-link'} onClick={() => setMobileMenuOpen(false)}>
+            Edit profile
+          </Link>
+          <Link href="/app/settings/how-it-works" className={pathname === '/app/settings/how-it-works' ? 'app-sidebar-link active' : 'app-sidebar-link'} onClick={() => setMobileMenuOpen(false)}>
+            FAQ
+          </Link>
           <button type="button" className="app-sidebar-logout" onClick={handleSignOut}>
             Log out
           </button>

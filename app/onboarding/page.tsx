@@ -35,12 +35,18 @@ function getFirstUnansweredStepAndAnswers(
     } else if (s.id === 'birthdate') {
       if (!profile?.birthdate) return { stepIndex: i, answers }
       answers.birthdate = profile.birthdate
+    } else if (s.id === 'gender') {
+      if (profile?.gender) answers.gender = profile.gender
+      if (!profile?.gender) return { stepIndex: i, answers }
+    } else if (s.id === 'gender_preference') {
+      if (profile?.gender_preference) answers.gender_preference = profile.gender_preference
+      if (!profile?.gender_preference) return { stepIndex: i, answers }
     } else if (s.id === 'pronouns') {
       if (profile?.pronouns) answers.pronouns = profile.pronouns
-      if (!profile?.pronouns) return { stepIndex: i, answers }
-    } else if (s.id === 'relationship_status') {
-      if (profile?.relationship_status) answers.relationship_status = profile.relationship_status
-      if (!profile?.relationship_status) return { stepIndex: i, answers }
+      return { stepIndex: i, answers }
+    } else if (s.id === 'languages') {
+      if (Array.isArray(profile?.languages)) answers.languages = profile.languages
+      return { stepIndex: i, answers }
     } else if (s.id === 'location') {
       if (!profile?.city) return { stepIndex: i, answers }
       answers.location = { city: profile.city, lat: profile.lat ?? 0, lng: profile.lng ?? 0 }
@@ -155,8 +161,10 @@ export default function OnboardingPage() {
         : (currentAnswers?.first_name as string)?.trim() || ' '
     updates.first_name = firstName
     if (id === 'birthdate' && (typeof value === 'string' || value === null)) updates.birthdate = value
-    if (id === 'pronouns' && typeof value === 'string') updates.pronouns = value
-    if (id === 'relationship_status' && typeof value === 'string') updates.relationship_status = value
+    if (id === 'gender' && typeof value === 'string') updates.gender = value
+    if (id === 'gender_preference' && typeof value === 'string') updates.gender_preference = value
+    if (id === 'pronouns') updates.pronouns = (typeof value === 'string' && value ? value : null)
+    if (id === 'languages') updates.languages = Array.isArray(value) ? value : null
     if (id === 'location' && typeof value === 'object' && value !== null && 'city' in value) {
       updates.city = value.city
       updates.lat = value.lat
@@ -252,6 +260,8 @@ export default function OnboardingPage() {
             await saveProfileField(step.id, raw as { city: string; lat: number; lng: number }, answers)
           } else if (step.id === 'confirm_intent') {
             await saveProfileField(step.id, 'confirmed', answers)
+          } else if (step.id === 'languages' && (Array.isArray(raw) || raw === undefined)) {
+            await saveProfileField(step.id, Array.isArray(raw) ? raw : [], answers)
           } else if (typeof raw === 'string' || typeof raw === 'number') {
             await saveProfileField(step.id, raw, answers)
           }
@@ -321,6 +331,12 @@ export default function OnboardingPage() {
       setLocationStatus('error')
       return
     }
+    // timeout 15s; don't require high accuracy so we can get a coarse fix faster (avoids kCLErrorLocationUnknown when GPS can't get a fix)
+    const options: PositionOptions = {
+      enableHighAccuracy: false,
+      timeout: 15000,
+      maximumAge: 60000,
+    }
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         const lat = pos.coords.latitude
@@ -348,10 +364,16 @@ export default function OnboardingPage() {
           setLocationStatus('done')
         }
       },
-      () => {
-        setError('Could not get your location. Please allow location access.')
+      (err) => {
+        // err.code: 1 = PERMISSION_DENIED, 2 = POSITION_UNAVAILABLE (e.g. kCLErrorLocationUnknown), 3 = TIMEOUT
+        const message =
+          err.code === 1
+            ? 'Location access was denied. Please allow location in your browser or device settings and try again.'
+            : 'We couldn’t get your location. Try again in a moment, or move to a spot with better signal.'
+        setError(message)
         setLocationStatus('error')
-      }
+      },
+      options
     )
   }
 
@@ -495,17 +517,35 @@ export default function OnboardingPage() {
             {displayStep.options.map((opt) => {
               const arr = (Array.isArray(value) ? value : []) as string[]
               const selected = arr.includes(opt)
+              const isExclusiveOption =
+                (displayStep.id === 'q10_first_conversation_feel' && opt === 'A mix — see where it goes') ||
+                (displayStep.id === 'q6_who_excited_to_meet' && opt === "I'm open — surprise me")
               const atMax = displayStep.maxSelections != null && arr.length >= displayStep.maxSelections && !selected
+              const exclusiveOptionText =
+                displayStep.id === 'q10_first_conversation_feel'
+                  ? 'A mix — see where it goes'
+                  : displayStep.id === 'q6_who_excited_to_meet'
+                    ? "I'm open — surprise me"
+                    : null
               return (
                 <button
                   key={opt}
                   type="button"
                   className={`onboarding-chip ${selected ? 'multi-selected' : ''}`}
                   onClick={() => {
-                    if (selected) setAnswers((a) => ({ ...a, [displayStep.id]: arr.filter((x) => x !== opt) }))
-                    else if (!atMax) setAnswers((a) => ({ ...a, [displayStep.id]: [...arr, opt] }))
+                    if (selected) {
+                      setAnswers((a) => ({ ...a, [displayStep.id]: arr.filter((x) => x !== opt) }))
+                    } else if (isExclusiveOption) {
+                      setAnswers((a) => ({ ...a, [displayStep.id]: [opt] }))
+                    } else if (exclusiveOptionText) {
+                      const withoutExclusive = arr.filter((x) => x !== exclusiveOptionText)
+                      const max = displayStep.maxSelections ?? Infinity
+                      if (withoutExclusive.length < max) setAnswers((a) => ({ ...a, [displayStep.id]: [...withoutExclusive, opt] }))
+                    } else if (!atMax) {
+                      setAnswers((a) => ({ ...a, [displayStep.id]: [...arr, opt] }))
+                    }
                   }}
-                  disabled={saving || atMax}
+                  disabled={saving || (!isExclusiveOption && atMax)}
                 >
                   {opt}
                 </button>
@@ -514,23 +554,45 @@ export default function OnboardingPage() {
           </div>
         )}
 
-        {displayStep.type === 'slider' && displayStep.sliderRange && (
+        {displayStep.type === 'slider' && (displayStep.sliderRange || displayStep.sliderSteps) && (
           <div className="onboarding-slider-wrap">
             <input
               id={`onboarding-${displayStep.id}`}
               name={displayStep.id}
               type="range"
               className="onboarding-slider"
-              min={displayStep.sliderRange[0]}
-              max={displayStep.sliderRange[1]}
-              value={typeof value === 'number' ? value : displayStep.sliderDefault ?? displayStep.sliderRange[0]}
-              onChange={(e) => setAnswers((a) => ({ ...a, [displayStep.id]: Number(e.target.value) }))}
+              min={displayStep.sliderSteps ? 0 : displayStep.sliderRange![0]}
+              max={displayStep.sliderSteps ? displayStep.sliderSteps.length - 1 : displayStep.sliderRange![1]}
+              step={displayStep.sliderSteps ? 1 : undefined}
+              value={
+                displayStep.sliderSteps
+                  ? (() => {
+                      const steps = displayStep.sliderSteps!
+                      const num = typeof value === 'number' ? value : displayStep.sliderDefault ?? steps[0]
+                      const idx = steps.indexOf(num)
+                      return idx >= 0 ? idx : steps.indexOf(displayStep.sliderDefault ?? steps[0]) || 0
+                    })()
+                  : (typeof value === 'number' ? value : displayStep.sliderDefault ?? displayStep.sliderRange![0])
+              }
+              onChange={(e) => {
+                const raw = Number(e.target.value)
+                const next = displayStep.sliderSteps ? displayStep.sliderSteps![raw] : raw
+                setAnswers((a) => ({ ...a, [displayStep.id]: next }))
+              }}
               disabled={saving}
               autoComplete="off"
             />
             {displayStep.sliderLabel && (
               <p className="onboarding-slider-label">
-                {displayStep.sliderLabel(typeof value === 'number' ? value : displayStep.sliderDefault ?? displayStep.sliderRange[0])}
+                {displayStep.sliderLabel(
+                  displayStep.sliderSteps
+                    ? (() => {
+                        const steps = displayStep.sliderSteps!
+                        const num = typeof value === 'number' ? value : displayStep.sliderDefault ?? steps[0]
+                        return steps.includes(num) ? num : (displayStep.sliderDefault ?? steps[0])
+                      })()
+                    : (typeof value === 'number' ? value : displayStep.sliderDefault ?? displayStep.sliderRange![0])
+                )}
               </p>
             )}
           </div>

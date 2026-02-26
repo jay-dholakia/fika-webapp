@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { getSupabase } from '@/lib/supabase'
+import { toE164, isValidPhone } from '@/lib/phone'
 
 declare global {
   interface Window {
@@ -56,7 +57,9 @@ export default function CtaWithLocation({ redirectToSignupWhenInLA = false }: Ct
   const [city, setCity] = useState('')
   const [state, setState] = useState('')
   const [locationStatus, setLocationStatus] = useState<'idle' | 'checking' | 'la' | 'not_la'>('idle')
+  const [phone, setPhone] = useState('')
   const [email, setEmail] = useState('')
+  const [marketingConsent, setMarketingConsent] = useState(false)
   const [waitlistStatus, setWaitlistStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [waitlistMessage, setWaitlistMessage] = useState('')
 
@@ -261,6 +264,23 @@ export default function CtaWithLocation({ redirectToSignupWhenInLA = false }: Ct
       cityVal = fromLocation.cityVal
       stateVal = fromLocation.stateVal
     }
+    const phoneTrim = phone.trim()
+    const emailTrim = email.trim()
+    if (!phoneTrim && !emailTrim) {
+      setWaitlistStatus('error')
+      setWaitlistMessage('Enter your phone number or email.')
+      return
+    }
+    if (phoneTrim && !isValidPhone(phoneTrim)) {
+      setWaitlistStatus('error')
+      setWaitlistMessage('Enter a valid phone number (at least 10 digits).')
+      return
+    }
+    if (emailTrim && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrim)) {
+      setWaitlistStatus('error')
+      setWaitlistMessage('Enter a valid email address.')
+      return
+    }
     const supabase = getSupabase()
     if (!supabase) {
       setWaitlistStatus('error')
@@ -268,17 +288,20 @@ export default function CtaWithLocation({ redirectToSignupWhenInLA = false }: Ct
       return
     }
     const { error } = await supabase.from('waitlist').insert({
-      email: email.trim(),
+      phone: phoneTrim ? toE164(phoneTrim) : null,
+      email: emailTrim || null,
       city: cityVal || null,
       state: stateVal || null,
+      marketing_consent_at: new Date().toISOString(),
     })
     if (error) {
       setWaitlistStatus('error')
-      setWaitlistMessage(error.code === '23505' ? 'This email is already on the list.' : 'Something went wrong. Please try again.')
+      setWaitlistMessage(error.code === '23505' ? 'This phone number or email is already on the list.' : 'Something went wrong. Please try again.')
       return
     }
     setWaitlistStatus('success')
     setWaitlistMessage("You're on the list. We'll be in touch when Fika comes to your city.")
+    setPhone('')
     setEmail('')
   }
 
@@ -380,16 +403,15 @@ export default function CtaWithLocation({ redirectToSignupWhenInLA = false }: Ct
       <form className="cta-form" onSubmit={handleWaitlistSubmit}>
         <div className="cta-form-row">
           <input
-            id="cta-waitlist-email"
-            name="email"
-            type="email"
-            placeholder="you@example.com"
+            id="cta-waitlist-phone"
+            name="phone"
+            type="tel"
+            placeholder="Phone (optional)"
             className="cta-input"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
             disabled={waitlistStatus === 'loading'}
-            autoComplete="email"
+            autoComplete="tel"
           />
           <div className="cta-place-wrapper">
             <input
@@ -405,12 +427,37 @@ export default function CtaWithLocation({ redirectToSignupWhenInLA = false }: Ct
             />
           </div>
         </div>
+        <div className="cta-form-row cta-form-row-single">
+          <input
+            id="cta-waitlist-email"
+            name="email"
+            type="email"
+            placeholder="Email (optional)"
+            className="cta-input"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            disabled={waitlistStatus === 'loading'}
+            autoComplete="email"
+          />
+        </div>
+        <label className="cta-consent">
+          <input
+            type="checkbox"
+            checked={marketingConsent}
+            onChange={(e) => setMarketingConsent(e.target.checked)}
+            disabled={waitlistStatus === 'loading'}
+            aria-describedby="cta-consent-text"
+          />
+                <span id="cta-consent-text" className="cta-consent-text">
+                  By clicking Notify me, you agree to receive SMS and/or email from Fika about when we launch in your city. Message &amp; data rates may apply for SMS. Reply STOP to opt out of SMS, HELP for help.
+                </span>
+        </label>
         {waitlistMessage && (
           <p className={`cta-message ${waitlistStatus === 'error' ? 'cta-message-error' : ''}`} role="alert">
             {waitlistMessage}
           </p>
         )}
-        <button type="submit" className="btn btn-primary btn-block" disabled={waitlistStatus === 'loading'}>
+        <button type="submit" className="btn btn-primary btn-block" disabled={waitlistStatus === 'loading' || !marketingConsent}>
           {waitlistStatus === 'loading' ? 'Adding…' : 'Notify me'}
         </button>
       </form>

@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { getSupabase } from '@/lib/supabase'
+import { toE164, isValidPhone } from '@/lib/phone'
 
 declare global {
   interface Window {
@@ -24,7 +25,9 @@ interface PlaceLike {
 }
 
 export default function WaitlistForm() {
+  const [phone, setPhone] = useState('')
   const [email, setEmail] = useState('')
+  const [marketingConsent, setMarketingConsent] = useState(false)
   const [city, setCity] = useState('')
   const [state, setState] = useState('')
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
@@ -130,20 +133,40 @@ export default function WaitlistForm() {
       setMessage('Unable to submit. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to .env.local.')
       return
     }
+    const phoneTrim = phone.trim()
+    const emailTrim = email.trim()
+    if (!phoneTrim && !emailTrim) {
+      setStatus('error')
+      setMessage('Enter your phone number or email.')
+      return
+    }
+    if (phoneTrim && !isValidPhone(phoneTrim)) {
+      setStatus('error')
+      setMessage('Enter a valid phone number (at least 10 digits).')
+      return
+    }
+    if (emailTrim && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrim)) {
+      setStatus('error')
+      setMessage('Enter a valid email address.')
+      return
+    }
     const { error } = await supabase.from('waitlist').insert({
-      email: email.trim(),
+      phone: phoneTrim ? toE164(phoneTrim) : null,
+      email: emailTrim || null,
       city: cityVal || null,
       state: stateVal || null,
+      marketing_consent_at: new Date().toISOString(),
     })
 
     if (error) {
       setStatus('error')
-      setMessage(error.code === '23505' ? 'This email is already on the list.' : 'Something went wrong. Please try again.')
+      setMessage(error.code === '23505' ? 'This phone number or email is already on the list.' : 'Something went wrong. Please try again.')
       return
     }
 
     setStatus('success')
     setMessage("You're on the list. We'll be in touch.")
+    setPhone('')
     setEmail('')
     setCity('')
     setState('')
@@ -162,16 +185,15 @@ export default function WaitlistForm() {
     <form className="cta-form" onSubmit={handleSubmit}>
       <div className="cta-form-row">
         <input
-          id="waitlist-email"
-          name="email"
-          type="email"
-          placeholder="you@example.com"
+          id="waitlist-phone"
+          name="phone"
+          type="tel"
+          placeholder="Phone (optional)"
           className="cta-input"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
           disabled={status === 'loading'}
-          autoComplete="email"
+          autoComplete="tel"
         />
         <div className="cta-place-wrapper" ref={placeContainerRef}>
           {(usePlainCityInput || !apiKey) && (
@@ -189,12 +211,37 @@ export default function WaitlistForm() {
           )}
         </div>
       </div>
+      <div className="cta-form-row cta-form-row-single">
+        <input
+          id="waitlist-email"
+          name="email"
+          type="email"
+          placeholder="Email (optional)"
+          className="cta-input"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          disabled={status === 'loading'}
+          autoComplete="email"
+        />
+      </div>
+      <label className="cta-consent">
+        <input
+          type="checkbox"
+          checked={marketingConsent}
+          onChange={(e) => setMarketingConsent(e.target.checked)}
+          disabled={status === 'loading'}
+          aria-describedby="waitlist-consent-text"
+        />
+        <span id="waitlist-consent-text" className="cta-consent-text">
+          By clicking Notify me, you agree to receive SMS and/or email from Fika about when we launch in your city. Message &amp; data rates may apply for SMS. Reply STOP to opt out of SMS, HELP for help.
+        </span>
+      </label>
       {message && (
         <p className={`cta-message ${status === 'error' ? 'cta-message-error' : ''}`} role="alert">
           {message}
         </p>
       )}
-      <button type="submit" className="btn btn-primary btn-block" disabled={status === 'loading'}>
+      <button type="submit" className="btn btn-primary btn-block" disabled={status === 'loading' || !marketingConsent}>
         {status === 'loading' ? 'Adding…' : 'Notify me'}
       </button>
     </form>

@@ -5,11 +5,14 @@ export type ProfileRow = {
   id: string
   first_name: string | null
   birthdate: string | null // YYYY-MM-DD
+  gender: string | null
+  gender_preference: string | null
   pronouns: string | null
   relationship_status: string | null
   city: string | null
   lat: number | null
   lng: number | null
+  languages?: string[] | null
   intent_confirmed_at: string | null // ISO
   in_match_bowl?: boolean
   intro_balance?: number
@@ -40,4 +43,24 @@ export type WeeklyMatchOptInRow = {
   user_id: string
   batch_week: string // Monday date YYYY-MM-DD
   opted_in_at: string // ISO timestamp (required in DB)
+}
+
+export type ConversationRow = {
+  id: string
+  user_a: string | null
+  user_b: string | null
+  match_id: string | null
+  conversation_type: string | null
+  status: string | null
+  last_activity_at: string | null // ISO
+  created_at: string | null // ISO
+}
+
+export type MessageRow = {
+  id: string
+  conversation_id: string
+  sender_type: string
+  sender_id: string | null
+  text: string
+  created_at: string | null // ISO
 }
