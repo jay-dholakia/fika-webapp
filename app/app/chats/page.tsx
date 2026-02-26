@@ -47,7 +47,7 @@ export default function AppChatsPage() {
           setLoading(false)
           return
         }
-        const otherIds = [...new Set((convos as ConversationRow[]).map((c) => (c.user_a === userId ? c.user_b : c.user_a)).filter(Boolean) as string[])]
+        const otherIds = Array.from(new Set((convos as ConversationRow[]).map((c) => (c.user_a === userId ? c.user_b : c.user_a)).filter(Boolean) as string[]))
         if (otherIds.length === 0) {
           setChats([])
           setLoading(false)
