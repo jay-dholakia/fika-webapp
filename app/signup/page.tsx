@@ -155,7 +155,7 @@ export default function SignupPage() {
               role="tab"
               aria-selected={method === 'email'}
               className={`auth-method-tab ${method === 'email' ? 'active' : ''}`}
-              onClick={() => { setMessage(null); }}
+              onClick={() => { setMethod('email'); setMessage(null); }}
             >
               Email
             </button>

@@ -7,12 +7,20 @@ export async function GET() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!url || !serviceRoleKey) {
-    return NextResponse.json({ error: 'Server not configured' }, { status: 500 })
+    // Missing env on Vercel: return safe count so the app doesn't 500. Set SUPABASE_SERVICE_ROLE_KEY in Vercel for real count.
+    return NextResponse.json({ count: 0, target: TARGET_COUNT })
   }
-  const supabase = createClient(url, serviceRoleKey)
-  const { count, error } = await supabase.from('profiles').select('*', { count: 'exact', head: true })
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+  try {
+    const supabase = createClient(url, serviceRoleKey)
+    const { count, error } = await supabase.from('profiles').select('*', { count: 'exact', head: true })
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+    return NextResponse.json({ count: count ?? 0, target: TARGET_COUNT })
+  } catch (err) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : 'Profile count failed' },
+      { status: 500 }
+    )
   }
-  return NextResponse.json({ count: count ?? 0, target: TARGET_COUNT })
 }
