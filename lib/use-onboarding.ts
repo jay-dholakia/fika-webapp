@@ -37,7 +37,7 @@ export function useOnboardingStatus(userId: string | undefined) {
         supabase!.from('intake_responses_v5').select('user_id, responses, completed_at, availability_times').eq('user_id', userId).maybeSingle(),
       ])
       if (cancelled) return
-      fetchedForUserIdRef.current = userId
+      fetchedForUserIdRef.current = userId ?? null
       const profileData = profileRes.data as ProfileRow | null
       const intakeData = intakeRes.data as IntakeResponsesV5Row | null
       const complete = checkComplete(profileData, intakeData)
