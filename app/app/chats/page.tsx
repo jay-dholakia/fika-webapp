@@ -74,7 +74,7 @@ export default function AppChatsPage() {
             })
             setChats(list)
           })
-          .finally(() => setLoading(false))
+          .then(() => setLoading(false), () => setLoading(false))
       })
   }, [userId])
 
