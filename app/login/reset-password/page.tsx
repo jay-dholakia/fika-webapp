@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { getSupabase } from '@/lib/supabase'
-import Footer from '../components/Footer'
+import Footer from '../../components/Footer'
 
 export default function ResetPasswordPage() {
   const router = useRouter()

@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { getSupabase } from '@/lib/supabase'
-import Footer from '../components/Footer'
+import Footer from '../../components/Footer'
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('')
