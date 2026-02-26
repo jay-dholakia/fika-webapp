@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import { getSupabase } from '@/lib/supabase'
 import type { User } from '@supabase/supabase-js'
 
-const navLinks = [
+const navLinks: { href: string; label: string; cta?: boolean }[] = [
   { href: '#how', label: 'How it works' },
 ]
 
