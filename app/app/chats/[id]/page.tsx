@@ -6,6 +6,9 @@ import Link from 'next/link'
 import { getSupabase } from '@/lib/supabase'
 import type { ConversationRow, MessageRow } from '@/lib/db-types'
 
+/** Shape returned by .select('id, text, created_at, sender_type, sender_id') on messages */
+type MessageSelectRow = Pick<MessageRow, 'id' | 'text' | 'created_at' | 'sender_type' | 'sender_id'>
+
 const LIV_MENTION = /@liv\b/i
 
 type DisplayMessage = {
@@ -95,7 +98,7 @@ export default function AppChatDetailPage() {
           setMessages([])
           return
         }
-        const list: DisplayMessage[] = (rows ?? []).map((m: MessageRow) => ({
+        const list: DisplayMessage[] = (rows ?? []).map((m: MessageSelectRow) => ({
           id: m.id,
           text: m.text,
           createdAt: m.created_at,
