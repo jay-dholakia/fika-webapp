@@ -147,7 +147,7 @@ export default function OnboardingPage() {
 
   async function saveProfileField(
     id: string,
-    value: string | number | { city: string; lat: number; lng: number } | null,
+    value: string | number | string[] | { city: string; lat: number; lng: number } | null,
     currentAnswers?: Record<string, unknown>
   ) {
     if (!sessionUserId) return
