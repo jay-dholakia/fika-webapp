@@ -289,22 +289,18 @@ export default function AppHomePage() {
           <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem', marginBottom: '1rem' }}>
             We&apos;re building the community. Once we reach {TARGET_USERS} users, you&apos;ll be able to opt in to weekly matches.
           </p>
-          {profileCount !== null && (
-            <>
-              <p className="app-counter-text">
-                <span className="app-counter-value">{profileCount}</span>
-                <span className="app-counter-sep"> / </span>
-                <span className="app-counter-target">{TARGET_USERS}</span>
-                <span className="app-counter-label"> users</span>
-              </p>
-              <div className="app-counter-bar" role="progressbar" aria-valuenow={profileCount} aria-valuemin={0} aria-valuemax={TARGET_USERS}>
-                <div
-                  className="app-counter-bar-fill"
-                  style={{ width: `${Math.min(100, (profileCount / TARGET_USERS) * 100)}%` }}
-                />
-              </div>
-            </>
-          )}
+          <p className="app-counter-text">
+            <span className="app-counter-value">{profileCount !== null ? profileCount : '—'}</span>
+            <span className="app-counter-sep"> / </span>
+            <span className="app-counter-target">{TARGET_USERS}</span>
+            <span className="app-counter-label"> users</span>
+          </p>
+          <div className="app-counter-bar" role="progressbar" aria-valuenow={profileCount ?? 0} aria-valuemin={0} aria-valuemax={TARGET_USERS}>
+            <div
+              className="app-counter-bar-fill"
+              style={{ width: `${profileCount !== null ? Math.min(100, (profileCount / TARGET_USERS) * 100) : 0}%` }}
+            />
+          </div>
           <p className="app-waitlist-share-copy">
             Help us unlock the experience for your city.
           </p>
