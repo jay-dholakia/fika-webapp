@@ -242,16 +242,16 @@ export function IntroDetailModal({
                     {age != null && (
                       <span>{intro.otherCity ? ' · ' : ''}{age} years old</span>
                     )}
-                    {detail.profile.pronouns && (
+                    {detail?.profile?.pronouns && (
                       <span> · {detail.profile.pronouns}</span>
                     )}
                   </div>
-                  {detail.profile.languages?.length ? (
+                  {detail?.profile?.languages?.length ? (
                     <p className="app-intro-detail-languages">
                       Speaks {detail.profile.languages.join(', ')}
                     </p>
                   ) : null}
-                  {detail.profile.bio_text?.trim() ? (
+                  {detail?.profile?.bio_text?.trim() ? (
                     <p className="app-intro-detail-bio">{detail.profile.bio_text.trim()}</p>
                   ) : null}
                 </div>
