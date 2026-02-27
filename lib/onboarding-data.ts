@@ -318,10 +318,8 @@ export const INTAKE_STEPS: ProfileStep[] = [
   {
     id: 'q8_distance_miles',
     question: 'How far are you willing to travel for a Fika?',
-    type: 'slider',
-    sliderSteps: [5, 10, 25, 50],
-    sliderDefault: 10,
-    sliderLabel: (v) => `${v} miles`,
+    type: 'chips_single',
+    options: ['5', '10', '25', '50'],
   },
   // Optional wrap
   {

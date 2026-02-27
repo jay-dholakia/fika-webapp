@@ -1839,6 +1839,10 @@ a {
     padding: 0.5rem 0 0.75rem;
     background: linear-gradient(to top, var(--color-surface) 70%, transparent);
   }
+  .app-new-questions-flow-actions--compact {
+    margin-top: 0.25rem;
+    padding-top: 0.25rem;
+  }
 }
 .app-feedback-pill {
   position: fixed;

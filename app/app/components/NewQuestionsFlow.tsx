@@ -117,7 +117,9 @@ export function NewQuestionsFlow({ orderedSteps, intake, userId, onComplete }: N
           step.id === 'q12_first_conversation' &&
           (base == null || (typeof base === 'string' && !base.trim()))
             ? 'N/A'
-            : base
+            : step.id === 'q8_distance_miles' && (typeof base === 'string' && base !== '')
+              ? Number(base)
+              : base
         await saveIntakeAnswer(userId, step, answer as string | string[] | number)
         if (step.id === 'confirm_intent') {
           const supabase = getSupabase()
@@ -147,6 +149,11 @@ export function NewQuestionsFlow({ orderedSteps, intake, userId, onComplete }: N
     onComplete()
     return null
   }
+
+  const isCompactStep =
+    step &&
+    ((step.type === 'chips_single' && step.options && step.options.length <= 4) ||
+      (step.type === 'multi_select' && step.options && step.options.length <= 6))
 
   return (
     <div className="app-card app-new-questions-flow">
@@ -251,19 +258,22 @@ export function NewQuestionsFlow({ orderedSteps, intake, userId, onComplete }: N
 
       {!showCombinedStudy && step?.type === 'chips_single' && step.options && (
         <div>
-          {step.options.map((opt) => (
+          {step.options.map((opt) => {
+            const isSelected =
+              value === opt || (step.id === 'q8_distance_miles' && typeof value === 'number' && value === Number(opt))
+            return (
             <button
               key={opt}
               type="button"
-              className={`onboarding-chip ${value === opt ? 'selected' : ''}`}
+              className={`onboarding-chip ${isSelected ? 'selected' : ''}`}
               onClick={() =>
-                setAnswers((a) => (value === opt ? { ...a, [step.id]: '' } : { ...a, [step.id]: opt }))
+                setAnswers((a) => (isSelected ? { ...a, [step.id]: '' } : { ...a, [step.id]: opt }))
               }
               disabled={saving}
             >
-              {opt}
+              {step.id === 'q8_distance_miles' ? `${opt} miles` : opt}
             </button>
-          ))}
+          )})}
         </div>
       )}
 
@@ -432,7 +442,7 @@ export function NewQuestionsFlow({ orderedSteps, intake, userId, onComplete }: N
         </p>
       )}
 
-      <div className="app-new-questions-flow-actions">
+      <div className={`app-new-questions-flow-actions${isCompactStep ? ' app-new-questions-flow-actions--compact' : ''}`}>
         <button
           type="button"
           className="btn btn-primary btn-block"
