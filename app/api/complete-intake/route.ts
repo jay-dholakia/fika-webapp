@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 
-const OPEN_ENDED_IDS = ['q3_work_study_detail', 'q12_first_conversation']
+const OPEN_ENDED_IDS = ['q12_first_conversation']
 
 interface IntakeResponseItem {
   question_id: string
@@ -13,7 +13,10 @@ function buildOpenEndedText(responses: IntakeResponseItem[]): string {
   for (const id of OPEN_ENDED_IDS) {
     const r = responses.find((x) => x.question_id === id)
     const val = r?.answer
-    if (typeof val === 'string' && val.trim()) parts.push(val.trim())
+    if (typeof val !== 'string') continue
+    const trimmed = val.trim()
+    if (!trimmed || trimmed === 'N/A') continue
+    parts.push(trimmed)
   }
   return parts.join('\n\n') || 'No open-ended answers.'
 }

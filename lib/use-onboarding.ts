@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { getSupabase } from './supabase'
 import { isOnboardingComplete as checkComplete } from './onboarding'
 import { authLog } from './auth-log'
@@ -11,18 +11,21 @@ export function useOnboardingStatus(userId: string | undefined) {
   const [profile, setProfile] = useState<ProfileRow | null>(null)
   const [intake, setIntake] = useState<IntakeResponsesV5Row | null>(null)
   const fetchedForUserIdRef = useRef<string | null>(null)
+  const loadRef = useRef<(() => Promise<void>) | null>(null)
 
   useEffect(() => {
     if (!userId) {
       authLog('useOnboardingStatus:no-userId', { loading: false })
       setLoading(false)
       fetchedForUserIdRef.current = null
+      loadRef.current = null
       return
     }
     const supabase = getSupabase()
     if (!supabase) {
       authLog('useOnboardingStatus:no-supabase')
       setLoading(false)
+      loadRef.current = null
       return
     }
 
@@ -52,14 +55,22 @@ export function useOnboardingStatus(userId: string | undefined) {
       setLoading(false)
     }
 
+    loadRef.current = load
     load()
-    return () => { cancelled = true }
+    return () => { cancelled = true; loadRef.current = null }
   }, [userId])
+
+  const refetch = useCallback(() => {
+    if (loadRef.current) {
+      setLoading(true)
+      loadRef.current().catch(() => setLoading(false))
+    }
+  }, [])
 
   const isComplete = checkComplete(profile, intake)
   // Stay in loading until we've received a fetch result for this userId (avoids redirect race when landing on /app after onboarding).
   // For new users, fetch returns null/null and we set fetchedForUserIdRef, so effectiveLoading becomes false and we redirect to onboarding.
   const pendingNoData = !!userId && profile === null && intake === null && fetchedForUserIdRef.current !== userId
   const effectiveLoading = loading || pendingNoData
-  return { loading: effectiveLoading, profile, intake, isComplete }
+  return { loading: effectiveLoading, profile, intake, isComplete, refetch }
 }

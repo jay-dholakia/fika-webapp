@@ -12,6 +12,7 @@ import {
   TOTAL_ONBOARDING_STEPS,
   type ProfileStep,
 } from '@/lib/onboarding-data'
+import { showIndustryStep, showSchoolSteps } from '@/lib/onboarding'
 import type { IntakeResponseItem } from '@/lib/db-types'
 import type { ProfileRow } from '@/lib/db-types'
 import type { IntakeResponsesV5Row } from '@/lib/db-types'
@@ -50,20 +51,45 @@ function getFirstUnansweredStepAndAnswers(
     } else if (s.id === 'location') {
       if (!profile?.city) return { stepIndex: i, answers }
       answers.location = { city: profile.city, lat: profile.lat ?? 0, lng: profile.lng ?? 0 }
-    } else if (s.id === 'confirm_intent') {
-      if (!profile?.intent_confirmed_at) return { stepIndex: i, answers }
     }
   }
 
   const responses = intake?.responses ?? []
   for (let j = 0; j < INTAKE_STEPS.length; j++) {
     const s = INTAKE_STEPS[j]
+    const gate = answers.q3_work_or_study as string | undefined
+    if (s.id === 'q3_profession' && !showIndustryStep(gate)) continue
+    if ((s.id === 'q3_university' || s.id === 'q3_major') && !showSchoolSteps(gate)) continue
     const r = responses.find((x: IntakeResponseItem) => x.question_id === s.id)
     if (!r) return { stepIndex: PROFILE_STEPS.length + j, answers }
     answers[s.id] = r.answer as string | string[] | number
   }
 
   return { stepIndex: ALL_STEPS.length - 1, answers }
+}
+
+/** Returns the next step index that applies given branching (gate). */
+function getNextStepIndex(fromIndex: number, answers: AnswersState): number {
+  const gate = answers.q3_work_or_study as string | undefined
+  for (let i = fromIndex; i < ALL_STEPS.length; i++) {
+    const s = ALL_STEPS[i]
+    if (s.id === 'q3_profession' && !showIndustryStep(gate)) continue
+    if ((s.id === 'q3_university' || s.id === 'q3_major') && !showSchoolSteps(gate)) continue
+    return i
+  }
+  return ALL_STEPS.length
+}
+
+/** Returns the previous step index that applies given branching. */
+function getPrevStepIndex(fromIndex: number, answers: AnswersState): number {
+  const gate = answers.q3_work_or_study as string | undefined
+  for (let i = fromIndex - 1; i >= 0; i--) {
+    const s = ALL_STEPS[i]
+    if (s.id === 'q3_profession' && !showIndustryStep(gate)) continue
+    if ((s.id === 'q3_university' || s.id === 'q3_major') && !showSchoolSteps(gate)) continue
+    return i
+  }
+  return 0
 }
 
 function parseDate(s: string): string | null {
@@ -81,7 +107,7 @@ function is18Plus(dateStr: string): boolean {
   return age >= 18
 }
 
-export default function OnboardingPage() {
+export default function AppOnboardingPage() {
   const router = useRouter()
   const [sessionUserId, setSessionUserId] = useState<string | null>(null)
   const [sessionChecked, setSessionChecked] = useState(false)
@@ -94,6 +120,8 @@ export default function OnboardingPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [locationStatus, setLocationStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
+  const [searchableQuery, setSearchableQuery] = useState('')
+  const [majorSearchQuery, setMajorSearchQuery] = useState('')
 
   useEffect(() => {
     authLog('onboarding:mount')
@@ -119,6 +147,8 @@ export default function OnboardingPage() {
     setStepIndex(first)
     setDisplayStepIndex(first)
     setAnswers(prefilled)
+    setSearchableQuery('')
+    setMajorSearchQuery('')
     if (first < PROFILE_STEPS.length && PROFILE_STEPS[first].id === 'location' && prefilled.location) {
       setLocationStatus('done')
     }
@@ -154,7 +184,6 @@ export default function OnboardingPage() {
     const supabase = getSupabase()
     if (!supabase) return
     const updates: Record<string, unknown> = { id: sessionUserId }
-    // first_name is NOT NULL in DB: always set it (from this save, from previous answers, or placeholder)
     const firstName =
       id === 'first_name' && typeof value === 'string'
         ? value.trim() || ' '
@@ -170,7 +199,6 @@ export default function OnboardingPage() {
       updates.lat = value.lat
       updates.lng = value.lng
     }
-    if (id === 'confirm_intent') updates.intent_confirmed_at = new Date().toISOString()
     const { error: e } = await supabase.from('profiles').upsert(updates, { onConflict: 'id' })
     if (e) throw new Error(e.message)
   }
@@ -258,29 +286,66 @@ export default function OnboardingPage() {
         if (isProfileStep) {
           if (step.id === 'location' && typeof raw === 'object' && raw !== null && 'city' in (raw as object)) {
             await saveProfileField(step.id, raw as { city: string; lat: number; lng: number }, answers)
-          } else if (step.id === 'confirm_intent') {
-            await saveProfileField(step.id, 'confirmed', answers)
           } else if (step.id === 'languages' && (Array.isArray(raw) || raw === undefined)) {
             await saveProfileField(step.id, Array.isArray(raw) ? raw : [], answers)
           } else if (typeof raw === 'string' || typeof raw === 'number') {
             await saveProfileField(step.id, raw, answers)
           }
+          setAnswers((a) => ({ ...a, [step.id]: raw }))
+          setIsExiting(true)
+          setTimeout(() => {
+            setStepIndex((i) => i + 1)
+            setDisplayStepIndex((i) => i + 1)
+            setIsExiting(false)
+          }, 280)
         } else {
-          await saveIntakeAnswer(step, raw as string | string[] | number)
+          const nextStep = ALL_STEPS[stepIndex + 1]
+          const isStudyScreenWithMajor = step.id === 'q3_university' && nextStep?.id === 'q3_major'
+          if (isStudyScreenWithMajor) {
+            await saveIntakeAnswer(step, ((answers.q3_university ?? '') as string))
+            await saveIntakeAnswer(nextStep, ((answers.q3_major ?? '') as string))
+            setAnswers((a) => ({ ...a, q3_university: answers.q3_university ?? '', q3_major: answers.q3_major ?? '' }))
+            setIsExiting(true)
+            setTimeout(() => {
+              setStepIndex((i) => i + 2)
+              setDisplayStepIndex((i) => i + 2)
+              setIsExiting(false)
+              setSearchableQuery('')
+              setMajorSearchQuery('')
+            }, 280)
+          } else {
+            const base = (step.type === 'searchable_single' || step.type === 'single_select') ? (raw ?? '') : raw
+            const intakeAnswer =
+              step.id === 'q12_first_conversation' &&
+              (base == null || (typeof base === 'string' && !base.trim()))
+                ? 'N/A'
+                : base
+            await saveIntakeAnswer(step, intakeAnswer as string | string[] | number)
+            if (step.id === 'confirm_intent' && sessionUserId) {
+              const supabase = getSupabase()
+              if (supabase) {
+                await supabase.from('profiles').update({
+                  intent_confirmed_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                }).eq('id', sessionUserId)
+              }
+            }
+            const updatedAnswers = { ...answers, [step.id]: intakeAnswer }
+            if (isLastStep) {
+              await callCompleteIntake()
+              router.replace('/app')
+              return
+            }
+            setAnswers((a) => ({ ...a, [step.id]: intakeAnswer }))
+            const nextIndex = getNextStepIndex(stepIndex + 1, updatedAnswers)
+            setIsExiting(true)
+            setTimeout(() => {
+              setStepIndex(nextIndex)
+              setDisplayStepIndex(nextIndex)
+              setIsExiting(false)
+            }, 280)
+          }
         }
-
-        if (isLastStep) {
-          await callCompleteIntake()
-          router.replace('/app')
-          return
-        }
-        setAnswers((a) => ({ ...a, [step.id]: raw }))
-        setIsExiting(true)
-        setTimeout(() => {
-          setStepIndex((i) => i + 1)
-          setDisplayStepIndex((i) => i + 1)
-          setIsExiting(false)
-        }, 280)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Something went wrong.')
       } finally {
@@ -291,8 +356,9 @@ export default function OnboardingPage() {
 
   function handleBack() {
     if (stepIndex > 0) {
-      setStepIndex((i) => i - 1)
-      setDisplayStepIndex((i) => i - 1)
+      const prevIndex = getPrevStepIndex(stepIndex, answers)
+      setStepIndex(prevIndex)
+      setDisplayStepIndex(prevIndex)
     }
     setError(null)
   }
@@ -331,7 +397,6 @@ export default function OnboardingPage() {
       setLocationStatus('error')
       return
     }
-    // timeout 15s; don't require high accuracy so we can get a coarse fix faster (avoids kCLErrorLocationUnknown when GPS can't get a fix)
     const options: PositionOptions = {
       enableHighAccuracy: false,
       timeout: 15000,
@@ -342,7 +407,6 @@ export default function OnboardingPage() {
         const lat = pos.coords.latitude
         const lng = pos.coords.longitude
         try {
-          // Prefer Google Geocoding (same as Ready for Fika) when key is set; no CORS
           const googleResult = await reverseGeocodeWithGoogle(lat, lng)
           if (googleResult) {
             const cityStr = googleResult.state
@@ -352,7 +416,6 @@ export default function OnboardingPage() {
             setLocationStatus('done')
             return
           }
-          // Fallback: our API proxy calls Nominatim server-side (avoids CORS/403)
           const res = await fetch(`/api/geocode?lat=${lat}&lng=${lng}`)
           const data = (await res.json()) as { city?: string; error?: string }
           if (!res.ok || data.error) throw new Error(data.error ?? 'Geocode failed')
@@ -365,11 +428,10 @@ export default function OnboardingPage() {
         }
       },
       (err) => {
-        // err.code: 1 = PERMISSION_DENIED, 2 = POSITION_UNAVAILABLE (e.g. kCLErrorLocationUnknown), 3 = TIMEOUT
         const message =
           err.code === 1
             ? 'Location access was denied. Please allow location in your browser or device settings and try again.'
-            : 'We couldn’t get your location. Try again in a moment, or move to a spot with better signal.'
+            : "We couldn't get your location. Try again in a moment, or move to a spot with better signal."
         setError(message)
         setLocationStatus('error')
       },
@@ -416,12 +478,13 @@ export default function OnboardingPage() {
   authLog('onboarding:render', { show: 'form', stepId: step.id, stepIndex })
   const progress = ((stepIndex + 1) / TOTAL_ONBOARDING_STEPS) * 100
   const value = answers[displayStep.id]
+  const gate = answers.q3_work_or_study as string | undefined
+  const isStudyPath = showSchoolSteps(gate)
+  const majorStep = ALL_STEPS[displayStepIndex + 1]
+  const showCombinedStudy = displayStep.id === 'q3_university' && isStudyPath && majorStep?.id === 'q3_major'
 
   return (
     <div className="onboarding-wrap">
-      <Link href="/" className="logo" style={{ marginBottom: '1rem', display: 'inline-block' }}>
-        fika
-      </Link>
       <div className="onboarding-progress">
         <div className="onboarding-progress-inner" style={{ width: `${progress}%` }} />
       </div>
@@ -430,13 +493,108 @@ export default function OnboardingPage() {
         className={`onboarding-step ${isExiting ? 'onboarding-step-exit' : 'onboarding-step-enter'}`}
         key={displayStepIndex}
       >
-        <h2 className="onboarding-question">{displayStep.question}</h2>
+        <h2 className="onboarding-question">{showCombinedStudy ? 'Where/what do you study? (Optional)' : displayStep.question}</h2>
 
-        {displayStep.body && (
+        {!showCombinedStudy && displayStep.body && (
           <div className="onboarding-body">
             {displayStep.body.split(/\n\n+/).map((p, i) => (
               <p key={i}>{p}</p>
             ))}
+            {displayStep.id === 'confirm_intent' && (
+              <p className="onboarding-body-links">
+                By continuing, you agree to our{' '}
+                <Link href="/terms" target="_blank" rel="noopener noreferrer">Terms of Service</Link>
+                {' '}and{' '}
+                <Link href="/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</Link>.
+              </p>
+            )}
+          </div>
+        )}
+
+        {showCombinedStudy && displayStep.options && majorStep && 'options' in majorStep && majorStep.options && (
+          <div className="onboarding-study-fields">
+            <div className="onboarding-searchable-wrap">
+              <label className="onboarding-searchable-label" htmlFor="onboarding-q3_university">
+                What college or university do you go to?
+              </label>
+              <input
+                id="onboarding-q3_university"
+                type="text"
+                className="auth-input"
+                placeholder={displayStep.placeholder || ''}
+                value={searchableQuery !== '' ? searchableQuery : ((answers.q3_university as string) ?? '')}
+                onChange={(e) => {
+                  setSearchableQuery(e.target.value)
+                  if (!e.target.value.trim()) setAnswers((a) => ({ ...a, q3_university: '' }))
+                }}
+                onFocus={() => setSearchableQuery((answers.q3_university as string) || '')}
+                disabled={saving}
+                autoComplete="off"
+              />
+              {searchableQuery.length > 0 && (
+                <ul className="onboarding-searchable-list" role="listbox">
+                  {displayStep.options
+                    .filter((opt) => opt.toLowerCase().includes(searchableQuery.toLowerCase()))
+                    .slice(0, 12)
+                    .map((opt) => (
+                      <li key={opt} role="option">
+                        <button
+                          type="button"
+                          className="onboarding-searchable-option"
+                          onClick={() => {
+                            setAnswers((a) => ({ ...a, q3_university: opt }))
+                            setSearchableQuery('')
+                          }}
+                          disabled={saving}
+                        >
+                          {opt}
+                        </button>
+                      </li>
+                    ))}
+                </ul>
+              )}
+            </div>
+            <div className="onboarding-searchable-wrap" style={{ marginTop: '1rem' }}>
+              <label className="onboarding-searchable-label" htmlFor="onboarding-q3_major">
+                What&apos;s your major?
+              </label>
+              <input
+                id="onboarding-q3_major"
+                type="text"
+                className="auth-input"
+                placeholder={majorStep.placeholder || 'Search majors…'}
+                value={majorSearchQuery !== '' ? majorSearchQuery : ((answers.q3_major as string) ?? '')}
+                onChange={(e) => {
+                  setMajorSearchQuery(e.target.value)
+                  if (!e.target.value.trim()) setAnswers((a) => ({ ...a, q3_major: '' }))
+                }}
+                onFocus={() => setMajorSearchQuery((answers.q3_major as string) || '')}
+                disabled={saving}
+                autoComplete="off"
+              />
+              {majorSearchQuery.length > 0 && (
+                <ul className="onboarding-searchable-list" role="listbox">
+                  {(majorStep.options as string[])
+                    .filter((opt) => opt.toLowerCase().includes(majorSearchQuery.toLowerCase()))
+                    .slice(0, 12)
+                    .map((opt) => (
+                      <li key={opt} role="option">
+                        <button
+                          type="button"
+                          className="onboarding-searchable-option"
+                          onClick={() => {
+                            setAnswers((a) => ({ ...a, q3_major: opt }))
+                            setMajorSearchQuery('')
+                          }}
+                          disabled={saving}
+                        >
+                          {opt}
+                        </button>
+                      </li>
+                    ))}
+                </ul>
+              )}
+            </div>
           </div>
         )}
 
@@ -496,19 +654,38 @@ export default function OnboardingPage() {
         )}
 
         {displayStep.type === 'location_permission' && (
-          <div>
-            <button
-              type="button"
-              className="onboarding-location-btn"
-              onClick={handleLocation}
-              disabled={locationStatus === 'loading'}
-            >
-              {locationStatus === 'loading'
-                ? 'Getting location…'
-                : locationStatus === 'done' && value && typeof value === 'object' && 'city' in (value as object)
-                  ? `✓ ${(value as { city: string }).city}`
-                  : 'Use My Location'}
-            </button>
+          <div className="onboarding-location-wrap">
+            {locationStatus === 'loading' ? (
+              <div className="onboarding-location-set">
+                <span className="onboarding-location-set-icon" aria-hidden>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                    <circle cx="12" cy="10" r="3" />
+                  </svg>
+                </span>
+                <span className="onboarding-location-set-city">Getting location…</span>
+              </div>
+            ) : (
+              <div className="onboarding-location-set">
+                <span className="onboarding-location-set-icon" aria-hidden>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                    <circle cx="12" cy="10" r="3" />
+                  </svg>
+                </span>
+                <span className="onboarding-location-set-city">
+                  {value && typeof value === 'object' && 'city' in (value as object) ? (value as { city: string }).city : 'Your Location'}
+                </span>
+                <button
+                  type="button"
+                  className="onboarding-location-change"
+                  onClick={handleLocation}
+                  disabled={saving}
+                >
+                  {value && typeof value === 'object' && 'city' in (value as object) ? 'Change' : 'Use my location'}
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -517,15 +694,16 @@ export default function OnboardingPage() {
             {displayStep.options.map((opt) => {
               const arr = (Array.isArray(value) ? value : []) as string[]
               const selected = arr.includes(opt)
+              const isPreferNotToSay = opt === 'Prefer not to say'
               const isExclusiveOption =
                 (displayStep.id === 'q10_first_conversation_feel' && opt === 'A mix — see where it goes') ||
-                (displayStep.id === 'q6_who_excited_to_meet' && opt === "I'm open — surprise me")
+                (displayStep.id === 'q6_who_excited_to_meet' && opt === "I'm open to anyone")
               const atMax = displayStep.maxSelections != null && arr.length >= displayStep.maxSelections && !selected
               const exclusiveOptionText =
                 displayStep.id === 'q10_first_conversation_feel'
                   ? 'A mix — see where it goes'
-                  : displayStep.id === 'q6_who_excited_to_meet'
-                    ? "I'm open — surprise me"
+: displayStep.id === 'q6_who_excited_to_meet'
+                  ? "I'm open to anyone"
                     : null
               return (
                 <button
@@ -535,6 +713,10 @@ export default function OnboardingPage() {
                   onClick={() => {
                     if (selected) {
                       setAnswers((a) => ({ ...a, [displayStep.id]: arr.filter((x) => x !== opt) }))
+                    } else if (isPreferNotToSay) {
+                      setAnswers((a) => ({ ...a, [displayStep.id]: [opt] }))
+                    } else if (arr.includes('Prefer not to say')) {
+                      setAnswers((a) => ({ ...a, [displayStep.id]: [...arr.filter((x) => x !== 'Prefer not to say'), opt] }))
                     } else if (isExclusiveOption) {
                       setAnswers((a) => ({ ...a, [displayStep.id]: [opt] }))
                     } else if (exclusiveOptionText) {
@@ -612,6 +794,73 @@ export default function OnboardingPage() {
             autoComplete="off"
           />
         )}
+
+        {displayStep.type === 'single_select' && displayStep.options && (
+          <select
+            id={`onboarding-${displayStep.id}`}
+            className="auth-input"
+            value={(value as string) ?? ''}
+            onChange={(e) => setAnswers((a) => ({ ...a, [displayStep.id]: e.target.value }))}
+            disabled={saving}
+            aria-label={displayStep.question}
+          >
+            <option value="">{displayStep.placeholder ?? 'Choose…'}</option>
+            {displayStep.options.map((opt) => (
+              <option key={opt} value={opt}>
+                {opt}
+              </option>
+            ))}
+          </select>
+        )}
+
+        {displayStep.type === 'searchable_single' && displayStep.options && !showCombinedStudy && (
+          <div className="onboarding-searchable-wrap">
+            <input
+              id={`onboarding-${displayStep.id}`}
+              type="text"
+              className="auth-input"
+              placeholder={displayStep.placeholder || ''}
+              value={searchableQuery !== '' ? searchableQuery : ((value as string) ?? '')}
+              onChange={(e) => {
+                setSearchableQuery(e.target.value)
+                if (!e.target.value.trim()) setAnswers((a) => ({ ...a, [displayStep.id]: '' }))
+              }}
+              onFocus={() => setSearchableQuery((value as string) || '')}
+              disabled={saving}
+              autoComplete="off"
+              aria-autocomplete="list"
+              aria-controls={`onboarding-${displayStep.id}-list`}
+              role="combobox"
+              aria-expanded={searchableQuery.length > 0}
+            />
+            {searchableQuery.length > 0 && (
+              <ul
+                id={`onboarding-${displayStep.id}-list`}
+                className="onboarding-searchable-list"
+                role="listbox"
+              >
+                {displayStep.options
+                  .filter((opt) => opt.toLowerCase().includes(searchableQuery.toLowerCase()))
+                  .slice(0, 12)
+                  .map((opt) => (
+                    <li key={opt} role="option">
+                      <button
+                        type="button"
+                        className="onboarding-searchable-option"
+                        onClick={() => {
+                          setAnswers((a) => ({ ...a, [displayStep.id]: opt }))
+                          setSearchableQuery('')
+                        }}
+                        disabled={saving}
+                      >
+                        {opt}
+                      </button>
+                    </li>
+                  ))}
+              </ul>
+            )}
+          </div>
+        )}
       </div>
 
       {error && <p className="onboarding-error" role="alert">{error}</p>}
@@ -629,21 +878,6 @@ export default function OnboardingPage() {
           disabled={saving || isExiting || (step.type === 'location_permission' && locationStatus !== 'done' && !value) || (step.id === 'confirm_intent' && !value)}
         >
           {saving ? 'Saving…' : isLastStep ? 'Finish' : 'Continue'}
-        </button>
-      </div>
-
-      <div className="onboarding-logout">
-        <button
-          type="button"
-          className="onboarding-logout-btn"
-          onClick={async () => {
-            await getSupabase()?.auth.signOut()
-            router.push('/')
-            router.refresh()
-          }}
-          disabled={saving}
-        >
-          Log out
         </button>
       </div>
     </div>

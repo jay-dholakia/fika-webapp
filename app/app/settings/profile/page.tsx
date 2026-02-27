@@ -8,6 +8,7 @@ import {
   INTAKE_STEPS,
   type ProfileStep,
 } from '@/lib/onboarding-data'
+import { showIndustryStep, showSchoolSteps } from '@/lib/onboarding'
 import {
   getAnswersFromProfileAndIntake,
   type AnswersState,
@@ -37,6 +38,7 @@ export default function SettingsProfilePage() {
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
   const [locationStatus, setLocationStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
+  const [searchableQuery, setSearchableQuery] = useState('')
 
   useEffect(() => {
     getSupabase()?.auth.getSession().then(({ data: { session } }) => {
@@ -65,7 +67,6 @@ export default function SettingsProfilePage() {
       pronouns: typeof answers.pronouns === 'string' ? answers.pronouns || null : null,
       relationship_status: typeof answers.relationship_status === 'string' ? answers.relationship_status || null : null,
       languages: Array.isArray(answers.languages) ? answers.languages : null,
-      intent_confirmed_at: answers.confirm_intent === "I'm in" ? new Date().toISOString() : null,
     }
     const loc = answers.location
     if (typeof loc === 'object' && loc !== null && 'city' in loc) {
@@ -91,10 +92,15 @@ export default function SettingsProfilePage() {
     const responses: IntakeResponseItem[] = []
     for (const step of INTAKE_STEPS) {
       const answer = answers[step.id]
+      const normalized =
+        step.id === 'q12_first_conversation' &&
+        (answer == null || (typeof answer === 'string' && !String(answer).trim()))
+          ? 'N/A'
+          : (answer ?? '')
       const newItem: IntakeResponseItem = {
         question_id: step.id,
         question_text: step.question,
-        answer: (answer ?? '') as string | number | string[],
+        answer: normalized as string | number | string[],
         type: step.type,
         answered_at: new Date().toISOString(),
       }
@@ -136,7 +142,7 @@ export default function SettingsProfilePage() {
     }
     const loc = answers.location
     if (!(typeof loc === 'object' && loc !== null && 'city' in loc)) {
-      setError('Location is required. Use "Use My Location" to set it.')
+      setError('Location is required. Use "Change" to set your location.')
       return
     }
     const availability = answers.q9_availability
@@ -226,12 +232,14 @@ export default function SettingsProfilePage() {
           id={`profile-${step.id}`}
           name={step.id}
           type="text"
-          className="auth-input"
+          className={`auth-input ${step.id === 'first_name' ? 'profile-field-locked' : ''}`}
           placeholder={step.placeholder || ''}
           value={(value as string) ?? ''}
           onChange={(e) => set(e.target.value)}
           disabled={saving}
+          readOnly={step.id === 'first_name'}
           autoComplete={step.id === 'first_name' ? 'given-name' : 'off'}
+          aria-readonly={step.id === 'first_name'}
         />
       )
     if (step.type === 'date')
@@ -240,11 +248,13 @@ export default function SettingsProfilePage() {
           id={`profile-${step.id}`}
           name={step.id}
           type="date"
-          className="auth-input"
+          className={`auth-input ${step.id === 'birthdate' ? 'profile-field-locked' : ''}`}
           value={(value as string) ?? ''}
           onChange={(e) => set(e.target.value)}
           disabled={saving}
+          readOnly={step.id === 'birthdate'}
           autoComplete={step.id === 'birthdate' ? 'bday' : 'off'}
+          aria-readonly={step.id === 'birthdate'}
         />
       )
     if (step.type === 'chips_single' && step.options)
@@ -265,19 +275,38 @@ export default function SettingsProfilePage() {
       )
     if (step.type === 'location_permission')
       return (
-        <div>
-          <button
-            type="button"
-            className="onboarding-location-btn"
-            onClick={handleLocation}
-            disabled={locationStatus === 'loading'}
-          >
-            {locationStatus === 'loading'
-              ? 'Getting location…'
-              : locationStatus === 'done'
-                ? `✓ ${(value as { city: string })?.city ?? 'Location set'}`
-                : 'Use My Location'}
-          </button>
+        <div className="onboarding-location-wrap">
+          {locationStatus === 'loading' ? (
+            <div className="onboarding-location-set">
+              <span className="onboarding-location-set-icon" aria-hidden>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                  <circle cx="12" cy="10" r="3" />
+                </svg>
+              </span>
+              <span className="onboarding-location-set-city">Getting location…</span>
+            </div>
+          ) : (
+            <div className="onboarding-location-set">
+              <span className="onboarding-location-set-icon" aria-hidden>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                  <circle cx="12" cy="10" r="3" />
+                </svg>
+              </span>
+              <span className="onboarding-location-set-city">
+                {value && typeof value === 'object' && 'city' in (value as object) ? (value as { city: string })?.city ?? 'Location set' : 'Your Location'}
+              </span>
+              <button
+                type="button"
+                className="onboarding-location-change"
+                onClick={handleLocation}
+                disabled={saving}
+              >
+                {value && typeof value === 'object' && 'city' in (value as object) ? 'Change' : 'Use my location'}
+              </button>
+            </div>
+          )}
         </div>
       )
     if (step.type === 'multi_select' && step.options) {
@@ -287,17 +316,20 @@ export default function SettingsProfilePage() {
         <div className="profile-chips">
           {step.options.map((opt) => {
             const selected = arr.includes(opt)
+            const isPreferNotToSay = opt === 'Prefer not to say'
             const isExclusiveOption =
               (step.id === 'q10_first_conversation_feel' && opt === 'A mix — see where it goes') ||
-              (step.id === 'q6_who_excited_to_meet' && opt === "I'm open — surprise me")
+              (step.id === 'q6_who_excited_to_meet' && opt === "I'm open to anyone")
             const exclusiveOptionText =
               step.id === 'q10_first_conversation_feel'
                 ? 'A mix — see where it goes'
-                : step.id === 'q6_who_excited_to_meet'
-                  ? "I'm open — surprise me"
+: step.id === 'q6_who_excited_to_meet'
+                ? "I'm open to anyone"
                   : null
             const toggle = () => {
               if (selected) set(arr.filter((x) => x !== opt))
+              else if (isPreferNotToSay) set([opt])
+              else if (arr.includes('Prefer not to say')) set([...arr.filter((x) => x !== 'Prefer not to say'), opt])
               else if (isExclusiveOption) set([opt])
               else if (exclusiveOptionText) {
                 const withoutExclusive = arr.filter((x) => x !== exclusiveOptionText)
@@ -379,6 +411,66 @@ export default function SettingsProfilePage() {
           autoComplete="off"
         />
       )
+    if (step.type === 'single_select' && step.options)
+      return (
+        <select
+          id={`profile-${step.id}`}
+          name={step.id}
+          className="auth-input"
+          value={(value as string) ?? ''}
+          onChange={(e) => set(e.target.value)}
+          disabled={saving}
+          aria-label={step.question}
+        >
+          <option value="">{step.placeholder ?? 'Choose…'}</option>
+          {step.options.map((opt) => (
+            <option key={opt} value={opt}>
+              {opt}
+            </option>
+          ))}
+        </select>
+      )
+    if (step.type === 'searchable_single' && step.options)
+      return (
+        <div className="onboarding-searchable-wrap">
+          <input
+            id={`profile-${step.id}`}
+            type="text"
+            className="auth-input"
+            placeholder={step.placeholder || ''}
+            value={searchableQuery !== '' ? searchableQuery : ((value as string) ?? '')}
+            onChange={(e) => {
+              setSearchableQuery(e.target.value)
+              if (!e.target.value.trim()) set('')
+            }}
+            onFocus={() => setSearchableQuery((value as string) || '')}
+            disabled={saving}
+            autoComplete="off"
+          />
+          {searchableQuery.length > 0 && (
+            <ul className="onboarding-searchable-list" role="listbox">
+              {step.options
+                .filter((opt) => opt.toLowerCase().includes(searchableQuery.toLowerCase()))
+                .slice(0, 12)
+                .map((opt) => (
+                  <li key={opt} role="option">
+                    <button
+                      type="button"
+                      className="onboarding-searchable-option"
+                      onClick={() => {
+                        set(opt)
+                        setSearchableQuery('')
+                      }}
+                      disabled={saving}
+                    >
+                      {opt}
+                    </button>
+                  </li>
+                ))}
+            </ul>
+          )}
+        </div>
+      )
     return null
   }
 
@@ -414,7 +506,13 @@ export default function SettingsProfilePage() {
 
         <section className="profile-section">
           <h3 className="profile-section-title">Questionnaire</h3>
-          {INTAKE_STEPS.map((step) => (
+          {INTAKE_STEPS.filter((step) => {
+            if (step.id === 'confirm_intent') return false
+            const gate = answers.q3_work_or_study as string | undefined
+            if (step.id === 'q3_profession' && !showIndustryStep(gate)) return false
+            if ((step.id === 'q3_university' || step.id === 'q3_major') && !showSchoolSteps(gate)) return false
+            return true
+          }).map((step) => (
             <div key={step.id} className="profile-field">
               <label htmlFor={`profile-${step.id}`} className="profile-label">
                 {step.question}

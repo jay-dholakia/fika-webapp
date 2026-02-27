@@ -54,6 +54,7 @@ export default function LocationGate() {
   const fallbackInputRef = useRef<HTMLInputElement>(null)
   const autocompleteElementRef = useRef<HTMLElement | null>(null)
   const [usePlainCityInput, setUsePlainCityInput] = useState(true)
+  const [cityInputValue, setCityInputValue] = useState('')
 
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
 
@@ -148,13 +149,18 @@ export default function LocationGate() {
 
     let cityVal = city.trim()
     let stateVal = state.trim()
+    if (!cityVal && cityInputValue.trim()) {
+      const parts = cityInputValue.trim().split(',').map((s) => s.trim())
+      cityVal = parts[0] ?? ''
+      stateVal = parts[1] ?? stateVal
+    }
     const fallbackEl = fallbackInputRef.current
     if (!cityVal && fallbackEl?.value) {
       const parts = fallbackEl.value.split(',').map((s) => s.trim())
       cityVal = parts[0] ?? ''
       stateVal = parts[1] ?? stateVal
     }
-    const rawInput = cityVal && stateVal ? `${cityVal}, ${stateVal}` : fallbackEl?.value ?? cityVal ?? ''
+    const rawInput = cityVal && stateVal ? `${cityVal}, ${stateVal}` : fallbackEl?.value ?? cityInputValue.trim() ?? cityVal ?? ''
 
     // Small delay so "checking" state is visible
     setTimeout(() => {
@@ -195,17 +201,24 @@ export default function LocationGate() {
       <div className="location-gate-row">
         <div className="location-gate-place-wrapper" ref={placeContainerRef}>
           {(usePlainCityInput || !apiKey) && (
-            <input
-              ref={fallbackInputRef}
-              id="location-gate-input"
-              name="location"
-              type="text"
-              placeholder="City, State"
-              className="location-gate-input"
-              defaultValue=""
-              disabled={status === 'checking'}
-              autoComplete="address-level2"
-            />
+            <div
+              className={`location-floating-wrap${cityInputValue.trim() ? ' location-floating-filled' : ''}`}
+            >
+              <input
+                ref={fallbackInputRef}
+                id="location-gate-input"
+                name="location"
+                type="text"
+                placeholder=" "
+                className="location-gate-input"
+                aria-label="City, State"
+                value={cityInputValue}
+                onChange={(e) => setCityInputValue(e.target.value)}
+                disabled={status === 'checking'}
+                autoComplete="address-level2"
+              />
+              <span className="location-floating-label">City, State</span>
+            </div>
           )}
         </div>
         <button type="submit" className="btn btn-primary" disabled={status === 'checking'}>

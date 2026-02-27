@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { getSupabase } from '@/lib/supabase'
 import { useOnboardingStatus } from '@/lib/use-onboarding'
 import { authLog } from '@/lib/auth-log'
+import { FeedbackBubble } from '@/app/app/components/FeedbackBubble'
 
 export default function AppLayout({
   children,
@@ -17,6 +18,7 @@ export default function AppLayout({
   const [userId, setUserId] = useState<string | null>(null)
   const [sessionChecked, setSessionChecked] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [feedbackOpen, setFeedbackOpen] = useState(false)
   const { loading, isComplete, profile } = useOnboardingStatus(userId ?? undefined)
 
   useEffect(() => {
@@ -64,10 +66,7 @@ export default function AppLayout({
       router.replace('/login')
       return
     }
-    if (!loading && !isComplete) {
-      authLog('app-layout:redirect', { to: '/onboarding', reason: 'onboarding-incomplete' })
-      router.replace('/onboarding')
-    }
+    // No redirect to onboarding: user stays in app and sees "Complete intro questionnaire" card until done.
   }, [sessionChecked, userId, loading, isComplete, router])
 
   async function handleSignOut() {
@@ -75,8 +74,8 @@ export default function AppLayout({
     router.replace('/')
   }
 
-  if (!sessionChecked || loading || (userId && !isComplete)) {
-    authLog('app-layout:render', { show: 'Loading', sessionChecked, loading, hasUserId: !!userId, isComplete })
+  if (!sessionChecked || loading) {
+    authLog('app-layout:render', { show: 'Loading', sessionChecked, loading, hasUserId: !!userId })
     return (
       <div style={{ padding: '2rem', textAlign: 'center' }}>
         Loading…
@@ -120,7 +119,7 @@ export default function AppLayout({
           </Link>
         </div>
         <nav className="app-sidebar-nav">
-          <Link href="/app" className={pathname === '/app' ? 'app-sidebar-link active' : 'app-sidebar-link'} onClick={() => setMobileMenuOpen(false)}>
+          <Link href="/app" className={pathname === '/app' || pathname?.startsWith('/app/onboarding') ? 'app-sidebar-link active' : 'app-sidebar-link'} onClick={() => setMobileMenuOpen(false)}>
             Introductions
           </Link>
           <Link href="/app/chats" className={pathname?.startsWith('/app/chats') ? 'app-sidebar-link active' : 'app-sidebar-link'} onClick={() => setMobileMenuOpen(false)}>
@@ -147,6 +146,25 @@ export default function AppLayout({
       <main className="app-main">
         {children}
       </main>
+      <div className="app-feedback-corner">
+        <FeedbackBubble isOpen={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
+        {!feedbackOpen && (
+          <button
+            type="button"
+            className="app-feedback-pill"
+            onClick={() => setFeedbackOpen(true)}
+            aria-label="Send feedback"
+            aria-expanded={false}
+          >
+            <span className="app-feedback-pill-icon" aria-hidden>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
+            </span>
+            <span className="app-feedback-pill-label">Feedback</span>
+          </button>
+        )}
+      </div>
     </div>
   )
 }

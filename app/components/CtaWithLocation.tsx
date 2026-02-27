@@ -68,6 +68,7 @@ export default function CtaWithLocation({ redirectToSignupWhenInLA = false }: Ct
   const waitlistCityRef = useRef<HTMLInputElement>(null)
   const autocompleteElementRef = useRef<HTMLElement | null>(null)
   const [usePlainCityInput, setUsePlainCityInput] = useState(true)
+  const [cityInputValue, setCityInputValue] = useState('')
   const [geoStatus, setGeoStatus] = useState<'idle' | 'getting' | 'error'>('idle')
   const [geoErrorMessage, setGeoErrorMessage] = useState('')
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
@@ -150,6 +151,13 @@ export default function CtaWithLocation({ redirectToSignupWhenInLA = false }: Ct
   }, [apiKey, usePlainCityInput, locationStatus])
 
   function getLocationFromInput() {
+    if (usePlainCityInput && cityInputValue.trim()) {
+      const parts = cityInputValue.trim().split(',').map((s) => s.trim())
+      const cityVal = parts[0] ?? ''
+      const stateVal = parts[1] ?? ''
+      const rawInput = cityVal && stateVal ? `${cityVal}, ${stateVal}` : cityInputValue.trim()
+      return { cityVal, stateVal, rawInput }
+    }
     const fallbackEl = fallbackInputRef.current
     const fallbackRaw = fallbackEl?.value?.trim() ?? ''
     // Prefer manual entry in the input when present so "Los Angeles, CA" etc. is always used
@@ -215,9 +223,11 @@ export default function CtaWithLocation({ redirectToSignupWhenInLA = false }: Ct
         }
         setCity(result.city)
         setState(result.state)
+        const displayVal = [result.city, result.state].filter(Boolean).join(', ')
+        setCityInputValue(displayVal)
         const fallbackEl = fallbackInputRef.current
         if (fallbackEl) {
-          fallbackEl.value = [result.city, result.state].filter(Boolean).join(', ')
+          fallbackEl.value = displayVal
         }
         setGeoStatus('idle')
         setLocationStatus('checking')
@@ -268,7 +278,7 @@ export default function CtaWithLocation({ redirectToSignupWhenInLA = false }: Ct
     const emailTrim = email.trim()
     if (!phoneTrim && !emailTrim) {
       setWaitlistStatus('error')
-      setWaitlistMessage('Enter your phone number or email.')
+      setWaitlistMessage('Enter your email or phone number.')
       return
     }
     if (phoneTrim && !isValidPhone(phoneTrim)) {
@@ -313,18 +323,24 @@ export default function CtaWithLocation({ redirectToSignupWhenInLA = false }: Ct
         <div className="cta-form-row">
           <div className="cta-place-wrapper cta-location-place" ref={placeContainerRef}>
             {(usePlainCityInput || !apiKey) && (
-              <input
-                ref={fallbackInputRef}
-                id="cta-location-input"
-                name="location"
-                type="text"
-                placeholder="City, State"
-                className="cta-input"
-                aria-label="City, State"
-                defaultValue=""
-                disabled={locationStatus === 'checking'}
-                autoComplete="address-level2"
-              />
+              <div
+                className={`location-floating-wrap${cityInputValue.trim() ? ' location-floating-filled' : ''}`}
+              >
+                <input
+                  ref={fallbackInputRef}
+                  id="cta-location-input"
+                  name="location"
+                  type="text"
+                  placeholder=" "
+                  className="cta-input"
+                  aria-label="City, State"
+                  value={cityInputValue}
+                  onChange={(e) => setCityInputValue(e.target.value)}
+                  disabled={locationStatus === 'checking'}
+                  autoComplete="address-level2"
+                />
+                <span className="location-floating-label">City, State</span>
+              </div>
             )}
           </div>
           <button type="submit" className="btn btn-primary" disabled={locationStatus === 'checking'}>
@@ -401,30 +417,54 @@ export default function CtaWithLocation({ redirectToSignupWhenInLA = false }: Ct
       <p className="cta-result-title">We&apos;re currently in Los Angeles.</p>
       <p className="cta-result-body">Join the waitlist and we&apos;ll let you know when Fika comes to your city.</p>
       <form className="cta-form" onSubmit={handleWaitlistSubmit}>
+        <p className="cta-waitlist-hint">Enter your email or phone number (at least one required).</p>
         <div className="cta-form-row">
           <input
             id="cta-waitlist-phone"
             name="phone"
             type="tel"
-            placeholder="Phone (optional)"
+            placeholder="Phone"
             className="cta-input"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             disabled={waitlistStatus === 'loading'}
             autoComplete="tel"
           />
-          <div className="cta-place-wrapper">
-            <input
-              ref={waitlistCityRef}
-              id="cta-waitlist-city"
-              name="city_state"
-              type="text"
-              placeholder="City, State"
-              className="cta-input"
-              defaultValue={cityDisplay}
-              disabled={waitlistStatus === 'loading'}
-              autoComplete="address-level2"
-            />
+          <div className={`cta-place-wrapper ${(usePlainCityInput || !apiKey) ? 'location-floating-wrap' : ''} ${(usePlainCityInput || !apiKey) && cityDisplay ? 'location-floating-filled' : ''}`}>
+            {(usePlainCityInput || !apiKey) ? (
+              <>
+                <input
+                  ref={waitlistCityRef}
+                  id="cta-waitlist-city"
+                  name="city_state"
+                  type="text"
+                  placeholder=" "
+                  className="cta-input"
+                  value={cityDisplay}
+                  onChange={(e) => {
+                    const v = e.target.value
+                    const parts = v.split(',').map((s) => s.trim())
+                    setCity(parts[0] ?? '')
+                    setState(parts[1] ?? '')
+                  }}
+                  disabled={waitlistStatus === 'loading'}
+                  autoComplete="address-level2"
+                />
+                <span className="location-floating-label">City, State</span>
+              </>
+            ) : (
+              <input
+                ref={waitlistCityRef}
+                id="cta-waitlist-city"
+                name="city_state"
+                type="text"
+                placeholder="City, State"
+                className="cta-input"
+                defaultValue={cityDisplay}
+                disabled={waitlistStatus === 'loading'}
+                autoComplete="address-level2"
+              />
+            )}
           </div>
         </div>
         <div className="cta-form-row cta-form-row-single">
@@ -432,7 +472,7 @@ export default function CtaWithLocation({ redirectToSignupWhenInLA = false }: Ct
             id="cta-waitlist-email"
             name="email"
             type="email"
-            placeholder="Email (optional)"
+            placeholder="Email"
             className="cta-input"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -457,7 +497,7 @@ export default function CtaWithLocation({ redirectToSignupWhenInLA = false }: Ct
             {waitlistMessage}
           </p>
         )}
-        <button type="submit" className="btn btn-primary btn-block" disabled={waitlistStatus === 'loading' || !marketingConsent}>
+        <button type="submit" className="btn btn-primary btn-block" disabled={waitlistStatus === 'loading' || !marketingConsent || (!phone.trim() && !email.trim())}>
           {waitlistStatus === 'loading' ? 'Adding…' : 'Notify me'}
         </button>
       </form>

@@ -1,5 +1,9 @@
-// Profile steps (5) + intent confirm, then intake steps (10).
-// Types: text | date | chips_single | location_permission | multi_select | slider | open_ended
+// Profile steps (5) then intake steps; confirm_intent is the last intake step.
+// Types: text | date | chips_single | location_permission | multi_select | slider | open_ended | searchable_single | single_select
+
+import { INDUSTRY_OPTIONS } from './industry-options'
+import { LA_COLLEGES } from './la-colleges'
+import { MAJORS } from './majors'
 
 export type StepType =
   | 'text'
@@ -9,6 +13,8 @@ export type StepType =
   | 'multi_select'
   | 'slider'
   | 'open_ended'
+  | 'searchable_single'
+  | 'single_select'
 
 export type ProfileStep = {
   id: string
@@ -31,7 +37,7 @@ export type ProfileStep = {
   sliderLabel?: (v: number) => string
 }
 
-// Profile steps 1–5 + confirm intent (step 6)
+// Profile steps 1–5 (no confirm_intent here; it's at end of intake)
 export const PROFILE_STEPS: ProfileStep[] = [
   {
     id: 'first_name',
@@ -51,13 +57,13 @@ export const PROFILE_STEPS: ProfileStep[] = [
     id: 'gender',
     question: "What's your gender?",
     type: 'chips_single',
-    options: ['Woman', 'Man', 'Non-binary', 'Other', 'Prefer not to say'],
+    options: ['Female', 'Male', 'Non-binary', 'Other', 'Prefer not to say'],
   },
   {
     id: 'pronouns',
     question: 'What are your pronouns? (Optional)',
     type: 'chips_single',
-    options: ['He/Him', 'She/Her', 'They/Them', 'Other', 'Prefer not to say'],
+    options: ['She/Her', 'He/Him', 'They/Them', 'Other', 'Prefer not to say'],
   },
   {
     id: 'gender_preference',
@@ -65,9 +71,8 @@ export const PROFILE_STEPS: ProfileStep[] = [
     type: 'chips_single',
     options: [
       'No preference',
-      'Prefer to meet women',
-      'Prefer to meet men',
-      'Prefer to meet non-binary people',
+      'Same gender',
+      'Different gender',
     ],
   },
   {
@@ -114,23 +119,16 @@ export const PROFILE_STEPS: ProfileStep[] = [
       'Romanian',
       'Dutch',
       'Swahili',
+      'Turkish',
       'Other',
       'Prefer not to say',
     ],
   },
   {
     id: 'location',
-    question:
-      "To suggest meetup spots and people near you, I'll need your location…",
+    question: 'Where are you located?',
+    body: 'Share your location to get intros to people nearby.\n\nYour location is private and will not be shared with anyone.',
     type: 'location_permission',
-    required: true,
-  },
-  {
-    id: 'confirm_intent',
-    question: "I'd like to have real conversations.",
-    body: "Fika is built for thoughtful, platonic connection.\n\nWe're here to meet new people for real conversation, shared interests, and meaningful experiences — clearly and respectfully.",
-    type: 'chips_single',
-    options: ["I'm in"],
     required: true,
   },
 ]
@@ -140,47 +138,22 @@ export const INTAKE_STEPS: ProfileStep[] = [
   // Who you are / where you're at
   {
     id: 'q2_life_chapter',
-    question: 'What chapter are you in right now? (Choose up to 3)',
+    question: 'What life chapter are you in right now? (Choose up to 4)',
     body: 'Choose the ones that feel closest:',
     type: 'multi_select',
-    maxSelections: 3,
+    maxSelections: 4,
     options: [
-      'Exploring and figuring things out',
+      'Exploring what\'s next',
+      'Early in my career',
+      'Growing professionally',
       'Building something meaningful',
-      'Growing in my career or craft',
-      'Raising or supporting a family',
-      'Reinventing or pivoting',
-      'Reflecting and sharing what I\'ve learned',
+      'Feeling grounded and steady',
+      'Raising a family',
+      'Establishing roots in a new city',
+      'Starting over / reinventing',
+      'Supporting family members',
+      'Mentoring and giving back',
     ],
-  },
-  {
-    id: 'q3_work_study',
-    question: 'What do you do for work or study? (Select all that apply.)',
-    type: 'multi_select',
-    options: [
-      'Full-time employed',
-      'Part-time employed',
-      'Freelance / contractor',
-      'Self-employed / business owner',
-      'Student (undergraduate)',
-      'Student (graduate)',
-      'Stay-at-home parent',
-      'Retired',
-      'Between jobs',
-      'Career break / sabbatical',
-      'Intern',
-      'Volunteer',
-      'In school (not degree-seeking)',
-      'Prefer not to say',
-      'Other',
-    ],
-  },
-  {
-    id: 'q3_work_study_detail',
-    question: "Add more about your work or study if it's an important part of who you are.",
-    body: 'industry, company, role, university, major — however much or little you want to share!',
-    type: 'open_ended',
-    placeholder: 'Optional',
   },
   {
     id: 'q5_talk_about',
@@ -199,25 +172,80 @@ export const INTAKE_STEPS: ProfileStep[] = [
       'Reading',
       'Writing',
       'Music',
+      'Dancing',
       'Art',
+      'Photography',
       'Design',
       'Creativity',
       'Cooking',
       'Food',
       'Dining out',
       'Film & TV',
-      'Sports',
+      'Comedy',
+      'Theater',
+      'Podcasts',
+      'Baseball',
+      'Basketball',
+      'Football',
+      'Golf',
+      'Hockey',
+      'Pickleball',
+      'Skiing',
+      'Snowboarding',
+      'Soccer',
+      'Tennis',
+      'Volleyball',
       'Board games',
+      'Trivia',
       'Tech',
       'Building things',
       'Entrepreneurship',
       'Work',
       'Travel',
+      'Gardening',
       'Volunteering',
       'Community',
       'Current events',
-      'Ideas',
+      'Dogs',
+      'Cats',
     ],
+  },
+  {
+    id: 'q3_work_or_study',
+    question: 'What best describes you right now?',
+    type: 'chips_single',
+    options: [
+      'I work',
+      "I'm in school",
+      'I work and study',
+      'Between things / in transition',
+      'On extended leave',
+      'Other',
+      'Prefer not to say',
+    ],
+  },
+  {
+    id: 'q3_profession',
+    question: 'What industry are you in?',
+    body: 'Choose the one that best fits your work.',
+    type: 'single_select',
+    placeholder: 'Choose industry…',
+    options: INDUSTRY_OPTIONS,
+  },
+  {
+    id: 'q3_university',
+    question: 'What college or university do you go to?',
+    body: 'Colleges and universities in the Greater Los Angeles area.',
+    type: 'searchable_single',
+    placeholder: 'Search schools…',
+    options: LA_COLLEGES,
+  },
+  {
+    id: 'q3_major',
+    question: "What's your major?",
+    type: 'searchable_single',
+    placeholder: 'Search majors…',
+    options: MAJORS,
   },
   // How you like to connect
   {
@@ -227,13 +255,12 @@ export const INTAKE_STEPS: ProfileStep[] = [
     type: 'multi_select',
     maxSelections: 4,
     options: [
-      'Relationships and connection',
-      'Career and ambition',
-      'Creativity and ideas',
-      'Big life questions',
-      'Fun and humor',
-      'Current events and the world',
-      'Shared interests (hobbies, stuff we do)',
+      'Work, career, and ambition',
+      'Creativity, side projects, and ideas',
+      'Deep or philosophical (life, meaning, big questions)',
+      'Light and fun (humor, stories, banter)',
+      "What's happening in the world (news, culture, society)",
+      'Hobbies and shared interests',
     ],
   },
   {
@@ -267,11 +294,12 @@ export const INTAKE_STEPS: ProfileStep[] = [
     type: 'multi_select',
     maxSelections: 3,
     options: [
-      'Someone in a similar life season',
-      'Someone a few steps ahead of me',
-      'Someone just starting out',
-      'Someone in a completely different chapter',
-      "I'm open — surprise me",
+      "Someone I'd instantly relate to",
+      'Someone with a very different background than mine',
+      'Someone outside my usual bubble',
+      'Someone navigating a big life change',
+      'Someone whose perspective challenges mine',
+      "I'm open to anyone",
     ],
   },
   // Practicals
@@ -301,7 +329,7 @@ export const INTAKE_STEPS: ProfileStep[] = [
     question: 'Anything else shaping your season of life right now? (Select all that apply)',
     type: 'multi_select',
     options: [
-      'Big move / relocating',
+      'Big move or relocating',
       'Recent breakup',
       'Got engaged',
       'Got married',
@@ -314,7 +342,7 @@ export const INTAKE_STEPS: ProfileStep[] = [
       'Kids just left for college',
       'Planning a wedding',
       'Planning to have kids',
-      'Career change / new job',
+      'Career change or new job',
       'Just got promoted',
       'Switching industries',
       'Lost job or job searching',
@@ -338,8 +366,17 @@ export const INTAKE_STEPS: ProfileStep[] = [
     id: 'q12_first_conversation',
     question:
       "Anything else you'd want us to know as we prepare your intros?",
+    body: 'Anything else on your mind, topics to avoid, etc.',
     type: 'open_ended',
     placeholder: 'Optional',
+  },
+  {
+    id: 'confirm_intent',
+    question: 'Fika is built for thoughtful, platonic connection.',
+    body: "We're here to help people meet others nearby for real conversation, shared interests, and meaningful experiences — clearly and respectfully.\n\nAny behavior that doesn't align with this may result in removal from our platform.",
+    type: 'chips_single',
+    options: ["I'm in"],
+    required: true,
   },
 ]
 

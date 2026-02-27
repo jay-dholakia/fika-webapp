@@ -36,6 +36,7 @@ export default function WaitlistForm() {
   const fallbackInputRef = useRef<HTMLInputElement>(null)
   const autocompleteElementRef = useRef<HTMLElement | null>(null)
   const [usePlainCityInput, setUsePlainCityInput] = useState(true)
+  const [cityInputValue, setCityInputValue] = useState('')
 
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
 
@@ -120,6 +121,11 @@ export default function WaitlistForm() {
 
     let cityVal = city.trim()
     let stateVal = state.trim()
+    if (!cityVal && cityInputValue.trim()) {
+      const parts = cityInputValue.trim().split(',').map((s) => s.trim())
+      cityVal = parts[0] ?? ''
+      stateVal = parts[1] ?? stateVal
+    }
     const fallbackEl = fallbackInputRef.current
     if (!cityVal && fallbackEl?.value) {
       const parts = fallbackEl.value.split(',').map((s) => s.trim())
@@ -137,7 +143,7 @@ export default function WaitlistForm() {
     const emailTrim = email.trim()
     if (!phoneTrim && !emailTrim) {
       setStatus('error')
-      setMessage('Enter your phone number or email.')
+      setMessage('Enter your email or phone number.')
       return
     }
     if (phoneTrim && !isValidPhone(phoneTrim)) {
@@ -170,6 +176,7 @@ export default function WaitlistForm() {
     setEmail('')
     setCity('')
     setState('')
+    setCityInputValue('')
     if (fallbackEl) fallbackEl.value = ''
   }
 
@@ -183,12 +190,13 @@ export default function WaitlistForm() {
 
   return (
     <form className="cta-form" onSubmit={handleSubmit}>
+      <p className="cta-waitlist-hint">Enter your email or phone number (at least one required).</p>
       <div className="cta-form-row">
         <input
           id="waitlist-phone"
           name="phone"
           type="tel"
-          placeholder="Phone (optional)"
+          placeholder="Phone"
           className="cta-input"
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
@@ -197,17 +205,24 @@ export default function WaitlistForm() {
         />
         <div className="cta-place-wrapper" ref={placeContainerRef}>
           {(usePlainCityInput || !apiKey) && (
-            <input
-              ref={fallbackInputRef}
-              id="waitlist-city"
-              name="city_state"
-              type="text"
-              placeholder="City, State"
-              className="cta-input"
-              defaultValue=""
-              disabled={status === 'loading'}
-              autoComplete="address-level2"
-            />
+            <div
+              className={`location-floating-wrap${cityInputValue.trim() ? ' location-floating-filled' : ''}`}
+            >
+              <input
+                ref={fallbackInputRef}
+                id="waitlist-city"
+                name="city_state"
+                type="text"
+                placeholder=" "
+                className="cta-input"
+                aria-label="City, State"
+                value={cityInputValue}
+                onChange={(e) => setCityInputValue(e.target.value)}
+                disabled={status === 'loading'}
+                autoComplete="address-level2"
+              />
+              <span className="location-floating-label">City, State</span>
+            </div>
           )}
         </div>
       </div>
@@ -216,7 +231,7 @@ export default function WaitlistForm() {
           id="waitlist-email"
           name="email"
           type="email"
-          placeholder="Email (optional)"
+          placeholder="Email"
           className="cta-input"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
@@ -241,7 +256,7 @@ export default function WaitlistForm() {
           {message}
         </p>
       )}
-      <button type="submit" className="btn btn-primary btn-block" disabled={status === 'loading' || !marketingConsent}>
+      <button type="submit" className="btn btn-primary btn-block" disabled={status === 'loading' || !marketingConsent || (!phone.trim() && !email.trim())}>
         {status === 'loading' ? 'Adding…' : 'Notify me'}
       </button>
     </form>

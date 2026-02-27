@@ -1,11 +1,15 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { getSupabase } from '@/lib/supabase'
-import { getCurrentBatchWeek } from '@/lib/onboarding'
+import { authLog } from '@/lib/auth-log'
+import { getCurrentBatchWeek, getMissingIntakeStepIds, getOrderedMissingIntakeSteps } from '@/lib/onboarding'
+import { useOnboardingStatus } from '@/lib/use-onboarding'
 import { formatIntakeAnswer, ageFromBirthdate } from '@/lib/intro-detail'
 import { IntroDetailModal, type IntroMatch } from '@/app/app/components/IntroDetailModal'
+import { NewQuestionsFlow } from '@/app/app/components/NewQuestionsFlow'
 import type { IntakeResponseItem } from '@/lib/db-types'
 
 export default function AppHomePage() {
@@ -21,9 +25,15 @@ export default function AppHomePage() {
   const [error, setError] = useState<string | null>(null)
   const [profileCount, setProfileCount] = useState<number | null>(null)
   const [shareCopied, setShareCopied] = useState(false)
+  const [fillingMissingMode, setFillingMissingMode] = useState(false)
 
-  const TARGET_USERS = 200
+  const TARGET_USERS = 250
   const showOptIn = profileCount !== null && profileCount >= TARGET_USERS
+  const { loading: onboardingLoading, isComplete: onboardingComplete, intake, refetch } = useOnboardingStatus(userId ?? undefined)
+  const showQuestionnaireCard = !onboardingLoading && !onboardingComplete
+  const missingIntakeSteps = onboardingComplete && intake ? getMissingIntakeStepIds(intake) : []
+  const showNewQuestionsCard = !onboardingLoading && onboardingComplete && missingIntakeSteps.length > 0 && !fillingMissingMode
+  const orderedMissingSteps = intake ? getOrderedMissingIntakeSteps(intake) : []
 
   function copyShareToClipboard(url: string, text: string) {
     const combined = `${text}\n\n${url}`
@@ -35,11 +45,64 @@ export default function AppHomePage() {
     }
   }
 
-  useEffect(() => {
+  function fetchProfileCount(reason: 'initial' | 'realtime' | 'polling' | 'accuracy') {
+    authLog('profile-count:fetch', { reason })
     fetch('/api/profile-count')
       .then((res) => res.ok ? res.json() : null)
-      .then((data) => data != null && typeof data.count === 'number' && setProfileCount(data.count))
-      .catch(() => {})
+      .then((data) => {
+        if (data != null && typeof data.count === 'number') {
+          setProfileCount(data.count)
+          authLog('profile-count:done', { reason, count: data.count })
+        }
+      })
+      .catch((err) => authLog('profile-count:error', { reason, error: String(err) }))
+  }
+
+  // Single effect: initial fetch, realtime subscription, and polling. Runs once per mount.
+  useEffect(() => {
+    const supabase = getSupabase()
+    let channel: ReturnType<typeof supabase.channel> | null = null
+    let intervalId: ReturnType<typeof setInterval> | null = null
+    let accuracyTimeoutId: ReturnType<typeof setTimeout> | null = null
+
+    // Initial fetch
+    fetchProfileCount('initial')
+
+    if (supabase) {
+      authLog('profile-count:realtime', { status: 'subscribing', table: 'profiles' })
+      channel = supabase
+        .channel('profile-count')
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'profiles' },
+          () => {
+            authLog('profile-count:realtime', { event: 'INSERT', refetch: true })
+            fetchProfileCount('realtime')
+          }
+        )
+        .subscribe((status) => {
+          authLog('profile-count:realtime', { subscriptionStatus: status })
+          // One-time refetch after subscription is live so count is accurate (e.g. after Strict Mode remount)
+          if (status === 'SUBSCRIBED') {
+            accuracyTimeoutId = setTimeout(() => {
+              fetchProfileCount('accuracy')
+            }, 1500)
+          }
+        })
+      intervalId = setInterval(() => {
+        authLog('profile-count:poll', {})
+        fetchProfileCount('polling')
+      }, 30_000)
+    } else {
+      authLog('profile-count:realtime', { status: 'no-supabase' })
+    }
+
+    return () => {
+      if (accuracyTimeoutId != null) clearTimeout(accuracyTimeoutId)
+      if (intervalId != null) clearInterval(intervalId)
+      if (supabase && channel) supabase.removeChannel(channel)
+      authLog('profile-count:realtime', { status: 'unsubscribed' })
+    }
   }, [])
 
   useEffect(() => {
@@ -287,13 +350,13 @@ export default function AppHomePage() {
         <div className="app-card app-waitlist-counter">
           <h2>Weekly introductions</h2>
           <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem', marginBottom: '1rem' }}>
-            We&apos;re building the community. Once we reach {TARGET_USERS} users, you&apos;ll be able to opt in to weekly matches.
+            We&apos;re building community in Los Angeles. Once {TARGET_USERS} people have signed up we&apos;ll run our first intros and reach out so you can opt in for week one!
           </p>
           <p className="app-counter-text">
             <span className="app-counter-value">{profileCount !== null ? profileCount : '—'}</span>
             <span className="app-counter-sep"> / </span>
             <span className="app-counter-target">{TARGET_USERS}</span>
-            <span className="app-counter-label"> users</span>
+            <span className="app-counter-label"> people</span>
           </p>
           <div className="app-counter-bar" role="progressbar" aria-valuenow={profileCount ?? 0} aria-valuemin={0} aria-valuemax={TARGET_USERS}>
             <div
@@ -302,14 +365,14 @@ export default function AppHomePage() {
             />
           </div>
           <p className="app-waitlist-share-copy">
-            Help us unlock the experience for your city.
+            Help us unlock Fika in your city.
           </p>
           <button
             type="button"
             className="app-waitlist-share-btn"
             onClick={async () => {
               const url = 'https://letsfika.vercel.app'
-              const text = "Help us unlock the experience for your city — join the waitlist and let's get to 200 people!"
+              const text = "Help us unlock Fika in your city — join the waitlist and get first access to intros when we hit 250 people!"
               if (typeof navigator !== 'undefined' && navigator.share) {
                 try {
                   await navigator.share({
@@ -324,7 +387,7 @@ export default function AppHomePage() {
                 copyShareToClipboard(url, text)
               }
             }}
-            aria-label="Share Fika with friends"
+            aria-label="Invite friends"
           >
             <span className="app-waitlist-share-icon" aria-hidden>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -332,10 +395,51 @@ export default function AppHomePage() {
                 <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
               </svg>
             </span>
-            <span>Share Fika with friends</span>
+            <span>Invite friends</span>
           </button>
           {shareCopied && <p className="app-waitlist-share-feedback">Link copied!</p>}
         </div>
+      )}
+
+      {showQuestionnaireCard && (
+        <div className="app-card app-questionnaire-card">
+          <h2>Complete intro questionnaire</h2>
+          <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem', marginBottom: '1rem' }}>
+            Answer a few questions so we can intro you to people for your Fika. Takes about 5 minutes.
+          </p>
+          <Link href="/app/onboarding" className="btn btn-primary btn-block auth-submit" style={{ display: 'inline-block', textAlign: 'center' }}>
+            Start questionnaire
+          </Link>
+        </div>
+      )}
+
+      {showNewQuestionsCard && (
+        <div className="app-card app-new-questions-card">
+          <h2>New intro questions added</h2>
+          <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem', marginBottom: '1rem' }}>
+            We&apos;ve added a few new questions to help match you better. Complete them so your intros stay up to date.
+          </p>
+          <button
+            type="button"
+            className="btn btn-primary btn-block auth-submit"
+            style={{ display: 'block', textAlign: 'center' }}
+            onClick={() => setFillingMissingMode(true)}
+          >
+            Complete new questions
+          </button>
+        </div>
+      )}
+
+      {fillingMissingMode && userId && intake && orderedMissingSteps.length > 0 && (
+        <NewQuestionsFlow
+          orderedSteps={orderedMissingSteps}
+          intake={intake}
+          userId={userId}
+          onComplete={() => {
+            setFillingMissingMode(false)
+            refetch()
+          }}
+        />
       )}
 
       <div className="app-card">
