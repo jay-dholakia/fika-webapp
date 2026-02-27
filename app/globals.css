@@ -1762,6 +1762,9 @@ a {
     padding: 1rem 1rem 1.5rem;
     margin-top: 0;
   }
+  .app-feedback-corner {
+    display: none;
+  }
 }
 @keyframes app-backdrop-in {
   from { opacity: 0; }
@@ -1826,6 +1829,19 @@ a {
   font-family: var(--font-heading);
   font-size: 1.25rem;
   margin-bottom: 0.75rem;
+}
+/* Onboarding flow: bring Continue button closer on mobile, sticky so it stays visible */
+.app-new-questions-flow-actions {
+  margin-top: 1.25rem;
+}
+@media (max-width: 768px) {
+  .app-new-questions-flow-actions {
+    margin-top: 0.5rem;
+    position: sticky;
+    bottom: 0;
+    padding: 0.5rem 0 0.75rem;
+    background: linear-gradient(to top, var(--color-surface) 70%, transparent);
+  }
 }
 .app-feedback-pill {
   position: fixed;

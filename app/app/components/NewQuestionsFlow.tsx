@@ -432,7 +432,7 @@ export function NewQuestionsFlow({ orderedSteps, intake, userId, onComplete }: N
         </p>
       )}
 
-      <div style={{ marginTop: '1.25rem' }}>
+      <div className="app-new-questions-flow-actions">
         <button
           type="button"
           className="btn btn-primary btn-block"

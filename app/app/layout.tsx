@@ -138,6 +138,9 @@ export default function AppLayout({
           <Link href="/app/settings/how-it-works" className={pathname === '/app/settings/how-it-works' ? 'app-sidebar-link active' : 'app-sidebar-link'} onClick={() => setMobileMenuOpen(false)}>
             FAQ
           </Link>
+          <Link href="/app/settings/feedback" className={pathname === '/app/settings/feedback' ? 'app-sidebar-link active' : 'app-sidebar-link'} onClick={() => setMobileMenuOpen(false)}>
+            Feedback
+          </Link>
           <button type="button" className="app-sidebar-logout" onClick={handleSignOut}>
             Log out
           </button>
