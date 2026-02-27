@@ -48,7 +48,8 @@ export const PROFILE_STEPS: ProfileStep[] = [
   },
   {
     id: 'birthdate',
-    question: "When's your birthday? (You must be 18+ to use this app)",
+    question: "When's your birthday?",
+    body: 'You must be 18+ to use this app.',
     type: 'date',
     required: true,
     minAge: 18,
@@ -61,7 +62,8 @@ export const PROFILE_STEPS: ProfileStep[] = [
   },
   {
     id: 'pronouns',
-    question: 'What are your pronouns? (Optional)',
+    question: 'What are your pronouns?',
+    body: 'Optional.',
     type: 'chips_single',
     options: ['She/Her', 'He/Him', 'They/Them', 'Other', 'Prefer not to say'],
   },
@@ -133,13 +135,13 @@ export const PROFILE_STEPS: ProfileStep[] = [
   },
 ]
 
-// Intake steps — ordered: who you are → how you connect → who you're open to → practicals → optional wrap
+// Intake steps — ordered: who you are → what you talk about (incl. political/societal) → how you connect → practicals → optional wrap
 export const INTAKE_STEPS: ProfileStep[] = [
   // Who you are / where you're at
   {
     id: 'q2_life_chapter',
-    question: 'What life chapter are you in right now? (Choose up to 4)',
-    body: 'Choose the ones that feel closest:',
+    question: 'What life chapter are you in right now?',
+    body: 'Choose up to 4. Choose the ones that feel closest.',
     type: 'multi_select',
     maxSelections: 4,
     options: [
@@ -153,61 +155,6 @@ export const INTAKE_STEPS: ProfileStep[] = [
       'Starting over / reinventing',
       'Supporting family members',
       'Mentoring and giving back',
-    ],
-  },
-  {
-    id: 'q5_talk_about',
-    question: 'What are some of your interests? (Select all that apply)',
-    type: 'multi_select',
-    options: [
-      'Fitness',
-      'Running',
-      'Walking',
-      'Hiking',
-      'Cycling',
-      'Swimming',
-      'Yoga',
-      'Pilates',
-      'Movement',
-      'Reading',
-      'Writing',
-      'Music',
-      'Dancing',
-      'Art',
-      'Photography',
-      'Design',
-      'Creativity',
-      'Cooking',
-      'Food',
-      'Dining out',
-      'Film & TV',
-      'Comedy',
-      'Theater',
-      'Podcasts',
-      'Baseball',
-      'Basketball',
-      'Football',
-      'Golf',
-      'Hockey',
-      'Pickleball',
-      'Skiing',
-      'Snowboarding',
-      'Soccer',
-      'Tennis',
-      'Volleyball',
-      'Board games',
-      'Trivia',
-      'Tech',
-      'Building things',
-      'Entrepreneurship',
-      'Work',
-      'Travel',
-      'Gardening',
-      'Volunteering',
-      'Community',
-      'Current events',
-      'Dogs',
-      'Cats',
     ],
   },
   {
@@ -247,26 +194,83 @@ export const INTAKE_STEPS: ProfileStep[] = [
     placeholder: 'Search majors…',
     options: MAJORS,
   },
-  // How you like to connect
+  // What you like to talk about (topics + political/societal)
   {
-    id: 'q1_conversation_types',
-    question:
-      'What kind of conversations are you craving more of lately? (Choose up to 4)',
+    id: 'q5_talk_about',
+    question: 'Which topics do you genuinely enjoy discussing?',
+    body: 'Choose up to 5.',
     type: 'multi_select',
-    maxSelections: 4,
+    maxSelections: 5,
     options: [
-      'Work, career, and ambition',
-      'Creativity, side projects, and ideas',
-      'Deep or philosophical (life, meaning, big questions)',
-      'Light and fun (humor, stories, banter)',
-      "What's happening in the world (news, culture, society)",
-      'Hobbies and shared interests',
+      'Current events & global affairs',
+      'Ethics & moral dilemmas',
+      'Public policy & social systems',
+      'Culture shifts & generational trends',
+      'Sustainability & the environment',
+      'Philosophy & big existential questions',
+      'Psychology & human behavior',
+      'Science discoveries',
+      'Technology & innovation',
+      'The future of society',
+      'Film & television',
+      'Books & storytelling',
+      'Music',
+      'Visual art & design',
+      'Fashion & aesthetics',
+      'Travel & different cultures',
+      'Food & restaurants',
+      'Personal stories & life turning points',
+      'Career journeys',
+      'Entrepreneurship & building things',
+      'Relationships & modern dating',
+      'Mental health & emotional growth',
+      'Identity & belonging',
+      'Religion & spirituality',
+      'Community & civic life',
     ],
   },
   {
+    id: 'q13_country_belief',
+    question: 'Right now, I believe the country is…',
+    body: 'Select one.',
+    type: 'chips_single',
+    options: [
+      'Moving in the right direction',
+      'In need of major change',
+      'More stable than people think',
+      'Hard to define in one sentence',
+      'Prefer not to say',
+    ],
+  },
+  {
+    id: 'q14_societal_discussion',
+    question: 'When discussing societal issues, I usually…',
+    body: 'Select one.',
+    type: 'chips_single',
+    options: [
+      'Prefer talking with people who share my views',
+      'Enjoy hearing opposing perspectives respectfully',
+      'Like exploring ideas without taking strong sides',
+      'Prefer to focus on culture and lifestyle over policy',
+    ],
+  },
+  {
+    id: 'q15_political_social',
+    question: 'How do you feel about discussing political and social issues in conversation?',
+    body: 'Select one.',
+    type: 'chips_single',
+    options: [
+      'I actively enjoy discussing politics and current events',
+      "I'm open to it if it comes up",
+      'I prefer keeping conversations non-political',
+      "I'd rather avoid political topics altogether",
+    ],
+  },
+  // How you like to connect
+  {
     id: 'q10_first_conversation_feel',
     question: 'How do you like a first conversation to feel?',
-    body: 'This captures energy — which matters more than topics.',
+    body: 'Choose up to 3. This captures energy — which matters more than topics.',
     type: 'multi_select',
     maxSelections: 3,
     options: [
@@ -279,7 +283,8 @@ export const INTAKE_STEPS: ProfileStep[] = [
   },
   {
     id: 'q4_where_most_yourself',
-    question: 'What meetup format sounds good for a Fika? (Select all that apply)',
+    question: 'What meetup format sounds good for a Fika?',
+    body: 'Select all that apply.',
     type: 'multi_select',
     options: [
       'Over coffee',
@@ -290,7 +295,8 @@ export const INTAKE_STEPS: ProfileStep[] = [
   // Who you're open to meeting
   {
     id: 'q6_who_excited_to_meet',
-    question: 'Who would you be open to meet for a Fika? (Choose up to 3)',
+    question: 'Who would you be open to meet for a Fika?',
+    body: 'Choose up to 3.',
     type: 'multi_select',
     maxSelections: 3,
     options: [
@@ -305,7 +311,8 @@ export const INTAKE_STEPS: ProfileStep[] = [
   // Practicals
   {
     id: 'q9_availability',
-    question: 'When are you usually up for a good conversation? (Choose at least 1)',
+    question: 'When are you usually up for a good conversation?',
+    body: 'Choose at least 1.',
     type: 'multi_select',
     minSelections: 1,
     options: [
@@ -324,7 +331,8 @@ export const INTAKE_STEPS: ProfileStep[] = [
   // Optional wrap
   {
     id: 'q11_season_of_life',
-    question: 'Anything else shaping your season of life right now? (Select all that apply)',
+    question: 'Anything else shaping your season of life right now?',
+    body: 'Select all that apply.',
     type: 'multi_select',
     options: [
       'Big move or relocating',

@@ -14,7 +14,6 @@ export const SAFE_INTAKE_QUESTION_IDS = new Set([
   'q3_university',
   'q3_major',
   'q5_talk_about',
-  'q1_conversation_types',
   'q10_first_conversation_feel',
   'q4_where_most_yourself',
   'q6_who_excited_to_meet',

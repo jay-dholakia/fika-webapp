@@ -187,13 +187,13 @@ export default function AppHomePage() {
             if (c.match_id) acc[c.match_id] = c.id
             return acc
           }, {})
-          const intakeByUserId: Record<string, { conversationTypes: string | null; fikaPreference: string | null }> = {}
+          const intakeByUserId: Record<string, { topicsPreview: string | null; fikaPreference: string | null }> = {}
           ;((intakeRes?.data ?? []) as { user_id: string; responses: unknown }[]).forEach((row) => {
             const responses = Array.isArray(row.responses) ? (row.responses as IntakeResponseItem[]) : []
-            const q1 = responses.find((r: IntakeResponseItem) => r.question_id === 'q1_conversation_types')
+            const q5 = responses.find((r: IntakeResponseItem) => r.question_id === 'q5_talk_about')
             const q4 = responses.find((r: IntakeResponseItem) => r.question_id === 'q4_where_most_yourself')
             intakeByUserId[row.user_id] = {
-              conversationTypes: q1 ? formatIntakeAnswer(q1.answer) || null : null,
+              topicsPreview: q5 ? formatIntakeAnswer(q5.answer) || null : null,
               fikaPreference: q4 ? formatIntakeAnswer(q4.answer) || null : null,
             }
           })
@@ -211,7 +211,7 @@ export default function AppHomePage() {
               reasons: (m.reasons as IntroMatch['reasons']) ?? null,
               myDecision: myOptIns[m.id],
               conversationId: convoByMatch[m.id] ?? null,
-              conversationTypesPreview: intake?.conversationTypes ?? null,
+              conversationTypesPreview: intake?.topicsPreview ?? null,
               fikaPreferencePreview: intake?.fikaPreference ?? null,
             }
           })
@@ -366,14 +366,14 @@ export default function AppHomePage() {
             />
           </div>
           <p className="app-waitlist-share-copy">
-            Help us unlock Fika in your city.
+            Help me unlock Fika in our city — create an account and get first access to intros when we hit 250 people!
           </p>
           <button
             type="button"
             className="app-waitlist-share-btn"
             onClick={async () => {
               const url = 'https://letsfika.vercel.app'
-              const text = "Help us unlock Fika in your city — join the waitlist and get first access to intros when we hit 250 people!"
+              const text = "Help me unlock Fika in our city — create an account and get first access to intros when we hit 250 people!"
               if (typeof navigator !== 'undefined' && navigator.share) {
                 try {
                   await navigator.share({

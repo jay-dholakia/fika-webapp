@@ -25,7 +25,7 @@ export type IntroMatch = {
   } | null
   myDecision?: 'yes' | 'no'
   conversationId?: string | null
-  /** Preview for card: conversations they're looking for (q1) */
+  /** Preview for card: topics they enjoy (q5) */
   conversationTypesPreview?: string | null
   /** Preview for card: fika preference (q4) */
   fikaPreferencePreview?: string | null
@@ -130,12 +130,10 @@ export function IntroDetailModal({
     ])
       .then(([profile, intakeResponses]) => {
         if (cancelled) return
-        const conversationTypes = intakeResponses?.find((r) => r.question_id === 'q1_conversation_types')
         const interestsResp = intakeResponses?.find((r) => r.question_id === 'q5_talk_about')
         log('detail set', {
           hasProfile: !!profile,
           intakeCount: intakeResponses?.length ?? 0,
-          hasConversationTypes: !!conversationTypes,
           hasInterestsResp: !!interestsResp,
         })
         setDetail({
@@ -164,12 +162,9 @@ export function IntroDetailModal({
   // Log which sections will render when detail is set (dev debugging)
   useEffect(() => {
     if (!detail || loading) return
-    const conversationTypes = detail.intakeResponses?.find((r) => r.question_id === 'q1_conversation_types')
-    const typesText = conversationTypes ? formatIntakeAnswer(conversationTypes.answer) : null
     const interestsResp = detail.intakeResponses?.find((r) => r.question_id === 'q5_talk_about')
     console.log('[IntroDetailModal] sections', {
       profile: { avatar: !!detail.profile.avatar_url, languages: !!detail.profile.languages?.length, bio: !!detail.profile.bio_text?.trim() },
-      conversationTypes: !!typesText,
       interests: !!interestsResp?.answer,
     })
   }, [detail, loading])
@@ -285,18 +280,6 @@ export function IntroDetailModal({
                         <span key={i} className="app-intro-pill">{interest.trim()}</span>
                       ))}
                     </div>
-                  </section>
-                )
-              })()}
-
-              {(() => {
-                const conversationTypes = detail?.intakeResponses?.find((r) => r.question_id === 'q1_conversation_types')
-                const typesText = conversationTypes ? formatIntakeAnswer(conversationTypes.answer) : null
-                if (!typesText) return null
-                return (
-                  <section className="app-intro-detail-section">
-                    <h3 className="app-intro-detail-section-title">Conversations they&apos;re looking for</h3>
-                    <p className="app-intro-detail-conversation-types">{typesText}</p>
                   </section>
                 )
               })()}
