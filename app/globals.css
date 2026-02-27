@@ -1762,9 +1762,6 @@ a {
     padding: 1rem 1rem 1.5rem;
     margin-top: 0;
   }
-  .app-feedback-corner {
-    display: none;
-  }
 }
 @keyframes app-backdrop-in {
   from { opacity: 0; }
