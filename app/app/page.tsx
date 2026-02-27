@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { getSupabase } from '@/lib/supabase'
 import type { RealtimeChannel } from '@supabase/supabase-js'
@@ -27,6 +27,15 @@ export default function AppHomePage() {
   const [profileCount, setProfileCount] = useState<number | null>(null)
   const [shareCopied, setShareCopied] = useState(false)
   const [fillingMissingMode, setFillingMissingMode] = useState(false)
+  const [showJustCompletedThankYou, setShowJustCompletedThankYou] = useState(false)
+
+  const searchParams = useSearchParams()
+  useEffect(() => {
+    if (searchParams.get('justCompletedIntro') === '1') {
+      setShowJustCompletedThankYou(true)
+      router.replace('/app')
+    }
+  }, [searchParams, router])
 
   const TARGET_USERS = 250
   const showOptIn = profileCount !== null && profileCount >= TARGET_USERS
@@ -399,6 +408,14 @@ export default function AppHomePage() {
             <span>Invite friends</span>
           </button>
           {shareCopied && <p className="app-waitlist-share-feedback">Link copied!</p>}
+        </div>
+      )}
+
+      {showJustCompletedThankYou && (
+        <div className="app-card">
+          <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem', margin: 0 }}>
+            Thank you for completing the intro questions! We&apos;ll be in touch when we&apos;re ready for you to opt in to the next round of intros.
+          </p>
         </div>
       )}
 

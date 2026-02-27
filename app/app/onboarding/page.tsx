@@ -333,7 +333,7 @@ export default function AppOnboardingPage() {
             const updatedAnswers = { ...answers, [step.id]: intakeAnswer }
             if (isLastStep) {
               await callCompleteIntake()
-              router.replace('/app')
+              router.replace('/app?justCompletedIntro=1')
               return
             }
             setAnswers((a) => ({ ...a, [step.id]: intakeAnswer }))
