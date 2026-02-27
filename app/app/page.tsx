@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { getSupabase } from '@/lib/supabase'
+import type { RealtimeChannel } from '@supabase/supabase-js'
 import { authLog } from '@/lib/auth-log'
 import { getCurrentBatchWeek, getMissingIntakeStepIds, getOrderedMissingIntakeSteps } from '@/lib/onboarding'
 import { useOnboardingStatus } from '@/lib/use-onboarding'
@@ -61,7 +62,7 @@ export default function AppHomePage() {
   // Single effect: initial fetch, realtime subscription, and polling. Runs once per mount.
   useEffect(() => {
     const supabase = getSupabase()
-    let channel: ReturnType<typeof supabase.channel> | null = null
+    let channel: RealtimeChannel | null = null
     let intervalId: ReturnType<typeof setInterval> | null = null
     let accuracyTimeoutId: ReturnType<typeof setTimeout> | null = null
 
