@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { getSupabase } from '@/lib/supabase'
 import { INTAKE_STEPS, type ProfileStep } from '@/lib/onboarding-data'
 import { showSchoolSteps } from '@/lib/onboarding'
@@ -72,6 +72,17 @@ export function NewQuestionsFlow({ orderedSteps, intake, userId, onComplete }: N
   const [error, setError] = useState<string | null>(null)
   const [searchableQuery, setSearchableQuery] = useState('')
   const [majorSearchQuery, setMajorSearchQuery] = useState('')
+  const isFirstQuestionMount = useRef(true)
+
+  useEffect(() => {
+    if (isFirstQuestionMount.current) {
+      isFirstQuestionMount.current = false
+      return
+    }
+    if (typeof window !== 'undefined' && window.innerWidth <= 768) {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }
+  }, [currentIndex])
 
   const step = orderedSteps[currentIndex]
   const nextStep = orderedSteps[currentIndex + 1]
