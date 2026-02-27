@@ -173,7 +173,7 @@ export default function LocationGate() {
     return (
       <div className="location-gate-result location-gate-la">
         <p className="location-gate-result-title">You&apos;re in our launch city.</p>
-        <p className="location-gate-result-body">Fika is live in Los Angeles. Create an account and get your first weekly intros.</p>
+        <p className="location-gate-result-body">We're bringing Fika to Los Angeles. Sign up and we'll get you in for your first weekly intros.</p>
         <Link href="/signup" className="btn btn-primary">
           Sign up
         </Link>

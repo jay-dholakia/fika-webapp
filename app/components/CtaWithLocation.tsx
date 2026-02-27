@@ -380,7 +380,7 @@ export default function CtaWithLocation({ redirectToSignupWhenInLA = false }: Ct
     return (
       <div className="cta-result cta-result-la">
         <p className="cta-result-title">You&apos;re in our launch city.</p>
-        <p className="cta-result-body">Fika is live in Los Angeles. Create an account and get your first weekly intros.</p>
+        <p className="cta-result-body">We're bringing Fika to Los Angeles. Sign up and we'll get you in for your first weekly intros.</p>
         <Link href="/signup" className="btn btn-primary">
           Sign up
         </Link>
