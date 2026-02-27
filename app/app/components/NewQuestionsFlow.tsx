@@ -129,7 +129,7 @@ export function NewQuestionsFlow({ orderedSteps, intake, userId, onComplete }: N
           (base == null || (typeof base === 'string' && !base.trim()))
             ? 'N/A'
             : step.id === 'q8_distance_miles' && (typeof base === 'string' && base !== '')
-              ? Number(base)
+              ? (base.includes('miles') ? base : `${base} miles`)
               : base
         await saveIntakeAnswer(userId, step, answer as string | string[] | number)
         if (step.id === 'confirm_intent') {
@@ -271,7 +271,7 @@ export function NewQuestionsFlow({ orderedSteps, intake, userId, onComplete }: N
         <div>
           {step.options.map((opt) => {
             const isSelected =
-              value === opt || (step.id === 'q8_distance_miles' && typeof value === 'number' && value === Number(opt))
+              value === opt || (step.id === 'q8_distance_miles' && typeof value === 'number' && value === Number(String(opt).replace(/\s*miles$/, '')))
             return (
             <button
               key={opt}
@@ -282,7 +282,7 @@ export function NewQuestionsFlow({ orderedSteps, intake, userId, onComplete }: N
               }
               disabled={saving}
             >
-              {step.id === 'q8_distance_miles' ? `${opt} miles` : opt}
+              {step.id === 'q8_distance_miles' && !String(opt).includes('miles') ? `${opt} miles` : opt}
             </button>
           )})}
         </div>

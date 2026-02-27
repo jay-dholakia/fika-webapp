@@ -326,7 +326,7 @@ export const INTAKE_STEPS: ProfileStep[] = [
     id: 'q8_distance_miles',
     question: 'How far are you willing to travel for a Fika?',
     type: 'chips_single',
-    options: ['5', '10', '25', '50'],
+    options: ['5 miles', '10 miles', '25 miles', '50 miles'],
   },
   // Optional wrap
   {
