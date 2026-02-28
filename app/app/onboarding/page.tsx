@@ -12,7 +12,6 @@ import {
   TOTAL_ONBOARDING_STEPS,
   type ProfileStep,
 } from '@/lib/onboarding-data'
-import { showIndustryStep, showSchoolSteps } from '@/lib/onboarding'
 import type { IntakeResponseItem } from '@/lib/db-types'
 import type { ProfileRow } from '@/lib/db-types'
 import type { IntakeResponsesV5Row } from '@/lib/db-types'
@@ -42,12 +41,9 @@ function getFirstUnansweredStepAndAnswers(
     } else if (s.id === 'gender_preference') {
       if (profile?.gender_preference) answers.gender_preference = profile.gender_preference
       if (!profile?.gender_preference) return { stepIndex: i, answers }
-    } else if (s.id === 'pronouns') {
-      if (profile?.pronouns) answers.pronouns = profile.pronouns
-      return { stepIndex: i, answers }
     } else if (s.id === 'languages') {
       if (Array.isArray(profile?.languages)) answers.languages = profile.languages
-      return { stepIndex: i, answers }
+      if (!Array.isArray(profile?.languages) || profile.languages.length === 0) return { stepIndex: i, answers }
     } else if (s.id === 'location') {
       if (!profile?.city) return { stepIndex: i, answers }
       answers.location = { city: profile.city, lat: profile.lat ?? 0, lng: profile.lng ?? 0 }
@@ -57,39 +53,20 @@ function getFirstUnansweredStepAndAnswers(
   const responses = intake?.responses ?? []
   for (let j = 0; j < INTAKE_STEPS.length; j++) {
     const s = INTAKE_STEPS[j]
-    const gate = answers.q3_work_or_study as string | undefined
-    if (s.id === 'q3_profession' && !showIndustryStep(gate)) continue
-    if ((s.id === 'q3_university' || s.id === 'q3_major') && !showSchoolSteps(gate)) continue
     const r = responses.find((x: IntakeResponseItem) => x.question_id === s.id)
-    if (!r) return { stepIndex: PROFILE_STEPS.length + j, answers }
-    answers[s.id] = r.answer as string | string[] | number
+    if (s.required !== false && !r) return { stepIndex: PROFILE_STEPS.length + j, answers }
+    answers[s.id] = r ? (r.answer as string | string[] | number) : (s.type === 'multi_select' ? [] : '')
   }
 
   return { stepIndex: ALL_STEPS.length - 1, answers }
 }
 
-/** Returns the next step index that applies given branching (gate). */
-function getNextStepIndex(fromIndex: number, answers: AnswersState): number {
-  const gate = answers.q3_work_or_study as string | undefined
-  for (let i = fromIndex; i < ALL_STEPS.length; i++) {
-    const s = ALL_STEPS[i]
-    if (s.id === 'q3_profession' && !showIndustryStep(gate)) continue
-    if ((s.id === 'q3_university' || s.id === 'q3_major') && !showSchoolSteps(gate)) continue
-    return i
-  }
-  return ALL_STEPS.length
+function getNextStepIndex(fromIndex: number): number {
+  return Math.min(fromIndex + 1, ALL_STEPS.length - 1)
 }
 
-/** Returns the previous step index that applies given branching. */
-function getPrevStepIndex(fromIndex: number, answers: AnswersState): number {
-  const gate = answers.q3_work_or_study as string | undefined
-  for (let i = fromIndex - 1; i >= 0; i--) {
-    const s = ALL_STEPS[i]
-    if (s.id === 'q3_profession' && !showIndustryStep(gate)) continue
-    if ((s.id === 'q3_university' || s.id === 'q3_major') && !showSchoolSteps(gate)) continue
-    return i
-  }
-  return 0
+function getPrevStepIndex(fromIndex: number): number {
+  return Math.max(fromIndex - 1, 0)
 }
 
 function parseDate(s: string): string | null {
@@ -120,8 +97,6 @@ export default function AppOnboardingPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [locationStatus, setLocationStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
-  const [searchableQuery, setSearchableQuery] = useState('')
-  const [majorSearchQuery, setMajorSearchQuery] = useState('')
 
   useEffect(() => {
     authLog('onboarding:mount')
@@ -147,8 +122,6 @@ export default function AppOnboardingPage() {
     setStepIndex(first)
     setDisplayStepIndex(first)
     setAnswers(prefilled)
-    setSearchableQuery('')
-    setMajorSearchQuery('')
     if (first < PROFILE_STEPS.length && PROFILE_STEPS[first].id === 'location' && prefilled.location) {
       setLocationStatus('done')
     }
@@ -192,7 +165,6 @@ export default function AppOnboardingPage() {
     if (id === 'birthdate' && (typeof value === 'string' || value === null)) updates.birthdate = value
     if (id === 'gender' && typeof value === 'string') updates.gender = value
     if (id === 'gender_preference' && typeof value === 'string') updates.gender_preference = value
-    if (id === 'pronouns') updates.pronouns = (typeof value === 'string' && value ? value : null)
     if (id === 'languages') updates.languages = Array.isArray(value) ? value : null
     if (id === 'location' && typeof value === 'object' && value !== null && 'city' in value) {
       updates.city = value.city
@@ -209,7 +181,7 @@ export default function AppOnboardingPage() {
     if (!supabase) return
     const { data: existing } = await supabase
       .from('intake_responses_v5')
-      .select('responses, availability_times')
+      .select('responses')
       .eq('user_id', sessionUserId)
       .maybeSingle()
 
@@ -229,9 +201,6 @@ export default function AppOnboardingPage() {
       user_id: sessionUserId,
       responses,
       updated_at: new Date().toISOString(),
-    }
-    if (step.id === 'q9_availability' && Array.isArray(answer)) {
-      payload.availability_times = answer
     }
     const { error: e } = await supabase.from('intake_responses_v5').upsert(payload, { onConflict: 'user_id' })
     if (e) throw new Error(e.message)
@@ -272,6 +241,13 @@ export default function AppOnboardingPage() {
         return
       }
     }
+    if (step.type === 'multi_select' && step.maxSelections) {
+      const arr = Array.isArray(raw) ? raw : []
+      if (arr.length > step.maxSelections) {
+        setError(`Please choose at most ${step.maxSelections}.`)
+        return
+      }
+    }
     if (step.type === 'multi_select' && step.minSelections) {
       const arr = Array.isArray(raw) ? raw : []
       if (arr.length < step.minSelections) {
@@ -299,52 +275,31 @@ export default function AppOnboardingPage() {
             setIsExiting(false)
           }, 280)
         } else {
-          const nextStep = ALL_STEPS[stepIndex + 1]
-          const isStudyScreenWithMajor = step.id === 'q3_university' && nextStep?.id === 'q3_major'
-          if (isStudyScreenWithMajor) {
-            await saveIntakeAnswer(step, ((answers.q3_university ?? '') as string))
-            await saveIntakeAnswer(nextStep, ((answers.q3_major ?? '') as string))
-            setAnswers((a) => ({ ...a, q3_university: answers.q3_university ?? '', q3_major: answers.q3_major ?? '' }))
-            setIsExiting(true)
-            setTimeout(() => {
-              setStepIndex((i) => i + 2)
-              setDisplayStepIndex((i) => i + 2)
-              setIsExiting(false)
-              setSearchableQuery('')
-              setMajorSearchQuery('')
-            }, 280)
-          } else {
-            const base = (step.type === 'searchable_single' || step.type === 'single_select') ? (raw ?? '') : raw
-            const intakeAnswer =
-              step.id === 'q12_first_conversation' &&
-              (base == null || (typeof base === 'string' && !base.trim()))
-                ? 'N/A'
-                : base
-            await saveIntakeAnswer(step, intakeAnswer as string | string[] | number)
-            if (step.id === 'confirm_intent' && sessionUserId) {
-              const supabase = getSupabase()
-              if (supabase) {
-                await supabase.from('profiles').update({
-                  intent_confirmed_at: new Date().toISOString(),
-                  updated_at: new Date().toISOString(),
-                }).eq('id', sessionUserId)
-              }
+          const intakeAnswer = raw as string | string[] | number
+          await saveIntakeAnswer(step, intakeAnswer)
+          if (step.id === 'confirm_intent' && sessionUserId) {
+            const supabase = getSupabase()
+            if (supabase) {
+              await supabase.from('profiles').update({
+                intent_confirmed_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              }).eq('id', sessionUserId)
             }
-            const updatedAnswers = { ...answers, [step.id]: intakeAnswer }
-            if (isLastStep) {
-              await callCompleteIntake()
-              router.replace('/app?justCompletedIntro=1')
-              return
-            }
-            setAnswers((a) => ({ ...a, [step.id]: intakeAnswer }))
-            const nextIndex = getNextStepIndex(stepIndex + 1, updatedAnswers)
-            setIsExiting(true)
-            setTimeout(() => {
-              setStepIndex(nextIndex)
-              setDisplayStepIndex(nextIndex)
-              setIsExiting(false)
-            }, 280)
           }
+          const updatedAnswers = { ...answers, [step.id]: intakeAnswer }
+          if (isLastStep) {
+            await callCompleteIntake()
+            router.replace('/app?justCompletedIntro=1')
+            return
+          }
+          setAnswers((a) => ({ ...a, [step.id]: intakeAnswer }))
+          const nextIndex = getNextStepIndex(stepIndex + 1)
+          setIsExiting(true)
+          setTimeout(() => {
+            setStepIndex(nextIndex)
+            setDisplayStepIndex(nextIndex)
+            setIsExiting(false)
+          }, 280)
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Something went wrong.')
@@ -356,7 +311,7 @@ export default function AppOnboardingPage() {
 
   function handleBack() {
     if (stepIndex > 0) {
-      const prevIndex = getPrevStepIndex(stepIndex, answers)
+      const prevIndex = getPrevStepIndex(stepIndex)
       setStepIndex(prevIndex)
       setDisplayStepIndex(prevIndex)
     }
@@ -478,10 +433,6 @@ export default function AppOnboardingPage() {
   authLog('onboarding:render', { show: 'form', stepId: step.id, stepIndex })
   const progress = ((stepIndex + 1) / TOTAL_ONBOARDING_STEPS) * 100
   const value = answers[displayStep.id]
-  const gate = answers.q3_work_or_study as string | undefined
-  const isStudyPath = showSchoolSteps(gate)
-  const majorStep = ALL_STEPS[displayStepIndex + 1]
-  const showCombinedStudy = displayStep.id === 'q3_university' && isStudyPath && majorStep?.id === 'q3_major'
 
   return (
     <div className="onboarding-wrap">
@@ -493,9 +444,9 @@ export default function AppOnboardingPage() {
         className={`onboarding-step ${isExiting ? 'onboarding-step-exit' : 'onboarding-step-enter'}`}
         key={displayStepIndex}
       >
-        <h2 className="onboarding-question">{showCombinedStudy ? 'Where/what do you study? (Optional)' : displayStep.question}</h2>
+        <h2 className="onboarding-question">{displayStep.question}</h2>
 
-        {!showCombinedStudy && displayStep.body && (
+        {displayStep.body && (
           <div className="onboarding-body">
             {displayStep.body.split(/\n\n+/).map((p, i) => (
               <p key={i}>{p}</p>
@@ -508,93 +459,6 @@ export default function AppOnboardingPage() {
                 <Link href="/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</Link>.
               </p>
             )}
-          </div>
-        )}
-
-        {showCombinedStudy && displayStep.options && majorStep && 'options' in majorStep && majorStep.options && (
-          <div className="onboarding-study-fields">
-            <div className="onboarding-searchable-wrap">
-              <label className="onboarding-searchable-label" htmlFor="onboarding-q3_university">
-                What college or university do you go to?
-              </label>
-              <input
-                id="onboarding-q3_university"
-                type="text"
-                className="auth-input"
-                placeholder={displayStep.placeholder || ''}
-                value={searchableQuery !== '' ? searchableQuery : ((answers.q3_university as string) ?? '')}
-                onChange={(e) => {
-                  setSearchableQuery(e.target.value)
-                  if (!e.target.value.trim()) setAnswers((a) => ({ ...a, q3_university: '' }))
-                }}
-                onFocus={() => setSearchableQuery((answers.q3_university as string) || '')}
-                disabled={saving}
-                autoComplete="off"
-              />
-              {searchableQuery.length > 0 && (
-                <ul className="onboarding-searchable-list" role="listbox">
-                  {displayStep.options
-                    .filter((opt) => opt.toLowerCase().includes(searchableQuery.toLowerCase()))
-                    .slice(0, 12)
-                    .map((opt) => (
-                      <li key={opt} role="option">
-                        <button
-                          type="button"
-                          className="onboarding-searchable-option"
-                          onClick={() => {
-                            setAnswers((a) => ({ ...a, q3_university: opt }))
-                            setSearchableQuery('')
-                          }}
-                          disabled={saving}
-                        >
-                          {opt}
-                        </button>
-                      </li>
-                    ))}
-                </ul>
-              )}
-            </div>
-            <div className="onboarding-searchable-wrap" style={{ marginTop: '1rem' }}>
-              <label className="onboarding-searchable-label" htmlFor="onboarding-q3_major">
-                What&apos;s your major?
-              </label>
-              <input
-                id="onboarding-q3_major"
-                type="text"
-                className="auth-input"
-                placeholder={majorStep.placeholder || 'Search majors…'}
-                value={majorSearchQuery !== '' ? majorSearchQuery : ((answers.q3_major as string) ?? '')}
-                onChange={(e) => {
-                  setMajorSearchQuery(e.target.value)
-                  if (!e.target.value.trim()) setAnswers((a) => ({ ...a, q3_major: '' }))
-                }}
-                onFocus={() => setMajorSearchQuery((answers.q3_major as string) || '')}
-                disabled={saving}
-                autoComplete="off"
-              />
-              {majorSearchQuery.length > 0 && (
-                <ul className="onboarding-searchable-list" role="listbox">
-                  {(majorStep.options as string[])
-                    .filter((opt) => opt.toLowerCase().includes(majorSearchQuery.toLowerCase()))
-                    .slice(0, 12)
-                    .map((opt) => (
-                      <li key={opt} role="option">
-                        <button
-                          type="button"
-                          className="onboarding-searchable-option"
-                          onClick={() => {
-                            setAnswers((a) => ({ ...a, q3_major: opt }))
-                            setMajorSearchQuery('')
-                          }}
-                          disabled={saving}
-                        >
-                          {opt}
-                        </button>
-                      </li>
-                    ))}
-                </ul>
-              )}
-            </div>
           </div>
         )}
 
@@ -696,14 +560,14 @@ export default function AppOnboardingPage() {
               const selected = arr.includes(opt)
               const isPreferNotToSay = opt === 'Prefer not to say'
               const isExclusiveOption =
-                (displayStep.id === 'q10_first_conversation_feel' && opt === 'A mix — see where it goes') ||
-                (displayStep.id === 'q6_who_excited_to_meet' && opt === "I'm open to anyone")
+                (displayStep.id === 'q_convo_feel' && opt === 'A mix — see where it goes') ||
+                (displayStep.id === 'q_openness' && opt === "I'm open to anyone")
               const atMax = displayStep.maxSelections != null && arr.length >= displayStep.maxSelections && !selected
               const exclusiveOptionText =
-                displayStep.id === 'q10_first_conversation_feel'
+                displayStep.id === 'q_convo_feel'
                   ? 'A mix — see where it goes'
-: displayStep.id === 'q6_who_excited_to_meet'
-                  ? "I'm open to anyone"
+                  : displayStep.id === 'q_openness'
+                    ? "I'm open to anyone"
                     : null
               return (
                 <button
@@ -736,131 +600,6 @@ export default function AppOnboardingPage() {
           </div>
         )}
 
-        {displayStep.type === 'slider' && (displayStep.sliderRange || displayStep.sliderSteps) && (
-          <div className="onboarding-slider-wrap">
-            <input
-              id={`onboarding-${displayStep.id}`}
-              name={displayStep.id}
-              type="range"
-              className="onboarding-slider"
-              min={displayStep.sliderSteps ? 0 : displayStep.sliderRange![0]}
-              max={displayStep.sliderSteps ? displayStep.sliderSteps.length - 1 : displayStep.sliderRange![1]}
-              step={displayStep.sliderSteps ? 1 : undefined}
-              value={
-                displayStep.sliderSteps
-                  ? (() => {
-                      const steps = displayStep.sliderSteps!
-                      const num = typeof value === 'number' ? value : displayStep.sliderDefault ?? steps[0]
-                      const idx = steps.indexOf(num)
-                      return idx >= 0 ? idx : steps.indexOf(displayStep.sliderDefault ?? steps[0]) || 0
-                    })()
-                  : (typeof value === 'number' ? value : displayStep.sliderDefault ?? displayStep.sliderRange![0])
-              }
-              onChange={(e) => {
-                const raw = Number(e.target.value)
-                const next = displayStep.sliderSteps ? displayStep.sliderSteps![raw] : raw
-                setAnswers((a) => ({ ...a, [displayStep.id]: next }))
-              }}
-              disabled={saving}
-              autoComplete="off"
-            />
-            {displayStep.sliderLabel && (
-              <p className="onboarding-slider-label">
-                {displayStep.sliderLabel(
-                  displayStep.sliderSteps
-                    ? (() => {
-                        const steps = displayStep.sliderSteps!
-                        const num = typeof value === 'number' ? value : displayStep.sliderDefault ?? steps[0]
-                        return steps.includes(num) ? num : (displayStep.sliderDefault ?? steps[0])
-                      })()
-                    : (typeof value === 'number' ? value : displayStep.sliderDefault ?? displayStep.sliderRange![0])
-                )}
-              </p>
-            )}
-          </div>
-        )}
-
-        {displayStep.type === 'open_ended' && (
-          <textarea
-            id={`onboarding-${displayStep.id}`}
-            name={displayStep.id}
-            className="auth-input"
-            placeholder={displayStep.placeholder || ''}
-            value={(value as string) ?? ''}
-            onChange={(e) => setAnswers((a) => ({ ...a, [displayStep.id]: e.target.value }))}
-            disabled={saving}
-            rows={4}
-            style={{ resize: 'vertical' }}
-            autoComplete="off"
-          />
-        )}
-
-        {displayStep.type === 'single_select' && displayStep.options && (
-          <select
-            id={`onboarding-${displayStep.id}`}
-            className="auth-input"
-            value={(value as string) ?? ''}
-            onChange={(e) => setAnswers((a) => ({ ...a, [displayStep.id]: e.target.value }))}
-            disabled={saving}
-            aria-label={displayStep.question}
-          >
-            <option value="">{displayStep.placeholder ?? 'Choose…'}</option>
-            {displayStep.options.map((opt) => (
-              <option key={opt} value={opt}>
-                {opt}
-              </option>
-            ))}
-          </select>
-        )}
-
-        {displayStep.type === 'searchable_single' && displayStep.options && !showCombinedStudy && (
-          <div className="onboarding-searchable-wrap">
-            <input
-              id={`onboarding-${displayStep.id}`}
-              type="text"
-              className="auth-input"
-              placeholder={displayStep.placeholder || ''}
-              value={searchableQuery !== '' ? searchableQuery : ((value as string) ?? '')}
-              onChange={(e) => {
-                setSearchableQuery(e.target.value)
-                if (!e.target.value.trim()) setAnswers((a) => ({ ...a, [displayStep.id]: '' }))
-              }}
-              onFocus={() => setSearchableQuery((value as string) || '')}
-              disabled={saving}
-              autoComplete="off"
-              aria-autocomplete="list"
-              aria-controls={`onboarding-${displayStep.id}-list`}
-              role="combobox"
-              aria-expanded={searchableQuery.length > 0}
-            />
-            {searchableQuery.length > 0 && (
-              <ul
-                id={`onboarding-${displayStep.id}-list`}
-                className="onboarding-searchable-list"
-                role="listbox"
-              >
-                {displayStep.options
-                  .filter((opt) => opt.toLowerCase().includes(searchableQuery.toLowerCase()))
-                  .slice(0, 12)
-                  .map((opt) => (
-                    <li key={opt} role="option">
-                      <button
-                        type="button"
-                        className="onboarding-searchable-option"
-                        onClick={() => {
-                          setAnswers((a) => ({ ...a, [displayStep.id]: opt }))
-                          setSearchableQuery('')
-                        }}
-                        disabled={saving}
-                      >
-                        {opt}
-                      </button>
-                    </li>
-                  ))}
-              </ul>
-            )}
-          </div>
-        )}
       </div>
 
       {error && <p className="onboarding-error" role="alert">{error}</p>}

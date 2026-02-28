@@ -131,6 +131,31 @@ export default function SignupPage() {
     }
   }
 
+  async function handleGoogleSignIn() {
+    const supabase = getSupabase()
+    if (!supabase) {
+      setMessage({ type: 'error', text: 'App is not configured.' })
+      return
+    }
+    setMessage(null)
+    setLoading(true)
+    try {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: typeof window !== 'undefined' ? `${window.location.origin}/app` : undefined },
+      })
+      if (error) {
+        setMessage({ type: 'error', text: error.message })
+        return
+      }
+      if (data?.url) window.location.href = data.url
+    } catch {
+      setMessage({ type: 'error', text: 'Something went wrong. Please try again.' })
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <>
       <header className="header">
@@ -232,6 +257,15 @@ export default function SignupPage() {
               )}
               <button type="submit" className="btn btn-primary btn-block auth-submit" disabled={loading}>
                 {loading ? 'Creating account…' : 'Create account'}
+              </button>
+              <div className="auth-divider" aria-hidden>or</div>
+              <button
+                type="button"
+                className="btn btn-secondary btn-block auth-submit auth-google-btn"
+                onClick={handleGoogleSignIn}
+                disabled={loading}
+              >
+                Continue with Google
               </button>
             </form>
           )}

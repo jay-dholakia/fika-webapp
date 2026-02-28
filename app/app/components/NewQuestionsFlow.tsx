@@ -3,7 +3,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { getSupabase } from '@/lib/supabase'
 import { INTAKE_STEPS, type ProfileStep } from '@/lib/onboarding-data'
-import { showSchoolSteps } from '@/lib/onboarding'
 import type { IntakeResponseItem } from '@/lib/db-types'
 import type { IntakeResponsesV5Row } from '@/lib/db-types'
 
@@ -52,7 +51,6 @@ async function saveIntakeAnswer(
   }
   if (existing?.completed_at != null) payload.completed_at = existing.completed_at
   if (existing?.embed_vector != null) payload.embed_vector = existing.embed_vector
-  if (step.id === 'q9_availability' && Array.isArray(answer)) payload.availability_times = answer
   const { error } = await supabase.from('intake_responses_v5').upsert(payload, { onConflict: 'user_id' })
   if (error) throw new Error(error.message)
 }
@@ -70,8 +68,6 @@ export function NewQuestionsFlow({ orderedSteps, intake, userId, onComplete }: N
   const [answers, setAnswers] = useState<AnswersState>(() => initialAnswers)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [searchableQuery, setSearchableQuery] = useState('')
-  const [majorSearchQuery, setMajorSearchQuery] = useState('')
   const isFirstQuestionMount = useRef(true)
 
   useEffect(() => {
@@ -85,13 +81,7 @@ export function NewQuestionsFlow({ orderedSteps, intake, userId, onComplete }: N
   }, [currentIndex])
 
   const step = orderedSteps[currentIndex]
-  const nextStep = orderedSteps[currentIndex + 1]
-  const gate = answers.q3_work_or_study as string | undefined
-  const isStudyPath = showSchoolSteps(gate)
-  const showCombinedStudy =
-    step?.id === 'q3_university' && nextStep?.id === 'q3_major' && isStudyPath
-  const isLast = currentIndex >= orderedSteps.length - 1 && !showCombinedStudy
-
+  const isLast = currentIndex >= orderedSteps.length - 1
   const value = step ? answers[step.id] : undefined
 
   async function handleNext() {
@@ -113,42 +103,27 @@ export function NewQuestionsFlow({ orderedSteps, intake, userId, onComplete }: N
 
     setSaving(true)
     try {
-      if (showCombinedStudy) {
-        await saveIntakeAnswer(userId, step, (answers.q3_university as string) ?? '')
-        const majorStep = INTAKE_STEPS.find((s) => s.id === 'q3_major')
-        if (majorStep) await saveIntakeAnswer(userId, majorStep, (answers.q3_major as string) ?? '')
-        setSearchableQuery('')
-        setMajorSearchQuery('')
-        const nextIndex = currentIndex + 2
-        setCurrentIndex(nextIndex)
-        if (nextIndex >= orderedSteps.length) onComplete()
-      } else {
-        const base = (step.type === 'searchable_single' || step.type === 'single_select') ? (raw ?? '') : raw
-        const answer =
-          step.id === 'q12_first_conversation' &&
-          (base == null || (typeof base === 'string' && !base.trim()))
-            ? 'N/A'
-            : step.id === 'q8_distance_miles' && (typeof base === 'string' && base !== '')
-              ? (base.includes('miles') ? base : `${base} miles`)
-              : base
-        await saveIntakeAnswer(userId, step, answer as string | string[] | number)
-        if (step.id === 'confirm_intent') {
-          const supabase = getSupabase()
-          if (supabase) {
-            await supabase.from('profiles').update({
-              intent_confirmed_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-            }).eq('id', userId)
-          }
+      const base = raw
+      const answer =
+        step.id === 'q_radius' && (typeof base === 'string' && base !== '')
+          ? (base.includes('miles') ? base : `${base} miles`)
+          : base
+      await saveIntakeAnswer(userId, step, answer as string | string[] | number)
+      if (step.id === 'confirm_intent') {
+        const supabase = getSupabase()
+        if (supabase) {
+          await supabase.from('profiles').update({
+            intent_confirmed_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }).eq('id', userId)
         }
-        setAnswers((a) => ({ ...a, [step.id]: answer }))
-        setSearchableQuery('')
-        if (isLast) {
-          onComplete()
-          return
-        }
-        setCurrentIndex((i) => i + 1)
       }
+      setAnswers((a) => ({ ...a, [step.id]: answer }))
+      if (isLast) {
+        onComplete()
+        return
+      }
+      setCurrentIndex((i) => i + 1)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.')
     } finally {
@@ -156,7 +131,7 @@ export function NewQuestionsFlow({ orderedSteps, intake, userId, onComplete }: N
     }
   }
 
-  if (!step && !showCombinedStudy) {
+  if (!step) {
     onComplete()
     return null
   }
@@ -169,10 +144,10 @@ export function NewQuestionsFlow({ orderedSteps, intake, userId, onComplete }: N
   return (
     <div className="app-card app-new-questions-flow">
       <h2 className="onboarding-question" style={{ marginTop: 0 }}>
-        {showCombinedStudy ? 'Where/what do you study? (Optional)' : step?.question}
+        {step.question}
       </h2>
 
-      {!showCombinedStudy && step?.body && (
+      {step.body && (
         <div className="onboarding-body" style={{ marginBottom: '1rem' }}>
           {step.body.split(/\n\n+/).map((p, i) => (
             <p key={i}>{p}</p>
@@ -180,98 +155,10 @@ export function NewQuestionsFlow({ orderedSteps, intake, userId, onComplete }: N
         </div>
       )}
 
-      {showCombinedStudy && step && nextStep && 'options' in nextStep && nextStep.options && (
-        <div className="onboarding-study-fields">
-          <div className="onboarding-searchable-wrap">
-            <label className="onboarding-searchable-label" htmlFor="newq-university">
-              What college or university do you go to?
-            </label>
-            <input
-              id="newq-university"
-              type="text"
-              className="auth-input"
-              placeholder={step.placeholder || ''}
-              value={searchableQuery !== '' ? searchableQuery : ((answers.q3_university as string) ?? '')}
-              onChange={(e) => {
-                setSearchableQuery(e.target.value)
-                if (!e.target.value.trim()) setAnswers((a) => ({ ...a, q3_university: '' }))
-              }}
-              onFocus={() => setSearchableQuery((answers.q3_university as string) || '')}
-              disabled={saving}
-              autoComplete="off"
-            />
-            {searchableQuery.length > 0 && step.options && (
-              <ul className="onboarding-searchable-list" role="listbox">
-                {(step.options as string[])
-                  .filter((opt) => opt.toLowerCase().includes(searchableQuery.toLowerCase()))
-                  .slice(0, 12)
-                  .map((opt) => (
-                    <li key={opt} role="option">
-                      <button
-                        type="button"
-                        className="onboarding-searchable-option"
-                        onClick={() => {
-                          setAnswers((a) => ({ ...a, q3_university: opt }))
-                          setSearchableQuery('')
-                        }}
-                        disabled={saving}
-                      >
-                        {opt}
-                      </button>
-                    </li>
-                  ))}
-              </ul>
-            )}
-          </div>
-          <div className="onboarding-searchable-wrap" style={{ marginTop: '1rem' }}>
-            <label className="onboarding-searchable-label" htmlFor="newq-major">
-              What&apos;s your major?
-            </label>
-            <input
-              id="newq-major"
-              type="text"
-              className="auth-input"
-              placeholder={nextStep.placeholder || 'Search majors…'}
-              value={majorSearchQuery !== '' ? majorSearchQuery : ((answers.q3_major as string) ?? '')}
-              onChange={(e) => {
-                setMajorSearchQuery(e.target.value)
-                if (!e.target.value.trim()) setAnswers((a) => ({ ...a, q3_major: '' }))
-              }}
-              onFocus={() => setMajorSearchQuery((answers.q3_major as string) || '')}
-              disabled={saving}
-              autoComplete="off"
-            />
-            {majorSearchQuery.length > 0 && nextStep.options && (
-              <ul className="onboarding-searchable-list" role="listbox">
-                {(nextStep.options as string[])
-                  .filter((opt) => opt.toLowerCase().includes(majorSearchQuery.toLowerCase()))
-                  .slice(0, 12)
-                  .map((opt) => (
-                    <li key={opt} role="option">
-                      <button
-                        type="button"
-                        className="onboarding-searchable-option"
-                        onClick={() => {
-                          setAnswers((a) => ({ ...a, q3_major: opt }))
-                          setMajorSearchQuery('')
-                        }}
-                        disabled={saving}
-                      >
-                        {opt}
-                      </button>
-                    </li>
-                  ))}
-              </ul>
-            )}
-          </div>
-        </div>
-      )}
-
-      {!showCombinedStudy && step?.type === 'chips_single' && step.options && (
+      {step?.type === 'chips_single' && step.options && (
         <div>
           {step.options.map((opt) => {
-            const isSelected =
-              value === opt || (step.id === 'q8_distance_miles' && typeof value === 'number' && value === Number(String(opt).replace(/\s*miles$/, '')))
+            const isSelected = value === opt
             return (
             <button
               key={opt}
@@ -282,85 +169,28 @@ export function NewQuestionsFlow({ orderedSteps, intake, userId, onComplete }: N
               }
               disabled={saving}
             >
-              {step.id === 'q8_distance_miles' && !String(opt).includes('miles') ? `${opt} miles` : opt}
+              {step.id === 'q_radius' && !String(opt).includes('miles') ? `${opt} miles` : opt}
             </button>
           )})}
         </div>
       )}
 
-      {!showCombinedStudy && step?.type === 'single_select' && step.options && (
-        <select
-          className="auth-input"
-          value={((value as string) ?? '')}
-          onChange={(e) => setAnswers((a) => ({ ...a, [step.id]: e.target.value }))}
-          disabled={saving}
-          aria-label={step.question}
-        >
-          <option value="">{step.placeholder ?? 'Choose…'}</option>
-          {(step.options as string[]).map((opt) => (
-            <option key={opt} value={opt}>
-              {opt}
-            </option>
-          ))}
-        </select>
-      )}
-
-      {!showCombinedStudy && step?.type === 'searchable_single' && step.options && (
-        <div className="onboarding-searchable-wrap">
-          <input
-            type="text"
-            className="auth-input"
-            placeholder={step.placeholder || ''}
-            value={searchableQuery !== '' ? searchableQuery : ((value as string) ?? '')}
-            onChange={(e) => {
-              setSearchableQuery(e.target.value)
-              if (!e.target.value.trim()) setAnswers((a) => ({ ...a, [step.id]: '' }))
-            }}
-            onFocus={() => setSearchableQuery((value as string) || '')}
-            disabled={saving}
-            autoComplete="off"
-          />
-          {searchableQuery.length > 0 && (
-            <ul className="onboarding-searchable-list" role="listbox">
-              {(step.options as string[])
-                .filter((opt) => opt.toLowerCase().includes(searchableQuery.toLowerCase()))
-                .slice(0, 12)
-                .map((opt) => (
-                  <li key={opt} role="option">
-                    <button
-                      type="button"
-                      className="onboarding-searchable-option"
-                      onClick={() => {
-                        setAnswers((a) => ({ ...a, [step.id]: opt }))
-                        setSearchableQuery('')
-                      }}
-                      disabled={saving}
-                    >
-                      {opt}
-                    </button>
-                  </li>
-                ))}
-            </ul>
-          )}
-        </div>
-      )}
-
-      {!showCombinedStudy && step?.type === 'multi_select' && step.options && (
+      {step?.type === 'multi_select' && step.options && (
         <div>
           {step.options.map((opt) => {
             const arr = (Array.isArray(value) ? value : []) as string[]
             const selected = arr.includes(opt)
             const isPreferNotToSay = opt === 'Prefer not to say'
             const isExclusiveOption =
-              (step.id === 'q10_first_conversation_feel' && opt === 'A mix — see where it goes') ||
-              (step.id === 'q6_who_excited_to_meet' && opt === "I'm open to anyone")
+              (step.id === 'q_convo_feel' && opt === 'A mix — see where it goes') ||
+              (step.id === 'q_openness' && opt === "I'm open to anyone")
             const atMax =
               step.maxSelections != null && arr.length >= step.maxSelections && !selected
             const exclusiveOptionText =
-              step.id === 'q10_first_conversation_feel'
+              step.id === 'q_convo_feel'
                 ? 'A mix — see where it goes'
-: step.id === 'q6_who_excited_to_meet'
-              ? "I'm open to anyone"
+                : step.id === 'q_openness'
+                  ? "I'm open to anyone"
                   : null
             return (
               <button

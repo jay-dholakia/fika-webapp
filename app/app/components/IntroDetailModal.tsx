@@ -18,6 +18,7 @@ export type IntroMatch = {
   otherAge?: number | null
   score: number | null
   reasons: {
+    whyWeIntroducedYou?: string[]
     conversationHooks?: string[]
     sharedInterests?: string[]
     conversation_hooks?: string[]
@@ -130,7 +131,7 @@ export function IntroDetailModal({
     ])
       .then(([profile, intakeResponses]) => {
         if (cancelled) return
-        const interestsResp = intakeResponses?.find((r) => r.question_id === 'q5_talk_about')
+        const interestsResp = intakeResponses?.find((r) => r.question_id === 'q_topics')
         log('detail set', {
           hasProfile: !!profile,
           intakeCount: intakeResponses?.length ?? 0,
@@ -162,7 +163,7 @@ export function IntroDetailModal({
   // Log which sections will render when detail is set (dev debugging)
   useEffect(() => {
     if (!detail || loading) return
-    const interestsResp = detail.intakeResponses?.find((r) => r.question_id === 'q5_talk_about')
+    const interestsResp = detail.intakeResponses?.find((r) => r.question_id === 'q_topics')
     console.log('[IntroDetailModal] sections', {
       profile: { avatar: !!detail.profile.avatar_url, languages: !!detail.profile.languages?.length, bio: !!detail.profile.bio_text?.trim() },
       interests: !!interestsResp?.answer,
@@ -193,12 +194,6 @@ export function IntroDetailModal({
     }
   }
   const displayInterests = sharedInterestsFromReasons.length > 0 ? sharedInterestsFromReasons : Array.from(new Set(parsedInterests))
-
-  // Fika preference (q4) and typical availability (q9) for bottom of modal
-  const fikaPreference = detail?.intakeResponses?.find((r) => r.question_id === 'q4_where_most_yourself')
-  const fikaPreferenceText = fikaPreference ? formatIntakeAnswer(fikaPreference.answer) : null
-  const typicalAvailability = detail?.intakeResponses?.find((r) => r.question_id === 'q9_availability')
-  const typicalAvailabilityText = typicalAvailability ? formatIntakeAnswer(typicalAvailability.answer) : null
 
   return (
     <div className="app-modal-overlay" onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="intro-modal-title">
@@ -252,9 +247,20 @@ export function IntroDetailModal({
                 </div>
               </div>
 
+              {(intro.reasons?.whyWeIntroducedYou?.length ?? 0) > 0 ? (
+                <section className="app-intro-detail-section">
+                  <h3 className="app-intro-detail-section-title">Why we introduced you</h3>
+                  <ul className="app-intro-detail-hooks">
+                    {intro.reasons.whyWeIntroducedYou!.map((line, i) => (
+                      <li key={i}>{line}</li>
+                    ))}
+                  </ul>
+                </section>
+              ) : null}
+
               {conversationHooks.length > 0 ? (
                 <section className="app-intro-detail-section">
-                  <h3 className="app-intro-detail-section-title">Why you might connect</h3>
+                  <h3 className="app-intro-detail-section-title">Start here</h3>
                   <ul className="app-intro-detail-hooks">
                     {conversationHooks.slice(0, 4).map((hook, i) => (
                       <li key={i}>{hook}</li>
@@ -264,7 +270,7 @@ export function IntroDetailModal({
               ) : null}
 
               {(() => {
-                const interestsResp = detail?.intakeResponses?.find((r) => r.question_id === 'q5_talk_about')
+                const interestsResp = detail?.intakeResponses?.find((r) => r.question_id === 'q_topics')
                 const interestsText = interestsResp ? formatIntakeAnswer(interestsResp.answer) : null
                 const interestsList = interestsResp && Array.isArray(interestsResp.answer)
                   ? (interestsResp.answer as string[]).filter(Boolean)
@@ -284,18 +290,6 @@ export function IntroDetailModal({
                 )
               })()}
 
-              {fikaPreferenceText ? (
-                <section className="app-intro-detail-section">
-                  <h3 className="app-intro-detail-section-title">Fika preference</h3>
-                  <p className="app-intro-detail-conversation-types">{fikaPreferenceText}</p>
-                </section>
-              ) : null}
-              {typicalAvailabilityText ? (
-                <section className="app-intro-detail-section">
-                  <h3 className="app-intro-detail-section-title">Typical availability</h3>
-                  <p className="app-intro-detail-conversation-types">{typicalAvailabilityText}</p>
-                </section>
-              ) : null}
             </>
           )}
         </div>

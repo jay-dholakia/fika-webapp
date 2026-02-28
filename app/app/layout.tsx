@@ -58,6 +58,28 @@ export default function AppLayout({
     }
   }, [])
 
+  // Ensure profile row exists after OAuth (e.g. Google sign-in)
+  useEffect(() => {
+    const supabase = getSupabase()
+    if (!userId || !supabase) return
+    let cancelled = false
+    ;(async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.user || cancelled) return
+      const meta = session.user.user_metadata
+      const name = (meta?.full_name ?? meta?.name ?? '').trim() || ' '
+      const { data: profile } = await supabase.from('profiles').select('id, first_name').eq('id', session.user.id).maybeSingle()
+      if (cancelled) return
+      if (!profile || (profile.first_name ?? '').trim() === '') {
+        await supabase.from('profiles').upsert(
+          { id: session.user.id, first_name: name, updated_at: new Date().toISOString() },
+          { onConflict: 'id' }
+        )
+      }
+    })()
+    return () => { cancelled = true }
+  }, [userId])
+
   useEffect(() => {
     if (!sessionChecked) return
     authLog('app-layout:redirect-check', { sessionChecked, userId: userId?.slice(0, 8) ?? null, loading, isComplete })

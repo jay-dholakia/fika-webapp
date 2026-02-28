@@ -8,7 +8,6 @@ import {
   INTAKE_STEPS,
   type ProfileStep,
 } from '@/lib/onboarding-data'
-import { showIndustryStep, showSchoolSteps } from '@/lib/onboarding'
 import {
   getAnswersFromProfileAndIntake,
   type AnswersState,
@@ -38,7 +37,6 @@ export default function SettingsProfilePage() {
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
   const [locationStatus, setLocationStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
-  const [searchableQuery, setSearchableQuery] = useState('')
 
   useEffect(() => {
     getSupabase()?.auth.getSession().then(({ data: { session } }) => {
@@ -353,124 +351,6 @@ export default function SettingsProfilePage() {
         </div>
       )
     }
-    if (step.type === 'slider' && (step.sliderRange || step.sliderSteps))
-      return (
-        <div className="onboarding-slider-wrap">
-          <input
-            id={`profile-${step.id}`}
-            name={step.id}
-            type="range"
-            className="onboarding-slider"
-            min={step.sliderSteps ? 0 : step.sliderRange![0]}
-            max={step.sliderSteps ? step.sliderSteps.length - 1 : step.sliderRange![1]}
-            step={step.sliderSteps ? 1 : undefined}
-            value={
-              step.sliderSteps
-                ? (() => {
-                    const steps = step.sliderSteps!
-                    const num = typeof value === 'number' ? value : step.sliderDefault ?? steps[0]
-                    const idx = steps.indexOf(num)
-                    return idx >= 0 ? idx : steps.indexOf(step.sliderDefault ?? steps[0]) || 0
-                  })()
-                : (typeof value === 'number' ? value : step.sliderDefault ?? step.sliderRange![0])
-            }
-            onChange={(e) => {
-              const raw = Number(e.target.value)
-              set(step.sliderSteps ? step.sliderSteps[raw] : raw)
-            }}
-            disabled={saving}
-            autoComplete="off"
-          />
-          {step.sliderLabel && (
-            <p className="onboarding-slider-label">
-              {step.sliderLabel(
-                step.sliderSteps
-                  ? (() => {
-                      const steps = step.sliderSteps!
-                      const num = typeof value === 'number' ? value : step.sliderDefault ?? steps[0]
-                      return steps.includes(num) ? num : (step.sliderDefault ?? steps[0])
-                    })()
-                  : (typeof value === 'number' ? value : step.sliderDefault ?? step.sliderRange![0])
-              )}
-            </p>
-          )}
-        </div>
-      )
-    if (step.type === 'open_ended')
-      return (
-        <textarea
-          id={`profile-${step.id}`}
-          name={step.id}
-          className="auth-input"
-          placeholder={step.placeholder || ''}
-          value={(value as string) ?? ''}
-          onChange={(e) => set(e.target.value)}
-          disabled={saving}
-          rows={3}
-          style={{ resize: 'vertical' }}
-          autoComplete="off"
-        />
-      )
-    if (step.type === 'single_select' && step.options)
-      return (
-        <select
-          id={`profile-${step.id}`}
-          name={step.id}
-          className="auth-input"
-          value={(value as string) ?? ''}
-          onChange={(e) => set(e.target.value)}
-          disabled={saving}
-          aria-label={step.question}
-        >
-          <option value="">{step.placeholder ?? 'Choose…'}</option>
-          {step.options.map((opt) => (
-            <option key={opt} value={opt}>
-              {opt}
-            </option>
-          ))}
-        </select>
-      )
-    if (step.type === 'searchable_single' && step.options)
-      return (
-        <div className="onboarding-searchable-wrap">
-          <input
-            id={`profile-${step.id}`}
-            type="text"
-            className="auth-input"
-            placeholder={step.placeholder || ''}
-            value={searchableQuery !== '' ? searchableQuery : ((value as string) ?? '')}
-            onChange={(e) => {
-              setSearchableQuery(e.target.value)
-              if (!e.target.value.trim()) set('')
-            }}
-            onFocus={() => setSearchableQuery((value as string) || '')}
-            disabled={saving}
-            autoComplete="off"
-          />
-          {searchableQuery.length > 0 && (
-            <ul className="onboarding-searchable-list" role="listbox">
-              {step.options
-                .filter((opt) => opt.toLowerCase().includes(searchableQuery.toLowerCase()))
-                .slice(0, 12)
-                .map((opt) => (
-                  <li key={opt} role="option">
-                    <button
-                      type="button"
-                      className="onboarding-searchable-option"
-                      onClick={() => {
-                        set(opt)
-                        setSearchableQuery('')
-                      }}
-                      disabled={saving}
-                    >
-                      {opt}
-                    </button>
-                  </li>
-                ))}
-            </ul>
-          )}
-        </div>
-      )
     return null
   }
 
@@ -506,13 +386,7 @@ export default function SettingsProfilePage() {
 
         <section className="profile-section">
           <h3 className="profile-section-title">Questionnaire</h3>
-          {INTAKE_STEPS.filter((step) => {
-            if (step.id === 'confirm_intent') return false
-            const gate = answers.q3_work_or_study as string | undefined
-            if (step.id === 'q3_profession' && !showIndustryStep(gate)) return false
-            if ((step.id === 'q3_university' || step.id === 'q3_major') && !showSchoolSteps(gate)) return false
-            return true
-          }).map((step) => (
+          {INTAKE_STEPS.filter((step) => step.id !== 'confirm_intent').map((step) => (
             <div key={step.id} className="profile-field">
               <label htmlFor={`profile-${step.id}`} className="profile-label">
                 {step.question}

@@ -1,24 +1,18 @@
 /**
  * Helpers for showing intro detail in the modal.
- * Safe intake question IDs = show in intro modal (not super personal).
+ * LA Beta: safe intake IDs = life_chapter, lately, everyday_anchor, topics, convo_feel, openness.
  */
 
 import { INTAKE_STEPS } from './onboarding-data'
 import type { IntakeResponseItem } from './db-types'
 
-/** Question IDs we're okay showing in the intro modal (interests, life chapter, work, conversation style, etc.). */
 export const SAFE_INTAKE_QUESTION_IDS = new Set([
-  'q2_life_chapter',
-  'q3_work_or_study',
-  'q3_profession',
-  'q3_university',
-  'q3_major',
-  'q5_talk_about',
-  'q10_first_conversation_feel',
-  'q4_where_most_yourself',
-  'q6_who_excited_to_meet',
-  'q9_availability',
-  'q11_season_of_life',
+  'q_life_chapter',
+  'q_lately',
+  'q_everyday_anchor',
+  'q_topics',
+  'q_convo_feel',
+  'q_openness',
 ])
 
 const questionById = new Map(INTAKE_STEPS.map((s) => [s.id, s.question]))
@@ -37,7 +31,7 @@ export function filterSafeIntakeResponses(responses: IntakeResponseItem[]): Inta
   return responses.filter((r) => SAFE_INTAKE_QUESTION_IDS.has(r.question_id))
 }
 
-/** Build a short prose summary from "about them" intake (excludes q1 + q5). Returns null if nothing to say. */
+/** Build a short prose summary from "about them" intake (LA Beta). */
 export function buildIntroSummary(responses: IntakeResponseItem[]): string | null {
   const byId = new Map(responses.map((r) => [r.question_id, r]))
   const str = (id: string) => {
@@ -46,25 +40,17 @@ export function buildIntroSummary(responses: IntakeResponseItem[]): string | nul
     const s = formatIntakeAnswer(r.answer).trim()
     return s || null
   }
-  const life = str('q2_life_chapter')
-  const work = str('q3_work_or_study')
-  const convoFeel = str('q10_first_conversation_feel')
-  const where = str('q4_where_most_yourself')
-  const who = str('q6_who_excited_to_meet')
-  const when = str('q9_availability')
+  const life = str('q_life_chapter')
+  const convoFeel = str('q_convo_feel')
+  const who = str('q_openness')
 
   const parts: string[] = []
   if (life) {
-    parts.push(`Right now they're in a season of ${life.toLowerCase()}.`)
-  }
-  if (work) {
-    parts.push(`They're ${work.toLowerCase()}.`)
+    parts.push(`Right now they're in a chapter of ${life.toLowerCase()}.`)
   }
   const connectParts: string[] = []
   if (convoFeel) connectParts.push(`like first conversations to feel ${convoFeel.toLowerCase()}`)
-  if (where) connectParts.push(`prefer ${where.toLowerCase()} for meetups`)
   if (who) connectParts.push(`open to ${who.toLowerCase()}`)
-  if (when) connectParts.push(`usually free ${when.toLowerCase()}`)
   if (connectParts.length > 0) {
     parts.push(`They ${connectParts.join(', ')}.`)
   }

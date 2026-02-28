@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 
-const OPEN_ENDED_IDS = ['q12_first_conversation']
+const OPEN_ENDED_IDS: string[] = []
 
 interface IntakeResponseItem {
   question_id: string
@@ -85,28 +85,41 @@ export async function POST(request: Request) {
 
   const responses = row.responses as IntakeResponseItem[]
   const text = buildOpenEndedText(responses)
-  let embedding: number[]
-  try {
-    embedding = await getEmbedding(text, openaiKey.trim())
-  } catch (e) {
-    return NextResponse.json(
-      { error: e instanceof Error ? e.message : 'Embedding failed' },
-      { status: 500 }
-    )
-  }
 
   const completedAt = new Date().toISOString()
-  const { error: updateError } = await supabase
-    .from('intake_responses_v5')
-    .update({
-      embed_vector: JSON.stringify(embedding),
-      completed_at: completedAt,
-      updated_at: completedAt,
-    })
-    .eq('user_id', user.id)
 
-  if (updateError) {
-    return NextResponse.json({ error: updateError.message }, { status: 500 })
+  if (text && text !== 'No open-ended answers.') {
+    let embedding: number[]
+    try {
+      embedding = await getEmbedding(text, openaiKey.trim())
+    } catch (e) {
+      return NextResponse.json(
+        { error: e instanceof Error ? e.message : 'Embedding failed' },
+        { status: 500 }
+      )
+    }
+    const { error: updateError } = await supabase
+      .from('intake_responses_v5')
+      .update({
+        embed_vector: JSON.stringify(embedding),
+        completed_at: completedAt,
+        updated_at: completedAt,
+      })
+      .eq('user_id', user.id)
+    if (updateError) {
+      return NextResponse.json({ error: updateError.message }, { status: 500 })
+    }
+  } else {
+    const { error: updateError } = await supabase
+      .from('intake_responses_v5')
+      .update({
+        completed_at: completedAt,
+        updated_at: completedAt,
+      })
+      .eq('user_id', user.id)
+    if (updateError) {
+      return NextResponse.json({ error: updateError.message }, { status: 500 })
+    }
   }
 
   return NextResponse.json({ ok: true, completed_at: completedAt })

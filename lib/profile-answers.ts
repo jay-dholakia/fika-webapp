@@ -19,8 +19,6 @@ export function getAnswersFromProfileAndIntake(
     else if (s.id === 'birthdate') answers.birthdate = profile?.birthdate ?? ''
     else if (s.id === 'gender') answers.gender = profile?.gender ?? ''
     else if (s.id === 'gender_preference') answers.gender_preference = profile?.gender_preference ?? ''
-    else if (s.id === 'pronouns') answers.pronouns = profile?.pronouns ?? ''
-    else if (s.id === 'relationship_status') answers.relationship_status = profile?.relationship_status ?? ''
     else if (s.id === 'languages') answers.languages = Array.isArray(profile?.languages) ? profile.languages : []
     else if (s.id === 'location' && profile?.city != null)
       answers.location = { city: profile.city, lat: profile.lat ?? 0, lng: profile.lng ?? 0 }
