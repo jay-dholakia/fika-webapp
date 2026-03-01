@@ -251,7 +251,7 @@ export function IntroDetailModal({
                 <section className="app-intro-detail-section">
                   <h3 className="app-intro-detail-section-title">Why we introduced you</h3>
                   <ul className="app-intro-detail-hooks">
-                    {intro.reasons.whyWeIntroducedYou!.map((line, i) => (
+                    {(intro.reasons?.whyWeIntroducedYou ?? []).map((line, i) => (
                       <li key={i}>{line}</li>
                     ))}
                   </ul>
