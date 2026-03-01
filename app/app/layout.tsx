@@ -144,6 +144,9 @@ export default function AppLayout({
           <Link href="/app" className={pathname === '/app' || pathname?.startsWith('/app/onboarding') ? 'app-sidebar-link active' : 'app-sidebar-link'} onClick={() => setMobileMenuOpen(false)}>
             Introductions
           </Link>
+          <Link href="/app/availability" className={pathname === '/app/availability' ? 'app-sidebar-link active' : 'app-sidebar-link'} onClick={() => setMobileMenuOpen(false)}>
+            Availability
+          </Link>
           <Link href="/app/chats" className={pathname?.startsWith('/app/chats') ? 'app-sidebar-link active' : 'app-sidebar-link'} onClick={() => setMobileMenuOpen(false)}>
             Chats
           </Link>

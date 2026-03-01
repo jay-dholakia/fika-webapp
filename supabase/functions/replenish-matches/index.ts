@@ -148,6 +148,16 @@ async function replenishUserMatches(supabaseClient: any, userId: string) {
     return
   }
 
+  // Get this user's availability from weekly_availability
+  const { data: availabilityRow } = await supabaseClient
+    .from('weekly_availability')
+    .select('availability_slots')
+    .eq('user_id', userId)
+    .eq('batch_week', batchWeek)
+    .maybeSingle()
+
+  const userAvailabilitySlots: string[] = Array.isArray(availabilityRow?.availability_slots) ? availabilityRow.availability_slots : []
+
   console.log(`Processing matches for user ${userId.substring(0, 8)}, batch_week: ${batchWeek}`)
 
   // Check if user already has matches from this week (idempotency check)
@@ -221,6 +231,7 @@ async function replenishUserMatches(supabaseClient: any, userId: string) {
     effectiveUserProfile,
     userIntake,
     batchWeek,
+    userAvailabilitySlots,
     50 // Get top 50 candidates to ensure we have enough above threshold
   )
 
@@ -260,6 +271,7 @@ async function findPotentialMatches(
   userProfile: UserProfile,
   userIntake: any,
   batchWeek: string,
+  userAvailabilitySlots: string[],
   limit: number
 ) {
   // Get user IDs who opted in for this week
@@ -270,6 +282,22 @@ async function findPotentialMatches(
 
   if (optInError) throw optInError
   const optedInIds = (optIns || []).map((r: { user_id: string }) => r.user_id).filter((id: string) => id !== userProfile.id)
+  if (optedInIds.length === 0) {
+    console.log('No other users opted in for this batch_week')
+    return []
+  }
+
+  // Get availability for all opted-in users from weekly_availability
+  const { data: availabilityRows } = await supabaseClient
+    .from('weekly_availability')
+    .select('user_id, availability_slots')
+    .eq('batch_week', batchWeek)
+    .in('user_id', optedInIds)
+
+  const availabilityByUserId: Record<string, string[]> = {}
+  for (const r of availabilityRows || []) {
+    availabilityByUserId[r.user_id] = Array.isArray(r.availability_slots) ? r.availability_slots : []
+  }
   if (optedInIds.length === 0) {
     console.log('No other users opted in for this batch_week')
     return []
@@ -304,6 +332,16 @@ async function findPotentialMatches(
     }
 
     const candidateIntake = candidateIntakeData
+
+    // Require overlapping availability when both have set slots (Doodle-style)
+    const candidateSlots: string[] = availabilityByUserId[candidate.id] ?? []
+    if (userAvailabilitySlots.length > 0 && candidateSlots.length > 0) {
+      const overlap = userAvailabilitySlots.some((s) => candidateSlots.includes(s))
+      if (!overlap) {
+        console.log(`Skipping ${candidate.id.substring(0, 8)} - no overlapping availability`)
+        continue
+      }
+    }
 
     const effectiveCandidateProfile: UserProfile = {
       id: candidate.id,

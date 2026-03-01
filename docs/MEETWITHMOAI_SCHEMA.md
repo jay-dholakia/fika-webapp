@@ -187,16 +187,34 @@ Prevents re-matching the same pair too soon.
 
 ### `weekly_match_opt_ins`
 
-Opt-in to receive matches for a given week.
+Opt-in to receive matches for a given week. Row exists only when the user has opted in.
 
 | Column | Type | Nullable | Notes |
 |--------|------|----------|--------|
 | `id` | uuid | NO | PK |
 | `user_id` | uuid | NO | FK profiles |
 | `batch_week` | date | NO | Start of week |
-| `opted_in_at` | timestamptz | NO | |
+| `opted_in_at` | timestamptz | NO | When the user opted in for this week's run |
 
-**RLS:** Users can SELECT/INSERT/DELETE own rows.
+**RLS:** Users can SELECT/INSERT/DELETE own rows (and UPDATE if needed).
+
+---
+
+### `weekly_availability`
+
+When a user is free for the week (batch_week). Used for matching; independent of opt-in.
+
+| Column | Type | Nullable | Notes |
+|--------|------|----------|--------|
+| `id` | uuid | NO | PK |
+| `user_id` | uuid | NO | FK auth.users |
+| `batch_week` | date | NO | Monday of the week |
+| `availability_slots` | text[] | YES | Slot ids e.g. mon_09_00, tue_14_30 (30-min 9am–7pm) |
+| `updated_at` | timestamptz | YES | |
+
+Unique on `(user_id, batch_week)`.
+
+**RLS:** Users can SELECT/INSERT/UPDATE/DELETE own rows.
 
 ---
 

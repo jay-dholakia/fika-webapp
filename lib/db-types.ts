@@ -42,7 +42,16 @@ export type WeeklyMatchOptInRow = {
   id?: string
   user_id: string
   batch_week: string // Monday date YYYY-MM-DD
-  opted_in_at: string // ISO timestamp (required in DB)
+  opted_in_at: string // ISO timestamp; row exists only when opted in
+}
+
+/** When a user is free for the week; independent of opt-in. */
+export type WeeklyAvailabilityRow = {
+  id?: string
+  user_id: string
+  batch_week: string // Monday date YYYY-MM-DD
+  availability_slots?: string[] | null
+  updated_at?: string
 }
 
 export type ConversationRow = {

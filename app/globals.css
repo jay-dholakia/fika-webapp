@@ -1237,6 +1237,35 @@ a {
   background: #f5f5f5;
   border-color: #ccc;
 }
+
+/* Google-only sign-in button (branded) */
+.btn-google {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  width: 100%;
+  background: #fff;
+  color: #1f1f1f;
+  border: 1px solid #dadce0;
+  font-size: 1rem;
+  font-weight: 500;
+  padding: 0.6rem 1.25rem;
+  border-radius: 6px;
+  transition: background 0.15s, border-color 0.15s;
+}
+.btn-google:hover:not(:disabled) {
+  background: #f8f9fa;
+  border-color: #dadce0;
+  color: #1f1f1f;
+}
+.btn-google:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+.auth-google-icon {
+  flex-shrink: 0;
+}
 .auth-switch {
   margin-top: 1.5rem;
   font-size: 0.95rem;
@@ -2189,6 +2218,131 @@ a {
   font-size: 0.95rem;
   color: var(--color-text);
 }
+
+/* Weekly availability (Doodle-style) */
+.app-availability-section {
+  padding-top: 1rem;
+  border-top: 1px solid var(--color-border);
+}
+
+/* Grid: days = columns, time slots = rows; buttons; hold-to-fill */
+.app-availability-grid-table {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+}
+.app-availability-grid-head {
+  display: grid;
+  grid-template-columns: 3rem repeat(7, minmax(2rem, 1fr));
+  min-width: min-content;
+  border-bottom: 1px solid var(--color-border);
+}
+.app-availability-grid-corner {
+  min-width: 3rem;
+  background: var(--color-surface);
+}
+.app-availability-grid-head-cell {
+  padding: 0.35rem 0.25rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--color-textSecondary);
+  text-align: center;
+  border-left: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+.app-availability-grid-row {
+  display: grid;
+  grid-template-columns: 3rem repeat(7, minmax(2rem, 1fr));
+  min-width: min-content;
+  border-bottom: 1px solid var(--color-border);
+}
+.app-availability-grid-row:last-child {
+  border-bottom: none;
+}
+.app-availability-grid-time-cell {
+  padding: 0.25rem 0.35rem;
+  font-size: 0.7rem;
+  color: var(--color-textSecondary);
+  display: flex;
+  align-items: center;
+  border-right: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+.app-availability-grid-cell {
+  min-height: 2rem;
+  min-width: 2rem;
+  padding: 0;
+  margin: 0;
+  border: none;
+  border-left: 1px solid var(--color-border);
+  background: var(--color-bg);
+  cursor: pointer;
+  transition: background 0.1s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.app-availability-grid-cell:hover:not(:disabled) {
+  background: var(--color-border);
+}
+.app-availability-grid-cell:disabled {
+  cursor: default;
+  opacity: 0.8;
+}
+.app-availability-grid-cell-selected {
+  background: var(--color-primary);
+}
+.app-availability-grid-cell-selected:hover:not(:disabled) {
+  background: var(--color-primary);
+  filter: brightness(1.1);
+}
+
+.app-availability-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.app-availability-day {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+.app-availability-day-label {
+  flex-shrink: 0;
+  width: 2.25rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-textSecondary);
+}
+.app-availability-day-slots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+.app-availability-slot {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.75rem;
+  color: var(--color-text);
+  cursor: pointer;
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+}
+.app-availability-slot:has(input:checked) {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--color-surface);
+}
+.app-availability-slot input {
+  margin: 0;
+}
+
 .app-empty {
   color: var(--color-textSecondary);
   padding: 2rem 0;

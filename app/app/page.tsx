@@ -7,6 +7,7 @@ import { getSupabase } from '@/lib/supabase'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { authLog } from '@/lib/auth-log'
 import { getCurrentBatchWeek, getMissingIntakeStepIds, getOrderedMissingIntakeSteps } from '@/lib/onboarding'
+import { isAvailabilityLocked } from '@/lib/availability-slots'
 import { useOnboardingStatus } from '@/lib/use-onboarding'
 import { formatIntakeAnswer, ageFromBirthdate } from '@/lib/intro-detail'
 import { IntroDetailModal, type IntroMatch } from '@/app/app/components/IntroDetailModal'
@@ -39,6 +40,8 @@ export default function AppHomePage() {
 
   const TARGET_USERS = 250
   const showOptIn = profileCount !== null && profileCount >= TARGET_USERS
+  const batchWeek = getCurrentBatchWeek()
+  const optInLocked = showOptIn && isAvailabilityLocked(batchWeek)
   const { loading: onboardingLoading, isComplete: onboardingComplete, intake, refetch } = useOnboardingStatus(userId ?? undefined)
   const showQuestionnaireCard = !onboardingLoading && !onboardingComplete
   const missingIntakeSteps = onboardingComplete && intake ? getMissingIntakeStepIds(intake) : []
@@ -333,8 +336,13 @@ export default function AppHomePage() {
         <div className="app-card">
           <h2>Weekly introductions</h2>
           <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem', marginBottom: '1rem' }}>
-            Opt in to be included in this week&apos;s match run. New intros appear here after the run.
+            Opt in to be included in this week&apos;s match run. New intros appear here after the run. You can set your availability anytime on the <Link href="/app/availability">Availability</Link> page—opt in when you&apos;re ready. Both lock Sunday at 6pm.
           </p>
+          {optInLocked && (
+            <p className="onboarding-error" style={{ marginBottom: '0.75rem' }}>
+              Opt-ins and availability are locked for this week. The intro run will happen soon.
+            </p>
+          )}
           <div className="app-opt-in-toggle">
             <label className="app-toggle-label">
               <input
@@ -342,7 +350,7 @@ export default function AppHomePage() {
                 role="switch"
                 checked={optedIn ?? false}
                 onChange={() => toggleOptIn()}
-                disabled={toggling}
+                disabled={toggling || optInLocked}
                 aria-label="Opt in to this week's introductions"
                 className="app-toggle-input"
               />
@@ -354,6 +362,16 @@ export default function AppHomePage() {
               </span>
             </label>
           </div>
+          {optedIn && (
+            <p style={{ marginTop: '0.75rem', fontSize: '0.95rem' }}>
+              <Link href="/app/availability">Edit your availability for next week</Link>
+            </p>
+          )}
+          {!optedIn && !optInLocked && (
+            <p style={{ marginTop: '0.75rem', fontSize: '0.95rem' }}>
+              <Link href="/app/availability">Set your availability for next week</Link> so we can match you when you opt in.
+            </p>
+          )}
           {error && <p className="onboarding-error" style={{ marginTop: '0.75rem' }}>{error}</p>}
         </div>
       ) : (

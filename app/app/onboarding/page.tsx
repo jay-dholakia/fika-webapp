@@ -143,6 +143,13 @@ export default function AppOnboardingPage() {
       })
   }, [sessionUserId])
 
+  // Scroll to top when step changes (onboarding flow only)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }
+  }, [displayStepIndex])
+
   const step = ALL_STEPS[stepIndex]
   const displayStep = ALL_STEPS[displayStepIndex] ?? step
   const isProfileStep = stepIndex < PROFILE_STEPS.length

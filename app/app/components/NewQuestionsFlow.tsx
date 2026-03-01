@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect, useRef } from 'react'
+import { useState, useMemo } from 'react'
 import { getSupabase } from '@/lib/supabase'
 import { INTAKE_STEPS, type ProfileStep } from '@/lib/onboarding-data'
 import type { IntakeResponseItem } from '@/lib/db-types'
@@ -68,17 +68,6 @@ export function NewQuestionsFlow({ orderedSteps, intake, userId, onComplete }: N
   const [answers, setAnswers] = useState<AnswersState>(() => initialAnswers)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const isFirstQuestionMount = useRef(true)
-
-  useEffect(() => {
-    if (isFirstQuestionMount.current) {
-      isFirstQuestionMount.current = false
-      return
-    }
-    if (typeof window !== 'undefined' && window.innerWidth <= 768) {
-      window.scrollTo({ top: 0, behavior: 'smooth' })
-    }
-  }, [currentIndex])
 
   const step = orderedSteps[currentIndex]
   const isLast = currentIndex >= orderedSteps.length - 1
@@ -222,59 +211,6 @@ export function NewQuestionsFlow({ orderedSteps, intake, userId, onComplete }: N
             )
           })}
         </div>
-      )}
-
-      {!showCombinedStudy && step?.type === 'slider' && (step.sliderRange || step.sliderSteps) && (
-        <div className="onboarding-slider-wrap">
-          <input
-            type="range"
-            className="onboarding-slider"
-            min={step.sliderSteps ? 0 : step.sliderRange![0]}
-            max={step.sliderSteps ? step.sliderSteps.length - 1 : step.sliderRange![1]}
-            step={step.sliderSteps ? 1 : undefined}
-            value={
-              step.sliderSteps
-                ? (() => {
-                    const steps = step.sliderSteps!
-                    const num = typeof value === 'number' ? value : step.sliderDefault ?? steps[0]
-                    const idx = steps.indexOf(num)
-                    return idx >= 0 ? idx : steps.indexOf(step.sliderDefault ?? steps[0]) || 0
-                  })()
-                : (typeof value === 'number' ? value : step.sliderDefault ?? step.sliderRange![0])
-            }
-            onChange={(e) => {
-              const raw = Number(e.target.value)
-              const next = step.sliderSteps ? step.sliderSteps![raw] : raw
-              setAnswers((a) => ({ ...a, [step.id]: next }))
-            }}
-            disabled={saving}
-          />
-          {step.sliderLabel && (
-            <p className="onboarding-slider-label">
-              {step.sliderLabel(
-                step.sliderSteps
-                  ? (() => {
-                      const steps = step.sliderSteps!
-                      const num = typeof value === 'number' ? value : step.sliderDefault ?? steps[0]
-                      return steps.includes(num) ? num : (step.sliderDefault ?? steps[0])
-                    })()
-                  : (typeof value === 'number' ? value : step.sliderDefault ?? step.sliderRange![0])
-              )}
-            </p>
-          )}
-        </div>
-      )}
-
-      {!showCombinedStudy && step?.type === 'open_ended' && (
-        <textarea
-          className="auth-input"
-          placeholder={step.placeholder || ''}
-          value={(value as string) ?? ''}
-          onChange={(e) => setAnswers((a) => ({ ...a, [step.id]: e.target.value }))}
-          disabled={saving}
-          rows={4}
-          style={{ resize: 'vertical' }}
-        />
       )}
 
       {error && (
