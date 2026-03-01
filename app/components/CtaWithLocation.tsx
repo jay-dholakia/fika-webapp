@@ -4,7 +4,6 @@ import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { getSupabase } from '@/lib/supabase'
-import { GoogleIcon } from '@/app/app/components/GoogleIcon'
 
 declare global {
   interface Window {
@@ -57,12 +56,13 @@ export default function CtaWithLocation({ redirectToSignupWhenInLA = false }: Ct
   const [city, setCity] = useState('')
   const [state, setState] = useState('')
   const [locationStatus, setLocationStatus] = useState<'idle' | 'checking' | 'la' | 'not_la'>('idle')
+  const [email, setEmail] = useState('')
+  const [emailConsent, setEmailConsent] = useState(false)
   const [waitlistStatus, setWaitlistStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [waitlistMessage, setWaitlistMessage] = useState('')
 
   const placeContainerRef = useRef<HTMLDivElement>(null)
   const fallbackInputRef = useRef<HTMLInputElement>(null)
-  const waitlistCityRef = useRef<HTMLInputElement>(null)
   const autocompleteElementRef = useRef<HTMLElement | null>(null)
   const [usePlainCityInput, setUsePlainCityInput] = useState(true)
   const [cityInputValue, setCityInputValue] = useState('')
@@ -254,38 +254,48 @@ export default function CtaWithLocation({ redirectToSignupWhenInLA = false }: Ct
     }, 300)
   }
 
-  async function handleWaitlistGoogle() {
-    const supabase = getSupabase()
-    if (!supabase) {
-      setWaitlistMessage('App is not configured.')
+  async function handleWaitlistSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setWaitlistMessage('')
+    const emailTrim = email.trim().toLowerCase()
+    if (!emailTrim) {
       setWaitlistStatus('error')
+      setWaitlistMessage('Enter your email address.')
       return
     }
-    setWaitlistStatus('loading')
-    setWaitlistMessage('')
-    const { cityVal, stateVal } = getLocationFromInput()
-    if (typeof window !== 'undefined') {
-      sessionStorage.setItem('fika_waitlist_city_state', JSON.stringify({ city: cityVal || undefined, state: stateVal || undefined }))
-    }
-    try {
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: typeof window !== 'undefined' ? `${window.location.origin}/waitlist-callback` : undefined,
-        },
-      })
-      if (error) {
-        setWaitlistStatus('error')
-        setWaitlistMessage(error.message)
-        return
-      }
-      if (data?.url) window.location.href = data.url
-    } catch {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrim)) {
       setWaitlistStatus('error')
-      setWaitlistMessage('Something went wrong. Please try again.')
-    } finally {
-      setWaitlistStatus('idle')
+      setWaitlistMessage('Enter a valid email address.')
+      return
     }
+    if (!emailConsent) {
+      setWaitlistStatus('error')
+      setWaitlistMessage('Please agree to receive email from us.')
+      return
+    }
+    const supabase = getSupabase()
+    if (!supabase) {
+      setWaitlistStatus('error')
+      setWaitlistMessage('Unable to submit. Please try again.')
+      return
+    }
+    const { cityVal, stateVal } = getLocationFromInput()
+    setWaitlistStatus('loading')
+    const { error } = await supabase.from('waitlist').insert({
+      email: emailTrim,
+      city: cityVal || null,
+      state: stateVal || null,
+      marketing_consent_at: new Date().toISOString(),
+    })
+    if (error) {
+      setWaitlistStatus('error')
+      setWaitlistMessage(error.code === '23505' ? 'This email is already on the list.' : 'Something went wrong. Please try again.')
+      return
+    }
+    setWaitlistStatus('success')
+    setWaitlistMessage("You're on the list. We'll email you when Fika comes to your city.")
+    setEmail('')
+    setEmailConsent(false)
   }
 
   // Step 1: Ask for location
@@ -373,7 +383,7 @@ export default function CtaWithLocation({ redirectToSignupWhenInLA = false }: Ct
     )
   }
 
-  // Not LA: show waitlist (Google + optional city)
+  // Not LA: show waitlist (email only; city from earlier step)
   if (waitlistStatus === 'success') {
     return (
       <p className="cta-success" role="status">
@@ -382,72 +392,53 @@ export default function CtaWithLocation({ redirectToSignupWhenInLA = false }: Ct
     )
   }
 
-  const { cityVal, stateVal } = getLocationFromInput()
-  const cityDisplay = [cityVal, stateVal].filter(Boolean).join(', ') || ''
-
   return (
     <div className="cta-result cta-result-waitlist">
       <p className="cta-result-title">We&apos;re currently in Los Angeles.</p>
       <p className="cta-result-body">Join the waitlist and we&apos;ll email you when Fika comes to your city.</p>
-      <div className="cta-form">
-        <p className="cta-waitlist-hint">Which city? (optional)</p>
-        <div className={`cta-form-row cta-form-row-single ${(usePlainCityInput || !apiKey) ? 'location-floating-wrap' : ''} ${(usePlainCityInput || !apiKey) && cityDisplay ? 'location-floating-filled' : ''}`}>
-          {(usePlainCityInput || !apiKey) ? (
-            <>
-              <input
-                ref={waitlistCityRef}
-                id="cta-waitlist-city"
-                name="city_state"
-                type="text"
-                placeholder=" "
-                className="cta-input"
-                aria-label="City, State (optional)"
-                value={cityDisplay}
-                onChange={(e) => {
-                  const v = e.target.value
-                  const parts = v.split(',').map((s) => s.trim())
-                  setCity(parts[0] ?? '')
-                  setState(parts[1] ?? '')
-                }}
-                disabled={waitlistStatus === 'loading'}
-                autoComplete="address-level2"
-              />
-              <span className="location-floating-label">City, State</span>
-            </>
-          ) : (
-            <input
-              ref={waitlistCityRef}
-              id="cta-waitlist-city"
-              name="city_state"
-              type="text"
-              placeholder="City, State (optional)"
-              className="cta-input"
-              aria-label="City, State (optional)"
-              defaultValue={cityDisplay}
-              disabled={waitlistStatus === 'loading'}
-              autoComplete="address-level2"
-            />
-          )}
+      <form className="cta-form" onSubmit={handleWaitlistSubmit}>
+        <label htmlFor="cta-waitlist-email" className="cta-waitlist-hint">
+          Email
+        </label>
+        <div className="cta-form-row cta-form-row-single">
+          <input
+            id="cta-waitlist-email"
+            name="email"
+            type="email"
+            placeholder="you@example.com"
+            className="cta-input"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            disabled={waitlistStatus === 'loading'}
+            autoComplete="email"
+            required
+          />
         </div>
-        <p className="cta-consent-text cta-consent-short">
-          We&apos;ll email you when we launch in your city. Unsubscribe anytime.
-        </p>
+        <label className="cta-consent">
+          <input
+            type="checkbox"
+            checked={emailConsent}
+            onChange={(e) => setEmailConsent(e.target.checked)}
+            disabled={waitlistStatus === 'loading'}
+            aria-describedby="cta-consent-email-text"
+          />
+          <span id="cta-consent-email-text" className="cta-consent-text">
+            I agree to receive email from Fika when we launch in my city. Unsubscribe anytime.
+          </span>
+        </label>
         {waitlistMessage && (
           <p className={`cta-message ${waitlistStatus === 'error' ? 'cta-message-error' : ''}`} role="alert">
             {waitlistMessage}
           </p>
         )}
         <button
-          type="button"
-          className="btn btn-google btn-block auth-submit"
-          onClick={handleWaitlistGoogle}
-          disabled={waitlistStatus === 'loading'}
-          aria-label="Join waitlist with Google"
+          type="submit"
+          className="btn btn-primary btn-block"
+          disabled={waitlistStatus === 'loading' || !email.trim() || !emailConsent}
         >
-          <GoogleIcon className="auth-google-icon" />
-          {waitlistStatus === 'loading' ? 'Redirecting…' : 'Continue with Google to join the waitlist'}
+          {waitlistStatus === 'loading' ? 'Adding…' : 'Notify me'}
         </button>
-      </div>
+      </form>
       <div className="cta-go-back-wrap">
         <button
           type="button"

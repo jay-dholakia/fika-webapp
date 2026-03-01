@@ -26,11 +26,7 @@ To enable "Sign in with Google" for sign-up and login:
 4. **Authentication** → **URL Configuration**:
    - **Redirect URLs**: add your app URLs, e.g.  
      `http://localhost:3000/app`,  
-     `https://your-app.vercel.app/app`,  
-     and for the **waitlist** flow:  
-     `http://localhost:3000/waitlist-callback`,  
-     `https://your-app.vercel.app/waitlist-callback`  
-     so after Google sign-in waitlist users are sent back to `/waitlist-callback`.
+     `https://your-app.vercel.app/app`.
 
 Save. The app's "Continue with Google" button will then sign users in and create an account on first use.
 
@@ -38,6 +34,6 @@ Save. The app's "Continue with Google" button will then sign users in and create
 
 - **Login** (`/login`) and **Signup** (`/signup`) each have a "Continue with Google" button that calls `signInWithOAuth({ provider: 'google' })` and redirects to Google.
 - After OAuth, Supabase redirects to `/app`. The app layout ensures a **profile** row exists for the user (using Google display name if available).
-- **Waitlist** (when user is not in LA): "Continue with Google to join the waitlist" redirects to `/waitlist-callback`; that page writes the user's email (and optional city) to the `waitlist` table, then shows a success message.
+- **Waitlist** (when user is not in LA) is **email-only**: users enter their email and consent to receive launch emails; no OAuth is used for the waitlist.
 
 No extra env vars are required; Supabase uses the credentials stored in the dashboard.
