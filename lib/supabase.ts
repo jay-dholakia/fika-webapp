@@ -10,7 +10,7 @@ function getSupabase(): SupabaseClient | null {
   client = createClient(url, key, {
     auth: {
       detectSessionInUrl: true,
-      flowType: 'pkce',
+      flowType: 'implicit',
     },
   })
   return client
