@@ -9,19 +9,27 @@ const portalFaqItems = [
   },
   {
     q: 'How do I get introductions?',
-    a: 'Opt in each week to be included in that week’s match run. New intros show up on your Introductions page after the run. Skip a week and you’re out until you opt in again.',
+    a: 'Opt in each week to be included in that week’s match run. Set your availability for Wed–Sun on the Your Availability page—we use when you’re free to suggest a time. Your intro appears Tuesday morning after the run. Skip a week and you’re out until you opt in again.',
+  },
+  {
+    q: 'How many intros do I get per week?',
+    a: 'One. We match you with a single person each week so you can focus on making that Fika happen.',
   },
   {
     q: 'How are intros chosen?',
-    a: 'We use your profile and preferences to suggest a small set of people who are a good fit. You get a curated batch each week and choose who you’d like to meet.',
+    a: 'We use your profile and preferences to find a good fit, and we only match you when you have overlapping availability—so we can suggest a real time you’re both free.',
   },
   {
     q: 'How often do matches run?',
-    a: 'Weekly. Opt in before the run to be included; new intros appear on the Introductions page after it.',
+    a: 'Weekly. Opt in and set your availability (Wed–Sun) before the run; both lock Sunday at 11:59pm. Matches run Tuesday morning; your intro appears then.',
   },
   {
-    q: 'What happens when I say yes to an intro?',
-    a: 'A chat opens only when you both opt in—neither sees the other’s choice until then. Then message to pick a time and place.',
+    q: 'What happens when I get an intro?',
+    a: 'You’ll see a suggested time based on when you’re both free. You can confirm that time, choose a different time from your shared options, or say you can’t make it. If you or they want to change the time, you get one round to pick an alternate—then the other person confirms or can’t make it. Once you’re both confirmed, you’re set. No in-app chat—just show up at the time you agreed on.',
+  },
+  {
+    q: 'How long do I have to respond?',
+    a: 'You have until Tuesday 11:59pm to confirm or change the time. If neither of you confirms by then, the intro expires and you’re back in the pool for next week.',
   },
   {
     q: 'How much does it cost?',
@@ -48,7 +56,7 @@ export default function SettingsHowItWorksPage() {
     <div className="app-card">
       <h2>How it Works</h2>
       <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem', marginBottom: '1.5rem' }}>
-        Quick answers to how intros, matching, and chats work.
+        Quick answers to how intros, matching, and scheduling work.
       </p>
       <div className="faq-list">
         {portalFaqItems.map((item, index) => (

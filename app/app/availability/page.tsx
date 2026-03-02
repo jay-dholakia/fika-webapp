@@ -10,9 +10,10 @@ import {
   AVAILABILITY_DAY_LABELS,
   AVAILABILITY_TIME_ROWS,
   getAvailabilitySlotId,
+  isAvailabilitySlotId,
 } from '@/lib/availability-slots'
 
-const LOCK_TIME_COPY = 'Sunday at 6pm'
+const LOCK_TIME_COPY = 'Sunday at 11:59pm'
 
 export default function AvailabilityPage() {
   const [userId, setUserId] = useState<string | null>(null)
@@ -50,7 +51,8 @@ export default function AvailabilityPage() {
       .eq('batch_week', batchWeek)
       .maybeSingle()
       .then(({ data }) => {
-        setAvailabilitySlots(Array.isArray(data?.availability_slots) ? data.availability_slots : [])
+        const raw = Array.isArray(data?.availability_slots) ? data.availability_slots : []
+        setAvailabilitySlots(raw.filter((id: string) => isAvailabilitySlotId(id)))
         setLoading(false)
       })
   }, [userId, batchWeek])
@@ -137,13 +139,13 @@ export default function AvailabilityPage() {
 
   return (
     <div className="app-card">
-      <h2 className="app-page-title">Availability</h2>
+      <h2 className="app-page-title">Your Availability</h2>
 
       <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem', marginBottom: '0.5rem' }}>
-        Set when you&apos;re free next week (Mon–Sun, 9am–7pm, 30-min slots). Tap or click to toggle; hold and drag to fill or clear multiple.
+        Pick times you&apos;re free <strong>Wednesday–Sunday</strong> (9am–7pm, 30-min slots). Matches run Tuesday morning; you have until Tuesday 11:59pm to confirm. Tap or click to toggle; hold and drag to fill or clear multiple.
       </p>
       <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.9rem', marginBottom: '1rem' }}>
-        <strong>Lock:</strong> Both availability and opt-ins lock {LOCK_TIME_COPY}. After that we run matches; you can&apos;t change anything until the next week.
+        <strong>Lock:</strong> Opt-in and availability close {LOCK_TIME_COPY}. You can&apos;t change anything until the next week.
       </p>
 
       {locked && (
@@ -160,7 +162,7 @@ export default function AvailabilityPage() {
           <div
             className="app-availability-grid-table"
             role="grid"
-            aria-label="Availability next week"
+            aria-label="Your Availability next week"
             aria-readonly={locked}
             onPointerMove={handleGridPointerMove}
             onPointerUp={handleGridPointerUp}

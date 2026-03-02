@@ -61,14 +61,14 @@ export default function Home() {
                 <span className="step-num">2</span>
                 <div className="step-content">
                   <h3 className="step-title">Get your weekly introductions</h3>
-                  <p className="step-text">Each week, you'll receive a small set of thoughtful introductions—people aligned enough to connect, different enough to make it interesting. You decide who to meet.</p>
+                  <p className="step-text">Each week you get one thoughtful intro—someone aligned enough to connect and different enough to keep it interesting. We only match you when you have overlapping availability, so we can suggest a real time.</p>
                 </div>
               </li>
               <li className="step">
                 <span className="step-num">3</span>
                 <div className="step-content">
                   <h3 className="step-title">Opt in and meet in real life</h3>
-                  <p className="step-text">Say yes to one or more of your intros. If they say yes too, a chat opens so you can set a time and place. Meet in person and see where the conversation goes—stay in touch or let it be one great Fika. Your call.</p>
+                  <p className="step-text">We suggest a time when you’re both free. Confirm it or pick another—one quick round if either of you wants to change. Then meet in person and see where the conversation goes. Your call.</p>
                 </div>
               </li>
             </ol>

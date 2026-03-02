@@ -1872,6 +1872,161 @@ a {
   font-size: 1.25rem;
   margin-bottom: 0.75rem;
 }
+
+/* How it works timeline card */
+.app-how-it-works-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  counter-reset: step;
+}
+.app-how-it-works-step {
+  counter-increment: step;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  padding: 0.65rem 0;
+  border-bottom: 1px solid var(--color-border);
+  align-items: baseline;
+}
+.app-how-it-works-step:last-child {
+  border-bottom: none;
+}
+.app-how-it-works-step::before {
+  content: counter(step);
+  flex-shrink: 0;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  background: var(--color-primary);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.app-how-it-works-when {
+  font-weight: 600;
+  color: var(--color-text);
+  min-width: 10ch;
+}
+.app-how-it-works-what {
+  color: var(--color-textSecondary);
+  font-size: 0.9375rem;
+  flex: 1;
+  min-width: 0;
+}
+
+/* How it works page (dedicated tab) */
+.app-how-it-works-page .app-how-it-works-timeline {
+  counter-reset: none;
+}
+.app-how-it-works-page .app-how-it-works-step::before {
+  display: none;
+}
+.app-how-it-works-title {
+  font-family: var(--font-heading);
+  font-size: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+.app-welcome-card {
+  margin-bottom: 1.5rem;
+}
+.app-welcome-card-title {
+  font-family: var(--font-heading);
+  font-size: 1.5rem;
+  margin: 0 0 0.75rem 0;
+}
+.app-welcome-card-text {
+  color: var(--color-textSecondary);
+  font-size: 1rem;
+  line-height: 1.5;
+  margin: 0;
+}
+.app-how-it-works-section {
+  margin-bottom: 2rem;
+}
+.app-how-it-works-section-title {
+  font-family: var(--font-heading);
+  font-size: 1.125rem;
+  margin-bottom: 0.75rem;
+  color: var(--color-text);
+}
+.app-how-it-works-page .app-how-it-works-step {
+  align-items: flex-start;
+  gap: 0.75rem 1rem;
+}
+.app-how-it-works-step-marker {
+  flex-shrink: 0;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  background: var(--color-primary);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.app-how-it-works-step-done .app-how-it-works-step-marker {
+  background: var(--color-success, #22c55e);
+}
+.app-how-it-works-check {
+  font-size: 0.875rem;
+  font-weight: 700;
+  line-height: 1;
+}
+.app-how-it-works-step-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.app-how-it-works-page .app-how-it-works-when {
+  min-width: 0;
+  font-size: 0.9375rem;
+}
+.app-how-it-works-page .app-how-it-works-what {
+  font-size: 0.9rem;
+}
+.app-how-it-works-count {
+  color: var(--color-textSecondary);
+  font-weight: 500;
+}
+.app-how-it-works-250-block {
+  margin-top: 1rem;
+}
+.app-how-it-works-250-block .app-counter-text {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  color: var(--color-text);
+}
+.app-how-it-works-250-block .app-counter-bar {
+  margin-bottom: 0.75rem;
+}
+.app-how-it-works-250-block .app-waitlist-share-copy {
+  margin: 0 0 0.75rem;
+  font-size: 0.9rem;
+  color: var(--color-textSecondary);
+}
+.app-how-it-works-invite-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.app-how-it-works-invite-link {
+  color: var(--color-primary);
+  font-size: 0.9rem;
+  text-decoration: underline;
+}
+.app-how-it-works-invite-link:hover {
+  text-decoration: none;
+}
+
 /* Onboarding flow: bring Continue button closer on mobile, sticky so it stays visible */
 .app-new-questions-flow-actions {
   margin-top: 1.25rem;
@@ -2687,6 +2842,37 @@ a {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  gap: 0.5rem;
+}
+.app-scheduling-proposal {
+  width: 100%;
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+  color: var(--color-textSecondary);
+}
+.app-scheduling-proposal strong {
+  color: var(--color-text);
+}
+.app-scheduling-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+.app-scheduling-picker {
+  width: 100%;
+}
+.app-scheduling-picker-title {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+  color: var(--color-textSecondary);
+}
+.app-scheduling-slot-list {
+  list-style: none;
+  margin: 0 0 0.5rem;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
 }
 

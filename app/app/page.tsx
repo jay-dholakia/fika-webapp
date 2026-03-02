@@ -162,7 +162,7 @@ export default function AppHomePage() {
     setIntrosLoading(true)
     supabase
       .from('match_candidates')
-      .select('id, user_a, user_b, score, reasons')
+      .select('id, user_a, user_b, score, reasons, scheduling_status, default_slot_id, overlapping_slot_ids, counter_slot_id, counter_proposed_by_user_id, final_slot_id, confirmed_slot_id')
       .or(`user_a.eq.${userId},user_b.eq.${userId}`)
       .eq('status', 'active')
       .then(({ data: matches, error: matchError }) => {
@@ -209,7 +209,20 @@ export default function AppHomePage() {
               fikaPreference: q4 ? formatIntakeAnswer(q4.answer) || null : null,
             }
           })
-          const list: IntroMatch[] = matches.map((m: { id: string; user_a: string; user_b: string; score: number | null; reasons: unknown }) => {
+          const list: IntroMatch[] = matches.map((m: {
+            id: string
+            user_a: string
+            user_b: string
+            score: number | null
+            reasons: unknown
+            scheduling_status?: string | null
+            default_slot_id?: string | null
+            overlapping_slot_ids?: string[] | null
+            counter_slot_id?: string | null
+            counter_proposed_by_user_id?: string | null
+            final_slot_id?: string | null
+            confirmed_slot_id?: string | null
+          }) => {
             const otherId = m.user_a === userId ? m.user_b : m.user_a
             const profile = byId[otherId]
             const intake = intakeByUserId[otherId]
@@ -225,9 +238,16 @@ export default function AppHomePage() {
               conversationId: convoByMatch[m.id] ?? null,
               conversationTypesPreview: intake?.topicsPreview ?? null,
               fikaPreferencePreview: intake?.fikaPreference ?? null,
+              schedulingStatus: m.scheduling_status ?? null,
+              defaultSlotId: m.default_slot_id ?? null,
+              overlappingSlotIds: m.overlapping_slot_ids ?? null,
+              counterSlotId: m.counter_slot_id ?? null,
+              counterProposedByUserId: m.counter_proposed_by_user_id ?? null,
+              finalSlotId: m.final_slot_id ?? null,
+              confirmedSlotId: m.confirmed_slot_id ?? null,
             }
           })
-          setIntros(list.filter((i) => i.myDecision !== 'yes' && i.myDecision !== 'no'))
+          setIntros(list.filter((i) => i.myDecision !== 'no' && i.schedulingStatus !== 'expired'))
           setIntrosLoading(false)
         }).catch(() => {
           setIntros([])
@@ -322,6 +342,47 @@ export default function AppHomePage() {
     }
   }
 
+  async function handleSchedulingAction(intro: IntroMatch, action: string, slotId?: string) {
+    if (!userId) return
+    const supabase = getSupabase()
+    if (!supabase) return
+    setError(null)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) throw new Error('Not signed in.')
+      const res = await fetch('/api/scheduling', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ action, match_id: intro.id, ...(slotId != null ? { slot_id: slotId } : {}) }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data?.error ?? 'Action failed.')
+      const updated: Partial<IntroMatch> = {
+        schedulingStatus: data.scheduling_status ?? intro.schedulingStatus,
+      }
+      if (action === 'change_time' && slotId) {
+        updated.counterSlotId = slotId
+        updated.counterProposedByUserId = userId
+      }
+      if (action === 'choose_another_time' && slotId) {
+        updated.finalSlotId = slotId
+      }
+      if (data.scheduling_status === 'confirmed') {
+        updated.myDecision = 'yes'
+        updated.confirmedSlotId = intro.finalSlotId ?? intro.counterSlotId ?? intro.defaultSlotId ?? slotId
+      }
+      if (data.scheduling_status === 'expired') {
+        setIntros((prev) => prev.filter((i) => i.id !== intro.id))
+        setModalIntro(null)
+        return
+      }
+      setIntros((prev) => prev.map((i) => i.id === intro.id ? { ...i, ...updated } : i))
+      setModalIntro((prev) => (prev?.id === intro.id ? { ...prev, ...updated } : prev))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Action failed.')
+    }
+  }
+
   if (loading) {
     return (
       <div className="app-empty">
@@ -334,13 +395,13 @@ export default function AppHomePage() {
     <>
       {showOptIn ? (
         <div className="app-card">
-          <h2>Weekly introductions</h2>
+          <h2>Weekly introduction</h2>
           <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem', marginBottom: '1rem' }}>
-            Opt in to be included in this week&apos;s match run. New intros appear here after the run. You can set your availability anytime on the <Link href="/app/availability">Availability</Link> page—opt in when you&apos;re ready. Both lock Sunday at 6pm.
+            Opt in to be included in this week&apos;s match run. You&apos;ll get one intro—someone we think you&apos;ll click with, when you&apos;re both free. Set your availability (Wed–Sun) on the <Link href="/app/availability">Your Availability</Link> page; opt in when you&apos;re ready. Both lock Sunday at 11:59pm.
           </p>
           {optInLocked && (
             <p className="onboarding-error" style={{ marginBottom: '0.75rem' }}>
-              Opt-ins and availability are locked for this week. The intro run will happen soon.
+              Opt-in and availability are locked (Sunday 11:59pm). Matches run Tuesday morning.
             </p>
           )}
           <div className="app-opt-in-toggle">
@@ -351,14 +412,14 @@ export default function AppHomePage() {
                 checked={optedIn ?? false}
                 onChange={() => toggleOptIn()}
                 disabled={toggling || optInLocked}
-                aria-label="Opt in to this week's introductions"
+                aria-label="Opt in to this week's introduction"
                 className="app-toggle-input"
               />
               <span className="app-toggle-track" aria-hidden>
                 <span className="app-toggle-thumb" />
               </span>
               <span className="app-toggle-text">
-                {optedIn ? "I'm opted in this week" : "Opt in to this week's introductions"}
+                {optedIn ? "I'm opted in this week" : "Opt in to this week's introduction"}
               </span>
             </label>
           </div>
@@ -376,9 +437,9 @@ export default function AppHomePage() {
         </div>
       ) : (
         <div className="app-card app-waitlist-counter">
-          <h2>Weekly introductions</h2>
+          <h2>Weekly introduction</h2>
           <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem', marginBottom: '1rem' }}>
-            We&apos;re building community in Los Angeles. Once {TARGET_USERS} people have signed up we&apos;ll run our first intros and reach out so you can opt in for week one!
+            We&apos;re building community in Los Angeles. Once {TARGET_USERS} people have signed up we&apos;ll run our first intro and reach out so you can opt in for week one!
           </p>
           <p className="app-counter-text">
             <span className="app-counter-value">{profileCount !== null ? profileCount : '—'}</span>
@@ -393,18 +454,18 @@ export default function AppHomePage() {
             />
           </div>
           <p className="app-waitlist-share-copy">
-            Help me unlock Fika in our city — create an account and get first access to intros when we hit 250 people!
+            Help me unlock Fika in our city — create an account and get first access to your weekly intro when we hit 250 people!
           </p>
           <button
             type="button"
             className="app-waitlist-share-btn"
             onClick={async () => {
               const url = 'https://letsfika.vercel.app'
-              const text = "Help me unlock Fika in our city — create an account and get first access to intros when we hit 250 people!"
+              const text = "Help me unlock Fika in our city — create an account and get first access to your weekly intro when we hit 250 people!"
               if (typeof navigator !== 'undefined' && navigator.share) {
                 try {
                   await navigator.share({
-                    title: 'Fika – Weekly introductions',
+                    title: 'Fika – Weekly introduction',
                     text,
                     url,
                   })
@@ -432,7 +493,7 @@ export default function AppHomePage() {
       {showJustCompletedThankYou && (
         <div className="app-card">
           <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem', margin: 0 }}>
-            Thank you for completing the intro questions! We&apos;ll be in touch when we&apos;re ready for you to opt in to the next round of intros.
+            Thank you for completing the intro questions! We&apos;ll be in touch when we&apos;re ready for you to opt in to the next round.
           </p>
         </div>
       )}
@@ -479,15 +540,15 @@ export default function AppHomePage() {
       )}
 
       <div className="app-card">
-        <h2>Your introductions</h2>
+        <h2>This Week&apos;s Fika</h2>
         {introsLoading ? (
-          <p className="app-empty" style={{ padding: '1rem 0' }}>Loading introductions…</p>
+          <p className="app-empty" style={{ padding: '1rem 0' }}>Loading…</p>
         ) : intros.length === 0 ? (
           <p className="app-empty" style={{ padding: '1rem 0' }}>
-            Introductions will appear here after the next weekly run. Make sure you&apos;re opted in above.
+            This week&apos;s Fika will appear here after the next weekly run.
           </p>
         ) : (
-          <ul className="app-intro-list" aria-label="Your introductions">
+          <ul className="app-intro-list" aria-label="This week's Fika">
             {intros.map((intro) => (
               <li key={intro.id} className="app-intro-card">
                 <button
@@ -519,10 +580,8 @@ export default function AppHomePage() {
                       </p>
                     ) : null}
                   </div>
-                  {intro.myDecision === 'yes' && intro.conversationId ? (
-                    <span className="app-intro-card-cta">Open chat →</span>
-                  ) : intro.myDecision === 'yes' ? (
-                    <span className="app-intro-card-status">You opted in</span>
+                  {intro.myDecision === 'yes' ? (
+                    <span className="app-intro-card-status">Confirmed</span>
                   ) : intro.myDecision === 'no' ? (
                     <span className="app-intro-card-status">Passed</span>
                   ) : (
@@ -541,8 +600,10 @@ export default function AppHomePage() {
           onClose={() => setModalIntro(null)}
           onOptIn={optInToIntro}
           onPass={passOnIntro}
+          onSchedulingAction={handleSchedulingAction}
           actionMatchId={actionMatchId}
           error={error}
+          currentUserId={userId}
         />
       )}
     </>

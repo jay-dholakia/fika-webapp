@@ -7,6 +7,7 @@ import {
   formatIntakeAnswer,
   filterSafeIntakeResponses,
 } from '@/lib/intro-detail'
+import { summarizeAvailabilitySlots, getAvailabilitySlotLabel } from '@/lib/availability-slots'
 import type { IntakeResponseItem } from '@/lib/db-types'
 
 export type IntroMatch = {
@@ -23,6 +24,8 @@ export type IntroMatch = {
     sharedInterests?: string[]
     conversation_hooks?: string[]
     shared_interests?: string[]
+    /** Overlapping 30-min slot IDs for intro card; summarize with summarizeAvailabilitySlots() */
+    overlappingAvailabilitySlots?: string[]
   } | null
   myDecision?: 'yes' | 'no'
   conversationId?: string | null
@@ -30,6 +33,14 @@ export type IntroMatch = {
   conversationTypesPreview?: string | null
   /** Preview for card: fika preference (q4) */
   fikaPreferencePreview?: string | null
+  /** Scheduling: proposed_default | counter_proposed | final_proposed | confirmed | expired */
+  schedulingStatus?: string | null
+  defaultSlotId?: string | null
+  overlappingSlotIds?: string[] | null
+  counterSlotId?: string | null
+  counterProposedByUserId?: string | null
+  finalSlotId?: string | null
+  confirmedSlotId?: string | null
 }
 
 type ModalDetail = {
@@ -48,8 +59,10 @@ type IntroDetailModalProps = {
   onClose: () => void
   onOptIn: (intro: IntroMatch) => void
   onPass: (intro: IntroMatch) => void
+  onSchedulingAction?: (intro: IntroMatch, action: string, slotId?: string) => Promise<void>
   actionMatchId: string | null
   error: string | null
+  currentUserId?: string | null
 }
 
 export function IntroDetailModal({
@@ -57,11 +70,15 @@ export function IntroDetailModal({
   onClose,
   onOptIn,
   onPass,
+  onSchedulingAction,
   actionMatchId,
   error,
+  currentUserId,
 }: IntroDetailModalProps) {
   const [detail, setDetail] = useState<ModalDetail | null>(null)
   const [loading, setLoading] = useState(true)
+  const [schedulingActionLoading, setSchedulingActionLoading] = useState(false)
+  const [pickSlotFor, setPickSlotFor] = useState<'change_time' | 'choose_another' | null>(null)
 
   useEffect(() => {
     const supabase = getSupabase()
@@ -195,6 +212,39 @@ export function IntroDetailModal({
   }
   const displayInterests = sharedInterestsFromReasons.length > 0 ? sharedInterestsFromReasons : Array.from(new Set(parsedInterests))
 
+  const schedulingStatus = intro.schedulingStatus ?? null
+  const defaultSlotId = intro.defaultSlotId ?? intro.reasons?.overlappingAvailabilitySlots?.[0] ?? null
+  const slots = intro.overlappingSlotIds ?? intro.reasons?.overlappingAvailabilitySlots ?? []
+  const counterSlotId = intro.counterSlotId ?? null
+  const finalSlotId = intro.finalSlotId ?? null
+  const confirmedSlotId = intro.confirmedSlotId ?? null
+  const counterProposedByUserId = intro.counterProposedByUserId ?? null
+  const isRequester = currentUserId && counterProposedByUserId === currentUserId
+  const alternateSlots = defaultSlotId ? slots.filter((s) => s !== defaultSlotId) : [...slots]
+  const remainingAfterCounter =
+    counterSlotId && defaultSlotId
+      ? slots.filter((s) => s !== defaultSlotId && s !== counterSlotId)
+      : []
+  const hasRemainingAfterCounter = remainingAfterCounter.length > 0
+
+  async function handleSchedulingAction(action: string, slotId?: string) {
+    if (!onSchedulingAction) return
+    setSchedulingActionLoading(true)
+    try {
+      await onSchedulingAction(intro, action, slotId)
+      setPickSlotFor(null)
+    } finally {
+      setSchedulingActionLoading(false)
+    }
+  }
+
+  const showScheduling =
+    schedulingStatus &&
+    schedulingStatus !== 'expired' &&
+    onSchedulingAction &&
+    slots.length > 0
+  const busy = actionMatchId !== null || schedulingActionLoading
+
   return (
     <div className="app-modal-overlay" onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="intro-modal-title">
       <div className="app-modal" onClick={(e) => e.stopPropagation()}>
@@ -270,6 +320,22 @@ export function IntroDetailModal({
               ) : null}
 
               {(() => {
+                const slots = intro.reasons?.overlappingAvailabilitySlots
+                const windows = slots?.length ? summarizeAvailabilitySlots(slots) : []
+                if (windows.length === 0) return null
+                return (
+                  <section className="app-intro-detail-section">
+                    <h3 className="app-intro-detail-section-title">When you&apos;re both free</h3>
+                    <ul className="app-intro-detail-hooks">
+                      {windows.map((w, i) => (
+                        <li key={i}>{w}</li>
+                      ))}
+                    </ul>
+                  </section>
+                )
+              })()}
+
+              {(() => {
                 const interestsResp = detail?.intakeResponses?.find((r) => r.question_id === 'q_topics')
                 const interestsText = interestsResp ? formatIntakeAnswer(interestsResp.answer) : null
                 const interestsList = interestsResp && Array.isArray(interestsResp.answer)
@@ -295,7 +361,133 @@ export function IntroDetailModal({
         </div>
 
         <footer className="app-modal-footer">
-          {intro.myDecision === 'yes' ? (
+          {pickSlotFor ? (
+            <div className="app-scheduling-picker">
+              <p className="app-scheduling-picker-title">
+                {pickSlotFor === 'change_time' ? 'Choose an alternate time' : 'Choose another time'}
+              </p>
+              <ul className="app-scheduling-slot-list">
+                {(pickSlotFor === 'change_time' ? alternateSlots : remainingAfterCounter).map((slotId) => (
+                  <li key={slotId}>
+                    <button
+                      type="button"
+                      className="app-intro-btn app-intro-btn-secondary"
+                      onClick={() => handleSchedulingAction(pickSlotFor === 'change_time' ? 'change_time' : 'choose_another_time', slotId)}
+                      disabled={busy}
+                    >
+                      {getAvailabilitySlotLabel(slotId)}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <button
+                type="button"
+                className="app-intro-btn app-intro-btn-secondary"
+                onClick={() => setPickSlotFor(null)}
+                disabled={busy}
+              >
+                Cancel
+              </button>
+            </div>
+          ) : schedulingStatus === 'confirmed' ? (
+            <span className="app-intro-status">
+              Confirmed for {confirmedSlotId ? getAvailabilitySlotLabel(confirmedSlotId) : 'your Fika'}
+            </span>
+          ) : schedulingStatus === 'expired' ? (
+            <span className="app-intro-status">Expired</span>
+          ) : showScheduling && schedulingStatus === 'proposed_default' ? (
+            <>
+              <p className="app-scheduling-proposal">
+                Suggested time: <strong>{defaultSlotId ? getAvailabilitySlotLabel(defaultSlotId) : '—'}</strong>
+              </p>
+              <div className="app-scheduling-actions">
+                <button
+                  type="button"
+                  className="app-intro-btn app-intro-btn-primary"
+                  onClick={() => handleSchedulingAction('confirm_default')}
+                  disabled={busy}
+                >
+                  {schedulingActionLoading ? 'Confirming…' : 'Confirm'}
+                </button>
+                {alternateSlots.length > 0 && (
+                  <button
+                    type="button"
+                    className="app-intro-btn app-intro-btn-secondary"
+                    onClick={() => setPickSlotFor('change_time')}
+                    disabled={busy}
+                  >
+                    Change time
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="app-intro-btn app-intro-btn-secondary"
+                  onClick={() => handleSchedulingAction('cant_make_it')}
+                  disabled={busy}
+                >
+                  Can&apos;t make it
+                </button>
+              </div>
+            </>
+          ) : showScheduling && schedulingStatus === 'counter_proposed' ? (
+            <>
+              <p className="app-scheduling-proposal">
+                {intro.otherFirstName} suggested: <strong>{counterSlotId ? getAvailabilitySlotLabel(counterSlotId) : '—'}</strong>
+              </p>
+              <div className="app-scheduling-actions">
+                <button
+                  type="button"
+                  className="app-intro-btn app-intro-btn-primary"
+                  onClick={() => handleSchedulingAction('accept_counter')}
+                  disabled={busy}
+                >
+                  {schedulingActionLoading ? 'Accepting…' : 'Accept'}
+                </button>
+                {hasRemainingAfterCounter && (
+                  <button
+                    type="button"
+                    className="app-intro-btn app-intro-btn-secondary"
+                    onClick={() => setPickSlotFor('choose_another')}
+                    disabled={busy}
+                  >
+                    Choose another time
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="app-intro-btn app-intro-btn-secondary"
+                  onClick={() => handleSchedulingAction('cant_make_it')}
+                  disabled={busy}
+                >
+                  Can&apos;t make it
+                </button>
+              </div>
+            </>
+          ) : showScheduling && schedulingStatus === 'final_proposed' ? (
+            <>
+              <p className="app-scheduling-proposal">
+                {intro.otherFirstName} suggested: <strong>{finalSlotId ? getAvailabilitySlotLabel(finalSlotId) : '—'}</strong>
+              </p>
+              <div className="app-scheduling-actions">
+                <button
+                  type="button"
+                  className="app-intro-btn app-intro-btn-primary"
+                  onClick={() => handleSchedulingAction('confirm_final')}
+                  disabled={busy}
+                >
+                  {schedulingActionLoading ? 'Confirming…' : 'Confirm'}
+                </button>
+                <button
+                  type="button"
+                  className="app-intro-btn app-intro-btn-secondary"
+                  onClick={() => handleSchedulingAction('cant_make_it')}
+                  disabled={busy}
+                >
+                  Can&apos;t make it
+                </button>
+              </div>
+            </>
+          ) : intro.myDecision === 'yes' ? (
             intro.conversationId ? (
               <a href={`/app/chats/${intro.conversationId}`} className="app-intro-btn app-intro-btn-primary">
                 Open chat
@@ -311,7 +503,7 @@ export function IntroDetailModal({
                 type="button"
                 className="app-intro-btn app-intro-btn-primary"
                 onClick={() => onOptIn(intro)}
-                disabled={actionMatchId !== null}
+                disabled={busy}
               >
                 {actionMatchId === intro.id ? 'Opting in…' : 'Opt in'}
               </button>
@@ -319,7 +511,7 @@ export function IntroDetailModal({
                 type="button"
                 className="app-intro-btn app-intro-btn-secondary"
                 onClick={() => onPass(intro)}
-                disabled={actionMatchId !== null}
+                disabled={busy}
               >
                 Pass
               </button>

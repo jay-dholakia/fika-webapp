@@ -5,15 +5,15 @@ import { useState } from 'react'
 const faqItems = [
   {
     q: 'How often do I get intros?',
-    a: 'Once a week. You opt in each week to be included in the next week’s intro pool—skip a week and you’re out until you opt in again. You can jump back in anytime.',
+    a: 'Once a week. You opt in each week and set your availability for the upcoming week. We match you with one person you have overlapping time with. Skip a week and you’re out until you opt in again.',
   },
   {
     q: 'How does matching work?',
-    a: 'It requires mutual opt-in. When you say yes to an intro and they say yes to you, a chat is created so you can schedule a time and place to meet for your Fika. No chat until you both opt in.',
+    a: 'We suggest a time when you’re both free. You can confirm it, pick a different time from your shared options, or say you can’t make it. If someone wants to change the time, you get one round to choose an alternate—then the other confirms or can’t make it. No in-app chat: once you’re both confirmed, you just show up.',
   },
   {
     q: 'What does it cost?',
-    a: '$5 curation fee—and it’s only charged when both you and your intro opt in to meet up. That helps ensure you actually meet in person instead of endless chats that fizzle.',
+    a: '$5 curation fee—and it’s only charged when you opt in to meet up. That helps ensure you actually meet in person instead of endless back-and-forth that fizzles.',
   },
   {
     q: 'Do I have to meet in person?',

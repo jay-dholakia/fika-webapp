@@ -16,6 +16,39 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+const AVAILABILITY_DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
+const HALF_HOUR_IDS: string[] = (() => {
+  const out: string[] = []
+  for (let h = 9; h <= 18; h++) {
+    for (const m of ['00', '30']) {
+      out.push(`${h.toString().padStart(2, '0')}_${m}`)
+    }
+  }
+  return out
+})()
+
+/** Rank slot IDs: earlier week first, evenings preferred. Returns best-first; first = default. */
+function rankAvailabilitySlots(slotIds: string[]): string[] {
+  if (!slotIds.length) return []
+  const scored = slotIds.map((id) => {
+    const parts = id.split('_')
+    const dayStr = parts[0]
+    const timeStr = parts.slice(1).join('_')
+    const dayIndex = AVAILABILITY_DAYS.indexOf(dayStr)
+    const timeIndex = HALF_HOUR_IDS.indexOf(timeStr)
+    if (dayIndex === -1 || timeIndex === -1) return { id, score: -1 }
+    const score = (7 - dayIndex) * 100 + timeIndex
+    return { id, score }
+  }).filter((x) => x.score >= 0)
+  scored.sort((a, b) => b.score - a.score)
+  return scored.map((x) => x.id)
+}
+
+function getBestDefaultSlot(slotIds: string[]): string | null {
+  const ranked = rankAvailabilitySlots(slotIds)
+  return ranked[0] ?? null
+}
+
 function ageFromBirthdate(birthdate: string | null | undefined): number | null {
   if (!birthdate || typeof birthdate !== 'string') return null
   const date = new Date(birthdate.trim())
@@ -99,6 +132,19 @@ function getBatchWeekMonday(now: Date): string {
   monday.setDate(now.getDate() - daysToMonday)
   monday.setHours(0, 0, 0, 0)
   return monday.toISOString().split('T')[0]
+}
+
+/** Wednesday 00:00 (midnight) of the match week = expiration. batch_week is Monday YYYY-MM-DD. */
+function getExpiresAtWednesdayMidnight(batchWeek: string): string {
+  const d = new Date(batchWeek + 'T12:00:00Z')
+  d.setUTCDate(d.getUTCDate() + 2)
+  d.setUTCHours(0, 0, 0, 0)
+  return d.toISOString()
+}
+
+const WED_SUN_PREFIXES = ['wed_', 'thu_', 'fri_', 'sat_', 'sun_']
+function isWedSunSlot(slotId: string): boolean {
+  return WED_SUN_PREFIXES.some((p) => slotId.startsWith(p))
 }
 
 async function replenishAllUsers(supabaseClient: any) {
@@ -240,7 +286,7 @@ async function replenishUserMatches(supabaseClient: any, userId: string) {
   // Create match candidates
   // Only create matches above 0.35 threshold
   const MATCH_SCORE_THRESHOLD = 0.35
-  const MAX_MATCHES = 5
+  const MAX_MATCHES = 1
   const needed = MAX_MATCHES - thisWeekCount
   
   let createdCount = 0
@@ -253,7 +299,10 @@ async function replenishUserMatches(supabaseClient: any, userId: string) {
     // Only create matches above threshold
     if (match.score >= MATCH_SCORE_THRESHOLD) {
       try {
-        await createMatchCandidate(supabaseClient, userId, match.id, match.score, match.reasons, batchWeek)
+        const overlappingSlots = (match.reasons?.overlappingAvailabilitySlots ?? []) as string[]
+        const wedSunOnly = overlappingSlots.filter((id) => isWedSunSlot(id))
+        const defaultSlotId = wedSunOnly.length > 0 ? getBestDefaultSlot(wedSunOnly) : null
+        await createMatchCandidate(supabaseClient, userId, match.id, match.score, match.reasons, batchWeek, wedSunOnly, defaultSlotId)
         createdCount++
         console.log(`Created match ${createdCount}/${needed}: score ${match.score.toFixed(3)}`)
       } catch (error) {
@@ -315,7 +364,8 @@ async function findPotentialMatches(
 
   console.log(`Found ${potentialUsers?.length || 0} potential users to match against`)
 
-  const scoredMatches = []
+  interface ScoredMatch { id: string; score: number; reasons: Record<string, unknown> }
+  const scoredMatches: ScoredMatch[] = []
 
   // Fetch intake data separately for each candidate
   for (const candidate of potentialUsers || []) {
@@ -335,9 +385,10 @@ async function findPotentialMatches(
 
     // Require overlapping availability when both have set slots (Doodle-style)
     const candidateSlots: string[] = availabilityByUserId[candidate.id] ?? []
+    let overlappingAvailabilitySlots: string[] = []
     if (userAvailabilitySlots.length > 0 && candidateSlots.length > 0) {
-      const overlap = userAvailabilitySlots.some((s) => candidateSlots.includes(s))
-      if (!overlap) {
+      overlappingAvailabilitySlots = userAvailabilitySlots.filter((s) => candidateSlots.includes(s))
+      if (overlappingAvailabilitySlots.length === 0) {
         console.log(`Skipping ${candidate.id.substring(0, 8)} - no overlapping availability`)
         continue
       }
@@ -414,6 +465,7 @@ async function findPotentialMatches(
       candidate.first_name || 'They'
     )
     reasons.matchScore = score // Set the actual calculated score
+    ;(reasons as Record<string, unknown>).overlappingAvailabilitySlots = overlappingAvailabilitySlots
 
     // Create matches for everyone - no score threshold
     scoredMatches.push({
@@ -573,14 +625,17 @@ async function createMatchCandidate(
   userB: string, 
   score: number, 
   reasons: any,
-  batchWeek: string
+  batchWeek: string,
+  overlappingSlotIds: string[] = [],
+  defaultSlotId: string | null = null
 ) {
-  // Ensure consistent ordering (user_a < user_b per constraint)
   const orderedUserA = userA < userB ? userA : userB
   const orderedUserB = userA < userB ? userB : userA
 
-  // Use upsert to avoid duplicate key errors
-  // Try insert first, then update if conflict
+  const schedulingStatus = overlappingSlotIds.length > 0 && defaultSlotId ? 'proposed_default' : null
+
+  const expiresAt = getExpiresAtWednesdayMidnight(batchWeek)
+
   const { data: insertData, error: insertError } = await supabaseClient
     .from('match_candidates')
     .insert({
@@ -590,7 +645,10 @@ async function createMatchCandidate(
       reasons,
       status: 'active',
       batch_week: batchWeek,
-      expires_at: new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString() // 72 hours
+      expires_at: expiresAt,
+      overlapping_slot_ids: overlappingSlotIds,
+      default_slot_id: defaultSlotId,
+      scheduling_status: schedulingStatus,
     })
     .select()
 
@@ -604,7 +662,10 @@ async function createMatchCandidate(
         .update({
           score: score || 0,
           reasons: reasons || {},
-          expires_at: new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString()
+          expires_at: getExpiresAtWednesdayMidnight(batchWeek),
+          overlapping_slot_ids: overlappingSlotIds,
+          default_slot_id: defaultSlotId,
+          scheduling_status: schedulingStatus,
         })
         .eq('user_a', orderedUserA)
         .eq('user_b', orderedUserB)
