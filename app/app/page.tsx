@@ -453,15 +453,12 @@ export default function AppHomePage() {
               style={{ width: `${profileCount !== null ? Math.min(100, (profileCount / TARGET_USERS) * 100) : 0}%` }}
             />
           </div>
-          <p className="app-waitlist-share-copy">
-            Help me unlock Fika in our city — create an account and get first access to your weekly intro when we hit 250 people!
-          </p>
           <button
             type="button"
             className="app-waitlist-share-btn"
             onClick={async () => {
               const url = 'https://letsfika.vercel.app'
-              const text = "Help me unlock Fika in our city — create an account and get first access to your weekly intro when we hit 250 people!"
+              const text = "Help me unlock Fika in our city — create an account and get first access to your weekly intro when we hit 250 people in the LA area."
               if (typeof navigator !== 'undefined' && navigator.share) {
                 try {
                   await navigator.share({

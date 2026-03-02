@@ -2026,6 +2026,17 @@ a {
 .app-how-it-works-invite-link:hover {
   text-decoration: none;
 }
+.app-how-it-works-start-btn {
+  display: inline-block;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--color-primary);
+  text-decoration: underline;
+  padding: 0.2rem 0;
+}
+.app-how-it-works-start-btn:hover {
+  text-decoration: none;
+}
 
 /* Onboarding flow: bring Continue button closer on mobile, sticky so it stays visible */
 .app-new-questions-flow-actions {

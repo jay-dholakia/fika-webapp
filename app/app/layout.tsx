@@ -88,14 +88,7 @@ export default function AppLayout({
       router.replace('/login')
       return
     }
-    // First-time users (onboarding incomplete): send to Welcome tab instead of Your Weekly Fika
-    if (pathname === '/app' && !loading && !isComplete) {
-      authLog('app-layout:redirect', { to: '/app/how-it-works', reason: 'onboarding-incomplete' })
-      router.replace('/app/how-it-works')
-      return
-    }
-    // No redirect to onboarding: user stays in app and sees "Complete intro questionnaire" card until done.
-  }, [sessionChecked, userId, loading, isComplete, router, pathname])
+  }, [sessionChecked, userId, loading, isComplete, router])
 
   async function handleSignOut() {
     await getSupabase()?.auth.signOut()

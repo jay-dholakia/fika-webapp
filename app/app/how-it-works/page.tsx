@@ -8,7 +8,7 @@ import { getSupabase } from '@/lib/supabase'
 const TARGET_USERS = 250
 const LA_LABEL = 'Los Angeles, CA'
 const SHARE_URL = 'https://letsfika.vercel.app'
-const SHARE_TEXT = "Help me unlock Fika in Los Angeles, CA — create an account and get first access to your weekly intro when we hit 250 people in Los Angeles, CA!"
+const SHARE_TEXT = "Help me unlock Fika in our city — create an account and get first access to your weekly intro when we hit 250 people in the LA area."
 
 export default function HowItWorksPage() {
   const [userId, setUserId] = useState<string | null>(null)
@@ -73,15 +73,14 @@ export default function HowItWorksPage() {
               <span className="app-how-it-works-when">Complete the intro questionnaire</span>
               <span className="app-how-it-works-what">
                 Answer a few questions so we can match you with the right people. Takes about 5 minutes.
-                {!questionnaireComplete && !onboardingLoading && (
-                  <>
-                    {' '}
-                    <Link href="/app/onboarding" className="btn btn-primary" style={{ marginTop: '0.5rem', display: 'inline-block' }}>
-                      {intake?.responses && Array.isArray(intake.responses) && intake.responses.length > 0 ? 'Continue' : 'Start'}
-                    </Link>
-                  </>
-                )}
               </span>
+              {!questionnaireComplete && !onboardingLoading && (
+                <p style={{ margin: '0.5rem 0 0 0' }}>
+                  <Link href="/app/onboarding" className="app-how-it-works-start-btn">
+                    {intake?.responses && Array.isArray(intake.responses) && intake.responses.length > 0 ? 'Continue' : 'Start'}
+                  </Link>
+                </p>
+              )}
             </div>
           </li>
           <li className={`app-how-it-works-step ${communityUnlocked ? 'app-how-it-works-step-done' : ''}`}>
@@ -95,10 +94,7 @@ export default function HowItWorksPage() {
             <div className="app-how-it-works-step-content">
               <span className="app-how-it-works-when">We hit {TARGET_USERS} people in {LA_LABEL}</span>
               <span className="app-how-it-works-what">
-                Once {TARGET_USERS} people have signed up in {LA_LABEL}, we run our first intros. Opt-in opens on the Your Weekly Fika tab and you can set your availability.
-                {!communityUnlocked && profileCount !== null && (
-                  <span className="app-how-it-works-count"> ({profileCount} / {TARGET_USERS} so far)</span>
-                )}
+                Once {TARGET_USERS} people have signed up, we run our first intros. Opt-in opens on the Your Weekly Fika tab and you can set your availability.
               </span>
               {!communityUnlocked && (
                 <div className="app-how-it-works-250-block">
