@@ -6,14 +6,15 @@ import { useOnboardingStatus } from '@/lib/use-onboarding'
 import { getSupabase } from '@/lib/supabase'
 
 const TARGET_USERS = 250
+const LA_LABEL = 'Los Angeles, CA'
 const SHARE_URL = 'https://letsfika.vercel.app'
-const SHARE_TEXT = "Help me unlock Fika in our city — create an account and get first access to your weekly intro when we hit 250 people!"
+const SHARE_TEXT = "Help me unlock Fika in Los Angeles, CA — create an account and get first access to your weekly intro when we hit 250 people in Los Angeles, CA!"
 
 export default function HowItWorksPage() {
   const [userId, setUserId] = useState<string | null>(null)
   const [profileCount, setProfileCount] = useState<number | null>(null)
   const [shareCopied, setShareCopied] = useState(false)
-  const { loading: onboardingLoading, isComplete: questionnaireComplete } = useOnboardingStatus(userId ?? undefined)
+  const { loading: onboardingLoading, isComplete: questionnaireComplete, intake } = useOnboardingStatus(userId ?? undefined)
 
   useEffect(() => {
     getSupabase()?.auth.getSession().then(({ data: { session } }) => {
@@ -73,7 +74,12 @@ export default function HowItWorksPage() {
               <span className="app-how-it-works-what">
                 Answer a few questions so we can match you with the right people. Takes about 5 minutes.
                 {!questionnaireComplete && !onboardingLoading && (
-                  <> <Link href="/app/onboarding">Start questionnaire</Link></>
+                  <>
+                    {' '}
+                    <Link href="/app/onboarding" className="btn btn-primary" style={{ marginTop: '0.5rem', display: 'inline-block' }}>
+                      {intake?.responses && Array.isArray(intake.responses) && intake.responses.length > 0 ? 'Continue' : 'Start'}
+                    </Link>
+                  </>
                 )}
               </span>
             </div>
@@ -87,9 +93,9 @@ export default function HowItWorksPage() {
               )}
             </span>
             <div className="app-how-it-works-step-content">
-              <span className="app-how-it-works-when">We hit {TARGET_USERS} people</span>
+              <span className="app-how-it-works-when">We hit {TARGET_USERS} people in {LA_LABEL}</span>
               <span className="app-how-it-works-what">
-                Once {TARGET_USERS} people have signed up in your city, we run our first intros. Opt-in opens on the Your Weekly Fika tab and you can set your availability.
+                Once {TARGET_USERS} people have signed up in {LA_LABEL}, we run our first intros. Opt-in opens on the Your Weekly Fika tab and you can set your availability.
                 {!communityUnlocked && profileCount !== null && (
                   <span className="app-how-it-works-count"> ({profileCount} / {TARGET_USERS} so far)</span>
                 )}
@@ -108,9 +114,6 @@ export default function HowItWorksPage() {
                       style={{ width: `${profileCount !== null ? Math.min(100, (profileCount / TARGET_USERS) * 100) : 0}%` }}
                     />
                   </div>
-                  <p className="app-waitlist-share-copy">
-                    Help me unlock Fika in our city — create an account and get first access to your weekly intro when we hit 250 people!
-                  </p>
                   <div className="app-how-it-works-invite-row">
                     <button
                       type="button"
