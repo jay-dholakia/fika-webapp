@@ -191,12 +191,12 @@ export function isAvailabilityLocked(batchWeek: string): boolean {
   return new Date() >= lockAt
 }
 
-/** Human-readable date range for the availability week: Wed–Sun (e.g. "Wed Mar 5 – Sun Mar 9"). */
+/** Human-readable date range for the availability week: Wed–Sun (e.g. "Wed, Mar 5 – Sun, Mar 9"). */
 export function formatNextWeekRange(batchWeek: string): string {
-  const wed = new Date(getAvailabilityWeekWednesday(batchWeek) + 'T12:00:00')
+  const wed = new Date(getAvailabilityWeekWednesday(batchWeek) + 'T12:00:00Z')
   const sun = new Date(wed)
-  sun.setDate(sun.getDate() + 4)
-  const wedStr = wed.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
-  const sunStr = sun.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  sun.setUTCDate(sun.getUTCDate() + 4)
+  const wedStr = wed.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })
+  const sunStr = sun.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })
   return `${wedStr} – ${sunStr}`
 }
