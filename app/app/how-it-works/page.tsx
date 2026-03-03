@@ -160,29 +160,36 @@ export default function HowItWorksPage() {
           <li className="app-how-it-works-step">
             <span className="app-how-it-works-step-marker" aria-hidden><span className="app-how-it-works-num">1</span></span>
             <div className="app-how-it-works-step-content">
-              <span className="app-how-it-works-when">Sunday 11:59pm</span>
-              <span className="app-how-it-works-what">Opt-in and availability lock. Set when you&apos;re free Wed–Sun on <Link href="/app/availability">Your Availability</Link> and toggle opt-in on <Link href="/app">Your Weekly Fika</Link> before this deadline.</span>
+              <span className="app-how-it-works-when">Sunday</span>
+              <span className="app-how-it-works-what">Opt in + share when you&apos;re available (Wed–Sun). Choose a few times you&apos;re genuinely free for a 30–45 minute meetup. The more flexibility, the easier it is to make a great match.</span>
             </div>
           </li>
           <li className="app-how-it-works-step">
             <span className="app-how-it-works-step-marker" aria-hidden><span className="app-how-it-works-num">2</span></span>
             <div className="app-how-it-works-step-content">
-              <span className="app-how-it-works-when">Tuesday 8am</span>
-              <span className="app-how-it-works-what">Matches run; your intro arrives with a suggested time (when you&apos;re both free). You can opt in for next week from Tuesday 8am too.</span>
+              <span className="app-how-it-works-when">Monday</span>
+              <span className="app-how-it-works-what">We look at what you&apos;ve shared and when you&apos;re free, then thoughtfully prepare your intro for the week.</span>
             </div>
           </li>
           <li className="app-how-it-works-step">
             <span className="app-how-it-works-step-marker" aria-hidden><span className="app-how-it-works-num">3</span></span>
             <div className="app-how-it-works-step-content">
-              <span className="app-how-it-works-when">Tuesday 11:59pm</span>
-              <span className="app-how-it-works-what">Confirm the suggested time or request a different one (one round of back-and-forth) by this deadline—it doesn&apos;t extend when you request a change. Unconfirmed intros expire; you can opt in again for next week (from Tuesday 8am).</span>
+              <span className="app-how-it-works-when">Tuesday morning</span>
+              <span className="app-how-it-works-what">You&apos;ll receive your intro with a suggested time (based on when you&apos;re both available) and a few conversation starters based on what we think could spark a great chat.</span>
             </div>
           </li>
           <li className="app-how-it-works-step">
             <span className="app-how-it-works-step-marker" aria-hidden><span className="app-how-it-works-num">4</span></span>
             <div className="app-how-it-works-step-content">
-              <span className="app-how-it-works-when">Wed–Sun</span>
-              <span className="app-how-it-works-what">Your Fika window. Show up at the time you confirmed—no in-app chat, just real life.</span>
+              <span className="app-how-it-works-when">By Tuesday night</span>
+              <span className="app-how-it-works-what">Confirm your Fika—or request to reschedule if your availability has changed. Unconfirmed intros expire.</span>
+            </div>
+          </li>
+          <li className="app-how-it-works-step">
+            <span className="app-how-it-works-step-marker" aria-hidden><span className="app-how-it-works-num">5</span></span>
+            <div className="app-how-it-works-step-content">
+              <span className="app-how-it-works-when">Wednesday–Sunday</span>
+              <span className="app-how-it-works-what">Meet up for your Fika. No endless texting. Just a real, face-to-face conversation.</span>
             </div>
           </li>
         </ol>
