@@ -106,7 +106,7 @@ export const PROFILE_STEPS: ProfileStep[] = [
   },
 ]
 
-// LA Beta INTAKE (9 steps): life chapter, lately, everyday anchor, topics, convo feel, hoping for, openness, radius, confirm
+// LA Beta INTAKE (9 steps): life chapter, lately, everyday anchor, topics, convo feel, openness, hoping for, radius, confirm
 export const INTAKE_STEPS: ProfileStep[] = [
   {
     id: 'q_life_chapter',
@@ -212,18 +212,6 @@ export const INTAKE_STEPS: ProfileStep[] = [
     ],
   },
   {
-    id: 'q_hoping_for',
-    question: 'What are you hoping for from Fika?',
-    body: 'No wrong answer — we use this to match you with people who want similar things.',
-    type: 'chips_single',
-    required: true,
-    options: [
-      'Just meaningful conversations',
-      'Open to friendships if they happen',
-      "I'm intentionally looking to build new friendships",
-    ],
-  },
-  {
     id: 'q_openness',
     question: 'Who would you be open to meet for a Fika?',
     body: 'Choose up to 2.',
@@ -235,6 +223,18 @@ export const INTAKE_STEPS: ProfileStep[] = [
       'Someone outside my usual bubble',
       'Someone whose perspective challenges mine',
       "I'm open to anyone",
+    ],
+  },
+  {
+    id: 'q_hoping_for',
+    question: 'What are you hoping for from Fika?',
+    body: 'No wrong answer — we use this to match you with people who want similar things.',
+    type: 'chips_single',
+    required: true,
+    options: [
+      'Just meaningful conversations',
+      'Open to friendships if they happen',
+      "I'm intentionally looking to build new friendships",
     ],
   },
   {
