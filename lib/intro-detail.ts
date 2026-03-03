@@ -1,6 +1,6 @@
 /**
  * Helpers for showing intro detail in the modal.
- * LA Beta: safe intake IDs = life_chapter, lately, everyday_anchor, topics, convo_feel, openness.
+ * LA Beta: safe intake IDs = life_chapter, lately, everyday_anchor, topics, convo_feel, hoping_for, openness.
  */
 
 import { INTAKE_STEPS } from './onboarding-data'
@@ -12,6 +12,7 @@ export const SAFE_INTAKE_QUESTION_IDS = new Set([
   'q_everyday_anchor',
   'q_topics',
   'q_convo_feel',
+  'q_hoping_for',
   'q_openness',
 ])
 
@@ -42,6 +43,7 @@ export function buildIntroSummary(responses: IntakeResponseItem[]): string | nul
   }
   const life = str('q_life_chapter')
   const convoFeel = str('q_convo_feel')
+  const hopingFor = str('q_hoping_for')
   const who = str('q_openness')
 
   const parts: string[] = []
@@ -50,6 +52,7 @@ export function buildIntroSummary(responses: IntakeResponseItem[]): string | nul
   }
   const connectParts: string[] = []
   if (convoFeel) connectParts.push(`like first conversations to feel ${convoFeel.toLowerCase()}`)
+  if (hopingFor) connectParts.push(`hoping for ${hopingFor.toLowerCase()}`)
   if (who) connectParts.push(`open to ${who.toLowerCase()}`)
   if (connectParts.length > 0) {
     parts.push(`They ${connectParts.join(', ')}.`)

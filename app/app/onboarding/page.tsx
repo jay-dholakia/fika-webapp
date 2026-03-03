@@ -97,6 +97,8 @@ export default function AppOnboardingPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [locationStatus, setLocationStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
+  const [zipCode, setZipCode] = useState('')
+  const [zipLoading, setZipLoading] = useState(false)
 
   useEffect(() => {
     authLog('onboarding:mount')
@@ -300,7 +302,7 @@ export default function AppOnboardingPage() {
             return
           }
           setAnswers((a) => ({ ...a, [step.id]: intakeAnswer }))
-          const nextIndex = getNextStepIndex(stepIndex + 1)
+          const nextIndex = stepIndex + 1
           setIsExiting(true)
           setTimeout(() => {
             setStepIndex(nextIndex)
@@ -399,6 +401,32 @@ export default function AppOnboardingPage() {
       },
       options
     )
+  }
+
+  async function handleZipSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    const zip = zipCode.trim().replace(/\s+/g, '')
+    if (!zip) return
+    setError(null)
+    setZipLoading(true)
+    try {
+      const res = await fetch(`/api/geocode?zip=${encodeURIComponent(zip)}`)
+      const data = (await res.json()) as { city?: string; lat?: number; lng?: number; error?: string }
+      if (!res.ok || data.error) {
+        setError(data.error ?? "We couldn't find that zip code. Try again.")
+        return
+      }
+      if (data.lat != null && data.lng != null && data.city) {
+        setAnswers((a) => ({ ...a, location: { city: data.city!, lat: data.lat!, lng: data.lng! } }))
+        setLocationStatus('done')
+      } else {
+        setError("We couldn't find that zip code. Try again.")
+      }
+    } catch {
+      setError("We couldn't look up that zip code. Try again.")
+    } finally {
+      setZipLoading(false)
+    }
   }
 
   if (!sessionChecked) {
@@ -526,17 +554,7 @@ export default function AppOnboardingPage() {
 
         {displayStep.type === 'location_permission' && (
           <div className="onboarding-location-wrap">
-            {locationStatus === 'loading' ? (
-              <div className="onboarding-location-set">
-                <span className="onboarding-location-set-icon" aria-hidden>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-                    <circle cx="12" cy="10" r="3" />
-                  </svg>
-                </span>
-                <span className="onboarding-location-set-city">Getting location…</span>
-              </div>
-            ) : (
+            {locationStatus === 'loading' || zipLoading ? (
               <div className="onboarding-location-set">
                 <span className="onboarding-location-set-icon" aria-hidden>
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -545,17 +563,57 @@ export default function AppOnboardingPage() {
                   </svg>
                 </span>
                 <span className="onboarding-location-set-city">
-                  {value && typeof value === 'object' && 'city' in (value as object) ? (value as { city: string }).city : 'Your Location'}
+                  {zipLoading ? 'Looking up zip code…' : 'Getting location…'}
                 </span>
-                <button
-                  type="button"
-                  className="onboarding-location-change"
-                  onClick={handleLocation}
-                  disabled={saving}
-                >
-                  {value && typeof value === 'object' && 'city' in (value as object) ? 'Change' : 'Use my location'}
-                </button>
               </div>
+            ) : (
+              <>
+                <div className="onboarding-location-set">
+                  <span className="onboarding-location-set-icon" aria-hidden>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                      <circle cx="12" cy="10" r="3" />
+                    </svg>
+                  </span>
+                  <span className="onboarding-location-set-city">
+                    {value && typeof value === 'object' && 'city' in (value as object) ? (value as { city: string }).city : 'Your Location'}
+                  </span>
+                  <button
+                    type="button"
+                    className="onboarding-location-change"
+                    onClick={handleLocation}
+                    disabled={saving}
+                  >
+                    {value && typeof value === 'object' && 'city' in (value as object) ? 'Change' : 'Use my location'}
+                  </button>
+                </div>
+                <p className="onboarding-location-or">or</p>
+                <form className="onboarding-location-zip" onSubmit={handleZipSubmit}>
+                  <label htmlFor="onboarding-location-zip-input" className="onboarding-location-zip-label">
+                    Enter your zip code
+                  </label>
+                  <div className="onboarding-location-zip-row">
+                    <input
+                      id="onboarding-location-zip-input"
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="postal-code"
+                      placeholder="e.g. 90210"
+                      className="auth-input onboarding-location-zip-input"
+                      value={zipCode}
+                      onChange={(e) => setZipCode(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                      disabled={saving || zipLoading}
+                    />
+                    <button
+                      type="submit"
+                      className="btn onboarding-location-zip-btn"
+                      disabled={saving || zipLoading || !zipCode.trim()}
+                    >
+                      Use this area
+                    </button>
+                  </div>
+                </form>
+              </>
             )}
           </div>
         )}

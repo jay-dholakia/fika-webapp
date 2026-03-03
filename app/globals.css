@@ -1533,6 +1533,39 @@ a {
   opacity: 0.6;
   cursor: not-allowed;
 }
+.onboarding-location-or {
+  margin: 1rem 0 0.75rem;
+  font-size: 0.9rem;
+  color: var(--color-textSecondary);
+  text-align: center;
+}
+.onboarding-location-zip {
+  margin-top: 0;
+}
+.onboarding-location-zip-label {
+  display: block;
+  font-size: 0.9rem;
+  color: var(--color-textSecondary);
+  margin-bottom: 0.35rem;
+}
+.onboarding-location-zip-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+.onboarding-location-zip-input {
+  width: 6rem;
+  min-width: 0;
+}
+.onboarding-location-zip-btn {
+  flex-shrink: 0;
+  background: var(--color-bg-soft);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+}
+.onboarding-location-zip-btn:hover:not(:disabled) {
+  background: var(--color-border);
+}
 .onboarding-error {
   margin-top: 1rem;
   font-size: 0.9rem;

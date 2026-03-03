@@ -32,13 +32,14 @@ export function isOnboardingComplete(
   return isProfileComplete(profile) || hasEssentials
 }
 
-/** Get current batch week (Monday) as YYYY-MM-DD. */
+/** Get current batch week (Monday) as YYYY-MM-DD, in UTC so the value is consistent everywhere. */
 export function getCurrentBatchWeek(): string {
   const d = new Date()
-  const day = d.getDay()
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1)
+  const day = d.getUTCDay()
+  const date = d.getUTCDate()
+  const diff = date - day + (day === 0 ? -6 : 1)
   const monday = new Date(d)
-  monday.setDate(diff)
+  monday.setUTCDate(diff)
   return monday.toISOString().slice(0, 10)
 }
 

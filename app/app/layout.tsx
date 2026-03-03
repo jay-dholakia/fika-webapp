@@ -58,7 +58,8 @@ export default function AppLayout({
     }
   }, [])
 
-  // Ensure profile row exists after OAuth (e.g. Google sign-in)
+  // Ensure profile row exists after OAuth (e.g. Google sign-in). We do not set first_name
+  // from the provider; the user enters it in onboarding.
   useEffect(() => {
     const supabase = getSupabase()
     if (!userId || !supabase) return
@@ -66,13 +67,11 @@ export default function AppLayout({
     ;(async () => {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session?.user || cancelled) return
-      const meta = session.user.user_metadata
-      const name = (meta?.full_name ?? meta?.name ?? '').trim() || ' '
       const { data: profile } = await supabase.from('profiles').select('id, first_name').eq('id', session.user.id).maybeSingle()
       if (cancelled) return
-      if (!profile || (profile.first_name ?? '').trim() === '') {
+      if (!profile) {
         await supabase.from('profiles').upsert(
-          { id: session.user.id, first_name: name, updated_at: new Date().toISOString() },
+          { id: session.user.id, first_name: ' ', updated_at: new Date().toISOString() },
           { onConflict: 'id' }
         )
       }

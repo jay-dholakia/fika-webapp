@@ -164,10 +164,10 @@ export function getNextWeekMonday(batchWeek: string): string {
   return d.toISOString().slice(0, 10)
 }
 
-/** Wednesday of the availability week (batch_week is Monday; Wed = batch_week + 2). */
+/** Wednesday of the availability week (batch_week is Monday; Wed = batch_week + 2). Uses UTC so the returned date is consistent. */
 export function getAvailabilityWeekWednesday(batchWeek: string): string {
-  const d = new Date(batchWeek + 'T12:00:00')
-  d.setDate(d.getDate() + 2)
+  const d = new Date(batchWeek + 'T12:00:00Z')
+  d.setUTCDate(d.getUTCDate() + 2)
   return d.toISOString().slice(0, 10)
 }
 
