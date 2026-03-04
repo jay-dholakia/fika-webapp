@@ -1,3 +1,8 @@
 {
-  "framework": "nextjs"
+  "framework": "nextjs",
+  "crons": [
+    { "path": "/api/cron/weekly-opt-in", "schedule": "0 10 * * 1" },
+    { "path": "/api/cron/match-delivery", "schedule": "30 10 * * 1" },
+    { "path": "/api/cron/day-of-reminder", "schedule": "0 9 * * *" }
+  ]
 }

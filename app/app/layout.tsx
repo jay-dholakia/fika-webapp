@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter, usePathname } from 'next/navigation'
+import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { getSupabase } from '@/lib/supabase'
 import { useOnboardingStatus } from '@/lib/use-onboarding'
@@ -15,6 +15,7 @@ export default function AppLayout({
 }) {
   const router = useRouter()
   const pathname = usePathname()
+  const searchParams = useSearchParams()
   const [userId, setUserId] = useState<string | null>(null)
   const [sessionChecked, setSessionChecked] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -81,13 +82,14 @@ export default function AppLayout({
 
   useEffect(() => {
     if (!sessionChecked) return
-    authLog('app-layout:redirect-check', { sessionChecked, userId: userId?.slice(0, 8) ?? null, loading, isComplete })
-    if (userId == null) {
+    const onboardingToken = pathname === '/app/onboarding' ? searchParams.get('token') : null
+    if (userId == null && !onboardingToken) {
       authLog('app-layout:redirect', { to: '/login', reason: 'no-session' })
       router.replace('/login')
       return
     }
-  }, [sessionChecked, userId, loading, isComplete, router])
+    authLog('app-layout:redirect-check', { sessionChecked, userId: userId?.slice(0, 8) ?? null, loading, isComplete })
+  }, [sessionChecked, userId, loading, isComplete, router, pathname, searchParams])
 
   async function handleSignOut() {
     await getSupabase()?.auth.signOut()

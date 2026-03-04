@@ -27,6 +27,10 @@ import {
 } from '@/lib/sms-agent'
 import { sendConcierge, sendMatch, isSendblueConfigured } from '@/lib/sendblue'
 import { getCurrentBatchWeek } from '@/lib/onboarding'
+import {
+  messageSmsSignupLinkSent,
+  messageSmsSignupLinkAlreadySent,
+} from '@/lib/sms-signup'
 
 const CONCIERGE = (process.env.SENDBLUE_CONCIERGE_NUMBER || '').replace(/\D/g, '')
 const MATCH = (process.env.SENDBLUE_MATCH_NUMBER || '').replace(/\D/g, '')
@@ -149,7 +153,36 @@ export async function POST(request: Request) {
   const userId = await getUserIdByPhone(supabase, fromPhone)
   console.log('[sendblue-webhook] user lookup', { fromLast4, userId: userId ? 'found' : 'not_found' })
   if (!userId) {
-    await sendConcierge(fromNumber, "We don't have your number linked to a Fika account. Add your phone in the app under profile settings, or sign up at letsfika.co")
+    // ----- Phone-first: unknown number → send link to profile builder; they finalize with Google -----
+    const appBase = process.env.NEXT_PUBLIC_VERCEL_URL
+      ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}`
+      : process.env.NEXT_PUBLIC_APP_URL || 'https://letsfika.vercel.app'
+    const { data: existing } = await supabase
+      .from('onboarding_sessions')
+      .select('token')
+      .eq('phone', fromPhone)
+      .is('merged_into_user_id', null)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (existing?.token) {
+      await sendConcierge(fromNumber, messageSmsSignupLinkAlreadySent())
+      return NextResponse.json({ ok: true })
+    }
+    const token = crypto.randomUUID()
+    const { error: insertErr } = await supabase.from('onboarding_sessions').insert({
+      token,
+      phone: fromPhone,
+      payload: {},
+      updated_at: new Date().toISOString(),
+    })
+    if (insertErr) {
+      console.error('[sendblue-webhook] onboarding_sessions insert', insertErr.message)
+      await sendConcierge(fromNumber, "Something went wrong. Try again or sign up at letsfika.co")
+      return NextResponse.json({ ok: true })
+    }
+    const link = `${appBase}/signup?token=${token}`
+    await sendConcierge(fromNumber, messageSmsSignupLinkSent(link))
     return NextResponse.json({ ok: true })
   }
 
@@ -193,7 +226,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true })
   }
 
-  // ----- Awaiting opt-in: IN / SKIP -----
+  // ----- Awaiting opt-in: IN / SKIP (and FIKA / HI to re-send the prompt) -----
   if (state === SMS_STATES.AWAITING_OPT_IN) {
     if (keyword === 'IN' || keyword === 'YES') {
       await supabase.from('weekly_match_opt_ins').upsert(
@@ -227,6 +260,9 @@ export async function POST(request: Request) {
         { onConflict: 'user_id,batch_week,match_id' }
       )
       await sendConcierge(fromNumber, messageSkipped())
+    } else if (keyword === 'FIKA' || keyword === 'HI') {
+      // Re-send entry prompt when they text the trigger words (first time or again)
+      await sendConcierge(fromNumber, messageEntry())
     }
     return NextResponse.json({ ok: true })
   }

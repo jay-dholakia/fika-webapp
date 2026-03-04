@@ -12,6 +12,7 @@ function AuthCallbackContent() {
   useEffect(() => {
     const next = searchParams.get('next') ?? '/app'
     const nextPath = next.startsWith('/') ? next : '/app'
+    const smsToken = searchParams.get('sms_token')
     const errorParam = searchParams.get('error_description') || searchParams.get('error')
 
     const supabase = getSupabase()
@@ -31,13 +32,38 @@ function AuthCallbackContent() {
     const timeout = setTimeout(() => {
       if (!mounted) return
       supabase.auth.getSession().then(({ data: { session } }) => {
-        if (mounted && session) router.replace(nextPath)
+        if (!mounted || !session) return
+        if (smsToken) {
+          fetch('/api/merge-sms-signup', {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${session.access_token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ token: smsToken }),
+          })
+            .then((res) => { if (!res.ok) console.error('merge-sms-signup failed', res.status) })
+            .finally(() => { router.replace(nextPath) })
+        } else {
+          router.replace(nextPath)
+        }
       })
     }, 100)
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!mounted) return
-      if (session) {
+      if (!mounted || !session) return
+      if (smsToken) {
+        fetch('/api/merge-sms-signup', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ token: smsToken }),
+        })
+          .then((res) => { if (!res.ok) console.error('merge-sms-signup failed', res.status) })
+          .finally(() => { router.replace(nextPath) })
+      } else {
         router.replace(nextPath)
       }
     })

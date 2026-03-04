@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { getSupabase } from '@/lib/supabase'
 import { useOnboardingStatus } from '@/lib/use-onboarding'
@@ -12,6 +12,7 @@ import {
   TOTAL_ONBOARDING_STEPS,
   type ProfileStep,
 } from '@/lib/onboarding-data'
+import { buildOnboardingSessionPayload, payloadToAnswers } from '@/lib/onboarding-session-payload'
 import type { IntakeResponseItem } from '@/lib/db-types'
 import type { ProfileRow } from '@/lib/db-types'
 import type { IntakeResponsesV5Row } from '@/lib/db-types'
@@ -19,6 +20,8 @@ import { toE164, isValidPhone } from '@/lib/phone'
 import { SmsConciergeCta } from '@/app/app/components/SmsConciergeCta'
 
 const ALL_STEPS = [...PROFILE_STEPS, ...INTAKE_STEPS]
+const INTAKE_STEPS_WITHOUT_PHONE = INTAKE_STEPS.filter((s) => s.id !== 'phone')
+const ALL_STEPS_TOKEN = [...PROFILE_STEPS, ...INTAKE_STEPS_WITHOUT_PHONE]
 
 type AnswersState = Record<string, string | string[] | number | { city: string; lat: number; lng: number }>
 
@@ -78,6 +81,20 @@ function getPrevStepIndex(fromIndex: number): number {
   return Math.max(fromIndex - 1, 0)
 }
 
+/** For token (SMS) flow: first unanswered step index and answers from session payload. */
+function getFirstUnansweredTokenStepAndAnswers(payload: Record<string, unknown>): { stepIndex: number; answers: AnswersState } {
+  const answers = payloadToAnswers(payload)
+  for (let i = 0; i < ALL_STEPS_TOKEN.length; i++) {
+    const s = ALL_STEPS_TOKEN[i]
+    const raw = answers[s.id]
+    if (s.required !== false && (raw === undefined || raw === '' || (Array.isArray(raw) && raw.length === 0))) {
+      return { stepIndex: i, answers }
+    }
+    if (s.id === 'location' && !raw) return { stepIndex: i, answers }
+  }
+  return { stepIndex: ALL_STEPS_TOKEN.length - 1, answers }
+}
+
 function parseDate(s: string): string | null {
   const d = new Date(s)
   if (Number.isNaN(d.getTime())) return null
@@ -95,8 +112,15 @@ function is18Plus(dateStr: string): boolean {
 
 export default function AppOnboardingPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const token = searchParams.get('token')
+  const tokenMode = Boolean(token)
+
   const [sessionUserId, setSessionUserId] = useState<string | null>(null)
   const [sessionChecked, setSessionChecked] = useState(false)
+  const [sessionLoadedForToken, setSessionLoadedForToken] = useState(false)
+  const [showGoogleSignIn, setShowGoogleSignIn] = useState(false)
+  const [tokenError, setTokenError] = useState<string | null>(null)
   const { loading: statusLoading, isComplete, profile, intake } = useOnboardingStatus(sessionUserId ?? undefined)
 
   const [stepIndex, setStepIndex] = useState(0)
@@ -127,8 +151,45 @@ export default function AppOnboardingPage() {
     }
   }, [sessionUserId, statusLoading, isComplete, router])
 
+  // Token (SMS) flow: when no session, load onboarding session and set answers + step
   useEffect(() => {
-    if (statusLoading || isComplete || sessionUserId == null) return
+    if (!tokenMode || !token || sessionUserId != null) return
+    let cancelled = false
+    fetch(`/api/onboarding-session?token=${encodeURIComponent(token)}`)
+      .then((res) => {
+        if (cancelled) return
+        if (!res.ok) {
+          if (res.status === 404) setTokenError('Invalid or expired link. Please text FIKA to get a new link.')
+          else setTokenError('Something went wrong. Please try again.')
+          setSessionLoadedForToken(true)
+          return
+        }
+        return res.json() as Promise<{ payload?: Record<string, unknown> }>
+      })
+      .then((data) => {
+        if (cancelled || !data?.payload) return
+        const { stepIndex: first, answers: prefilled } = getFirstUnansweredTokenStepAndAnswers(data.payload as Record<string, unknown>)
+        setStepIndex(first)
+        setDisplayStepIndex(first)
+        setAnswers(prefilled)
+        if (first < PROFILE_STEPS.length && PROFILE_STEPS[first]?.id === 'location' && prefilled.location) {
+          setLocationStatus('done')
+        }
+        setSessionLoadedForToken(true)
+      })
+      .catch(() => { if (!cancelled) { setTokenError('Something went wrong. Please try again.'); setSessionLoadedForToken(true) } })
+    return () => { cancelled = true }
+  }, [tokenMode, token, sessionUserId])
+
+  useEffect(() => {
+    if (tokenMode && sessionUserId != null) {
+      router.replace('/app')
+      return
+    }
+  }, [tokenMode, sessionUserId, router])
+
+  useEffect(() => {
+    if (statusLoading || isComplete || sessionUserId == null || tokenMode) return
     const { stepIndex: first, answers: prefilled } = getFirstUnansweredStepAndAnswers(profile ?? null, intake ?? null)
     setStepIndex(first)
     setDisplayStepIndex(first)
@@ -161,10 +222,11 @@ export default function AppOnboardingPage() {
     }
   }, [displayStepIndex])
 
-  const step = ALL_STEPS[stepIndex]
-  const displayStep = ALL_STEPS[displayStepIndex] ?? step
-  const isProfileStep = stepIndex < PROFILE_STEPS.length
-  const isLastStep = stepIndex === ALL_STEPS.length - 1
+  const steps = tokenMode ? ALL_STEPS_TOKEN : ALL_STEPS
+  const step = steps[stepIndex]
+  const displayStep = steps[displayStepIndex] ?? step
+  const isProfileStep = tokenMode ? stepIndex < PROFILE_STEPS.length : stepIndex < PROFILE_STEPS.length
+  const isLastStep = stepIndex === steps.length - 1
 
   async function saveProfileField(
     id: string,
@@ -286,6 +348,32 @@ export default function AppOnboardingPage() {
     setSaving(true)
     ;(async () => {
       try {
+        if (tokenMode && token) {
+          const updatedAnswers = { ...answers, [step.id]: raw }
+          const payload = buildOnboardingSessionPayload(updatedAnswers)
+          const res = await fetch('/api/onboarding-session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token, payload }),
+          })
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({}))
+            throw new Error((data as { error?: string }).error ?? 'Failed to save')
+          }
+          setAnswers(updatedAnswers)
+          if (isLastStep) {
+            setShowGoogleSignIn(true)
+            return
+          }
+          setIsExiting(true)
+          setTimeout(() => {
+            setStepIndex((i) => i + 1)
+            setDisplayStepIndex((i) => i + 1)
+            setIsExiting(false)
+          }, 280)
+          return
+        }
+
         if (isProfileStep) {
           if (step.id === 'location' && typeof raw === 'object' && raw !== null && 'city' in (raw as object)) {
             await saveProfileField(step.id, raw as { city: string; lat: number; lng: number }, answers)
@@ -361,6 +449,14 @@ export default function AppOnboardingPage() {
       setDisplayStepIndex(prevIndex)
     }
     setError(null)
+  }
+
+  async function handleSignInWithGoogle(smsToken: string) {
+    const supabase = getSupabase()
+    if (!supabase) return
+    const origin = typeof window !== 'undefined' ? window.location.origin : ''
+    const redirectTo = `${origin}/auth/callback?next=/app&sms_token=${encodeURIComponent(smsToken)}`
+    await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo } })
   }
 
   async function reverseGeocodeWithGoogle(lat: number, lng: number): Promise<{ city: string; state: string } | null> {
@@ -477,7 +573,46 @@ export default function AppOnboardingPage() {
     )
   }
 
-  if (sessionUserId == null) {
+  if (tokenMode && !sessionLoadedForToken && sessionUserId == null) {
+    return (
+      <div className="onboarding-wrap">
+        <div className="onboarding-progress">
+          <div className="onboarding-progress-inner" style={{ width: '0%' }} />
+        </div>
+        <p className="onboarding-question">Loading…</p>
+      </div>
+    )
+  }
+
+  if (tokenMode && tokenError) {
+    return (
+      <div className="onboarding-wrap">
+        <p className="onboarding-question">{tokenError}</p>
+        <Link href="/login" className="btn btn-primary" style={{ marginTop: '1rem' }}>
+          Go to sign in
+        </Link>
+      </div>
+    )
+  }
+
+  if (showGoogleSignIn && token) {
+    return (
+      <div className="onboarding-wrap">
+        <div className="onboarding-progress">
+          <div className="onboarding-progress-inner" style={{ width: '100%' }} />
+        </div>
+        <h2 className="onboarding-question">You&apos;re all set</h2>
+        <p className="onboarding-body" style={{ marginTop: '0.5rem' }}>
+          Sign in with Google to finalize your account and start matching.
+        </p>
+        <button type="button" className="btn btn-primary" onClick={() => handleSignInWithGoogle(token)} style={{ marginTop: '1.5rem' }}>
+          Sign in with Google
+        </button>
+      </div>
+    )
+  }
+
+  if (sessionUserId == null && !tokenMode) {
     authLog('onboarding:render', { show: 'Please log in', sessionChecked: true })
     return (
       <div className="onboarding-wrap">
@@ -489,7 +624,7 @@ export default function AppOnboardingPage() {
     )
   }
 
-  if (statusLoading || !step) {
+  if ((!tokenMode && statusLoading) || !step) {
     authLog('onboarding:render', { show: 'Loading', statusLoading, stepId: step?.id })
     return (
       <div className="onboarding-wrap">
@@ -502,7 +637,7 @@ export default function AppOnboardingPage() {
   }
 
   authLog('onboarding:render', { show: 'form', stepId: step.id, stepIndex })
-  const progress = ((stepIndex + 1) / TOTAL_ONBOARDING_STEPS) * 100
+  const progress = ((stepIndex + 1) / steps.length) * 100
   const value = answers[displayStep.id]
 
   return (

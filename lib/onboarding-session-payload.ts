@@ -1,0 +1,56 @@
+/**
+ * Build payload for onboarding_sessions (and merge) from answers state.
+ * Used by /app/onboarding when token is present (SMS signup flow).
+ */
+
+import { INTAKE_STEPS } from './onboarding-data'
+
+export type AnswersState = Record<
+  string,
+  string | string[] | number | { city: string; lat: number; lng: number }
+>
+
+export function buildOnboardingSessionPayload(answers: AnswersState): Record<string, unknown> {
+  const loc = answers.location as { city: string; lat: number; lng: number } | undefined
+  const intakeStepsWithoutPhone = INTAKE_STEPS.filter((s) => s.id !== 'phone')
+  const responses = intakeStepsWithoutPhone.map((s) => ({
+    question_id: s.id,
+    question_text: s.question,
+    answer: answers[s.id] ?? (s.type === 'multi_select' ? [] : ''),
+    type: s.type,
+    answered_at: new Date().toISOString(),
+  }))
+  return {
+    first_name: typeof answers.first_name === 'string' ? answers.first_name.trim() || ' ' : ' ',
+    birthdate: answers.birthdate ?? null,
+    gender: answers.gender ?? null,
+    gender_preference: answers.gender_preference ?? null,
+    languages: Array.isArray(answers.languages) ? answers.languages : null,
+    city: loc?.city ?? null,
+    lat: typeof loc?.lat === 'number' ? loc.lat : null,
+    lng: typeof loc?.lng === 'number' ? loc.lng : null,
+    responses,
+  }
+}
+
+/** Map API payload (from GET onboarding-session) into answers state for form. */
+export function payloadToAnswers(payload: Record<string, unknown>): AnswersState {
+  const answers: AnswersState = {}
+  if (typeof payload.first_name === 'string') answers.first_name = payload.first_name
+  if (typeof payload.birthdate === 'string') answers.birthdate = payload.birthdate
+  if (typeof payload.gender === 'string') answers.gender = payload.gender
+  if (typeof payload.gender_preference === 'string') answers.gender_preference = payload.gender_preference
+  if (Array.isArray(payload.languages)) answers.languages = payload.languages
+  if (
+    typeof payload.city === 'string' &&
+    typeof payload.lat === 'number' &&
+    typeof payload.lng === 'number'
+  ) {
+    answers.location = { city: payload.city, lat: payload.lat, lng: payload.lng }
+  }
+  const responses = Array.isArray(payload.responses) ? payload.responses : []
+  for (const r of responses as Array<{ question_id?: string; answer?: unknown }>) {
+    if (r?.question_id != null) answers[r.question_id] = r.answer as string | string[] | number
+  }
+  return answers
+}
