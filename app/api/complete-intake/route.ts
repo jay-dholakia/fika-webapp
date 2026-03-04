@@ -140,7 +140,7 @@ export async function POST(request: Request) {
         const entryMsg = messageEntry()
         const sent = await sendMessage(profile.phone, entryMsg, { fromNumber: 'concierge' })
         if (sent.success) {
-          await getOrCreateSmsState(serviceSupabase, user.id, SMS_STATES.awaiting_opt_in, {
+          await getOrCreateSmsState(serviceSupabase, user.id, SMS_STATES.AWAITING_OPT_IN, {
             batch_week: getCurrentBatchWeek(),
           })
         }
