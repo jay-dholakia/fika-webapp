@@ -1,12 +1,12 @@
 'use client'
 
-import { useSearchParams } from 'next/navigation'
+import { Suspense, useSearchParams } from 'next/navigation'
 import { useEffect } from 'react'
 
 /**
  * Redirect /signup?token=XXX to /app/onboarding?token=XXX so the profile builder runs there (with token-based session).
  */
-export default function SignupPage() {
+function SignupContent() {
   const searchParams = useSearchParams()
   const token = searchParams.get('token')
 
@@ -22,5 +22,17 @@ export default function SignupPage() {
     <div style={{ padding: '2rem', textAlign: 'center' }}>
       <p style={{ color: 'var(--color-textSecondary)' }}>Taking you to complete your profile…</p>
     </div>
+  )
+}
+
+export default function SignupPage() {
+  return (
+    <Suspense fallback={
+      <div style={{ padding: '2rem', textAlign: 'center' }}>
+        <p style={{ color: 'var(--color-textSecondary)' }}>Loading…</p>
+      </div>
+    }>
+      <SignupContent />
+    </Suspense>
   )
 }

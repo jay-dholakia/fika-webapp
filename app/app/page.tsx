@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { getSupabase } from '@/lib/supabase'
@@ -14,8 +14,9 @@ import { IntroDetailModal, type IntroMatch } from '@/app/app/components/IntroDet
 import { NewQuestionsFlow } from '@/app/app/components/NewQuestionsFlow'
 import type { IntakeResponseItem } from '@/lib/db-types'
 
-export default function AppHomePage() {
+function AppHomeContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [userId, setUserId] = useState<string | null>(null)
   const [optedIn, setOptedIn] = useState<boolean | null>(null)
   const [intros, setIntros] = useState<IntroMatch[]>([])
@@ -26,11 +27,9 @@ export default function AppHomePage() {
   const [modalIntro, setModalIntro] = useState<IntroMatch | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [profileCount, setProfileCount] = useState<number | null>(null)
-  const [shareCopied, setShareCopied] = useState(false)
   const [fillingMissingMode, setFillingMissingMode] = useState(false)
   const [showJustCompletedThankYou, setShowJustCompletedThankYou] = useState(false)
 
-  const searchParams = useSearchParams()
   useEffect(() => {
     if (searchParams.get('justCompletedIntro') === '1') {
       setShowJustCompletedThankYou(true)
@@ -604,5 +603,13 @@ export default function AppHomePage() {
         />
       )}
     </>
+  )
+}
+
+export default function AppHomePage() {
+  return (
+    <Suspense fallback={<div style={{ padding: '2rem', textAlign: 'center' }}>Loading…</div>}>
+      <AppHomeContent />
+    </Suspense>
   )
 }

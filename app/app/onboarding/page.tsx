@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { getSupabase } from '@/lib/supabase'
@@ -110,7 +110,7 @@ function is18Plus(dateStr: string): boolean {
   return age >= 18
 }
 
-export default function AppOnboardingPage() {
+function AppOnboardingContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const token = searchParams.get('token')
@@ -863,5 +863,20 @@ export default function AppOnboardingPage() {
         </button>
       </div>
     </div>
+  )
+}
+
+export default function AppOnboardingPage() {
+  return (
+    <Suspense fallback={
+      <div className="onboarding-wrap">
+        <div className="onboarding-progress">
+          <div className="onboarding-progress-inner" style={{ width: '0%' }} />
+        </div>
+        <p className="onboarding-question">Loading…</p>
+      </div>
+    }>
+      <AppOnboardingContent />
+    </Suspense>
   )
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { getSupabase } from '@/lib/supabase'
@@ -8,7 +8,15 @@ import { useOnboardingStatus } from '@/lib/use-onboarding'
 import { authLog } from '@/lib/auth-log'
 import { FeedbackBubble } from '@/app/app/components/FeedbackBubble'
 
-export default function AppLayout({
+function AppLayoutLoading() {
+  return (
+    <div style={{ padding: '2rem', textAlign: 'center' }}>
+      Loading…
+    </div>
+  )
+}
+
+function AppLayoutInner({
   children,
 }: {
   children: React.ReactNode
@@ -191,5 +199,17 @@ export default function AppLayout({
         )}
       </div>
     </div>
+  )
+}
+
+export default function AppLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  return (
+    <Suspense fallback={<AppLayoutLoading />}>
+      <AppLayoutInner>{children}</AppLayoutInner>
+    </Suspense>
   )
 }
