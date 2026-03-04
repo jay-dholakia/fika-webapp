@@ -70,9 +70,12 @@ export async function POST(request: Request) {
   let body: {
     content?: string
     from_number?: string
+    fromNumber?: string
     to_number?: string
+    toNumber?: string
     sendblue_number?: string
     message_handle?: string
+    messageHandle?: string
   }
   try {
     body = JSON.parse(rawBody)
