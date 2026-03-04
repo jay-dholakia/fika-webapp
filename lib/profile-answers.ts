@@ -22,11 +22,14 @@ export function getAnswersFromProfileAndIntake(
     else if (s.id === 'languages') answers.languages = Array.isArray(profile?.languages) ? profile.languages : []
     else if (s.id === 'location' && profile?.city != null)
       answers.location = { city: profile.city, lat: profile.lat ?? 0, lng: profile.lng ?? 0 }
-    else if (s.id === 'phone') answers.phone = profile?.phone ?? ''
   }
 
   const responses = intake?.responses ?? []
   for (const s of INTAKE_STEPS) {
+    if (s.id === 'phone') {
+      answers.phone = profile?.phone ?? ''
+      continue
+    }
     const r = responses.find((x: IntakeResponseItem) => x.question_id === s.id)
     if (r != null) answers[s.id] = r.answer as string | string[] | number
   }

@@ -49,16 +49,19 @@ function getFirstUnansweredStepAndAnswers(
     } else if (s.id === 'location') {
       if (!profile?.city) return { stepIndex: i, answers }
       answers.location = { city: profile.city, lat: profile.lat ?? 0, lng: profile.lng ?? 0 }
-    } else if (s.id === 'phone') {
-      if (profile?.phone) answers.phone = profile.phone
-      if (!profile?.phone?.trim()) return { stepIndex: i, answers }
-      answers.phone = profile.phone
     }
+    // phone is no longer in PROFILE_STEPS; handled after confirm_intent in intake section
   }
 
   const responses = intake?.responses ?? []
   for (let j = 0; j < INTAKE_STEPS.length; j++) {
     const s = INTAKE_STEPS[j]
+    if (s.id === 'phone') {
+      if (profile?.phone) answers.phone = profile.phone
+      if (!profile?.phone?.trim()) return { stepIndex: PROFILE_STEPS.length + j, answers }
+      answers.phone = profile.phone
+      continue
+    }
     const r = responses.find((x: IntakeResponseItem) => x.question_id === s.id)
     if (s.required !== false && !r) return { stepIndex: PROFILE_STEPS.length + j, answers }
     answers[s.id] = r ? (r.answer as string | string[] | number) : (s.type === 'multi_select' ? [] : '')
@@ -301,31 +304,47 @@ export default function AppOnboardingPage() {
             setIsExiting(false)
           }, 280)
         } else {
-          const intakeAnswer = raw as string | string[] | number
-          await saveIntakeAnswer(step, intakeAnswer)
-          if (step.id === 'confirm_intent' && sessionUserId) {
-            const supabase = getSupabase()
-            if (supabase) {
-              await supabase.from('profiles').update({
-                intent_confirmed_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-              }).eq('id', sessionUserId)
+          const intakeAnswer = raw as string | string | string[] | number
+          if (step.id === 'phone') {
+            await saveProfileField('phone', typeof raw === 'string' ? toE164(raw.trim()) : null, answers)
+            setAnswers((a) => ({ ...a, phone: raw }))
+            if (isLastStep) {
+              await callCompleteIntake()
+              router.replace('/app?justCompletedIntro=1')
+              return
             }
+            setIsExiting(true)
+            setTimeout(() => {
+              setStepIndex((i) => i + 1)
+              setDisplayStepIndex((i) => i + 1)
+              setIsExiting(false)
+            }, 280)
+          } else {
+            await saveIntakeAnswer(step, intakeAnswer as string | string[] | number)
+            if (step.id === 'confirm_intent' && sessionUserId) {
+              const supabase = getSupabase()
+              if (supabase) {
+                await supabase.from('profiles').update({
+                  intent_confirmed_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                }).eq('id', sessionUserId)
+              }
+            }
+            const updatedAnswers = { ...answers, [step.id]: intakeAnswer }
+            if (isLastStep) {
+              await callCompleteIntake()
+              router.replace('/app?justCompletedIntro=1')
+              return
+            }
+            setAnswers((a) => ({ ...a, [step.id]: intakeAnswer }))
+            const nextIndex = stepIndex + 1
+            setIsExiting(true)
+            setTimeout(() => {
+              setStepIndex(nextIndex)
+              setDisplayStepIndex(nextIndex)
+              setIsExiting(false)
+            }, 280)
           }
-          const updatedAnswers = { ...answers, [step.id]: intakeAnswer }
-          if (isLastStep) {
-            await callCompleteIntake()
-            router.replace('/app?justCompletedIntro=1')
-            return
-          }
-          setAnswers((a) => ({ ...a, [step.id]: intakeAnswer }))
-          const nextIndex = stepIndex + 1
-          setIsExiting(true)
-          setTimeout(() => {
-            setStepIndex(nextIndex)
-            setDisplayStepIndex(nextIndex)
-            setIsExiting(false)
-          }, 280)
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Something went wrong.')

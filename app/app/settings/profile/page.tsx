@@ -388,11 +388,6 @@ export default function SettingsProfilePage() {
               <div className="profile-input">
                 {renderStep(step, answers[step.id])}
               </div>
-              {step.id === 'phone' && answers.phone && (
-                <div className="onboarding-body" style={{ marginTop: '0.5rem' }}>
-                  <SmsConciergeCta />
-                </div>
-              )}
             </div>
           ))}
         </section>
@@ -413,6 +408,11 @@ export default function SettingsProfilePage() {
               <div className="profile-input">
                 {renderStep(step, answers[step.id])}
               </div>
+              {step.id === 'phone' && answers.phone && (
+                <div className="onboarding-body" style={{ marginTop: '0.5rem' }}>
+                  <SmsConciergeCta />
+                </div>
+              )}
             </div>
           ))}
         </section>
