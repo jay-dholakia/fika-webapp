@@ -65,6 +65,7 @@ export async function POST(request: Request) {
     null
   const webhookSecret = process.env.SENDBLUE_WEBHOOK_SECRET
   if (webhookSecret && !verifyWebhookSignature(rawBody, signatureHeader, webhookSecret)) {
+    console.log('[sendblue-webhook] signature verification failed')
     return NextResponse.json({ error: 'Invalid webhook signature' }, { status: 401 })
   }
   let body: {
@@ -87,6 +88,10 @@ export async function POST(request: Request) {
   const toNumber = body.to_number ?? body.toNumber ?? body.sendblue_number ?? ''
   const messageHandle = body.message_handle ?? body.messageHandle ?? ''
 
+  // Debug logging (visible in Vercel Functions logs)
+  const fromLast4 = fromNumber.replace(/\D/g, '').slice(-4)
+  console.log('[sendblue-webhook] received', { from: `***${fromLast4}`, toNumber: toNumber ? '***' + toNumber.replace(/\D/g, '').slice(-4) : '', contentLength: content.length })
+
   if (!fromNumber || !content) {
     return NextResponse.json({ error: 'Missing from_number or content' }, { status: 400 })
   }
@@ -96,6 +101,10 @@ export async function POST(request: Request) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   )
   const fromPhone = normalizeIncomingPhone(fromNumber)
+
+  const isConcierge = isConciergeNumber(toNumber)
+  const isMatch = isMatchNumber(toNumber)
+  console.log('[sendblue-webhook] route', { isConcierge, isMatch, toNumber: toNumber ? 'set' : 'empty' })
 
   // ----- Relay (Fika Match number) -----
   if (isMatchNumber(toNumber)) {
@@ -138,6 +147,7 @@ export async function POST(request: Request) {
   }
 
   const userId = await getUserIdByPhone(supabase, fromPhone)
+  console.log('[sendblue-webhook] user lookup', { fromLast4, userId: userId ? 'found' : 'not_found' })
   if (!userId) {
     await sendConcierge(fromNumber, "We don't have your number linked to a Fika account. Add your phone in the app under profile settings, or sign up at letsfika.co")
     return NextResponse.json({ ok: true })
@@ -156,7 +166,9 @@ export async function POST(request: Request) {
 
   // First contact (reply-only flow): no state yet — send entry message and set awaiting_opt_in
   if (!stateRow) {
-    await sendConcierge(fromNumber, messageEntry())
+    console.log('[sendblue-webhook] first_contact sending entry to', fromLast4)
+    const entryResult = await sendConcierge(fromNumber, messageEntry())
+    console.log('[sendblue-webhook] sendConcierge result', { ok: entryResult.ok, error: entryResult.error })
     await supabase.from('sms_conversation_states').upsert(
       {
         user_id: userId,
