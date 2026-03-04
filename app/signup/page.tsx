@@ -1,7 +1,7 @@
 'use client'
 
-import { Suspense, useSearchParams } from 'next/navigation'
-import { useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
+import { Suspense, useEffect } from 'react'
 
 /**
  * Redirect /signup?token=XXX to /app/onboarding?token=XXX so the profile builder runs there (with token-based session).
