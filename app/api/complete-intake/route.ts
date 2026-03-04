@@ -1,5 +1,8 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { sendMessage } from '@/lib/sendblue'
+import { getOrCreateSmsState, messageEntry, SMS_STATES } from '@/lib/sms-agent'
+import { getCurrentBatchWeek } from '@/lib/onboarding'
 
 const OPEN_ENDED_IDS: string[] = []
 
@@ -119,6 +122,31 @@ export async function POST(request: Request) {
       .eq('user_id', user.id)
     if (updateError) {
       return NextResponse.json({ error: updateError.message }, { status: 500 })
+    }
+  }
+
+  // Entry SMS: only when not in reply-only mode (user must text first when reply-only)
+  const replyOnly = process.env.SENDBLUE_REPLY_ONLY === 'true'
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!replyOnly && serviceKey && process.env.SENDBLUE_API_KEY_ID) {
+    try {
+      const serviceSupabase = createClient(url, serviceKey)
+      const { data: profile } = await serviceSupabase
+        .from('profiles')
+        .select('phone')
+        .eq('id', user.id)
+        .single()
+      if (profile?.phone) {
+        const entryMsg = messageEntry()
+        const sent = await sendMessage(profile.phone, entryMsg, { fromNumber: 'concierge' })
+        if (sent.success) {
+          await getOrCreateSmsState(serviceSupabase, user.id, SMS_STATES.awaiting_opt_in, {
+            batch_week: getCurrentBatchWeek(),
+          })
+        }
+      }
+    } catch {
+      // Non-fatal: don't fail complete-intake if SMS fails
     }
   }
 

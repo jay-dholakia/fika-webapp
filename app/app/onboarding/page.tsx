@@ -15,6 +15,8 @@ import {
 import type { IntakeResponseItem } from '@/lib/db-types'
 import type { ProfileRow } from '@/lib/db-types'
 import type { IntakeResponsesV5Row } from '@/lib/db-types'
+import { toE164, isValidPhone } from '@/lib/phone'
+import { SmsConciergeCta } from '@/app/app/components/SmsConciergeCta'
 
 const ALL_STEPS = [...PROFILE_STEPS, ...INTAKE_STEPS]
 
@@ -47,6 +49,10 @@ function getFirstUnansweredStepAndAnswers(
     } else if (s.id === 'location') {
       if (!profile?.city) return { stepIndex: i, answers }
       answers.location = { city: profile.city, lat: profile.lat ?? 0, lng: profile.lng ?? 0 }
+    } else if (s.id === 'phone') {
+      if (profile?.phone) answers.phone = profile.phone
+      if (!profile?.phone?.trim()) return { stepIndex: i, answers }
+      answers.phone = profile.phone
     }
   }
 
@@ -180,6 +186,9 @@ export default function AppOnboardingPage() {
       updates.lat = value.lat
       updates.lng = value.lng
     }
+    if (id === 'phone' && typeof value === 'string') {
+      updates.phone = toE164(value.trim()) || null
+    }
     const { error: e } = await supabase.from('profiles').upsert(updates, { onConflict: 'id' })
     if (e) throw new Error(e.message)
   }
@@ -264,6 +273,12 @@ export default function AppOnboardingPage() {
         return
       }
     }
+    if (step.id === 'phone' && typeof raw === 'string') {
+      if (!isValidPhone(raw)) {
+        setError('Please enter a valid phone number (at least 10 digits).')
+        return
+      }
+    }
 
     setSaving(true)
     ;(async () => {
@@ -273,6 +288,8 @@ export default function AppOnboardingPage() {
             await saveProfileField(step.id, raw as { city: string; lat: number; lng: number }, answers)
           } else if (step.id === 'languages' && (Array.isArray(raw) || raw === undefined)) {
             await saveProfileField(step.id, Array.isArray(raw) ? raw : [], answers)
+          } else if (step.id === 'phone' && typeof raw === 'string') {
+            await saveProfileField(step.id, toE164(raw.trim()), answers)
           } else if (typeof raw === 'string' || typeof raw === 'number') {
             await saveProfileField(step.id, raw, answers)
           }
@@ -498,18 +515,25 @@ export default function AppOnboardingPage() {
         )}
 
         {displayStep.type === 'text' && (
-          <input
-            id={`onboarding-${displayStep.id}`}
-            name={displayStep.id}
-            type="text"
-            className="auth-input"
-            placeholder={displayStep.placeholder || ''}
-            value={(value as string) ?? ''}
-            onChange={(e) => setAnswers((a) => ({ ...a, [displayStep.id]: e.target.value }))}
-            disabled={saving}
-            autoFocus
-            autoComplete={displayStep.id === 'first_name' ? 'given-name' : 'off'}
-          />
+          <>
+            <input
+              id={`onboarding-${displayStep.id}`}
+              name={displayStep.id}
+              type="text"
+              className="auth-input"
+              placeholder={displayStep.placeholder || ''}
+              value={(value as string) ?? ''}
+              onChange={(e) => setAnswers((a) => ({ ...a, [displayStep.id]: e.target.value }))}
+              disabled={saving}
+              autoFocus
+              autoComplete={displayStep.id === 'first_name' ? 'given-name' : 'off'}
+            />
+            {displayStep.id === 'phone' && (
+              <div className="onboarding-body" style={{ marginTop: '1rem' }}>
+                <SmsConciergeCta />
+              </div>
+            )}
+          </>
         )}
 
         {displayStep.type === 'date' && (

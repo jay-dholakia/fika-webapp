@@ -21,7 +21,7 @@ export type ProfileStep = {
   minSelections?: number
 }
 
-// LA Beta PROFILE (6 steps)
+// LA Beta PROFILE (7 steps): includes phone for SMS
 export const PROFILE_STEPS: ProfileStep[] = [
   {
     id: 'first_name',
@@ -103,6 +103,14 @@ export const PROFILE_STEPS: ProfileStep[] = [
     body: "This is the area we'll use to match you with people nearby. Your location stays private.",
     type: 'location_permission',
     required: true,
+  },
+  {
+    id: 'phone',
+    question: 'What\'s your phone number?',
+    body: 'We\'ll text you for weekly intros and to coordinate your Fikas (Fika Concierge).',
+    type: 'text',
+    required: true,
+    placeholder: '(555) 123-4567',
   },
 ]
 

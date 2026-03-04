@@ -13,6 +13,8 @@ import {
   type AnswersState,
 } from '@/lib/profile-answers'
 import type { IntakeResponseItem } from '@/lib/db-types'
+import { toE164, isValidPhone } from '@/lib/phone'
+import { SmsConciergeCta } from '@/app/app/components/SmsConciergeCta'
 
 function parseDate(s: string): string | null {
   const d = new Date(s)
@@ -55,6 +57,9 @@ export default function SettingsProfilePage() {
     if (!userId) return
     const supabase = getSupabase()
     if (!supabase) throw new Error('Not configured')
+    if (typeof answers.phone === 'string' && answers.phone.trim() && !isValidPhone(answers.phone)) {
+      throw new Error('Please enter a valid phone number (at least 10 digits).')
+    }
     const firstName = (answers.first_name as string)?.trim() || ' '
     const updates: Record<string, unknown> = {
       id: userId,
@@ -71,6 +76,9 @@ export default function SettingsProfilePage() {
       updates.city = loc.city
       updates.lat = loc.lat
       updates.lng = loc.lng
+    }
+    if (typeof answers.phone === 'string') {
+      updates.phone = toE164(answers.phone.trim()) || null
     }
     const { error: e } = await supabase.from('profiles').upsert(updates, { onConflict: 'id' })
     if (e) throw new Error(e.message)
@@ -380,6 +388,11 @@ export default function SettingsProfilePage() {
               <div className="profile-input">
                 {renderStep(step, answers[step.id])}
               </div>
+              {step.id === 'phone' && answers.phone && (
+                <div className="onboarding-body" style={{ marginTop: '0.5rem' }}>
+                  <SmsConciergeCta />
+                </div>
+              )}
             </div>
           ))}
         </section>

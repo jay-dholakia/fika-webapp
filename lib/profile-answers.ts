@@ -22,6 +22,7 @@ export function getAnswersFromProfileAndIntake(
     else if (s.id === 'languages') answers.languages = Array.isArray(profile?.languages) ? profile.languages : []
     else if (s.id === 'location' && profile?.city != null)
       answers.location = { city: profile.city, lat: profile.lat ?? 0, lng: profile.lng ?? 0 }
+    else if (s.id === 'phone') answers.phone = profile?.phone ?? ''
   }
 
   const responses = intake?.responses ?? []

@@ -12,6 +12,7 @@ export type ProfileRow = {
   city: string | null
   lat: number | null
   lng: number | null
+  phone: string | null // E.164 for SMS (Sendblue)
   languages?: string[] | null
   intent_confirmed_at: string | null // ISO
   in_match_bowl?: boolean
@@ -72,4 +73,29 @@ export type MessageRow = {
   sender_id: string | null
   text: string
   created_at: string | null // ISO
+}
+
+/** SMS Concierge flow state per user (and optionally per match). */
+export type SmsConversationStateRow = {
+  id: string
+  user_id: string
+  batch_week: string | null // YYYY-MM-DD Monday
+  match_id: string | null
+  state: string
+  payload: Record<string, unknown>
+  last_sendblue_message_handle: string | null
+  updated_at: string
+  created_at: string
+}
+
+/** Suggested meetup venue (e.g. coffee shop). */
+export type VenueRow = {
+  id: string
+  name: string
+  neighborhood: string | null
+  city: string
+  address: string | null
+  lat: number | null
+  lng: number | null
+  created_at: string | null
 }

@@ -36,7 +36,7 @@ export function useOnboardingStatus(userId: string | undefined) {
 
     async function load() {
       const [profileRes, intakeRes] = await Promise.all([
-        supabase!.from('profiles').select('id, first_name, birthdate, gender, gender_preference, languages, city, lat, lng, intent_confirmed_at, in_match_bowl, intro_balance').eq('id', userId).maybeSingle(),
+        supabase!.from('profiles').select('id, first_name, birthdate, gender, gender_preference, languages, city, lat, lng, phone, intent_confirmed_at, in_match_bowl, intro_balance').eq('id', userId).maybeSingle(),
         supabase!.from('intake_responses_v5').select('user_id, responses, completed_at').eq('user_id', userId).maybeSingle(),
       ])
       if (cancelled) return
