@@ -27,6 +27,7 @@ function AppHomeContent() {
   const [modalIntro, setModalIntro] = useState<IntroMatch | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [profileCount, setProfileCount] = useState<number | null>(null)
+  const [shareCopied, setShareCopied] = useState(false)
   const [fillingMissingMode, setFillingMissingMode] = useState(false)
   const [showJustCompletedThankYou, setShowJustCompletedThankYou] = useState(false)
 
