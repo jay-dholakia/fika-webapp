@@ -33,12 +33,12 @@ const MATCH = (process.env.SENDBLUE_MATCH_NUMBER || '').replace(/\D/g, '')
 
 function isConciergeNumber(toNumber: string): boolean {
   const digits = toNumber.replace(/\D/g, '')
-  return CONCIERGE && (digits === CONCIERGE || digits.endsWith(CONCIERGE))
+  return Boolean(CONCIERGE && (digits === CONCIERGE || digits.endsWith(CONCIERGE)))
 }
 
 function isMatchNumber(toNumber: string): boolean {
   const digits = toNumber.replace(/\D/g, '')
-  return MATCH && (digits === MATCH || digits.endsWith(MATCH))
+  return Boolean(MATCH && (digits === MATCH || digits.endsWith(MATCH)))
 }
 
 function verifyWebhookSignature(rawBody: string, signatureHeader: string | null, secret: string): boolean {
