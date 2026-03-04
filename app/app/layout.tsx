@@ -115,6 +115,24 @@ function AppLayoutInner({
     )
   }
 
+  // Token-based signup (SMS link): minimal shell — no sidebar, no settings, no logout
+  const isTokenOnboarding = pathname === '/app/onboarding' && searchParams.get('token')
+  if (isTokenOnboarding) {
+    authLog('app-layout:render', { show: 'minimal-onboarding' })
+    return (
+      <div className="app-shell app-shell-minimal">
+        <header className="app-minimal-header" aria-label="Fika">
+          <Link href="/" className="app-sidebar-logo">
+            fika
+          </Link>
+        </header>
+        <main className="app-main app-main-full">
+          {children}
+        </main>
+      </div>
+    )
+  }
+
   authLog('app-layout:render', { show: 'dashboard' })
   return (
     <div className="app-shell">

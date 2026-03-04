@@ -1751,7 +1751,32 @@ a {
   padding: 2rem 1.5rem;
 }
 
-/* Mobile: top bar + drawer sidebar */
+/* Minimal shell for token-based onboarding (SMS link): no sidebar, no settings, no logout */
+.app-shell.app-shell-minimal {
+  flex-direction: column;
+  padding-top: 0;
+}
+.app-shell-minimal .app-minimal-header {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  height: 56px;
+  padding: 0 1rem;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+.app-shell-minimal .app-minimal-header .app-sidebar-logo {
+  font-size: 1.25rem;
+}
+.app-shell-minimal .app-main.app-main-full {
+  flex: 1;
+  padding: 2rem 1.5rem;
+}
+@media (max-width: 768px) {
+  .app-shell-minimal .app-main.app-main-full {
+    padding: 1rem 1rem 1.5rem;
+  }
+}
 .app-mobile-header {
   display: none;
 }
