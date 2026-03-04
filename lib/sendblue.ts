@@ -50,6 +50,7 @@ export async function sendSendblueMessage(
         'sb-api-secret-key': config.apiSecretKey,
       },
       body: JSON.stringify({
+        from_number: fromNumber,
         number: to,
         content,
         send_style: 'invisible',
