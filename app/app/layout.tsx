@@ -91,6 +91,8 @@ function AppLayoutInner({
   useEffect(() => {
     if (!sessionChecked) return
     const onboardingToken = pathname === '/app/onboarding' ? searchParams.get('token') : null
+    // Don't redirect to login when on /app/onboarding — let the page load so token-based flow can run (no auth required)
+    if (userId == null && pathname === '/app/onboarding') return
     if (userId == null && !onboardingToken) {
       authLog('app-layout:redirect', { to: '/login', reason: 'no-session' })
       router.replace('/login')
