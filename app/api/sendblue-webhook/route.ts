@@ -154,10 +154,12 @@ export async function POST(request: Request) {
   console.log('[sendblue-webhook] user lookup', { fromLast4, userId: userId ? 'found' : 'not_found' })
   if (!userId) {
     // ----- Phone-first: unknown number → send link to profile builder; they finalize with Google -----
-    // Always use canonical app URL for SMS link (never deployment/preview URL). Set NEXT_PUBLIC_APP_URL in Vercel if different.
-    const appBase = process.env.NEXT_PUBLIC_APP_URL?.trim()
-      ? process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, '')
-      : 'https://letsfika.vercel.app'
+    // Use hardcoded production URL so the link is never the deployment/preview URL.
+    // Override only by setting APP_CANONICAL_URL in Vercel (e.g. https://letsfika.co).
+    const DEFAULT_SIGNUP_BASE = 'https://letsfika.vercel.app'
+    const appBase = (process.env.APP_CANONICAL_URL ?? '').trim()
+      ? process.env.APP_CANONICAL_URL!.trim().replace(/\/$/, '')
+      : DEFAULT_SIGNUP_BASE
     const { data: existing } = await supabase
       .from('onboarding_sessions')
       .select('token')

@@ -21,7 +21,7 @@ export type ProfileStep = {
   minSelections?: number
 }
 
-// LA Beta PROFILE (6 steps): name, demographics, location (phone is after "I'm in" in intake)
+// LA Beta PROFILE (6 steps): name, demographics, location
 export const PROFILE_STEPS: ProfileStep[] = [
   {
     id: 'first_name',
@@ -106,7 +106,7 @@ export const PROFILE_STEPS: ProfileStep[] = [
   },
 ]
 
-// LA Beta INTAKE (9 steps): life chapter, lately, everyday anchor, topics, convo feel, openness, hoping for, radius, confirm
+// LA Beta INTAKE: life chapter, lately, everyday anchor, topics, convo feel, openness, hoping for, radius, confirm (no phone)
 export const INTAKE_STEPS: ProfileStep[] = [
   {
     id: 'q_life_chapter',
@@ -251,14 +251,6 @@ export const INTAKE_STEPS: ProfileStep[] = [
     type: 'chips_single',
     required: true,
     options: ["I'm in"],
-  },
-  {
-    id: 'phone',
-    question: "What's your phone number?",
-    body: "We'll text you for weekly intros and to coordinate your Fikas (Fika Concierge).",
-    type: 'text',
-    required: true,
-    placeholder: '(555) 123-4567',
   },
 ]
 

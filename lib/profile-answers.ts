@@ -26,13 +26,9 @@ export function getAnswersFromProfileAndIntake(
 
   const responses = intake?.responses ?? []
   for (const s of INTAKE_STEPS) {
-    if (s.id === 'phone') {
-      answers.phone = profile?.phone ?? ''
-      continue
-    }
     const r = responses.find((x: IntakeResponseItem) => x.question_id === s.id)
     if (r != null) answers[s.id] = r.answer as string | string[] | number
   }
-
+  answers.phone = profile?.phone ?? ''
   return answers
 }

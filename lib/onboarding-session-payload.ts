@@ -12,8 +12,8 @@ export type AnswersState = Record<
 
 export function buildOnboardingSessionPayload(answers: AnswersState): Record<string, unknown> {
   const loc = answers.location as { city: string; lat: number; lng: number } | undefined
-  const intakeStepsWithoutPhone = INTAKE_STEPS.filter((s) => s.id !== 'phone')
-  const responses = intakeStepsWithoutPhone.map((s) => ({
+  const intakeStepsForPayload = INTAKE_STEPS
+  const responses = intakeStepsForPayload.map((s) => ({
     question_id: s.id,
     question_text: s.question,
     answer: answers[s.id] ?? (s.type === 'multi_select' ? [] : ''),

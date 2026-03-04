@@ -16,12 +16,9 @@ import { buildOnboardingSessionPayload, payloadToAnswers } from '@/lib/onboardin
 import type { IntakeResponseItem } from '@/lib/db-types'
 import type { ProfileRow } from '@/lib/db-types'
 import type { IntakeResponsesV5Row } from '@/lib/db-types'
-import { toE164, isValidPhone } from '@/lib/phone'
-import { SmsConciergeCta } from '@/app/app/components/SmsConciergeCta'
 
 const ALL_STEPS = [...PROFILE_STEPS, ...INTAKE_STEPS]
-const INTAKE_STEPS_WITHOUT_PHONE = INTAKE_STEPS.filter((s) => s.id !== 'phone')
-const ALL_STEPS_TOKEN = [...PROFILE_STEPS, ...INTAKE_STEPS_WITHOUT_PHONE]
+const ALL_STEPS_TOKEN = ALL_STEPS
 
 type AnswersState = Record<string, string | string[] | number | { city: string; lat: number; lng: number }>
 
@@ -53,18 +50,12 @@ function getFirstUnansweredStepAndAnswers(
       if (!profile?.city) return { stepIndex: i, answers }
       answers.location = { city: profile.city, lat: profile.lat ?? 0, lng: profile.lng ?? 0 }
     }
-    // phone is no longer in PROFILE_STEPS; handled after confirm_intent in intake section
+    // phone is optional (from SMS or settings), not in intake steps
   }
 
   const responses = intake?.responses ?? []
   for (let j = 0; j < INTAKE_STEPS.length; j++) {
     const s = INTAKE_STEPS[j]
-    if (s.id === 'phone') {
-      if (profile?.phone) answers.phone = profile.phone
-      if (!profile?.phone?.trim()) return { stepIndex: PROFILE_STEPS.length + j, answers }
-      answers.phone = profile.phone
-      continue
-    }
     const r = responses.find((x: IntakeResponseItem) => x.question_id === s.id)
     if (s.required !== false && !r) return { stepIndex: PROFILE_STEPS.length + j, answers }
     answers[s.id] = r ? (r.answer as string | string[] | number) : (s.type === 'multi_select' ? [] : '')
@@ -251,9 +242,6 @@ function AppOnboardingContent() {
       updates.lat = value.lat
       updates.lng = value.lng
     }
-    if (id === 'phone' && typeof value === 'string') {
-      updates.phone = toE164(value.trim()) || null
-    }
     const { error: e } = await supabase.from('profiles').upsert(updates, { onConflict: 'id' })
     if (e) throw new Error(e.message)
   }
@@ -338,12 +326,6 @@ function AppOnboardingContent() {
         return
       }
     }
-    if (step.id === 'phone' && typeof raw === 'string') {
-      if (!isValidPhone(raw)) {
-        setError('Please enter a valid phone number (at least 10 digits).')
-        return
-      }
-    }
 
     setSaving(true)
     ;(async () => {
@@ -379,8 +361,6 @@ function AppOnboardingContent() {
             await saveProfileField(step.id, raw as { city: string; lat: number; lng: number }, answers)
           } else if (step.id === 'languages' && (Array.isArray(raw) || raw === undefined)) {
             await saveProfileField(step.id, Array.isArray(raw) ? raw : [], answers)
-          } else if (step.id === 'phone' && typeof raw === 'string') {
-            await saveProfileField(step.id, toE164(raw.trim()), answers)
           } else if (typeof raw === 'string' || typeof raw === 'number') {
             await saveProfileField(step.id, raw, answers)
           }
@@ -393,23 +373,8 @@ function AppOnboardingContent() {
           }, 280)
         } else {
           const intakeAnswer = raw as string | string | string[] | number
-          if (step.id === 'phone') {
-            await saveProfileField('phone', typeof raw === 'string' ? toE164(raw.trim()) : null, answers)
-            setAnswers((a) => ({ ...a, phone: raw }))
-            if (isLastStep) {
-              await callCompleteIntake()
-              router.replace('/app?justCompletedIntro=1')
-              return
-            }
-            setIsExiting(true)
-            setTimeout(() => {
-              setStepIndex((i) => i + 1)
-              setDisplayStepIndex((i) => i + 1)
-              setIsExiting(false)
-            }, 280)
-          } else {
-            await saveIntakeAnswer(step, intakeAnswer as string | string[] | number)
-            if (step.id === 'confirm_intent' && sessionUserId) {
+          await saveIntakeAnswer(step, intakeAnswer as string | string[] | number)
+          if (step.id === 'confirm_intent' && sessionUserId) {
               const supabase = getSupabase()
               if (supabase) {
                 await supabase.from('profiles').update({
@@ -433,8 +398,7 @@ function AppOnboardingContent() {
               setIsExiting(false)
             }, 280)
           }
-        }
-      } catch (err) {
+        } catch (err) {
         setError(err instanceof Error ? err.message : 'Something went wrong.')
       } finally {
         setSaving(false)
@@ -682,11 +646,6 @@ function AppOnboardingContent() {
               autoFocus
               autoComplete={displayStep.id === 'first_name' ? 'given-name' : 'off'}
             />
-            {displayStep.id === 'phone' && (
-              <div className="onboarding-body" style={{ marginTop: '1rem' }}>
-                <SmsConciergeCta />
-              </div>
-            )}
           </>
         )}
 
