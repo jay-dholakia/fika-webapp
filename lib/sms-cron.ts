@@ -116,7 +116,7 @@ export async function runDayOfReminder(): Promise<{ sent: number; error?: string
   const todayMatches = (matches ?? []).filter((m) => m.confirmed_at && String(m.confirmed_at).slice(0, 10) === today)
   if (!todayMatches.length) return { sent: 0 }
 
-  const venueIds = [...new Set(todayMatches.map((m) => m.confirmed_venue_id).filter(Boolean))]
+  const venueIds = Array.from(new Set(todayMatches.map((m) => m.confirmed_venue_id).filter(Boolean)))
   const { data: venues } = venueIds.length
     ? await supabase.from('venues').select('id, name, neighborhood').in('id', venueIds)
     : { data: [] }
@@ -125,7 +125,7 @@ export async function runDayOfReminder(): Promise<{ sent: number; error?: string
     return acc
   }, {})
 
-  const userIds = [...new Set(todayMatches.flatMap((m) => [m.user_a, m.user_b]))]
+  const userIds = Array.from(new Set(todayMatches.flatMap((m) => [m.user_a, m.user_b])))
   const { data: profs } = await supabase.from('profiles').select('id, phone').in('id', userIds)
   const phoneBy = (profs ?? []).reduce<Record<string, string>>((acc, p) => {
     if (p.phone) acc[p.id] = p.phone
