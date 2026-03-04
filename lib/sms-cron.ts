@@ -40,7 +40,7 @@ export async function runWeeklyOptIn(): Promise<{ sent: number; error?: string }
   for (const p of withPhone) {
     const result = await sendMessage(p.phone!, msg, { fromNumber: 'concierge' })
     if (result.success) {
-      await getOrCreateSmsState(supabase, p.id, SMS_STATES.awaiting_opt_in, { batch_week: batchWeek })
+      await getOrCreateSmsState(supabase, p.id, SMS_STATES.AWAITING_OPT_IN, { batch_week: batchWeek })
       sent++
     }
   }
@@ -65,7 +65,7 @@ export async function runMatchDelivery(): Promise<{ sent: number; error?: string
     .from('sms_conversation_states')
     .select('match_id')
     .eq('batch_week', batchWeek)
-    .eq('state', SMS_STATES.match_offered)
+    .eq('state', SMS_STATES.MATCH_OFFERED)
   const alreadySent = new Set((states ?? []).map((s) => s.match_id).filter(Boolean))
 
   let sent = 0
@@ -93,8 +93,8 @@ export async function runMatchDelivery(): Promise<{ sent: number; error?: string
     const r1 = await sendMessage(a.phone, introA, { fromNumber: 'concierge' })
     const r2 = await sendMessage(b.phone, introB, { fromNumber: 'concierge' })
     if (r1.success && r2.success) {
-      await getOrCreateSmsState(supabase, m.user_a, SMS_STATES.match_offered, { batch_week: batchWeek, match_id: m.id })
-      await getOrCreateSmsState(supabase, m.user_b, SMS_STATES.match_offered, { batch_week: batchWeek, match_id: m.id })
+      await getOrCreateSmsState(supabase, m.user_a, SMS_STATES.MATCH_OFFERED, { batch_week: batchWeek, match_id: m.id })
+      await getOrCreateSmsState(supabase, m.user_b, SMS_STATES.MATCH_OFFERED, { batch_week: batchWeek, match_id: m.id })
       sent += 2
     }
   }
