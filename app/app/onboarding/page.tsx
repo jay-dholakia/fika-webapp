@@ -677,22 +677,22 @@ function AppOnboardingContent() {
       </div>
 
       <div className="onboarding-single-page">
-        <section className="onboarding-section">
+        <section className="onboarding-section onboarding-section-card">
           <h2 className="onboarding-section-title">About you</h2>
           {PROFILE_STEPS.map(renderField)}
         </section>
 
-        <section className="onboarding-section">
+        <section className="onboarding-section onboarding-section-card">
           <h2 className="onboarding-section-title">Life & context</h2>
           {SECTION_2_STEPS.map(renderField)}
         </section>
 
-        <section className="onboarding-section">
+        <section className="onboarding-section onboarding-section-card">
           <h2 className="onboarding-section-title">Conversation & matching</h2>
           {SECTION_3_STEPS.map(renderField)}
         </section>
 
-        <section className="onboarding-section">
+        <section className="onboarding-section onboarding-section-card">
           <h2 className="onboarding-section-title">Confirm & finish</h2>
           {CONFIRM_STEP && renderField(CONFIRM_STEP)}
 

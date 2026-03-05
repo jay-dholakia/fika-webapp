@@ -157,6 +157,11 @@ export function messageOptInConfirmation(): string {
   return `You're in for this week. We'll send your match soon.`
 }
 
+/** When user replies IN: send link to webapp availability page to finalize opt-in. */
+export function messageOptInSetAvailability(availabilityUrl: string): string {
+  return `Got it. To finalize your opt-in, set your availability here so we can find a time that works:\n\n${availabilityUrl}\n\nOnce you're done, we'll shoot you a text later this week with your match.`
+}
+
 export function messageSkipped(): string {
   return `No problem — we'll check in again next week.`
 }

@@ -13,7 +13,7 @@ import {
   SMS_STATES,
   getDaysFromSlotIds,
   slotIdToDayAndWindow,
-  messageOptInConfirmation,
+  messageOptInSetAvailability,
   messageSkipped,
   messageEntry,
   messageMatchOffer,
@@ -248,7 +248,12 @@ export async function POST(request: Request) {
         },
         { onConflict: 'user_id,batch_week,match_id' }
       )
-      await sendConcierge(fromNumber, messageOptInConfirmation())
+      const DEFAULT_APP_BASE = 'https://letsfika.vercel.app'
+      const appBase = (process.env.APP_CANONICAL_URL ?? '').trim()
+        ? process.env.APP_CANONICAL_URL!.trim().replace(/\/$/, '')
+        : DEFAULT_APP_BASE
+      const availabilityUrl = `${appBase}/app/availability`
+      await sendConcierge(fromNumber, messageOptInSetAvailability(availabilityUrl))
     } else if (keyword === 'SKIP') {
       await supabase.from('sms_conversation_states').upsert(
         {

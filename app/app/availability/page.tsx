@@ -2,10 +2,26 @@
 
 import { useState, useEffect } from 'react'
 import { getSupabase } from '@/lib/supabase'
+import { getCurrentBatchWeek } from '@/lib/onboarding'
+import {
+  AVAILABILITY_DAYS,
+  AVAILABILITY_DAY_LABELS,
+  AVAILABILITY_TIME_ROWS,
+  getAvailabilitySlotId,
+  isAvailabilityLocked,
+  formatNextWeekRange,
+} from '@/lib/availability-slots'
 
 export default function AvailabilityPage() {
   const [userId, setUserId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [slots, setSlots] = useState<Set<string>>(new Set())
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const batchWeek = getCurrentBatchWeek()
+  const locked = isAvailabilityLocked(batchWeek)
 
   useEffect(() => {
     getSupabase()?.auth.getSession().then(({ data: { session } }) => {
@@ -13,6 +29,77 @@ export default function AvailabilityPage() {
       setLoading(false)
     })
   }, [])
+
+  useEffect(() => {
+    if (!userId) return
+    const supabase = getSupabase()
+    if (!supabase) return
+    supabase
+      .from('weekly_availability')
+      .select('availability_slots')
+      .eq('user_id', userId)
+      .eq('batch_week', batchWeek)
+      .maybeSingle()
+      .then(({ data }) => {
+        const arr = Array.isArray(data?.availability_slots) ? data.availability_slots : []
+        setSlots(new Set(arr))
+      })
+  }, [userId, batchWeek])
+
+  function toggleSlot(dayIndex: number, timeIndex: number) {
+    if (locked) return
+    const id = getAvailabilitySlotId(dayIndex, timeIndex)
+    if (!id) return
+    setSlots((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (locked || !userId) return
+    setError(null)
+    setSaving(true)
+    const supabase = getSupabase()
+    if (!supabase) {
+      setError('Not configured')
+      setSaving(false)
+      return
+    }
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.access_token) {
+      setError('Please sign in again.')
+      setSaving(false)
+      return
+    }
+    try {
+      const res = await fetch('/api/availability', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          batch_week: batchWeek,
+          availability_slots: Array.from(slots),
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setError((data as { error?: string }).error ?? 'Failed to save')
+        setSaving(false)
+        return
+      }
+      setSaved(true)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong')
+    } finally {
+      setSaving(false)
+    }
+  }
 
   if (loading) {
     return (
@@ -25,14 +112,66 @@ export default function AvailabilityPage() {
   return (
     <div className="app-card">
       <h2 className="app-page-title">Your Availability</h2>
-      <div className="app-availability-default-card">
-        <p>
-          We&apos;re still building the community in your area. Once we&apos;re ready to match you for Fikas, we&apos;ll ask when you&apos;re free so we can suggest times that work for everyone.
+      <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem', marginBottom: '1rem' }}>
+        When are you free for a Fika next week? We use this to find a time that works for both you and your match.
+      </p>
+      <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.9rem', marginBottom: '1rem' }}>
+        {formatNextWeekRange(batchWeek)} — tap the slots you&apos;re available.
+      </p>
+
+      {locked && (
+        <p className="onboarding-error" style={{ marginBottom: '1rem' }}>
+          Availability for this week is locked. Set your availability before Sunday 11:59pm for the next run.
         </p>
-        <p style={{ marginTop: '0.75rem', marginBottom: 0 }}>
-          Nothing for you to do here yet — we&apos;ll let you know when it&apos;s time to set your availability.
+      )}
+
+      <form onSubmit={handleSubmit}>
+        <div className="app-availability-grid-table">
+          <div className="app-availability-grid-head" role="row">
+            <div className="app-availability-grid-corner">Time</div>
+            {AVAILABILITY_DAY_LABELS.map((label) => (
+              <div key={label} className="app-availability-grid-head-cell">{label}</div>
+            ))}
+          </div>
+          {AVAILABILITY_TIME_ROWS.map((row, timeIndex) => (
+            <div key={row.id} className="app-availability-grid-row" role="row">
+              <div className="app-availability-grid-time-cell">{row.label}</div>
+              {AVAILABILITY_DAYS.map((_, dayIndex) => {
+                const id = getAvailabilitySlotId(dayIndex, timeIndex)
+                const selected = id ? slots.has(id) : false
+                return (
+                  <button
+                    key={dayIndex}
+                    type="button"
+                    className={`app-availability-grid-cell ${selected ? 'app-availability-grid-cell-selected' : ''}`}
+                    onClick={() => toggleSlot(dayIndex, timeIndex)}
+                    disabled={locked}
+                    aria-pressed={selected}
+                    aria-label={`${AVAILABILITY_DAY_LABELS[dayIndex]} ${row.label}`}
+                  />
+                )
+              })}
+            </div>
+          ))}
+        </div>
+
+        <div style={{ marginTop: '1rem' }}>
+          <button
+            type="submit"
+            className="btn btn-primary"
+            disabled={saving || locked}
+          >
+            {saving ? 'Saving…' : saved ? 'Saved' : 'Save availability'}
+          </button>
+        </div>
+      </form>
+
+      {saved && (
+        <p style={{ marginTop: '0.75rem', color: 'var(--color-success)', fontSize: '0.95rem' }}>
+          Your availability is saved. We&apos;ll text you when we have a match.
         </p>
-      </div>
+      )}
+      {error && <p className="onboarding-error" style={{ marginTop: '0.75rem' }}>{error}</p>}
     </div>
   )
 }
