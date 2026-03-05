@@ -466,8 +466,8 @@ function AppOnboardingContent() {
     return (
       <div className="onboarding-wrap">
         <p className="onboarding-question">{tokenError}</p>
-        <Link href="/login" className="btn btn-primary" style={{ marginTop: '1rem' }}>
-          Go to sign in
+        <Link href="/" className="btn btn-primary" style={{ marginTop: '1rem' }}>
+          Go to home
         </Link>
       </div>
     )
@@ -495,8 +495,8 @@ function AppOnboardingContent() {
     return (
       <div className="onboarding-wrap">
         <p>Please log in to continue.</p>
-        <Link href="/login" className="btn btn-primary">
-          Log in
+        <Link href="/" className="btn btn-primary">
+          Go to home
         </Link>
       </div>
     )

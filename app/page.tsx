@@ -85,8 +85,8 @@ export default function Home() {
         <section id="cta" data-animate className="section section-cta">
           <div className="section-inner cta-inner">
             <h2 className="cta-title">Ready for a real Fika?</h2>
-            <p className="cta-sub">Enter your location to see if we&apos;re in your city—or join the waitlist and we&apos;ll let you know when Fika comes to you.</p>
-            <CtaWithLocation />
+            <p className="cta-sub">Join the waitlist and we&apos;ll let you know when Fika is ready for you.</p>
+            <CtaWithLocation waitlistOnly />
           </div>
         </section>
         </main>

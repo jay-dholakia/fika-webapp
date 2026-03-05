@@ -61,8 +61,7 @@ export default function Header() {
             </>
           ) : (
             <>
-              <Link href="/login" onClick={closeMenu}>Log in</Link>
-              <Link href="#cta" className="nav-cta" onClick={closeMenu}>Sign up</Link>
+              <Link href="#cta" className="nav-cta" onClick={closeMenu}>Get started</Link>
             </>
           )}
         </nav>
@@ -104,8 +103,7 @@ export default function Header() {
             </>
           ) : (
             <>
-              <Link href="/login" onClick={closeMenu}>Log in</Link>
-              <Link href="#cta" className="nav-mobile-cta" onClick={closeMenu}>Sign up</Link>
+              <Link href="#cta" className="nav-mobile-cta" onClick={closeMenu}>Get started</Link>
             </>
           )}
         </nav>

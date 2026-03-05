@@ -1,8 +1,6 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { getSupabase } from '@/lib/supabase'
 
 declare global {
@@ -47,12 +45,11 @@ function isInLaunchArea(city: string, state: string, rawInput: string): boolean 
 }
 
 type CtaWithLocationProps = {
-  /** When true, redirect to /signup as soon as user is detected in launch area (e.g. on login page) */
-  redirectToSignupWhenInLA?: boolean
+  /** When true, skip location step and show only waitlist form (for home page; no login/signup flow) */
+  waitlistOnly?: boolean
 }
 
-export default function CtaWithLocation({ redirectToSignupWhenInLA = false }: CtaWithLocationProps) {
-  const router = useRouter()
+export default function CtaWithLocation({ waitlistOnly = false }: CtaWithLocationProps) {
   const [city, setCity] = useState('')
   const [state, setState] = useState('')
   const [locationStatus, setLocationStatus] = useState<'idle' | 'checking' | 'la' | 'not_la'>('idle')
@@ -69,12 +66,6 @@ export default function CtaWithLocation({ redirectToSignupWhenInLA = false }: Ct
   const [geoStatus, setGeoStatus] = useState<'idle' | 'getting' | 'error'>('idle')
   const [geoErrorMessage, setGeoErrorMessage] = useState('')
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
-
-  useEffect(() => {
-    if (redirectToSignupWhenInLA && locationStatus === 'la') {
-      router.replace('/signup')
-    }
-  }, [redirectToSignupWhenInLA, locationStatus, router])
 
   useEffect(() => {
     const update = () => {
@@ -279,7 +270,7 @@ export default function CtaWithLocation({ redirectToSignupWhenInLA = false }: Ct
       setWaitlistMessage('Unable to submit. Please try again.')
       return
     }
-    const { cityVal, stateVal } = getLocationFromInput()
+    const { cityVal, stateVal } = waitlistOnly ? { cityVal: '', stateVal: '' } : getLocationFromInput()
     setWaitlistStatus('loading')
     const { error } = await supabase.from('waitlist').insert({
       email: emailTrim,
@@ -293,9 +284,65 @@ export default function CtaWithLocation({ redirectToSignupWhenInLA = false }: Ct
       return
     }
     setWaitlistStatus('success')
-    setWaitlistMessage("You're on the list. We'll email you when Fika comes to your city.")
+    setWaitlistMessage(waitlistOnly ? "You're on the list. We'll be in touch." : "You're on the list. We'll email you when Fika comes to your city.")
     setEmail('')
     setEmailConsent(false)
+  }
+
+  // Waitlist-only mode (home page): skip location, show only waitlist form
+  if (waitlistOnly) {
+    if (waitlistStatus === 'success') {
+      return (
+        <p className="cta-success" role="status">
+          {waitlistMessage}
+        </p>
+      )
+    }
+    return (
+      <form className="cta-form" onSubmit={handleWaitlistSubmit}>
+        <label htmlFor="cta-waitlist-email" className="cta-waitlist-hint">
+          Email
+        </label>
+        <div className="cta-form-row cta-form-row-single">
+          <input
+            id="cta-waitlist-email"
+            name="email"
+            type="email"
+            placeholder="you@example.com"
+            className="cta-input"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            disabled={waitlistStatus === 'loading'}
+            autoComplete="email"
+            required
+          />
+        </div>
+        <label className="cta-consent">
+          <input
+            type="checkbox"
+            checked={emailConsent}
+            onChange={(e) => setEmailConsent(e.target.checked)}
+            disabled={waitlistStatus === 'loading'}
+            aria-describedby="cta-consent-email-text"
+          />
+          <span id="cta-consent-email-text" className="cta-consent-text">
+            I agree to receive email from Fika when we launch. Unsubscribe anytime.
+          </span>
+        </label>
+        {waitlistMessage && (
+          <p className={`cta-message ${waitlistStatus === 'error' ? 'cta-message-error' : ''}`} role="alert">
+            {waitlistMessage}
+          </p>
+        )}
+        <button
+          type="submit"
+          className="btn btn-primary btn-block"
+          disabled={waitlistStatus === 'loading' || !email.trim() || !emailConsent}
+        >
+          {waitlistStatus === 'loading' ? 'Adding…' : 'Notify me'}
+        </button>
+      </form>
+    )
   }
 
   // Step 1: Ask for location
@@ -351,22 +398,12 @@ export default function CtaWithLocation({ redirectToSignupWhenInLA = false }: Ct
     )
   }
 
-  // LA: redirect to signup when requested (e.g. login page), else show sign up CTA
+  // LA: no webapp signup — direct to SMS
   if (locationStatus === 'la') {
-    if (redirectToSignupWhenInLA) {
-      return (
-        <p className="cta-message" aria-live="polite">
-          Taking you to sign up…
-        </p>
-      )
-    }
     return (
       <div className="cta-result cta-result-la">
         <p className="cta-result-title">You&apos;re in our launch city.</p>
-        <p className="cta-result-body">We're bringing Fika to Los Angeles. Sign up and we'll get you in for your first weekly intros.</p>
-        <Link href="/signup" className="btn btn-primary">
-          Sign up
-        </Link>
+        <p className="cta-result-body">Text FIKA to our number to get started. We&apos;ll send you a link to complete your profile.</p>
         <button
           type="button"
           className="cta-go-back"

@@ -173,9 +173,9 @@ export default function LocationGate() {
     return (
       <div className="location-gate-result location-gate-la">
         <p className="location-gate-result-title">You&apos;re in our launch city.</p>
-        <p className="location-gate-result-body">We're bringing Fika to Los Angeles. Sign up and we'll get you in for your first weekly intros.</p>
-        <Link href="/signup" className="btn btn-primary">
-          Sign up
+        <p className="location-gate-result-body">Text FIKA to our number to get started. We&apos;ll send you a link to complete your profile.</p>
+        <Link href="/" className="btn btn-primary">
+          Go to home
         </Link>
       </div>
     )

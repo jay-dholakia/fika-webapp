@@ -14,7 +14,7 @@ function SignupContent() {
     if (token) {
       window.location.href = `/app/onboarding?token=${encodeURIComponent(token)}`
     } else {
-      window.location.href = '/login'
+      window.location.href = '/'
     }
   }, [token])
 

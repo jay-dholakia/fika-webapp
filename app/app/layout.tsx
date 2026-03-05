@@ -94,8 +94,8 @@ function AppLayoutInner({
     // Don't redirect to login when on /app/onboarding — let the page load so token-based flow can run (no auth required)
     if (userId == null && pathname === '/app/onboarding') return
     if (userId == null && !onboardingToken) {
-      authLog('app-layout:redirect', { to: '/login', reason: 'no-session' })
-      router.replace('/login')
+      authLog('app-layout:redirect', { to: '/', reason: 'no-session' })
+      router.replace('/')
       return
     }
     authLog('app-layout:redirect-check', { sessionChecked, userId: userId?.slice(0, 8) ?? null, loading, isComplete })

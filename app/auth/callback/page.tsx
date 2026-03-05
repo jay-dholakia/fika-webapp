@@ -81,8 +81,8 @@ function AuthCallbackContent() {
         <p className="auth-message auth-message-error" role="alert">
           {error}
         </p>
-        <a href="/login" className="btn btn-primary" style={{ marginTop: '1rem' }}>
-          Back to sign in
+        <a href="/" className="btn btn-primary" style={{ marginTop: '1rem' }}>
+          Back to home
         </a>
       </div>
     )
