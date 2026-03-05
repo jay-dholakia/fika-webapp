@@ -16,8 +16,8 @@ import type { IntakeResponseItem } from '@/lib/db-types'
 import type { ProfileRow } from '@/lib/db-types'
 import type { IntakeResponsesV5Row } from '@/lib/db-types'
 
-const SECTION_2_IDS = ['q_life_chapter', 'q_lately', 'q_everyday_anchor']
-const SECTION_3_IDS = ['q_topics', 'q_convo_feel', 'q_openness', 'gender_preference', 'q_hoping_for', 'q_radius']
+const SECTION_2_IDS = ['q_life_chapter', 'q_lately', 'q_everyday_anchor', 'q_interests']
+const SECTION_3_IDS = ['q_topics', 'q_prefer_not_to_discuss', 'q_openness', 'gender_preference', 'q_hoping_for', 'q_radius']
 const SECTION_2_STEPS = INTAKE_STEPS.filter((s) => SECTION_2_IDS.includes(s.id))
 const SECTION_3_STEPS = INTAKE_STEPS.filter((s) => SECTION_3_IDS.includes(s.id))
 const CONFIRM_STEP = INTAKE_STEPS.find((s) => s.id === 'confirm_intent')!
@@ -208,8 +208,8 @@ function AppOnboardingContent() {
       }
     }
     const confirmRaw = answers.confirm_intent
-    if (confirmRaw !== "I'm in") return "Please confirm you're in by selecting \"I'm in\"."
     if (!avatarFile) return 'Please upload a profile photo.'
+    if (confirmRaw !== "I'm in") return "Please confirm you're in by selecting \"I'm in\"."
     return null
   }
 
@@ -651,10 +651,9 @@ function AppOnboardingContent() {
               const selected = arr.includes(opt)
               const isPreferNotToSay = opt === 'Prefer not to say'
               const isExclusiveOption =
-                (step.id === 'q_convo_feel' && opt === 'A mix — see where it goes') ||
                 (step.id === 'q_openness' && opt === "I'm open to anyone")
               const atMax = step.maxSelections != null && arr.length >= step.maxSelections && !selected
-              const exclusiveOptionText = step.id === 'q_convo_feel' ? 'A mix — see where it goes' : step.id === 'q_openness' ? "I'm open to anyone" : null
+              const exclusiveOptionText = step.id === 'q_openness' ? "I'm open to anyone" : null
 
               const handleMultiSelect = () => {
                 const now = Date.now()
@@ -735,8 +734,6 @@ function AppOnboardingContent() {
 
         <section className="onboarding-section onboarding-section-card">
           <h2 className="onboarding-section-title">Confirm & finish</h2>
-          {CONFIRM_STEP && renderField(CONFIRM_STEP)}
-
           <div className="onboarding-field-wrap">
             <label className="onboarding-question" htmlFor="onboarding-avatar">Profile photo</label>
             <p className="onboarding-body">Upload a clear photo of your face. This helps others feel comfortable meeting you.</p>
@@ -767,6 +764,8 @@ function AppOnboardingContent() {
               </label>
             </div>
           </div>
+
+          {CONFIRM_STEP && renderField(CONFIRM_STEP)}
 
           <button
             ref={submitRef}

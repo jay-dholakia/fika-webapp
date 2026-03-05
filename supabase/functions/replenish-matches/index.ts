@@ -745,13 +745,16 @@ function passesStructuredFilters(
     }
   }
 
-  // Filter 3: First conversation feel - at least one overlapping preference (q_convo_feel)
-  const userFeel = getMultiSelectValue(userIntake, 'q_convo_feel')
-  const candidateFeel = getMultiSelectValue(candidateIntake, 'q_convo_feel')
-  if (userFeel.length > 0 && candidateFeel.length > 0) {
-    const feelOverlap = userFeel.some((f: string) => candidateFeel.includes(f))
-    if (!feelOverlap) {
-      console.log(`First conversation feel filter: No overlapping preference between user and candidate`)
+  // Filter 3: What you're hoping for (q_hoping_for) - don't match "conversation only" with "actively looking for friends"
+  const HOPING_CONVERSATION_ONLY = 'Conversation with new people — not necessarily friendship'
+  const HOPING_ACTIVELY_FRIENDS = 'Actively looking for new friends'
+  const userHoping = getSingleSelectValue(userIntake, 'q_hoping_for')
+  const candidateHoping = getSingleSelectValue(candidateIntake, 'q_hoping_for')
+  if (userHoping && candidateHoping) {
+    const u = userHoping.trim()
+    const c = candidateHoping.trim()
+    if ((u === HOPING_CONVERSATION_ONLY && c === HOPING_ACTIVELY_FRIENDS) || (u === HOPING_ACTIVELY_FRIENDS && c === HOPING_CONVERSATION_ONLY)) {
+      console.log(`q_hoping_for filter: conversation-only vs actively-friends mismatch`)
       return false
     }
   }
@@ -873,24 +876,24 @@ async function calculateCompatibilityScoreV4(
 ): Promise<number> {
   let score = 0
 
-  // LA Beta: scoring from q_topics, q_convo_feel, q_life_chapter, q_lately, q_everyday_anchor, q_openness, distance
+  // Recalibrated: q_topics, q_interests, q_life_chapter, q_lately, q_everyday_anchor, q_openness, q_hoping_for, distance (no q_convo_feel)
 
-  // 1. Topics (30% weight) - q_topics
+  // 1. Topics (40% weight) - q_topics
   const userTalkAbout = getMultiSelectValue(userIntake, 'q_topics')
   const candidateTalkAbout = getMultiSelectValue(candidateIntake, 'q_topics')
-  score += multiSelectOverlapScore(userTalkAbout, candidateTalkAbout) * 0.30
+  score += multiSelectOverlapScore(userTalkAbout, candidateTalkAbout) * 0.40
 
-  // 2. First conversation feel (22% weight) - q_convo_feel
-  const userFirstFeel = getMultiSelectValue(userIntake, 'q_convo_feel')
-  const candidateFirstFeel = getMultiSelectValue(candidateIntake, 'q_convo_feel')
-  score += multiSelectOverlapScore(userFirstFeel, candidateFirstFeel) * 0.22
+  // 2. Interests (8% weight) - q_interests
+  const userInterests = getMultiSelectValue(userIntake, 'q_interests')
+  const candidateInterests = getMultiSelectValue(candidateIntake, 'q_interests')
+  score += multiSelectOverlapScore(userInterests, candidateInterests) * 0.08
 
   // 3. Life chapter (15% weight) - q_life_chapter
   const userLifeChapter = getMultiSelectValue(userIntake, 'q_life_chapter')
   const candidateLifeChapter = getMultiSelectValue(candidateIntake, 'q_life_chapter')
   score += multiSelectOverlapScore(userLifeChapter, candidateLifeChapter) * 0.15
 
-  // 4. Lately (12% weight) - q_lately - high signal for prompt generation
+  // 4. Lately (12% weight) - q_lately
   const userLately = getMultiSelectValue(userIntake, 'q_lately')
   const candidateLately = getMultiSelectValue(candidateIntake, 'q_lately')
   score += multiSelectOverlapScore(userLately, candidateLately) * 0.12
@@ -910,7 +913,14 @@ async function calculateCompatibilityScoreV4(
   }
   score += openScore * 0.05
 
-  // 7. Distance (8% weight)
+  // 7. Hoping for (4% weight) - q_hoping_for; same pill = full, else neutral
+  const userHoping = getSingleSelectValue(userIntake, 'q_hoping_for')
+  const candidateHoping = getSingleSelectValue(candidateIntake, 'q_hoping_for')
+  if (userHoping && candidateHoping && userHoping.trim() === candidateHoping.trim()) {
+    score += 0.04
+  }
+
+  // 8. Distance (8% weight)
   if (
     userProfile.lat != null && userProfile.lng != null &&
     candidateProfile.lat != null && candidateProfile.lng != null &&
@@ -962,6 +972,26 @@ function cosineSimilarity(vecA: number[], vecB: number[]): number {
   return isNaN(result) ? 0 : result
 }
 
+// Map q_prefer_not_to_discuss pills to q_topics labels we might show in reasons (avoid suggesting these)
+const PREFER_NOT_TO_TOPIC_MAP: Record<string, string[]> = {
+  'Politics': ['Current events & global affairs'],
+  'Religion': ['Religion & spirituality'],
+  'Work & career': ['Career journeys', 'Entrepreneurship & building things'],
+  'Relationship status': ['Relationships & modern dating'],
+  'Health': ['Mental health & emotional growth'],
+  'Personal finances': [],
+}
+
+function topicExcludedByPreferNot(topic: string, preferNot: string[]): boolean {
+  if (!preferNot || preferNot.length === 0) return false
+  const excludeLabels = new Set<string>()
+  for (const p of preferNot) {
+    const mapped = PREFER_NOT_TO_TOPIC_MAP[p?.trim() ?? '']
+    if (mapped) mapped.forEach((l: string) => excludeLabels.add(l))
+  }
+  return excludeLabels.has(topic)
+}
+
 // Generate match reasons from v4 responses (bidirectional - includes both users' info)
 async function generateMatchReasonsV4(
   userIntake: any, 
@@ -989,20 +1019,29 @@ async function generateMatchReasonsV4(
   // Extract user A's information (LA Beta intake)
   user_a_hobbies.push(...getMultiSelectValue(userAIntake, 'q_topics').slice(0, 5))
   user_a_talk_topics.push(...getMultiSelectValue(userAIntake, 'q_openness').slice(0, 4))
+  user_a_interests.push(...getMultiSelectValue(userAIntake, 'q_interests').slice(0, 6))
 
   // Extract user B's information (LA Beta intake)
   user_b_hobbies.push(...getMultiSelectValue(userBIntake, 'q_topics').slice(0, 5))
   user_b_talk_topics.push(...getMultiSelectValue(userBIntake, 'q_openness').slice(0, 4))
+  user_b_interests.push(...getMultiSelectValue(userBIntake, 'q_interests').slice(0, 6))
 
-  // Shared interests from topic overlap
+  // Prefer not to discuss: exclude these topics from reasons/starters
+  const userPreferNot = getMultiSelectValue(userIntake, 'q_prefer_not_to_discuss').filter((s: string) => s !== 'Nothing in particular' && s !== 'Prefer not to say')
+  const candidatePreferNot = getMultiSelectValue(candidateIntake, 'q_prefer_not_to_discuss').filter((s: string) => s !== 'Nothing in particular' && s !== 'Prefer not to say')
+
+  // Shared interests from topic overlap (only topics neither marked prefer-not-to-discuss)
   const userTalk = getMultiSelectValue(userIntake, 'q_topics')
   const candidateTalk = getMultiSelectValue(candidateIntake, 'q_topics')
-  const overlap = userTalk.filter((t: string) => candidateTalk.includes(t))
+  const overlap = userTalk.filter((t: string) => candidateTalk.includes(t) && !topicExcludedByPreferNot(t, userPreferNot) && !topicExcludedByPreferNot(t, candidatePreferNot))
   shared_interests.push(...overlap.slice(0, 5))
 
-  // LA Beta: build "Why we introduced you" + "Start here" from structured overlap only (no OpenAI)
-  const userConvo = getMultiSelectValue(userIntake, 'q_convo_feel')
-  const candidateConvo = getMultiSelectValue(candidateIntake, 'q_convo_feel')
+  // Shared interests from q_interests (activities/hobbies)
+  const userInterests = getMultiSelectValue(userIntake, 'q_interests')
+  const candidateInterests = getMultiSelectValue(candidateIntake, 'q_interests')
+  const interestOverlap = userInterests.filter((i: string) => candidateInterests.includes(i) && i !== 'Prefer not to say')
+  shared_interests.push(...interestOverlap.slice(0, 3))
+
   const userLately = getMultiSelectValue(userIntake, 'q_lately')
   const candidateLately = getMultiSelectValue(candidateIntake, 'q_lately')
   const userAnchor = getMultiSelectValue(userIntake, 'q_everyday_anchor')
@@ -1010,18 +1049,23 @@ async function generateMatchReasonsV4(
   const userLife = getMultiSelectValue(userIntake, 'q_life_chapter')
   const candidateLife = getMultiSelectValue(candidateIntake, 'q_life_chapter')
 
-  const sharedConvo = userConvo.filter((f: string) => candidateConvo.includes(f))
   const sharedLately = userLately.filter((l: string) => candidateLately.includes(l))
   const sharedAnchor = userAnchor.filter((a: string) => candidateAnchor.includes(a))
   const sharedLife = userLife.filter((l: string) => candidateLife.includes(l))
 
+  // Hoping for (same pill) - add to reasons
+  const userHoping = getSingleSelectValue(userIntake, 'q_hoping_for')
+  const candidateHoping = getSingleSelectValue(candidateIntake, 'q_hoping_for')
+  const sameHoping = userHoping && candidateHoping && userHoping.trim() === candidateHoping.trim()
+
   const whyWeIntroducedYou: string[] = []
-  for (const f of sharedConvo.slice(0, 1)) whyWeIntroducedYou.push(`You both chose "${f}"`)
+  if (sameHoping && userHoping) whyWeIntroducedYou.push(`You're both looking for: ${userHoping.trim()}`)
   for (const t of overlap.slice(0, 2)) whyWeIntroducedYou.push(`You both selected "${t}"`)
   for (const l of sharedLately.slice(0, 1)) whyWeIntroducedYou.push(`You both said "${l}" has been on your mind`)
   for (const a of sharedAnchor.slice(0, 1)) {
     if (a !== 'Prefer not to say') whyWeIntroducedYou.push(`You both have "${a}" in your everyday life`)
   }
+  for (const i of interestOverlap.slice(0, 2)) whyWeIntroducedYou.push(`You're both into ${i}`)
 
   const conversationStarters: string[] = []
   if (sharedLately.length > 0) {
@@ -1048,44 +1092,31 @@ async function generateMatchReasonsV4(
     if (life === "Exploring what's next" || life === 'Starting over / reinventing') conversationStarters.push(`You're both in a chapter of change — What's something you've learned about yourself in the past year?`)
     else if (life === 'Building something meaningful' || life === 'Growing professionally') conversationStarters.push(`You're both in a building phase — Has your definition of success changed recently?`)
   }
-  if (conversationStarters.length < 2 && sharedConvo.length > 0) {
-    const feel = sharedConvo[0]
-    if (feel.includes('Thoughtful') || feel.includes('reflective')) conversationStarters.push(`You both enjoy thoughtful conversation — What's a question you've been sitting with lately?`)
-    else if (feel.includes('Curious') || feel.includes('exploratory')) conversationStarters.push(`You both like exploratory conversation — What's something you've changed your mind about recently?`)
+  if (conversationStarters.length < 2 && interestOverlap.length > 0) {
+    conversationStarters.push(`You're both into ${interestOverlap[0]} — What do you like about it?`)
+  }
+  if (conversationStarters.length < 1 && overlap.length > 0) {
+    conversationStarters.push(`You both enjoy ${overlap[0]} — What got you into it?`)
   }
 
   const starters = conversationStarters.slice(0, 3)
   const whyBullets = whyWeIntroducedYou.slice(0, 4)
 
-  // (OpenAI block removed for LA Beta — template-based starters above)
-  // Fallback: ensure we have at least one starter from topics/convo if nothing from lately
-  if (starters.length < 1 && sharedConvo.length > 0) {
-    const f = sharedConvo[0]
-    if (f.includes('Light') || f.includes('easy')) starters.push(`You both are open to light, easy conversation — a great starting point for connection.`)
-    else if (f.includes('Thoughtful') || f.includes('reflective')) starters.push(`You both enjoy thoughtful, reflective conversation — What's a question you've been sitting with lately?`)
-    else if (f.includes('Curious') || f.includes('exploratory')) starters.push(`You both like curious, exploratory conversation — What's something you've changed your mind about recently?`)
-    else if (f.includes('Deep dive')) starters.push(`You both enjoy deep dives into a topic — What's something you could talk about for an hour?`)
-    else starters.push(`You both are open to going where the conversation leads — What's on your mind these days?`)
-  }
-  if (starters.length < 1 && overlap.length > 0) {
-    starters.push(`You both enjoy ${overlap[0]} — What got you into it?`)
-  }
-
   return {
     whyWeIntroducedYou: whyBullets,
-    sharedInterests: shared_interests.slice(0, 3),
+    sharedInterests: shared_interests.slice(0, 5),
     conversationHooks: starters,
-    shared_interests: shared_interests.slice(0, 3),
+    shared_interests: shared_interests.slice(0, 5),
     conversation_hooks: starters,
     user_a_hobbies: user_a_hobbies.slice(0, 5),
     user_a_talk_topics: user_a_talk_topics.slice(0, 4),
-    user_a_interests: [],
+    user_a_interests: user_a_interests.slice(0, 6),
     user_b_hobbies: user_b_hobbies.slice(0, 5),
     user_b_talk_topics: user_b_talk_topics.slice(0, 4),
-    user_b_interests: [],
+    user_b_interests: user_b_interests.slice(0, 6),
     candidateHobbies: user_b_hobbies.slice(0, 5),
     candidateTalkTopics: user_b_talk_topics.slice(0, 4),
-    candidateInterests: [],
+    candidateInterests: user_b_interests.slice(0, 6),
     matchScore: 0
   }
 }
