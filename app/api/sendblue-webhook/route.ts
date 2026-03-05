@@ -17,6 +17,7 @@ import {
   messageSkipped,
   messageEntry,
   messageOnboardingRequired,
+  messageEntryReminder,
   messageMatchOffer,
   messageConversationContext,
   messageSchedulingDay,
@@ -224,9 +225,7 @@ export async function POST(request: Request) {
       await sendConcierge(fromNumber, messageOnboardingRequired(onboardingUrl))
       return NextResponse.json({ ok: true })
     }
-    console.log('[sendblue-webhook] first_contact sending entry to', fromLast4)
-    const entryResult = await sendConcierge(fromNumber, messageEntry())
-    console.log('[sendblue-webhook] sendConcierge result', { ok: entryResult.ok, error: entryResult.error })
+    // Upsert state BEFORE sending so a quick "YES" reply sees AWAITING_OPT_IN and progresses instead of re-sending entry
     await supabase.from('sms_conversation_states').upsert(
       {
         user_id: userId,
@@ -239,6 +238,9 @@ export async function POST(request: Request) {
       },
       { onConflict: 'user_id,batch_week,match_id' }
     )
+    console.log('[sendblue-webhook] first_contact sending entry to', fromLast4)
+    const entryResult = await sendConcierge(fromNumber, messageEntry())
+    console.log('[sendblue-webhook] sendConcierge result', { ok: entryResult.ok, error: entryResult.error })
     return NextResponse.json({ ok: true })
   }
 
@@ -291,8 +293,8 @@ export async function POST(request: Request) {
       )
       await sendConcierge(fromNumber, messageSkipped())
     } else if (keyword === 'FIKA' || keyword === 'HI') {
-      // Re-send entry prompt when they text the trigger words (first time or again)
-      await sendConcierge(fromNumber, messageEntry())
+      // Short reminder only — don't re-send the full intro
+      await sendConcierge(fromNumber, messageEntryReminder())
     }
     return NextResponse.json({ ok: true })
   }

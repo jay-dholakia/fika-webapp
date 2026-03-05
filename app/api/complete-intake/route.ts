@@ -126,7 +126,7 @@ export async function POST(request: Request) {
   }
 
   // After first-time intake completion: send entry SMS so they know they're in and can reply YES or SKIP
-  // (Send even in reply-only mode — this is the one proactive "you're set up" message.)
+  // Create state before sending so a quick YES reply sees AWAITING_OPT_IN and progresses.
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (serviceKey && process.env.SENDBLUE_API_KEY_ID) {
     try {
@@ -137,13 +137,11 @@ export async function POST(request: Request) {
         .eq('id', user.id)
         .single()
       if (profile?.phone) {
+        await getOrCreateSmsState(serviceSupabase, user.id, SMS_STATES.AWAITING_OPT_IN, {
+          batch_week: getCurrentBatchWeek(),
+        })
         const entryMsg = messageEntry()
-        const sent = await sendMessage(profile.phone, entryMsg, { fromNumber: 'concierge' })
-        if (sent.success) {
-          await getOrCreateSmsState(serviceSupabase, user.id, SMS_STATES.AWAITING_OPT_IN, {
-            batch_week: getCurrentBatchWeek(),
-          })
-        }
+        await sendMessage(profile.phone, entryMsg, { fromNumber: 'concierge' })
       }
     } catch {
       // Non-fatal: don't fail complete-intake if SMS fails

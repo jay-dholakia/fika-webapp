@@ -1495,29 +1495,16 @@ a {
   -webkit-tap-highlight-color: transparent;
   tap-highlight-color: transparent;
   box-shadow: 0 0 0 1px var(--color-border);
-  transition: transform 0.2s, box-shadow 0.2s, background 0.2s, color 0.2s;
-}
-.onboarding-chip:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 14px rgba(91, 155, 213, 0.3);
-  background: var(--color-primary-soft);
+  transition: background 0.2s, color 0.2s;
 }
 .onboarding-chip.selected {
   background: #4a85b8;
   color: #fff;
   box-shadow: none;
 }
-.onboarding-chip.selected:hover {
-  transform: translateY(-1px);
-  box-shadow: none;
-}
 .onboarding-chip.multi-selected {
   background: #4a85b8;
   color: #fff;
-  box-shadow: none;
-}
-.onboarding-chip.multi-selected:hover {
-  transform: translateY(-1px);
   box-shadow: none;
 }
 .onboarding-chip:focus-visible {

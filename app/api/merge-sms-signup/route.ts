@@ -124,16 +124,14 @@ export async function POST(request: Request) {
     })
     .eq('id', session.id)
 
-  // After first-time merge: send entry SMS so they know they're in and can reply YES or SKIP
+  // After first-time merge: send entry SMS. Create state before sending so a quick YES reply progresses.
   if (session.phone && process.env.SENDBLUE_API_KEY_ID) {
     try {
+      await getOrCreateSmsState(supabase, user.id, SMS_STATES.AWAITING_OPT_IN, {
+        batch_week: getCurrentBatchWeek(),
+      })
       const entryMsg = messageEntry()
-      const sent = await sendMessage(session.phone, entryMsg, { fromNumber: 'concierge' })
-      if (sent.success) {
-        await getOrCreateSmsState(supabase, user.id, SMS_STATES.AWAITING_OPT_IN, {
-          batch_week: getCurrentBatchWeek(),
-        })
-      }
+      await sendMessage(session.phone, entryMsg, { fromNumber: 'concierge' })
     } catch {
       // Non-fatal
     }

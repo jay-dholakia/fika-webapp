@@ -568,13 +568,7 @@ function AppOnboardingContent() {
                 key={opt}
                 type="button"
                 className={`onboarding-chip ${value === opt ? 'selected' : ''}`}
-                onClick={() => {
-                  if (value === opt) {
-                    setAnswers((a) => { const next = { ...a }; delete next[step.id]; return next })
-                  } else {
-                    setAnswers((a) => ({ ...a, [step.id]: opt }))
-                  }
-                }}
+                onClick={() => setAnswers((a) => ({ ...a, [step.id]: opt }))}
                 disabled={saving}
               >
                 {opt}
