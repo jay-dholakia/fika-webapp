@@ -131,6 +131,20 @@ function AppOnboardingContent() {
     return () => { cancelled = true }
   }, [tokenMode, token, sessionUserId])
 
+  // Token mode: debounced auto-save so progress is persisted when they reopen the link
+  useEffect(() => {
+    if (!tokenMode || !token || !sessionLoadedForToken || showGoogleSignIn) return
+    const t = setTimeout(() => {
+      const payload = buildOnboardingSessionPayload(answers)
+      fetch('/api/onboarding-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, payload }),
+      }).catch(() => {})
+    }, 1500)
+    return () => clearTimeout(t)
+  }, [answers, tokenMode, token, sessionLoadedForToken, showGoogleSignIn])
+
   useEffect(() => {
     if (tokenMode && sessionUserId != null) {
       router.replace('/app')
