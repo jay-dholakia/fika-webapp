@@ -1,6 +1,7 @@
 // SMS cron: follow-up for users who didn't reply to weekly opt-in.
-// Invoke via pg_cron (Supabase).
+// Invoked by pg_cron. Requires SENDBLUE_API_KEY_ID, SENDBLUE_API_SECRET_KEY.
 
+declare const Deno: { env: { get(key: string): string | undefined } }
 // @ts-ignore Deno
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 // @ts-ignore Deno
@@ -28,15 +29,15 @@ serve(async () => {
         headers: { 'Content-Type': 'application/json' },
       })
     }
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    )
     const apiKeyId = Deno.env.get('SENDBLUE_API_KEY_ID')
     const apiSecret = Deno.env.get('SENDBLUE_API_SECRET_KEY')
     if (!apiKeyId || !apiSecret) {
       return new Response(JSON.stringify({ error: 'Sendblue not configured' }), { status: 503 })
     }
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    )
     const batchWeek = getCurrentBatchWeek()
 
     const { data: optedIn } = await supabase
@@ -57,13 +58,15 @@ serve(async () => {
       .from('profiles')
       .select('id, phone')
       .in('id', awaiting.map((s: { user_id: string }) => s.user_id))
-    const byId = new Map((profiles ?? []).map((p: { id: string; phone: string }) => [p.id, p.phone]))
+    const byId = new Map<string, string | null>(
+      (profiles ?? []).map((p: { id: string; phone: string | null }) => [p.id, p.phone ?? null])
+    )
 
     let sent = 0
     for (const s of awaiting) {
       if (optedSet.has(s.user_id)) continue
       const phone = byId.get(s.user_id)
-      if (!phone?.trim()) continue
+      if (typeof phone !== 'string' || !phone.trim()) continue
       const res = await fetch(SENDBLUE_URL, {
         method: 'POST',
         headers: {

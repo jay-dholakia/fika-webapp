@@ -225,22 +225,36 @@ export async function POST(request: Request) {
       await sendConcierge(fromNumber, messageOnboardingRequired(onboardingUrl))
       return NextResponse.json({ ok: true })
     }
-    // Upsert state BEFORE sending so a quick "YES" reply sees AWAITING_OPT_IN and progresses instead of re-sending entry
-    await supabase.from('sms_conversation_states').upsert(
-      {
-        user_id: userId,
-        batch_week: batchWeek,
-        match_id: null,
-        state: SMS_STATES.AWAITING_OPT_IN,
-        payload: {},
-        last_sendblue_message_handle: messageHandle || undefined,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'user_id,batch_week,match_id' }
-    )
+    // Insert global state row. Only one can exist per (user_id, batch_week) after migration; if we get unique violation, another request already created it — don't send again.
+    const { error: insertError } = await supabase.from('sms_conversation_states').insert({
+      user_id: userId,
+      batch_week: batchWeek,
+      match_id: null,
+      state: SMS_STATES.AWAITING_OPT_IN,
+      payload: {},
+      last_sendblue_message_handle: messageHandle || null,
+      updated_at: new Date().toISOString(),
+    })
+    if (insertError) {
+      if (insertError.code === '23505') {
+        // Unique violation: another request (or merge/complete-intake) already created the row; don't send entry again
+        await supabase.from('sms_conversation_states').update({
+          updated_at: new Date().toISOString(),
+        }).eq('user_id', userId).eq('batch_week', batchWeek).is('match_id', null)
+        return NextResponse.json({ ok: true })
+      }
+      console.error('[sendblue-webhook] first_contact insert state', insertError.message)
+      return NextResponse.json({ ok: true })
+    }
     console.log('[sendblue-webhook] first_contact sending entry to', fromLast4)
     const entryResult = await sendConcierge(fromNumber, messageEntry())
-    console.log('[sendblue-webhook] sendConcierge result', { ok: entryResult.ok, error: entryResult.error })
+    console.log('[sendblue-webhook] sendConcierge result', { ok: entryResult.ok, error: entryResult.error, message_handle: entryResult.message_handle })
+    if (entryResult.message_handle) {
+      await supabase.from('sms_conversation_states').update({
+        last_sendblue_message_handle: entryResult.message_handle,
+        updated_at: new Date().toISOString(),
+      }).eq('user_id', userId).eq('batch_week', batchWeek).is('match_id', null)
+    }
     return NextResponse.json({ ok: true })
   }
 
@@ -270,7 +284,7 @@ export async function POST(request: Request) {
           last_sendblue_message_handle: messageHandle,
           updated_at: new Date().toISOString(),
         },
-        { onConflict: 'user_id,batch_week,match_id' }
+        { onConflict: 'user_id,batch_week' }
       )
       const DEFAULT_APP_BASE = 'https://letsfika.vercel.app'
       const appBase = (process.env.APP_CANONICAL_URL ?? '').trim()
@@ -289,7 +303,7 @@ export async function POST(request: Request) {
           last_sendblue_message_handle: messageHandle,
           updated_at: new Date().toISOString(),
         },
-        { onConflict: 'user_id,batch_week,match_id' }
+        { onConflict: 'user_id,batch_week' }
       )
       await sendConcierge(fromNumber, messageSkipped())
     } else if (keyword === 'FIKA' || keyword === 'HI') {

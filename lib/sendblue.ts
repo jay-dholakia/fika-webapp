@@ -27,12 +27,13 @@ function getConfig(): SendblueConfig | null {
  * @param to - Recipient E.164 (e.g. +15551234567)
  * @param content - Message text
  * @param fromConcierge - true = use Concierge number, false = use Match number
+ * @returns ok, optional error, and message_handle when the API returns it (for storing in sms_conversation_states)
  */
 export async function sendSendblueMessage(
   to: string,
   content: string,
   fromConcierge: boolean
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<{ ok: boolean; error?: string; message_handle?: string }> {
   const config = getConfig()
   if (!config) {
     return { ok: false, error: 'Sendblue not configured' }
@@ -55,11 +56,19 @@ export async function sendSendblueMessage(
         content,
       }),
     })
-    if (!res.ok) {
-      const err = await res.text()
-      return { ok: false, error: err || res.statusText }
+    const text = await res.text()
+    let data: { message_handle?: string; error_message?: string } | null = null
+    try {
+      data = text ? (JSON.parse(text) as { message_handle?: string; error_message?: string }) : null
+    } catch {
+      // ignore
     }
-    return { ok: true }
+    if (!res.ok) {
+      const fallback = text || res.statusText
+      const err = (data?.error_message ?? (data && 'message' in data ? String((data as { message?: string }).message) : null)) ?? fallback
+      return { ok: false, error: err || 'Send failed' }
+    }
+    return { ok: true, message_handle: data?.message_handle }
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Send failed' }
   }
@@ -77,12 +86,12 @@ export function isSendblueConfigured(): boolean {
   return getConfig() !== null
 }
 
-/** Send a message (concierge or match). Used by complete-intake and other callers. */
+/** Send a message (concierge or match). Used by complete-intake and other callers. Returns message_handle when API provides it. */
 export async function sendMessage(
   to: string,
   content: string,
   opts?: { fromNumber: 'concierge' | 'match' }
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; message_handle?: string }> {
   const result = await sendSendblueMessage(to, content, opts?.fromNumber !== 'match')
-  return { success: result.ok, error: result.error }
+  return { success: result.ok, error: result.error, message_handle: result.message_handle }
 }

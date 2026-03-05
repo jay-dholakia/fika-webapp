@@ -1,6 +1,7 @@
 // SMS cron: send weekly opt-in to users with phone who haven't opted in yet.
-// Invoke via pg_cron (Supabase).
+// Invoked by pg_cron. Requires SENDBLUE_API_KEY_ID, SENDBLUE_API_SECRET_KEY.
 
+declare const Deno: { env: { get(key: string): string | undefined } }
 // @ts-ignore Deno
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 // @ts-ignore Deno
@@ -22,23 +23,22 @@ const MESSAGE = `Would you like a Fika introduction this week?
 
 Reply IN or SKIP`
 
-serve(async (req: Request) => {
+serve(async () => {
   try {
     if (Deno.env.get('SENDBLUE_REPLY_ONLY') === 'true') {
       return new Response(JSON.stringify({ ok: true, reply_only: true }), {
         headers: { 'Content-Type': 'application/json' },
       })
     }
+    const apiKeyId = Deno.env.get('SENDBLUE_API_KEY_ID')
+    const apiSecret = Deno.env.get('SENDBLUE_API_SECRET_KEY')
+    if (!apiKeyId || !apiSecret) {
+      return new Response(JSON.stringify({ error: 'Sendblue not configured' }), { status: 503 })
+    }
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
-    const apiKeyId = Deno.env.get('SENDBLUE_API_KEY_ID')
-    const apiSecret = Deno.env.get('SENDBLUE_API_SECRET_KEY')
-    const conciergeNumber = Deno.env.get('SENDBLUE_CONCIERGE_NUMBER')
-    if (!apiKeyId || !apiSecret || !conciergeNumber) {
-      return new Response(JSON.stringify({ error: 'Sendblue not configured' }), { status: 503 })
-    }
     const batchWeek = getCurrentBatchWeek()
 
     const { data: optedInUserIds } = await supabase
@@ -80,7 +80,7 @@ serve(async (req: Request) => {
             payload: {},
             updated_at: new Date().toISOString(),
           },
-          { onConflict: 'user_id,batch_week,match_id' }
+          { onConflict: 'user_id,batch_week' }
         )
       }
     }

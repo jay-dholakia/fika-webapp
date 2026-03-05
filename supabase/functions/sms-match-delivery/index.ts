@@ -1,6 +1,7 @@
 // SMS cron: send match offer (intro) to users who have a new match_candidate.
-// Run after replenish-matches or on schedule. Sends Concierge SMS to each user.
+// Invoked by pg_cron after replenish-matches. Requires SENDBLUE_API_KEY_ID, SENDBLUE_API_SECRET_KEY.
 
+declare const Deno: { env: { get(key: string): string | undefined } }
 // @ts-ignore Deno
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 // @ts-ignore Deno
@@ -53,15 +54,15 @@ serve(async () => {
         headers: { 'Content-Type': 'application/json' },
       })
     }
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    )
     const apiKeyId = Deno.env.get('SENDBLUE_API_KEY_ID')
     const apiSecret = Deno.env.get('SENDBLUE_API_SECRET_KEY')
     if (!apiKeyId || !apiSecret) {
       return new Response(JSON.stringify({ error: 'Sendblue not configured' }), { status: 503 })
     }
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    )
     const batchWeek = getCurrentBatchWeek()
 
     const { data: matches } = await supabase

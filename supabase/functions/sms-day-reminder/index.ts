@@ -1,6 +1,7 @@
 // SMS cron: day-of reminder for confirmed Fikas today.
-// Invoke via pg_cron (Supabase). Sends Concierge SMS to both users.
+// Invoked by pg_cron. Requires SENDBLUE_API_KEY_ID, SENDBLUE_API_SECRET_KEY.
 
+declare const Deno: { env: { get(key: string): string | undefined } }
 // @ts-ignore Deno
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 // @ts-ignore Deno
@@ -21,16 +22,15 @@ serve(async () => {
         headers: { 'Content-Type': 'application/json' },
       })
     }
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    )
     const apiKeyId = Deno.env.get('SENDBLUE_API_KEY_ID')
     const apiSecret = Deno.env.get('SENDBLUE_API_SECRET_KEY')
     if (!apiKeyId || !apiSecret) {
       return new Response(JSON.stringify({ error: 'Sendblue not configured' }), { status: 503 })
     }
-
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    )
     const today = new Date().toISOString().slice(0, 10)
     const { data: matches } = await supabase
       .from('match_candidates')

@@ -131,7 +131,13 @@ export async function POST(request: Request) {
         batch_week: getCurrentBatchWeek(),
       })
       const entryMsg = messageEntry()
-      await sendMessage(session.phone, entryMsg, { fromNumber: 'concierge' })
+      const sent = await sendMessage(session.phone, entryMsg, { fromNumber: 'concierge' })
+      if (sent.message_handle) {
+        await supabase.from('sms_conversation_states').update({
+          last_sendblue_message_handle: sent.message_handle,
+          updated_at: new Date().toISOString(),
+        }).eq('user_id', user.id).eq('batch_week', getCurrentBatchWeek()).is('match_id', null)
+      }
     } catch {
       // Non-fatal
     }
