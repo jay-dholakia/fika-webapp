@@ -2,7 +2,6 @@
  * Day-aware SMS: timezone from user location, phrase for "next Monday" (tomorrow / Monday / next Monday).
  */
 
-// @ts-expect-error geo-tz has no types in main export
 import { find as geoFind } from 'geo-tz'
 
 /**
