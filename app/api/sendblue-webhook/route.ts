@@ -273,7 +273,7 @@ export async function POST(request: Request) {
   // Match-offered / YES / PASS: handled when we have a match_id in state (per-match state row)
   // For simplicity, check for match_offered state with match_id
   const { data: matchStateRow } = await supabase
-    .from('sms_conversation_states')
+          .from('sms_conversation_states')
     .select('*')
     .eq('user_id', userId)
     .eq('batch_week', batchWeek)

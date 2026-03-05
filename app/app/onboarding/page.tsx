@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, Suspense, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { getSupabase } from '@/lib/supabase'
@@ -9,7 +9,6 @@ import { authLog } from '@/lib/auth-log'
 import {
   PROFILE_STEPS,
   INTAKE_STEPS,
-  TOTAL_ONBOARDING_STEPS,
   type ProfileStep,
 } from '@/lib/onboarding-data'
 import { buildOnboardingSessionPayload, payloadToAnswers } from '@/lib/onboarding-session-payload'
@@ -17,73 +16,34 @@ import type { IntakeResponseItem } from '@/lib/db-types'
 import type { ProfileRow } from '@/lib/db-types'
 import type { IntakeResponsesV5Row } from '@/lib/db-types'
 
-const ALL_STEPS = [...PROFILE_STEPS, ...INTAKE_STEPS]
-const ALL_STEPS_TOKEN = ALL_STEPS
+const SECTION_2_IDS = ['q_life_chapter', 'q_lately', 'q_everyday_anchor']
+const SECTION_3_IDS = ['q_topics', 'q_convo_feel', 'q_openness', 'q_hoping_for', 'q_radius']
+const SECTION_2_STEPS = INTAKE_STEPS.filter((s) => SECTION_2_IDS.includes(s.id))
+const SECTION_3_STEPS = INTAKE_STEPS.filter((s) => SECTION_3_IDS.includes(s.id))
+const CONFIRM_STEP = INTAKE_STEPS.find((s) => s.id === 'confirm_intent')!
 
 type AnswersState = Record<string, string | string[] | number | { city: string; lat: number; lng: number }>
 
-function getFirstUnansweredStepAndAnswers(
+/** Prefill answers from existing profile + intake (logged-in flow). */
+function getInitialAnswers(
   profile: ProfileRow | null,
   intake: IntakeResponsesV5Row | null
-): { stepIndex: number; answers: AnswersState } {
+): AnswersState {
   const answers: AnswersState = {}
-
-  for (let i = 0; i < PROFILE_STEPS.length; i++) {
-    const s = PROFILE_STEPS[i]
-    if (s.id === 'first_name') {
-      const v = profile?.first_name?.trim()
-      if (!v || v === '') return { stepIndex: i, answers }
-      answers.first_name = v
-    } else if (s.id === 'birthdate') {
-      if (!profile?.birthdate) return { stepIndex: i, answers }
-      answers.birthdate = profile.birthdate
-    } else if (s.id === 'gender') {
-      if (profile?.gender) answers.gender = profile.gender
-      if (!profile?.gender) return { stepIndex: i, answers }
-    } else if (s.id === 'gender_preference') {
-      if (profile?.gender_preference) answers.gender_preference = profile.gender_preference
-      if (!profile?.gender_preference) return { stepIndex: i, answers }
-    } else if (s.id === 'languages') {
-      if (Array.isArray(profile?.languages)) answers.languages = profile.languages
-      if (!Array.isArray(profile?.languages) || profile.languages.length === 0) return { stepIndex: i, answers }
-    } else if (s.id === 'location') {
-      if (!profile?.city) return { stepIndex: i, answers }
-      answers.location = { city: profile.city, lat: profile.lat ?? 0, lng: profile.lng ?? 0 }
-    }
-    // phone is optional (from SMS or settings), not in intake steps
+  for (const s of PROFILE_STEPS) {
+    if (s.id === 'first_name') answers.first_name = profile?.first_name?.trim() ?? ''
+    else if (s.id === 'birthdate') answers.birthdate = profile?.birthdate ?? ''
+    else if (s.id === 'gender') answers.gender = profile?.gender ?? ''
+    else if (s.id === 'gender_preference') answers.gender_preference = profile?.gender_preference ?? ''
+    else if (s.id === 'languages') answers.languages = Array.isArray(profile?.languages) ? profile.languages : []
+    else if (s.id === 'location' && profile?.city) answers.location = { city: profile.city, lat: profile.lat ?? 0, lng: profile.lng ?? 0 }
   }
-
   const responses = intake?.responses ?? []
-  for (let j = 0; j < INTAKE_STEPS.length; j++) {
-    const s = INTAKE_STEPS[j]
+  for (const s of INTAKE_STEPS) {
     const r = responses.find((x: IntakeResponseItem) => x.question_id === s.id)
-    if (s.required !== false && !r) return { stepIndex: PROFILE_STEPS.length + j, answers }
     answers[s.id] = r ? (r.answer as string | string[] | number) : (s.type === 'multi_select' ? [] : '')
   }
-
-  return { stepIndex: ALL_STEPS.length - 1, answers }
-}
-
-function getNextStepIndex(fromIndex: number): number {
-  return Math.min(fromIndex + 1, ALL_STEPS.length - 1)
-}
-
-function getPrevStepIndex(fromIndex: number): number {
-  return Math.max(fromIndex - 1, 0)
-}
-
-/** For token (SMS) flow: first unanswered step index and answers from session payload. */
-function getFirstUnansweredTokenStepAndAnswers(payload: Record<string, unknown>): { stepIndex: number; answers: AnswersState } {
-  const answers = payloadToAnswers(payload)
-  for (let i = 0; i < ALL_STEPS_TOKEN.length; i++) {
-    const s = ALL_STEPS_TOKEN[i]
-    const raw = answers[s.id]
-    if (s.required !== false && (raw === undefined || raw === '' || (Array.isArray(raw) && raw.length === 0))) {
-      return { stepIndex: i, answers }
-    }
-    if (s.id === 'location' && !raw) return { stepIndex: i, answers }
-  }
-  return { stepIndex: ALL_STEPS_TOKEN.length - 1, answers }
+  return answers
 }
 
 function parseDate(s: string): string | null {
@@ -114,15 +74,15 @@ function AppOnboardingContent() {
   const [tokenError, setTokenError] = useState<string | null>(null)
   const { loading: statusLoading, isComplete, profile, intake } = useOnboardingStatus(sessionUserId ?? undefined)
 
-  const [stepIndex, setStepIndex] = useState(0)
-  const [displayStepIndex, setDisplayStepIndex] = useState(0)
-  const [isExiting, setIsExiting] = useState(false)
   const [answers, setAnswers] = useState<AnswersState>({})
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [locationStatus, setLocationStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
   const [zipCode, setZipCode] = useState('')
   const [zipLoading, setZipLoading] = useState(false)
+  const [avatarFile, setAvatarFile] = useState<File | null>(null)
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null)
+  const submitRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
     authLog('onboarding:mount')
@@ -159,11 +119,9 @@ function AppOnboardingContent() {
       })
       .then((data) => {
         if (cancelled || !data?.payload) return
-        const { stepIndex: first, answers: prefilled } = getFirstUnansweredTokenStepAndAnswers(data.payload as Record<string, unknown>)
-        setStepIndex(first)
-        setDisplayStepIndex(first)
-        setAnswers(prefilled)
-        if (first < PROFILE_STEPS.length && PROFILE_STEPS[first]?.id === 'location' && prefilled.location) {
+        setAnswers(payloadToAnswers(data.payload as Record<string, unknown>))
+        const payload = data.payload as Record<string, unknown>
+        if (payload?.city && typeof payload?.lat === 'number' && typeof payload?.lng === 'number') {
           setLocationStatus('done')
         }
         setSessionLoadedForToken(true)
@@ -181,13 +139,8 @@ function AppOnboardingContent() {
 
   useEffect(() => {
     if (statusLoading || isComplete || sessionUserId == null || tokenMode) return
-    const { stepIndex: first, answers: prefilled } = getFirstUnansweredStepAndAnswers(profile ?? null, intake ?? null)
-    setStepIndex(first)
-    setDisplayStepIndex(first)
-    setAnswers(prefilled)
-    if (first < PROFILE_STEPS.length && PROFILE_STEPS[first].id === 'location' && prefilled.location) {
-      setLocationStatus('done')
-    }
+    setAnswers(getInitialAnswers(profile ?? null, intake ?? null))
+    if (profile?.city) setLocationStatus('done')
   }, [statusLoading, isComplete, sessionUserId, profile, intake])
 
   useEffect(() => {
@@ -206,74 +159,87 @@ function AppOnboardingContent() {
       })
   }, [sessionUserId])
 
-  // Scroll to top when step changes (onboarding flow only)
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      window.scrollTo({ top: 0, behavior: 'smooth' })
+  function validateAll(): string | null {
+    for (const s of PROFILE_STEPS) {
+      const raw = answers[s.id]
+      if (s.required !== false) {
+        if (raw === undefined || raw === '' || (Array.isArray(raw) && raw.length === 0))
+          return `Please answer: ${s.question}`
+        if (s.id === 'location') {
+          if (typeof raw !== 'object' || !raw || !('city' in raw)) return `Please set your location.`
+          if (locationStatus !== 'done' && !(raw as { city?: string }).city) return `Please set your location.`
+        }
+        if (s.type === 'date' && typeof raw === 'string') {
+          if (!parseDate(raw)) return 'Please enter a valid date.'
+          if (s.minAge && !is18Plus(raw)) return 'You must be 18 or older to use Fika.'
+        }
+        if (s.type === 'multi_select' && s.maxSelections) {
+          const arr = Array.isArray(raw) ? raw : []
+          if (arr.length > s.maxSelections) return `Please choose at most ${s.maxSelections} for: ${s.question}`
+        }
+        if (s.type === 'multi_select' && s.minSelections) {
+          const arr = Array.isArray(raw) ? raw : []
+          if (arr.length < s.minSelections) return `Please choose at least ${s.minSelections} for: ${s.question}`
+        }
+      }
     }
-  }, [displayStepIndex])
+    for (const s of [...SECTION_2_STEPS, ...SECTION_3_STEPS]) {
+      const raw = answers[s.id]
+      if (s.required !== false && (raw === undefined || raw === '' || (Array.isArray(raw) && raw.length === 0)))
+        return `Please answer: ${s.question}`
+      if (s.type === 'multi_select' && s.maxSelections) {
+        const arr = Array.isArray(raw) ? raw : []
+        if (arr.length > s.maxSelections) return `Please choose at most ${s.maxSelections}.`
+      }
+    }
+    const confirmRaw = answers.confirm_intent
+    if (confirmRaw !== "I'm in") return "Please confirm you're in by selecting \"I'm in\"."
+    if (!avatarFile) return 'Please upload a profile photo.'
+    return null
+  }
 
-  const steps = tokenMode ? ALL_STEPS_TOKEN : ALL_STEPS
-  const step = steps[stepIndex]
-  const displayStep = steps[displayStepIndex] ?? step
-  const isProfileStep = tokenMode ? stepIndex < PROFILE_STEPS.length : stepIndex < PROFILE_STEPS.length
-  const isLastStep = stepIndex === steps.length - 1
-
-  async function saveProfileField(
-    id: string,
-    value: string | number | string[] | { city: string; lat: number; lng: number } | null,
-    currentAnswers?: Record<string, unknown>
-  ) {
+  async function saveAllProfileFields() {
     if (!sessionUserId) return
     const supabase = getSupabase()
     if (!supabase) return
-    const updates: Record<string, unknown> = { id: sessionUserId }
-    const firstName =
-      id === 'first_name' && typeof value === 'string'
-        ? value.trim() || ' '
-        : (currentAnswers?.first_name as string)?.trim() || ' '
-    updates.first_name = firstName
-    if (id === 'birthdate' && (typeof value === 'string' || value === null)) updates.birthdate = value
-    if (id === 'gender' && typeof value === 'string') updates.gender = value
-    if (id === 'gender_preference' && typeof value === 'string') updates.gender_preference = value
-    if (id === 'languages') updates.languages = Array.isArray(value) ? value : null
-    if (id === 'location' && typeof value === 'object' && value !== null && 'city' in value) {
-      updates.city = value.city
-      updates.lat = value.lat
-      updates.lng = value.lng
+    const loc = answers.location as { city: string; lat: number; lng: number } | undefined
+    const updates: Record<string, unknown> = {
+      id: sessionUserId,
+      first_name: (typeof answers.first_name === 'string' ? answers.first_name.trim() : '') || ' ',
+      birthdate: answers.birthdate ?? null,
+      gender: (typeof answers.gender === 'string' ? answers.gender : null) ?? null,
+      gender_preference: (typeof answers.gender_preference === 'string' ? answers.gender_preference : null) ?? null,
+      languages: Array.isArray(answers.languages) ? answers.languages : null,
+      city: loc?.city ?? null,
+      lat: typeof loc?.lat === 'number' ? loc.lat : null,
+      lng: typeof loc?.lng === 'number' ? loc.lng : null,
+      intent_confirmed_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     }
     const { error: e } = await supabase.from('profiles').upsert(updates, { onConflict: 'id' })
     if (e) throw new Error(e.message)
   }
 
-  async function saveIntakeAnswer(step: ProfileStep, answer: string | string[] | number) {
+  async function saveAllIntakeResponses() {
     if (!sessionUserId) return
     const supabase = getSupabase()
     if (!supabase) return
-    const { data: existing } = await supabase
-      .from('intake_responses_v5')
-      .select('responses')
-      .eq('user_id', sessionUserId)
-      .maybeSingle()
-
-    const responses: IntakeResponseItem[] = Array.isArray(existing?.responses) ? [...(existing.responses as IntakeResponseItem[])] : []
-    const newItem: IntakeResponseItem = {
-      question_id: step.id,
-      question_text: step.question,
-      answer,
-      type: step.type,
-      answered_at: new Date().toISOString(),
-    }
-    const idx = responses.findIndex((r) => r.question_id === step.id)
-    if (idx >= 0) responses[idx] = newItem
-    else responses.push(newItem)
-
-    const payload: Record<string, unknown> = {
-      user_id: sessionUserId,
-      responses,
-      updated_at: new Date().toISOString(),
-    }
-    const { error: e } = await supabase.from('intake_responses_v5').upsert(payload, { onConflict: 'user_id' })
+    const responses: IntakeResponseItem[] = INTAKE_STEPS.map((s) => {
+      const raw = answers[s.id]
+      const value = raw === undefined || (typeof raw === 'object' && 'city' in (raw as object)) ? (s.type === 'multi_select' ? [] : '') : raw
+      return {
+        question_id: s.id,
+        question_text: s.question,
+        answer: value as string | string[] | number,
+        type: s.type,
+        answered_at: new Date().toISOString(),
+      }
+    })
+    const completedAt = new Date().toISOString()
+    const { error: e } = await supabase.from('intake_responses_v5').upsert(
+      { user_id: sessionUserId, responses, completed_at: completedAt, updated_at: completedAt },
+      { onConflict: 'user_id' }
+    )
     if (e) throw new Error(e.message)
   }
 
@@ -293,126 +259,74 @@ function AppOnboardingContent() {
     }
   }
 
-  function handleNext() {
-    if (!step) return
+  async function handleSubmit() {
     setError(null)
-
-    const raw = answers[step.id]
-    if (step.required && (raw === undefined || raw === '' || (Array.isArray(raw) && raw.length === 0))) {
-      setError('Please answer this question.')
+    const err = validateAll()
+    if (err) {
+      setError(err)
+      submitRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
       return
     }
-    if (step.type === 'date' && typeof raw === 'string') {
-      if (!parseDate(raw)) {
-        setError('Please enter a valid date.')
-        return
-      }
-      if (step.minAge && !is18Plus(raw)) {
-        setError('You must be 18 or older to use Fika.')
-        return
-      }
-    }
-    if (step.type === 'multi_select' && step.maxSelections) {
-      const arr = Array.isArray(raw) ? raw : []
-      if (arr.length > step.maxSelections) {
-        setError(`Please choose at most ${step.maxSelections}.`)
-        return
-      }
-    }
-    if (step.type === 'multi_select' && step.minSelections) {
-      const arr = Array.isArray(raw) ? raw : []
-      if (arr.length < step.minSelections) {
-        setError(`Please choose at least ${step.minSelections}.`)
-        return
-      }
-    }
-
     setSaving(true)
-    ;(async () => {
-      try {
-        if (tokenMode && token) {
-          const updatedAnswers = { ...answers, [step.id]: raw }
-          const payload = buildOnboardingSessionPayload(updatedAnswers)
-          const res = await fetch('/api/onboarding-session', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token, payload }),
-          })
-          if (!res.ok) {
-            const data = await res.json().catch(() => ({}))
-            throw new Error((data as { error?: string }).error ?? 'Failed to save')
-          }
-          setAnswers(updatedAnswers)
-          if (isLastStep) {
-            setShowGoogleSignIn(true)
-            return
-          }
-          setIsExiting(true)
-          setTimeout(() => {
-            setStepIndex((i) => i + 1)
-            setDisplayStepIndex((i) => i + 1)
-            setIsExiting(false)
-          }, 280)
+    try {
+      if (tokenMode && token) {
+        if (!avatarFile) {
+          setError('Please upload a profile photo.')
+          setSaving(false)
           return
         }
-
-        if (isProfileStep) {
-          if (step.id === 'location' && typeof raw === 'object' && raw !== null && 'city' in (raw as object)) {
-            await saveProfileField(step.id, raw as { city: string; lat: number; lng: number }, answers)
-          } else if (step.id === 'languages' && (Array.isArray(raw) || raw === undefined)) {
-            await saveProfileField(step.id, Array.isArray(raw) ? raw : [], answers)
-          } else if (typeof raw === 'string' || typeof raw === 'number') {
-            await saveProfileField(step.id, raw, answers)
-          }
-          setAnswers((a) => ({ ...a, [step.id]: raw }))
-          setIsExiting(true)
-          setTimeout(() => {
-            setStepIndex((i) => i + 1)
-            setDisplayStepIndex((i) => i + 1)
-            setIsExiting(false)
-          }, 280)
-        } else {
-          const intakeAnswer = raw as string | string | string[] | number
-          await saveIntakeAnswer(step, intakeAnswer as string | string[] | number)
-          if (step.id === 'confirm_intent' && sessionUserId) {
-              const supabase = getSupabase()
-              if (supabase) {
-                await supabase.from('profiles').update({
-                  intent_confirmed_at: new Date().toISOString(),
-                  updated_at: new Date().toISOString(),
-                }).eq('id', sessionUserId)
-              }
-            }
-            const updatedAnswers = { ...answers, [step.id]: intakeAnswer }
-            if (isLastStep) {
-              await callCompleteIntake()
-              router.replace('/app?justCompletedIntro=1')
-              return
-            }
-            setAnswers((a) => ({ ...a, [step.id]: intakeAnswer }))
-            const nextIndex = stepIndex + 1
-            setIsExiting(true)
-            setTimeout(() => {
-              setStepIndex(nextIndex)
-              setDisplayStepIndex(nextIndex)
-              setIsExiting(false)
-            }, 280)
-          }
-        } catch (err) {
-        setError(err instanceof Error ? err.message : 'Something went wrong.')
-      } finally {
-        setSaving(false)
+        const form = new FormData()
+        form.set('token', token)
+        form.set('file', avatarFile)
+        const avatarRes = await fetch('/api/onboarding-avatar', { method: 'POST', body: form })
+        if (!avatarRes.ok) {
+          const data = await avatarRes.json().catch(() => ({}))
+          throw new Error((data as { error?: string }).error ?? 'Avatar upload failed')
+        }
+        const { url: avatarUrl, avatar_path: avatarPath } = (await avatarRes.json()) as { url?: string; avatar_path?: string }
+        const payload = buildOnboardingSessionPayload({
+          ...answers,
+          avatar_url: avatarUrl ?? '',
+          avatar_path: avatarPath ?? '',
+        })
+        const res = await fetch('/api/onboarding-session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token, payload }),
+        })
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}))
+          throw new Error((data as { error?: string }).error ?? 'Failed to save')
+        }
+        setShowGoogleSignIn(true)
+        return
       }
-    })()
-  }
-
-  function handleBack() {
-    if (stepIndex > 0) {
-      const prevIndex = getPrevStepIndex(stepIndex)
-      setStepIndex(prevIndex)
-      setDisplayStepIndex(prevIndex)
+      await saveAllProfileFields()
+      await saveAllIntakeResponses()
+      if (avatarFile) {
+        const supabase = getSupabase()
+        if (!supabase) throw new Error('Not configured')
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session?.access_token) throw new Error('Not authenticated')
+        const form = new FormData()
+        form.set('file', avatarFile)
+        const avatarRes = await fetch('/api/avatar-upload', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${session.access_token}` },
+          body: form,
+        })
+        if (!avatarRes.ok) {
+          const data = await avatarRes.json().catch(() => ({}))
+          throw new Error((data as { error?: string }).error ?? 'Avatar upload failed')
+        }
+      }
+      await callCompleteIntake()
+      router.replace('/app?justCompletedIntro=1')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong.')
+    } finally {
+      setSaving(false)
     }
-    setError(null)
   }
 
   async function handleSignInWithGoogle(smsToken: string) {
@@ -588,8 +502,8 @@ function AppOnboardingContent() {
     )
   }
 
-  if ((!tokenMode && statusLoading) || !step) {
-    authLog('onboarding:render', { show: 'Loading', statusLoading, stepId: step?.id })
+  if (!tokenMode && statusLoading) {
+    authLog('onboarding:render', { show: 'Loading', statusLoading: true })
     return (
       <div className="onboarding-wrap">
         <div className="onboarding-progress">
@@ -600,28 +514,19 @@ function AppOnboardingContent() {
     )
   }
 
-  authLog('onboarding:render', { show: 'form', stepId: step.id, stepIndex })
-  const progress = ((stepIndex + 1) / steps.length) * 100
-  const value = answers[displayStep.id]
+  authLog('onboarding:render', { show: 'single-page-form' })
 
-  return (
-    <div className="onboarding-wrap">
-      <div className="onboarding-progress">
-        <div className="onboarding-progress-inner" style={{ width: `${progress}%` }} />
-      </div>
-
-      <div
-        className={`onboarding-step ${isExiting ? 'onboarding-step-exit' : 'onboarding-step-enter'}`}
-        key={displayStepIndex}
-      >
-        <h2 className="onboarding-question">{displayStep.question}</h2>
-
-        {displayStep.body && (
+  function renderField(step: ProfileStep) {
+    const value = answers[step.id]
+    return (
+      <div key={step.id} className="onboarding-field-wrap">
+        <h3 className="onboarding-question">{step.question}</h3>
+        {step.body && (
           <div className="onboarding-body">
-            {displayStep.body.split(/\n\n+/).map((p, i) => (
+            {step.body.split(/\n\n+/).map((p, i) => (
               <p key={i}>{p}</p>
             ))}
-            {displayStep.id === 'confirm_intent' && (
+            {step.id === 'confirm_intent' && (
               <p className="onboarding-body-links">
                 By continuing, you agree to our{' '}
                 <Link href="/terms" target="_blank" rel="noopener noreferrer">Terms of Service</Link>
@@ -631,54 +536,43 @@ function AppOnboardingContent() {
             )}
           </div>
         )}
-
-        {displayStep.type === 'text' && (
-          <>
-            <input
-              id={`onboarding-${displayStep.id}`}
-              name={displayStep.id}
-              type="text"
-              className="auth-input"
-              placeholder={displayStep.placeholder || ''}
-              value={(value as string) ?? ''}
-              onChange={(e) => setAnswers((a) => ({ ...a, [displayStep.id]: e.target.value }))}
-              disabled={saving}
-              autoFocus
-              autoComplete={displayStep.id === 'first_name' ? 'given-name' : 'off'}
-            />
-          </>
-        )}
-
-        {displayStep.type === 'date' && (
+        {step.type === 'text' && (
           <input
-            id={`onboarding-${displayStep.id}`}
-            name={displayStep.id}
+            id={`onboarding-${step.id}`}
+            name={step.id}
+            type="text"
+            className="auth-input"
+            placeholder={step.placeholder || ''}
+            value={(value as string) ?? ''}
+            onChange={(e) => setAnswers((a) => ({ ...a, [step.id]: e.target.value }))}
+            disabled={saving}
+            autoComplete={step.id === 'first_name' ? 'given-name' : 'off'}
+          />
+        )}
+        {step.type === 'date' && (
+          <input
+            id={`onboarding-${step.id}`}
+            name={step.id}
             type="date"
             className="auth-input"
             value={(value as string) ?? ''}
-            onChange={(e) => setAnswers((a) => ({ ...a, [displayStep.id]: e.target.value }))}
+            onChange={(e) => setAnswers((a) => ({ ...a, [step.id]: e.target.value }))}
             disabled={saving}
-            autoFocus
-            autoComplete={displayStep.id === 'birthdate' ? 'bday' : 'off'}
+            autoComplete={step.id === 'birthdate' ? 'bday' : 'off'}
           />
         )}
-
-        {displayStep.type === 'chips_single' && displayStep.options && (
+        {step.type === 'chips_single' && step.options && (
           <div>
-            {displayStep.options.map((opt) => (
+            {step.options.map((opt) => (
               <button
                 key={opt}
                 type="button"
                 className={`onboarding-chip ${value === opt ? 'selected' : ''}`}
                 onClick={() => {
                   if (value === opt) {
-                    setAnswers((a) => {
-                      const next = { ...a }
-                      delete next[displayStep.id]
-                      return next
-                    })
+                    setAnswers((a) => { const next = { ...a }; delete next[step.id]; return next })
                   } else {
-                    setAnswers((a) => ({ ...a, [displayStep.id]: opt }))
+                    setAnswers((a) => ({ ...a, [step.id]: opt }))
                   }
                 }}
                 disabled={saving}
@@ -688,47 +582,35 @@ function AppOnboardingContent() {
             ))}
           </div>
         )}
-
-        {displayStep.type === 'location_permission' && (
+        {step.type === 'location_permission' && (
           <div className="onboarding-location-wrap">
             {locationStatus === 'loading' || zipLoading ? (
               <div className="onboarding-location-set">
                 <span className="onboarding-location-set-icon" aria-hidden>
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-                    <circle cx="12" cy="10" r="3" />
+                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" />
                   </svg>
                 </span>
-                <span className="onboarding-location-set-city">
-                  {zipLoading ? 'Looking up zip code…' : 'Getting location…'}
-                </span>
+                <span className="onboarding-location-set-city">{zipLoading ? 'Looking up zip code…' : 'Getting location…'}</span>
               </div>
             ) : (
               <>
                 <div className="onboarding-location-set">
                   <span className="onboarding-location-set-icon" aria-hidden>
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-                      <circle cx="12" cy="10" r="3" />
+                      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" />
                     </svg>
                   </span>
                   <span className="onboarding-location-set-city">
                     {value && typeof value === 'object' && 'city' in (value as object) ? (value as { city: string }).city : 'Your Location'}
                   </span>
-                  <button
-                    type="button"
-                    className="onboarding-location-change"
-                    onClick={handleLocation}
-                    disabled={saving}
-                  >
+                  <button type="button" className="onboarding-location-change" onClick={handleLocation} disabled={saving}>
                     {value && typeof value === 'object' && 'city' in (value as object) ? 'Change' : 'Use my location'}
                   </button>
                 </div>
                 <p className="onboarding-location-or">or</p>
                 <form className="onboarding-location-zip" onSubmit={handleZipSubmit}>
-                  <label htmlFor="onboarding-location-zip-input" className="onboarding-location-zip-label">
-                    Enter your zip code
-                  </label>
+                  <label htmlFor="onboarding-location-zip-input" className="onboarding-location-zip-label">Enter your zip code</label>
                   <div className="onboarding-location-zip-row">
                     <input
                       id="onboarding-location-zip-input"
@@ -741,11 +623,7 @@ function AppOnboardingContent() {
                       onChange={(e) => setZipCode(e.target.value.replace(/\D/g, '').slice(0, 10))}
                       disabled={saving || zipLoading}
                     />
-                    <button
-                      type="submit"
-                      className="btn onboarding-location-zip-btn"
-                      disabled={saving || zipLoading || !zipCode.trim()}
-                    >
+                    <button type="submit" className="btn onboarding-location-zip-btn" disabled={saving || zipLoading || !zipCode.trim()}>
                       Use this area
                     </button>
                   </div>
@@ -754,44 +632,31 @@ function AppOnboardingContent() {
             )}
           </div>
         )}
-
-        {displayStep.type === 'multi_select' && displayStep.options && (
+        {step.type === 'multi_select' && step.options && (
           <div>
-            {displayStep.options.map((opt) => {
+            {step.options.map((opt) => {
               const arr = (Array.isArray(value) ? value : []) as string[]
               const selected = arr.includes(opt)
               const isPreferNotToSay = opt === 'Prefer not to say'
               const isExclusiveOption =
-                (displayStep.id === 'q_convo_feel' && opt === 'A mix — see where it goes') ||
-                (displayStep.id === 'q_openness' && opt === "I'm open to anyone")
-              const atMax = displayStep.maxSelections != null && arr.length >= displayStep.maxSelections && !selected
-              const exclusiveOptionText =
-                displayStep.id === 'q_convo_feel'
-                  ? 'A mix — see where it goes'
-                  : displayStep.id === 'q_openness'
-                    ? "I'm open to anyone"
-                    : null
+                (step.id === 'q_convo_feel' && opt === 'A mix — see where it goes') ||
+                (step.id === 'q_openness' && opt === "I'm open to anyone")
+              const atMax = step.maxSelections != null && arr.length >= step.maxSelections && !selected
+              const exclusiveOptionText = step.id === 'q_convo_feel' ? 'A mix — see where it goes' : step.id === 'q_openness' ? "I'm open to anyone" : null
               return (
                 <button
                   key={opt}
                   type="button"
                   className={`onboarding-chip ${selected ? 'multi-selected' : ''}`}
                   onClick={() => {
-                    if (selected) {
-                      setAnswers((a) => ({ ...a, [displayStep.id]: arr.filter((x) => x !== opt) }))
-                    } else if (isPreferNotToSay) {
-                      setAnswers((a) => ({ ...a, [displayStep.id]: [opt] }))
-                    } else if (arr.includes('Prefer not to say')) {
-                      setAnswers((a) => ({ ...a, [displayStep.id]: [...arr.filter((x) => x !== 'Prefer not to say'), opt] }))
-                    } else if (isExclusiveOption) {
-                      setAnswers((a) => ({ ...a, [displayStep.id]: [opt] }))
-                    } else if (exclusiveOptionText) {
+                    if (selected) setAnswers((a) => ({ ...a, [step.id]: arr.filter((x) => x !== opt) }))
+                    else if (isPreferNotToSay) setAnswers((a) => ({ ...a, [step.id]: [opt] }))
+                    else if (arr.includes('Prefer not to say')) setAnswers((a) => ({ ...a, [step.id]: [...arr.filter((x) => x !== 'Prefer not to say'), opt] }))
+                    else if (isExclusiveOption) setAnswers((a) => ({ ...a, [step.id]: [opt] }))
+                    else if (exclusiveOptionText) {
                       const withoutExclusive = arr.filter((x) => x !== exclusiveOptionText)
-                      const max = displayStep.maxSelections ?? Infinity
-                      if (withoutExclusive.length < max) setAnswers((a) => ({ ...a, [displayStep.id]: [...withoutExclusive, opt] }))
-                    } else if (!atMax) {
-                      setAnswers((a) => ({ ...a, [displayStep.id]: [...arr, opt] }))
-                    }
+                      if (withoutExclusive.length < (step.maxSelections ?? Infinity)) setAnswers((a) => ({ ...a, [step.id]: [...withoutExclusive, opt] }))
+                    } else if (!atMax) setAnswers((a) => ({ ...a, [step.id]: [...arr, opt] }))
                   }}
                   disabled={saving || (!isExclusiveOption && atMax)}
                 >
@@ -801,26 +666,80 @@ function AppOnboardingContent() {
             })}
           </div>
         )}
+      </div>
+    )
+  }
 
+  return (
+    <div className="onboarding-wrap">
+      <div className="onboarding-progress">
+        <div className="onboarding-progress-inner" style={{ width: '25%' }} />
+      </div>
+
+      <div className="onboarding-single-page">
+        <section className="onboarding-section">
+          <h2 className="onboarding-section-title">About you</h2>
+          {PROFILE_STEPS.map(renderField)}
+        </section>
+
+        <section className="onboarding-section">
+          <h2 className="onboarding-section-title">Life & context</h2>
+          {SECTION_2_STEPS.map(renderField)}
+        </section>
+
+        <section className="onboarding-section">
+          <h2 className="onboarding-section-title">Conversation & matching</h2>
+          {SECTION_3_STEPS.map(renderField)}
+        </section>
+
+        <section className="onboarding-section">
+          <h2 className="onboarding-section-title">Confirm & finish</h2>
+          {CONFIRM_STEP && renderField(CONFIRM_STEP)}
+
+          <div className="onboarding-field-wrap">
+            <label className="onboarding-question" htmlFor="onboarding-avatar">Profile photo</label>
+            <p className="onboarding-body">Upload a clear photo of your face. This helps others feel comfortable meeting you.</p>
+            <div className={`onboarding-avatar-zone ${avatarFile || answers.avatar_url ? 'has-file' : ''}`}>
+              {avatarPreviewUrl || (typeof answers.avatar_url === 'string' && answers.avatar_url) ? (
+                <img
+                  src={avatarPreviewUrl ?? (answers.avatar_url as string)}
+                  alt="Preview"
+                  className="onboarding-avatar-preview"
+                />
+              ) : null}
+              <input
+                id="onboarding-avatar"
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                className="onboarding-avatar-input"
+                onChange={(e) => {
+                  const f = e.target.files?.[0]
+                  if (f) {
+                    setAvatarFile(f)
+                    setAvatarPreviewUrl(URL.createObjectURL(f))
+                    if (tokenMode) setAnswers((a) => ({ ...a, avatar_url: '' }))
+                  }
+                }}
+              />
+              <label htmlFor="onboarding-avatar" className="onboarding-avatar-label">
+                {avatarFile || answers.avatar_url ? 'Change photo' : 'Choose photo'}
+              </label>
+            </div>
+          </div>
+
+          <button
+            ref={submitRef}
+            type="button"
+            className="btn btn-primary"
+            onClick={handleSubmit}
+            disabled={saving}
+          >
+            {saving ? 'Saving…' : 'Submit'}
+          </button>
+        </section>
       </div>
 
       {error && <p className="onboarding-error" role="alert">{error}</p>}
-
-      <div className={`onboarding-actions ${isExiting ? 'onboarding-actions-disabled' : ''}`}>
-        {stepIndex > 0 && (
-          <button type="button" className="btn" onClick={handleBack} disabled={saving || isExiting}>
-            Back
-          </button>
-        )}
-        <button
-          type="button"
-          className={`btn btn-primary ${step.id === 'confirm_intent' && !value ? 'btn-primary-muted' : ''}`}
-          onClick={handleNext}
-          disabled={saving || isExiting || (step.type === 'location_permission' && locationStatus !== 'done' && !value) || (step.id === 'confirm_intent' && !value)}
-        >
-          {saving ? 'Saving…' : isLastStep ? 'Finish' : 'Continue'}
-        </button>
-      </div>
     </div>
   )
 }

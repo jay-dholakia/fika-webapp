@@ -2,13 +2,14 @@ import { getSupabase } from './supabase'
 import type { ProfileRow, IntakeResponsesV5Row } from './db-types'
 import { INTAKE_STEPS, type ProfileStep } from './onboarding-data'
 
-/** Profile is complete when these are set (LA Beta; phone optional, from SMS or settings). */
+/** Profile is complete when these are set (LA Beta; phone optional, avatar required). */
 export function isProfileComplete(p: ProfileRow | null): boolean {
   if (!p) return false
   return !!(
     p.first_name?.trim() &&
     p.birthdate &&
     p.city?.trim() &&
+    p.avatar_url?.trim() &&
     p.intent_confirmed_at
   )
 }

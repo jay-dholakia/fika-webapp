@@ -49,6 +49,18 @@ export async function POST(request: Request) {
   const lat = typeof payload.lat === 'number' ? payload.lat : null
   const lng = typeof payload.lng === 'number' ? payload.lng : null
   const responses = Array.isArray(payload.responses) ? payload.responses : []
+  const avatarPath = typeof payload.avatar_path === 'string' ? payload.avatar_path : null
+
+  let avatarUrl: string | null = null
+  if (avatarPath) {
+    const ext = avatarPath.includes('.') ? avatarPath.split('.').pop() ?? 'jpg' : 'jpg'
+    const destPath = `${user.id}/avatar.${ext}`
+    const { error: copyErr } = await supabase.storage.from('avatars').copy(avatarPath, destPath)
+    if (!copyErr) {
+      const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(destPath)
+      avatarUrl = urlData.publicUrl
+    }
+  }
 
   await supabase.from('profiles').upsert(
     {
@@ -62,6 +74,7 @@ export async function POST(request: Request) {
       lat,
       lng,
       phone: session.phone || null,
+      avatar_url: avatarUrl ?? null,
       intent_confirmed_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     },

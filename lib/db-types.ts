@@ -14,6 +14,7 @@ export type ProfileRow = {
   lng: number | null
   phone: string | null // E.164 for SMS (Sendblue)
   languages?: string[] | null
+  avatar_url?: string | null
   intent_confirmed_at: string | null // ISO
   in_match_bowl?: boolean
   intro_balance?: number

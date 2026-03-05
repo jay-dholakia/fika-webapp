@@ -29,6 +29,8 @@ export function buildOnboardingSessionPayload(answers: AnswersState): Record<str
     city: loc?.city ?? null,
     lat: typeof loc?.lat === 'number' ? loc.lat : null,
     lng: typeof loc?.lng === 'number' ? loc.lng : null,
+    avatar_url: typeof answers.avatar_url === 'string' ? answers.avatar_url : null,
+    avatar_path: typeof answers.avatar_path === 'string' ? answers.avatar_path : null,
     responses,
   }
 }
@@ -52,5 +54,7 @@ export function payloadToAnswers(payload: Record<string, unknown>): AnswersState
   for (const r of responses as Array<{ question_id?: string; answer?: unknown }>) {
     if (r?.question_id != null) answers[r.question_id] = r.answer as string | string[] | number
   }
+  if (typeof payload.avatar_url === 'string') answers.avatar_url = payload.avatar_url
+  if (typeof payload.avatar_path === 'string') answers.avatar_path = payload.avatar_path
   return answers
 }
