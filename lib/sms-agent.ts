@@ -111,30 +111,30 @@ export async function pickVenueForMatch(
 // Cadence: Monday opt-in → Tuesday 11:59pm PT deadline (opt in + availability) → Wednesday morning intros → Wed–Sun meet.
 
 export function messageEntry(): string {
-  return `Hi — I'm the Fika agent.\nEach week I introduce you to one thoughtful person nearby for a real conversation.\n\nWant an intro this week? Reply IN or SKIP. If IN, set your availability for Wed–Sun by Tuesday 11:59pm PT and we'll send your intro Wednesday morning.`
+  return `Hey! I'm Fika — think of me as your friend who sets up intros. 😊\n\nEach week I match you with one person nearby for a real conversation. Want in this week? Reply IN or SKIP. If you're in, set your availability for Wed–Sun by Tuesday 11:59pm PT and we'll send your intro Wednesday morning.`
 }
 
 /** When sign-in completes after the Tuesday 11:59pm PT deadline — set expectation for next week. */
 export function messageEntryAfterDeadline(): string {
-  return `You're all set. This week's opt-in window has closed. We'll text you Monday morning so you can opt in for next week's intro.`
+  return `You're all set! This week's window has closed, but we'll text you Monday so you can opt in for next week.`
 }
 
 /** Short reminder when they text HI/FIKA again — avoid re-sending the full intro. */
 export function messageEntryReminder(): string {
-  return `Want an intro this week? Reply IN or SKIP. Set availability for Wed–Sun by Tuesday 11:59pm PT.`
+  return `Want an intro this week? Just reply IN or SKIP — and if you're in, set your availability for Wed–Sun by Tuesday 11:59pm PT.`
 }
 
 /** When user is known but hasn't completed onboarding/intake — send link to finish profile. */
 export function messageOnboardingRequired(onboardingUrl: string): string {
-  return `You're in our system — we just need a bit more from you before we can match you.\n\nComplete your profile here:\n\n${onboardingUrl}\n\nReply to this number again once you're done and we'll send you the weekly intro.`
+  return `Hey, we've got you in the system — just need a few more details before we can match you.\n\nFinish up here:\n\n${onboardingUrl}\n\nReply back once you're done and we'll send you the weekly intro.`
 }
 
 export function messageWeeklyOptIn(): string {
-  return `Want a Fika intro this week? Reply IN or SKIP. If IN, set your availability for Wed–Sun by Tuesday 11:59pm PT — we'll send your intro Wednesday morning.`
+  return `Want a Fika intro this week? Reply IN or SKIP. If you're in, set your availability for Wed–Sun by Tuesday 11:59pm PT and we'll send your intro Wednesday morning.`
 }
 
 export function messageWeeklyOptInFollowUp(): string {
-  return `Quick check — reply IN or SKIP and set availability by Tuesday 11:59pm PT to get your intro Wednesday.`
+  return `Quick ping — reply IN or SKIP and set your availability by Tuesday 11:59pm PT to get your intro Wednesday.`
 }
 
 export function messageMatchOffer(params: {
@@ -146,11 +146,11 @@ export function messageMatchOffer(params: {
 }): string {
   const { otherFirstName, otherAge, otherBio, sharedInterests, conversationThread } = params
   const ageLine = otherAge != null ? `${otherFirstName}, ${otherAge}` : otherFirstName
-  let text = `I found someone you might enjoy meeting.\n\n${ageLine}\n${otherBio}\n\n`
+  let text = `Found someone you might really vibe with.\n\n${ageLine}\n${otherBio}\n\n`
   if (sharedInterests.length > 0) {
-    text += `Shared interests:\n${sharedInterests.map((s) => `• ${s}`).join('\n')}\n\n`
+    text += `You've both got:\n${sharedInterests.map((s) => `• ${s}`).join('\n')}\n\n`
   }
-  text += `Potential conversation thread:\n${conversationThread}\n\nWould you like the introduction?\nReply YES or PASS`
+  text += `Something to talk about:\n${conversationThread}\n\nWant the intro? Reply YES or PASS`
   return text
 }
 
@@ -159,59 +159,59 @@ export function messageConversationContext(params: {
   starterQuestion: string
 }): string {
   const { sharedInterests, starterQuestion } = params
-  let text = `Great — here's a little context for your Fika:\n\nYou both mentioned interest in:\n${sharedInterests.join(' and ')}\n\nA question you could start with:\n\n"${starterQuestion}"`
+  let text = `Here's a little context for your Fika:\n\nYou both mentioned:\n${sharedInterests.join(' and ')}\n\nA question you could kick things off with:\n\n"${starterQuestion}"`
   return text
 }
 
 export function messageSchedulingDay(days: string[]): string {
-  return `When might you be free for a quick coffee conversation?\n\n${days.join('\n')}\n\nReply with one or more days.`
+  return `When are you free for a quick coffee chat?\n\n${days.join('\n')}\n\nReply with one or more days that work.`
 }
 
 export function messageSchedulingWindow(): string {
-  return `What time window works best?\n\nMorning\nAfternoon\nEvening\n\nReply with one.`
+  return `What time works best?\n\nMorning\nAfternoon\nEvening\n\nReply with one.`
 }
 
 export function messageVenueProposed(day: string, time: string, venueName: string, neighborhood: string): string {
-  return `Looks like ${day} ${time.toLowerCase()} works for both of you.\n\nHow about:\n\n${time} at ${venueName} in ${neighborhood}\n\nReply CONFIRM or CHANGE`
+  return `Looks like ${day} ${time.toLowerCase()} works for you both.\n\nHow about:\n\n${time} at ${venueName} in ${neighborhood}\n\nReply CONFIRM or CHANGE`
 }
 
 export function messageYoureAllSet(day: string, time: string, venueName: string, neighborhood: string): string {
-  return `You're all set for your Fika ☕\n\n${day} — ${time}\n${venueName} (${neighborhood})\n\nYou can coordinate here if needed.`
+  return `You're all set for your Fika ☕\n\n${day} — ${time}\n${venueName} (${neighborhood})\n\nReach out here if you need to coordinate.`
 }
 
 export function messageDayOfReminder(time: string, venueName: string, neighborhood: string, starterQuestion?: string): string {
-  let text = `Your Fika conversation is today at ${time} at ${venueName} (${neighborhood}). We'll text you closer to the Fika with more details and how to update your Fika intro if you're running late.\n\nHope you both enjoy it.`
+  let text = `Your Fika is today at ${time} at ${venueName} (${neighborhood}). We'll text you closer to the time with more details — and you can update your intro if you're running late.\n\nHope you both have a great conversation!`
   if (starterQuestion) {
-    text += `\n\nOne question you might enjoy exploring:\n${starterQuestion}`
+    text += `\n\nA question you might enjoy:\n${starterQuestion}`
   }
   return text
 }
 
 export function messageOptInConfirmation(): string {
-  return `You're in for this week. We'll send your intro Wednesday morning.`
+  return `You're in! We'll send your intro Wednesday morning.`
 }
 
 /** When user replies IN: send link to webapp availability page to finalize opt-in. */
 export function messageOptInSetAvailability(availabilityUrl: string): string {
-  return `Got it. Set your availability for Wed–Sun by Tuesday 11:59pm PT here:\n\n${availabilityUrl}\n\nWe'll send your intro Wednesday morning.`
+  return `Got it! Set your availability for Wed–Sun by Tuesday 11:59pm PT here:\n\n${availabilityUrl}\n\nWe'll send your intro Wednesday morning.`
 }
 
 export function messageSkipped(): string {
-  return `No problem — we'll check in again next week.`
+  return `No worries — we'll check in again next week.`
 }
 
 export function messagePassConfirmation(): string {
-  return `Got it — we'll look for someone else for you next time.`
+  return `Got it — we'll find someone else for you next time.`
 }
 
 /** First person said YES — waiting for the other to reply. */
 export function messageYesWaitingForOther(): string {
-  return `Great — we'll let you know once they reply.`
+  return `Nice — we'll let you know as soon as they reply.`
 }
 
 /** Notify the person who said YES when the other passed. */
 export function messageMatchPassed(): string {
-  return `Your match passed on this intro. We'll send you another next week.`
+  return `They passed on this one — we'll send you another match next week.`
 }
 
 /** Propose one time from shared availability; ask them to confirm. Second YES-er gets this first, then first YES-er. */
@@ -256,9 +256,9 @@ export function messageRelayConfirmToSender(otherFirstName: string, intent: Rela
     case 'running_late':
       return `I'll let ${name} know you're running a bit behind.`
     case 'cant_make_it':
-      return `I'll let ${name} know. We'll help you reschedule or match again another time.`
+      return `I'll let ${name} know. We'll help you reschedule or find another time.`
     default:
-      return `I'll let ${name} know.`
+      return `I'll pass it along to ${name}.`
   }
 }
 
@@ -271,7 +271,7 @@ export function messageRelayToOther(senderFirstName: string, intent: RelayIntent
     case 'on_my_way':
       return `${name} is on their way.`
     case 'running_late':
-      return `${name} is running a bit behind — no need to rush.`
+      return `${name} is running a bit behind — no rush.`
     case 'cant_make_it':
       return `${name} can't make it today — something came up. We'll help you reschedule or match again.`
     default:
@@ -281,12 +281,12 @@ export function messageRelayToOther(senderFirstName: string, intent: RelayIntent
 
 /** 3 hours before Fika: reminder + how to update your Fika intro if running late. */
 export function messageThreeHourReminder(time: string, venueName: string, neighborhood: string): string {
-  return `Your Fika is in about 3 hours — ${time} at ${venueName} (${neighborhood}).\n\nYou can update your Fika intro in case you're running late: reply HERE when you arrive, or RUNNING LATE if you're behind, and we'll let them know.`
+  return `Your Fika is in about 3 hours — ${time} at ${venueName} (${neighborhood}).\n\nRunning late? Reply HERE when you arrive, or RUNNING LATE, and we'll let them know.`
 }
 
 /** Hint when they have a Fika today but message didn't match a relay intent. */
 export function messageRelayHint(): string {
-  return `You can update your Fika intro in case you're running late — reply HERE when you arrive, ON MY WAY, RUNNING LATE, or CAN'T MAKE IT and we'll let them know.`
+  return `You can update your Fika intro anytime — reply HERE when you arrive, ON MY WAY, RUNNING LATE, or CAN'T MAKE IT and we'll let them know.`
 }
 
 /** Fika date (YYYY-MM-DD) from batch_week (Monday) + slotId (e.g. wed_14_30). */
@@ -336,32 +336,32 @@ export function isFikaTimeInPast(batchWeek: string, slotId: string): boolean {
 
 /** When they text Concierge after Fika time: acknowledge, no relay, set expectation for feedback. */
 export function messageFikaInPast(): string {
-  return `Your Fika was earlier today — we can't pass along updates now. We'll reach out in a few hours after your scheduled Fika start to see how it went and collect feedback.`
+  return `Your Fika was earlier today — we can't pass along updates now. We'll reach out in a few hours to see how it went and get your feedback.`
 }
 
 /** Post-Fika: ask how it went and for feedback (sent ~2 hours after Fika). */
 export function messagePostFikaFeedback(): string {
-  return `How did your Fika go? We'd love any feedback to help us set up future Fikas — just reply to this message.`
+  return `How did your Fika go? We'd love to hear — just reply with any feedback.`
 }
 
 /** Reply after we store their post-Fika feedback (first time). */
 export function messageThanksForFeedback(): string {
-  return `Thanks for the feedback — we really appreciate it.`
+  return `Thanks for sharing — we really appreciate it.`
 }
 
 /** Reply when they've already sent feedback for this Fika and send more. */
 export function messageThanksForFeedbackAgain(): string {
-  return `Got it, thanks! Anything else? We're always happy to hear from you.`
+  return `Got it, thanks! We're always happy to hear from you.`
 }
 
 /** When we can't relay (e.g. no phone for other person). Don't promise retries. */
 export function messageRelayCouldNotDeliver(): string {
-  return `We couldn't deliver your update this time.`
+  return `We couldn't get your update through this time — try reaching out to them directly if you can.`
 }
 
 /** STOP: we'll stop texting; account still on web; how to opt back in. */
 export function messageSmsOptOut(webappUrl: string, conciergeNumber: string): string {
-  return `We'll stop texting you. Your Fika account is still available on the web: ${webappUrl}\n\nYou can manage or delete your account there, and text ${conciergeNumber} from the number we have on file to start receiving messages again.`
+  return `We'll stop texting you. Your Fika account is still on the web: ${webappUrl}\n\nYou can manage or delete your account there, and text ${conciergeNumber} from the number we have on file whenever you want to start getting messages again.`
 }
 
 /** When they text back after opting out. */
@@ -371,7 +371,7 @@ export function messageSmsOptBackIn(): string {
 
 /** Confirmed Fika upcoming: fun reminder + CTA. */
 export function messageConfirmedUpcoming(day: string, time: string, venueName: string, neighborhood: string, webappUrl: string): string {
-  return `Your Fika is coming up — ${day} at ${time} at ${venueName} (${neighborhood}). ☕\n\nAny questions? Want to reschedule or cancel? Reply with your question, or RESCHEDULE or CANCEL and we'll help. You can also manage your account here: ${webappUrl}`
+  return `Your Fika is coming up — ${day} at ${time} at ${venueName} (${neighborhood}). ☕\n\nQuestions? Need to reschedule or cancel? Reply with your question, or RESCHEDULE or CANCEL and we'll help. You can also manage your account here: ${webappUrl}`
 }
 
 /** RESCHEDULE acknowledged. */
@@ -381,7 +381,7 @@ export function messageRescheduleAck(): string {
 
 /** CANCEL acknowledged. */
 export function messageCancelAck(): string {
-  return `We've got your cancel request — we'll follow up and let your Fika intro know.`
+  return `Got your cancel — we'll follow up and let your Fika intro know.`
 }
 
 // ---------- Human fallbacks when message doesn't match a keyword ----------
@@ -411,15 +411,15 @@ export function fallbackSchedulingWindow(): string {
 }
 
 export function fallbackYesWaiting(): string {
-  return `We'll let you know once they reply. Hang tight!`
+  return `We'll let you know as soon as they reply — hang tight!`
 }
 
 export function fallbackAwaitingConfirm(): string {
-  return `Reply YES to confirm this time and venue — we're almost there.`
+  return `Reply YES to confirm this time and venue — almost there!`
 }
 
 export function fallbackConfirmed(): string {
-  return `You're all set. Reply if you have questions or need to reschedule or cancel.`
+  return `You're all set. Reply anytime if you have questions or need to reschedule or cancel.`
 }
 
 export function fallbackGeneric(): string {

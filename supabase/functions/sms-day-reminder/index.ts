@@ -37,8 +37,8 @@ function slotToTimeStr(slotId: string): string {
 }
 
 function buildReminderMessage(time: string, venueName: string, neighborhood: string, starter?: string): string {
-  let text = `Your Fika conversation is today at ${time} at ${venueName} (${neighborhood}). We'll text you closer to the Fika with more details and how to update your Fika intro if you're running late.\n\nHope you both enjoy it.`
-  if (starter) text += `\n\nOne question you might enjoy exploring:\n${starter}`
+  let text = `Your Fika is today at ${time} at ${venueName} (${neighborhood}). We'll text you closer to the time with more details — and you can update your intro if you're running late.\n\nHope you both have a great conversation!`
+  if (starter) text += `\n\nA question you might enjoy:\n${starter}`
   return text
 }
 

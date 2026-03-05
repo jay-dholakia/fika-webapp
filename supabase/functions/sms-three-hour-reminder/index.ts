@@ -40,7 +40,7 @@ const MS_2_5_H = 2.5 * 60 * 60 * 1000
 const MS_3_5_H = 3.5 * 60 * 60 * 1000
 
 function buildThreeHourMessage(time: string, venueName: string, neighborhood: string): string {
-  return `Your Fika is in about 3 hours — ${time} at ${venueName} (${neighborhood}).\n\nYou can update your Fika intro in case you're running late: reply HERE when you arrive, or RUNNING LATE if you're behind, and we'll let them know.`
+  return `Your Fika is in about 3 hours — ${time} at ${venueName} (${neighborhood}).\n\nRunning late? Reply HERE when you arrive, or RUNNING LATE, and we'll let them know.`
 }
 
 serve(async () => {

@@ -30,7 +30,7 @@ const MS_1_5_H = 1.5 * 60 * 60 * 1000
 const MS_2_5_H = 2.5 * 60 * 60 * 1000
 
 const POST_FIKA_MESSAGE =
-  "How did your Fika go? We'd love any feedback to help us set up future Fikas — just reply to this message."
+  "How did your Fika go? We'd love to hear — just reply with any feedback."
 
 serve(async () => {
   try {

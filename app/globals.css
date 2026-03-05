@@ -1319,6 +1319,7 @@ a {
   border-radius: 10px;
   padding: 1rem 1.1rem;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
 }
 .onboarding-section-title {
   font-family: var(--font-heading);
@@ -1329,6 +1330,7 @@ a {
 }
 .onboarding-field-wrap {
   margin-bottom: 0.65rem;
+  min-width: 0;
 }
 .onboarding-field-wrap:last-child {
   margin-bottom: 0;
@@ -1336,6 +1338,13 @@ a {
 .onboarding-wrap .auth-input {
   padding: 0.6rem 1rem;
   font-size: 0.9375rem;
+  max-width: 100%;
+  min-width: 0;
+}
+.onboarding-wrap input[type="date"].auth-input {
+  /* Keep date field within card on mobile; native picker still opens full-screen */
+  max-width: 100%;
+  min-width: 0;
 }
 .onboarding-avatar-zone {
   display: flex;
