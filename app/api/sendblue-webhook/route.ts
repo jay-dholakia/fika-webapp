@@ -60,6 +60,7 @@ import {
   getFikaTimeMs,
   pickVenueForMatch,
 } from '@/lib/sms-agent'
+import { getTimezoneFromLatLng, getNextMondayPhrase } from '@/lib/sms-day-aware'
 import { sendConcierge, isSendblueConfigured } from '@/lib/sendblue'
 import { getCurrentBatchWeek, isOnboardingComplete, isPastOptInDeadline } from '@/lib/onboarding'
 import type { ProfileRow, IntakeResponsesV5Row } from '@/lib/db-types'
@@ -379,7 +380,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true })
     }
     console.log('[sendblue-webhook] first_contact sending entry to', fromLast4)
-    const entryMsg = isPastOptInDeadline(batchWeek) ? messageEntryAfterDeadline() : messageEntry()
+    const { data: profile } = await supabase.from('profiles').select('lat, lng').eq('id', userId).maybeSingle()
+    const nextMondayPhrase = getNextMondayPhrase(getTimezoneFromLatLng(profile?.lat ?? null, profile?.lng ?? null))
+    const entryMsg = isPastOptInDeadline(batchWeek) ? messageEntryAfterDeadline(nextMondayPhrase) : messageEntry()
     const entryResult = await sendConcierge(fromNumber, entryMsg)
     console.log('[sendblue-webhook] sendConcierge result', { ok: entryResult.ok, error: entryResult.error, message_handle: entryResult.message_handle })
     if (entryResult.message_handle) {
@@ -403,7 +406,9 @@ export async function POST(request: Request) {
   // ----- Awaiting opt-in: IN / SKIP (and FIKA / HI to re-send the prompt); post-deadline = no opt-in -----
   if (state === SMS_STATES.AWAITING_OPT_IN) {
     if (isPastOptInDeadline(batchWeek)) {
-      await sendConcierge(fromNumber, messageEntryAfterDeadline())
+      const { data: profile } = await supabase.from('profiles').select('lat, lng').eq('id', userId).maybeSingle()
+      const nextMondayPhrase = getNextMondayPhrase(getTimezoneFromLatLng(profile?.lat ?? null, profile?.lng ?? null))
+      await sendConcierge(fromNumber, messageEntryAfterDeadline(nextMondayPhrase))
       return NextResponse.json({ ok: true })
     }
     if (isOptInKeyword(content) || keyword === 'IN' || keyword === 'YES') {

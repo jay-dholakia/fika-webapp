@@ -1,7 +1,8 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { sendMessage } from '@/lib/sendblue'
-import { getOrCreateSmsState, messageEntry, messageEntryAfterDeadline, SMS_STATES } from '@/lib/sms-agent'
+import { getOrCreateSmsState, messageEntryFirstTimeMessages, SMS_STATES } from '@/lib/sms-agent'
+import { getTimezoneFromLatLng, getNextMondayPhrase } from '@/lib/sms-day-aware'
 import { getCurrentBatchWeek, isPastOptInDeadline } from '@/lib/onboarding'
 
 const OPEN_ENDED_IDS: string[] = []
@@ -125,15 +126,14 @@ export async function POST(request: Request) {
     }
   }
 
-  // After first-time intake completion: send entry SMS so they know they're in and can reply YES or SKIP
-  // Create state before sending so a quick YES reply sees AWAITING_OPT_IN and progresses.
+  // After first-time intake completion: send entry SMS sequence (4 messages) so they know they're in and can reply YES or SKIP
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (serviceKey && process.env.SENDBLUE_API_KEY_ID) {
     try {
       const serviceSupabase = createClient(url, serviceKey)
       const { data: profile } = await serviceSupabase
         .from('profiles')
-        .select('phone')
+        .select('phone, lat, lng')
         .eq('id', user.id)
         .single()
       if (profile?.phone) {
@@ -141,11 +141,21 @@ export async function POST(request: Request) {
         await getOrCreateSmsState(serviceSupabase, user.id, SMS_STATES.AWAITING_OPT_IN, {
           batch_week: batchWeek,
         })
-        const entryMsg = isPastOptInDeadline(batchWeek) ? messageEntryAfterDeadline() : messageEntry()
-        const sent = await sendMessage(profile.phone, entryMsg, { fromNumber: 'concierge' })
-        if (sent.message_handle) {
+        const isAfterDeadline = isPastOptInDeadline(batchWeek)
+        const timezone = getTimezoneFromLatLng(profile.lat ?? null, profile.lng ?? null)
+        const nextMondayPhrase = getNextMondayPhrase(timezone)
+        const messages = messageEntryFirstTimeMessages(isAfterDeadline, nextMondayPhrase)
+        let lastHandle: string | undefined
+        for (let i = 0; i < messages.length; i++) {
+          const sent = await sendMessage(profile.phone, messages[i], { fromNumber: 'concierge' })
+          if (sent.message_handle) lastHandle = sent.message_handle
+          if (i < messages.length - 1) {
+            await new Promise((r) => setTimeout(r, 1600))
+          }
+        }
+        if (lastHandle) {
           await serviceSupabase.from('sms_conversation_states').update({
-            last_sendblue_message_handle: sent.message_handle,
+            last_sendblue_message_handle: lastHandle,
             updated_at: new Date().toISOString(),
           }).eq('user_id', user.id).eq('batch_week', batchWeek).is('match_id', null)
         }

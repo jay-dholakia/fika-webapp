@@ -48,20 +48,20 @@ export function getCurrentBatchWeek(): string {
   return monday.toISOString().slice(0, 10)
 }
 
-/** Opt-in deadline: Tuesday 11:59pm PT for the given batch week (Monday). Used for "opt in + set availability by Tuesday 11:59pm". */
-const OPT_IN_DEADLINE_HOUR_UTC = 7
-const OPT_IN_DEADLINE_MINUTE_UTC = 59
+/** Deadline = Tuesday morning when intros run (UTC). After this time, "this week's window" is closed. */
+const INTRO_RUN_TUESDAY_HOUR_UTC = 14
+const INTRO_RUN_TUESDAY_MINUTE_UTC = 0
 
 /**
  * Returns the opt-in deadline for a batch week (Monday YYYY-MM-DD).
- * Deadline = Tuesday 23:59 PT (PST) ≈ Wednesday 07:59 UTC.
+ * Deadline = Tuesday morning when intros run (e.g. 14:00 UTC = 9am PT). Before this we accept opt-in; after this, window closed.
  */
 export function getOptInDeadlineForBatchWeek(batchWeek: string): Date {
   const monday = new Date(batchWeek + 'T00:00:00Z')
-  const wednesday = new Date(monday)
-  wednesday.setUTCDate(wednesday.getUTCDate() + 2)
-  wednesday.setUTCHours(OPT_IN_DEADLINE_HOUR_UTC, OPT_IN_DEADLINE_MINUTE_UTC, 59, 999)
-  return wednesday
+  const tuesday = new Date(monday)
+  tuesday.setUTCDate(tuesday.getUTCDate() + 1)
+  tuesday.setUTCHours(INTRO_RUN_TUESDAY_HOUR_UTC, INTRO_RUN_TUESDAY_MINUTE_UTC, 0, 0)
+  return tuesday
 }
 
 /**

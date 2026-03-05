@@ -108,20 +108,31 @@ export async function pickVenueForMatch(
 }
 
 // ---------- Message templates ----------
-// Cadence: Monday opt-in → Tuesday 11:59pm PT deadline (opt in + availability) → Wednesday morning intros → Wed–Sun meet.
+// Cadence: Monday opt-in → Tuesday morning intros run (deadline) → Wed–Sun meet.
 
-export function messageEntry(): string {
-  return `Hey! I'm Fika — think of me as your friend who sets up intros. 😊\n\nEach week I match you with one person nearby for a real conversation. Want in this week? Reply IN or SKIP. If you're in, set your availability for Wed–Sun by Tuesday 11:59pm PT and we'll send your intro Wednesday morning.`
+/** First-time "you're all set" sequence (Option B): intro concierge + cadence. Returns 4 messages to send in order.
+ * nextMondayPhrase = day-aware "tomorrow" | "Monday" | "next Monday" from getNextMondayPhrase(timezone). */
+export function messageEntryFirstTimeMessages(isAfterDeadline: boolean, nextMondayPhrase: string = 'next Monday'): string[] {
+  const msg1 = `You're in. I'm your Fika concierge — once a week I send you one intro to someone nearby worth a real conversation. That's it.`
+  const msg2 = `How it works: Mondays I ask if you want an intro that week. Opt in and I'll ask for your Wed–Sun availability (30–45 min block). Tuesday morning you get the intro — someone I think you'll actually click with.`
+  const msg3 = `You both say yes? I suggest a time and place, you confirm, have your Fika, and I'll follow up after to see how it went. Skip a week? No big deal — I'll just catch you the following Monday.`
+  const msg4OnTime = `I'll text you ${nextMondayPhrase} to see if you're up for a Fika this week. Have a great week!`
+  const msg4AfterDeadline = `This week's window is already closed, so ${nextMondayPhrase} I'll check in to see if you're up for a Fika. Have a great week.`
+  return [msg1, msg2, msg3, isAfterDeadline ? msg4AfterDeadline : msg4OnTime]
 }
 
-/** When sign-in completes after the Tuesday 11:59pm PT deadline — set expectation for next week. */
-export function messageEntryAfterDeadline(): string {
-  return `You're all set! This week's window has closed, but we'll text you Monday so you can opt in for next week.`
+export function messageEntry(): string {
+  return `Hey! I'm Fika — think of me as your friend who sets up intros. 😊\n\nEach week I match you with one person nearby for a real conversation. Want in this week? Reply IN or SKIP. If you're in, set your availability for Wed–Sun before Tuesday morning and we'll send your intro Tuesday morning.`
+}
+
+/** When sign-in completes after the Tuesday morning intro run — set expectation for next week. nextMondayPhrase = day-aware "tomorrow" | "Monday" | "next Monday". */
+export function messageEntryAfterDeadline(nextMondayPhrase: string = 'next Monday'): string {
+  return `You're all set! This week's window has closed, but we'll text you ${nextMondayPhrase} so you can opt in for next week.`
 }
 
 /** Short reminder when they text HI/FIKA again — avoid re-sending the full intro. */
 export function messageEntryReminder(): string {
-  return `Want an intro this week? Just reply IN or SKIP — and if you're in, set your availability for Wed–Sun by Tuesday 11:59pm PT.`
+  return `Want an intro this week? Just reply IN or SKIP — and if you're in, set your availability for Wed–Sun before Tuesday morning.`
 }
 
 /** When user is known but hasn't completed onboarding/intake — send link to finish profile. */
@@ -130,11 +141,11 @@ export function messageOnboardingRequired(onboardingUrl: string): string {
 }
 
 export function messageWeeklyOptIn(): string {
-  return `Want a Fika intro this week? Reply IN or SKIP. If you're in, set your availability for Wed–Sun by Tuesday 11:59pm PT and we'll send your intro Wednesday morning.`
+  return `Want a Fika intro this week? Reply IN or SKIP. If you're in, set your availability for Wed–Sun before Tuesday morning and we'll send your intro Tuesday morning.`
 }
 
 export function messageWeeklyOptInFollowUp(): string {
-  return `Quick ping — reply IN or SKIP and set your availability by Tuesday 11:59pm PT to get your intro Wednesday.`
+  return `Quick ping — reply IN or SKIP and set your availability before Tuesday morning to get your intro.`
 }
 
 export function messageMatchOffer(params: {
@@ -188,12 +199,12 @@ export function messageDayOfReminder(time: string, venueName: string, neighborho
 }
 
 export function messageOptInConfirmation(): string {
-  return `You're in! We'll send your intro Wednesday morning.`
+  return `You're in! We'll send your intro Tuesday morning.`
 }
 
 /** When user replies IN: send link to webapp availability page to finalize opt-in. */
 export function messageOptInSetAvailability(availabilityUrl: string): string {
-  return `Got it! Set your availability for Wed–Sun by Tuesday 11:59pm PT here:\n\n${availabilityUrl}\n\nWe'll send your intro Wednesday morning.`
+  return `Got it! Set your availability for Wed–Sun before Tuesday morning here:\n\n${availabilityUrl}\n\nWe'll send your intro Tuesday morning.`
 }
 
 export function messageSkipped(): string {
@@ -391,7 +402,7 @@ export function fallbackAwaitingOptIn(): string {
 }
 
 export function fallbackOptedIn(): string {
-  return `Set your availability by Tuesday 11:59pm PT using the link we sent — or reply LINK and we'll send it again.`
+  return `Set your availability before Tuesday morning using the link we sent — or reply LINK and we'll send it again.`
 }
 
 export function fallbackMatchOffered(): string {

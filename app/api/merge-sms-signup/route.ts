@@ -7,7 +7,8 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { sendMessage } from '@/lib/sendblue'
-import { getOrCreateSmsState, messageEntry, messageEntryAfterDeadline, SMS_STATES } from '@/lib/sms-agent'
+import { getOrCreateSmsState, messageEntryFirstTimeMessages, SMS_STATES } from '@/lib/sms-agent'
+import { getTimezoneFromLatLng, getNextMondayPhrase } from '@/lib/sms-day-aware'
 import { getCurrentBatchWeek, isPastOptInDeadline } from '@/lib/onboarding'
 
 export async function POST(request: Request) {
@@ -124,18 +125,28 @@ export async function POST(request: Request) {
     })
     .eq('id', session.id)
 
-  // After first-time merge: send entry SMS. Create state before sending so a quick YES reply progresses.
+  // After first-time merge: send entry SMS sequence (4 messages). Create state before sending so a quick YES reply progresses.
   if (session.phone && process.env.SENDBLUE_API_KEY_ID) {
     try {
       const batchWeek = getCurrentBatchWeek()
       await getOrCreateSmsState(supabase, user.id, SMS_STATES.AWAITING_OPT_IN, {
         batch_week: batchWeek,
       })
-      const entryMsg = isPastOptInDeadline(batchWeek) ? messageEntryAfterDeadline() : messageEntry()
-      const sent = await sendMessage(session.phone, entryMsg, { fromNumber: 'concierge' })
-      if (sent.message_handle) {
+      const isAfterDeadline = isPastOptInDeadline(batchWeek)
+      const timezone = getTimezoneFromLatLng(lat, lng)
+      const nextMondayPhrase = getNextMondayPhrase(timezone)
+      const messages = messageEntryFirstTimeMessages(isAfterDeadline, nextMondayPhrase)
+      let lastHandle: string | undefined
+      for (let i = 0; i < messages.length; i++) {
+        const sent = await sendMessage(session.phone, messages[i], { fromNumber: 'concierge' })
+        if (sent.message_handle) lastHandle = sent.message_handle
+        if (i < messages.length - 1) {
+          await new Promise((r) => setTimeout(r, 1600))
+        }
+      }
+      if (lastHandle) {
         await supabase.from('sms_conversation_states').update({
-          last_sendblue_message_handle: sent.message_handle,
+          last_sendblue_message_handle: lastHandle,
           updated_at: new Date().toISOString(),
         }).eq('user_id', user.id).eq('batch_week', batchWeek).is('match_id', null)
       }
