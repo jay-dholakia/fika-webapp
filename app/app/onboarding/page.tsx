@@ -17,7 +17,7 @@ import type { ProfileRow } from '@/lib/db-types'
 import type { IntakeResponsesV5Row } from '@/lib/db-types'
 
 const SECTION_2_IDS = ['q_life_chapter', 'q_lately', 'q_everyday_anchor']
-const SECTION_3_IDS = ['q_topics', 'q_convo_feel', 'q_openness', 'q_hoping_for', 'q_radius']
+const SECTION_3_IDS = ['q_topics', 'q_convo_feel', 'q_openness', 'gender_preference', 'q_hoping_for', 'q_radius']
 const SECTION_2_STEPS = INTAKE_STEPS.filter((s) => SECTION_2_IDS.includes(s.id))
 const SECTION_3_STEPS = INTAKE_STEPS.filter((s) => SECTION_3_IDS.includes(s.id))
 const CONFIRM_STEP = INTAKE_STEPS.find((s) => s.id === 'confirm_intent')!
@@ -34,10 +34,10 @@ function getInitialAnswers(
     if (s.id === 'first_name') answers.first_name = profile?.first_name?.trim() ?? ''
     else if (s.id === 'birthdate') answers.birthdate = profile?.birthdate ?? ''
     else if (s.id === 'gender') answers.gender = profile?.gender ?? ''
-    else if (s.id === 'gender_preference') answers.gender_preference = profile?.gender_preference ?? ''
     else if (s.id === 'languages') answers.languages = Array.isArray(profile?.languages) ? profile.languages : []
     else if (s.id === 'location' && profile?.city) answers.location = { city: profile.city, lat: profile.lat ?? 0, lng: profile.lng ?? 0 }
   }
+  answers.gender_preference = profile?.gender_preference ?? ''
   const responses = intake?.responses ?? []
   for (const s of INTAKE_STEPS) {
     const r = responses.find((x: IntakeResponseItem) => x.question_id === s.id)
@@ -239,7 +239,7 @@ function AppOnboardingContent() {
     if (!sessionUserId) return
     const supabase = getSupabase()
     if (!supabase) return
-    const responses: IntakeResponseItem[] = INTAKE_STEPS.map((s) => {
+    const responses: IntakeResponseItem[] = INTAKE_STEPS.filter((s) => s.id !== 'gender_preference').map((s) => {
       const raw = answers[s.id]
       const value = raw === undefined || (typeof raw === 'object' && 'city' in (raw as object)) ? (s.type === 'multi_select' ? [] : '') : raw
       return {
@@ -636,7 +636,7 @@ function AppOnboardingContent() {
                       disabled={saving || zipLoading}
                     />
                     <button type="submit" className="btn onboarding-location-zip-btn" disabled={saving || zipLoading || !zipCode.trim()}>
-                      Use this area
+                      Use Zip Code
                     </button>
                   </div>
                 </form>

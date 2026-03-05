@@ -1020,7 +1020,7 @@ async function generateMatchReasonsV4(
   for (const t of overlap.slice(0, 2)) whyWeIntroducedYou.push(`You both selected "${t}"`)
   for (const l of sharedLately.slice(0, 1)) whyWeIntroducedYou.push(`You both said "${l}" has been on your mind`)
   for (const a of sharedAnchor.slice(0, 1)) {
-    if (a !== 'None of the above / Prefer not to say') whyWeIntroducedYou.push(`You both have "${a}" in your everyday life`)
+    if (a !== 'Prefer not to say') whyWeIntroducedYou.push(`You both have "${a}" in your everyday life`)
   }
 
   const conversationStarters: string[] = []

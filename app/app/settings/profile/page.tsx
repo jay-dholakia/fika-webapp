@@ -97,6 +97,7 @@ export default function SettingsProfilePage() {
     const existingResponses: IntakeResponseItem[] = Array.isArray(existing?.responses) ? [...(existing.responses as IntakeResponseItem[])] : []
     const responses: IntakeResponseItem[] = []
     for (const step of INTAKE_STEPS) {
+      if (step.id === 'gender_preference') continue
       const answer = answers[step.id]
       const normalized =
         step.id === 'q12_first_conversation' &&
@@ -114,10 +115,11 @@ export default function SettingsProfilePage() {
       if (idx >= 0) existingResponses[idx] = newItem
       else existingResponses.push(newItem)
     }
+    const filteredResponses = existingResponses.filter((r) => r.question_id !== 'gender_preference')
     const availabilityTimes = answers.q9_availability as string[] | undefined
     const payload: Record<string, unknown> = {
       user_id: userId,
-      responses: existingResponses,
+      responses: filteredResponses,
       updated_at: new Date().toISOString(),
     }
     if (existing?.completed_at != null) payload.completed_at = existing.completed_at

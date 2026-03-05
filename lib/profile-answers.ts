@@ -18,12 +18,11 @@ export function getAnswersFromProfileAndIntake(
     if (s.id === 'first_name') answers.first_name = profile?.first_name?.trim() ?? ''
     else if (s.id === 'birthdate') answers.birthdate = profile?.birthdate ?? ''
     else if (s.id === 'gender') answers.gender = profile?.gender ?? ''
-    else if (s.id === 'gender_preference') answers.gender_preference = profile?.gender_preference ?? ''
     else if (s.id === 'languages') answers.languages = Array.isArray(profile?.languages) ? profile.languages : []
     else if (s.id === 'location' && profile?.city != null)
       answers.location = { city: profile.city, lat: profile.lat ?? 0, lng: profile.lng ?? 0 }
   }
-
+  answers.gender_preference = profile?.gender_preference ?? ''
   const responses = intake?.responses ?? []
   for (const s of INTAKE_STEPS) {
     const r = responses.find((x: IntakeResponseItem) => x.question_id === s.id)
