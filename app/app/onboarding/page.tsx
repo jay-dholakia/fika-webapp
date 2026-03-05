@@ -83,6 +83,7 @@ function AppOnboardingContent() {
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null)
   const submitRef = useRef<HTMLButtonElement>(null)
+  const lastMultiSelectRef = useRef<{ stepId: string; opt: string; t: number }>({ stepId: '', opt: '', t: 0 })
 
   useEffect(() => {
     authLog('onboarding:mount')
@@ -640,31 +641,49 @@ function AppOnboardingContent() {
                 (step.id === 'q_openness' && opt === "I'm open to anyone")
               const atMax = step.maxSelections != null && arr.length >= step.maxSelections && !selected
               const exclusiveOptionText = step.id === 'q_convo_feel' ? 'A mix — see where it goes' : step.id === 'q_openness' ? "I'm open to anyone" : null
+
+              const handleMultiSelect = () => {
+                const now = Date.now()
+                if (
+                  lastMultiSelectRef.current.stepId === step.id &&
+                  lastMultiSelectRef.current.opt === opt &&
+                  now - lastMultiSelectRef.current.t < 200
+                ) {
+                  return
+                }
+                lastMultiSelectRef.current = { stepId: step.id, opt, t: now }
+                if (selected) {
+                  setAnswers((a) => ({ ...a, [step.id]: arr.filter((x) => x !== opt) }))
+                } else if (isPreferNotToSay) {
+                  setAnswers((a) => ({ ...a, [step.id]: [opt] }))
+                } else if (arr.includes('Prefer not to say')) {
+                  setAnswers((a) => ({ ...a, [step.id]: [...arr.filter((x) => x !== 'Prefer not to say'), opt] }))
+                } else if (isExclusiveOption) {
+                  setAnswers((a) => ({ ...a, [step.id]: [opt] }))
+                } else if (exclusiveOptionText) {
+                  const withoutExclusive = arr.filter((x) => x !== exclusiveOptionText)
+                  if (withoutExclusive.length < (step.maxSelections ?? Infinity)) {
+                    setAnswers((a) => ({ ...a, [step.id]: [...withoutExclusive, opt] }))
+                  }
+                } else if (!atMax) {
+                  setAnswers((a) => ({ ...a, [step.id]: [...arr, opt] }))
+                }
+              }
+
               return (
                 <button
                   key={opt}
                   type="button"
                   className={`onboarding-chip ${selected ? 'multi-selected' : ''}`}
                   onPointerDown={(e) => {
-                    if (e.button !== 0) return
-                    if (selected) setAnswers((a) => ({ ...a, [step.id]: arr.filter((x) => x !== opt) }))
-                    else if (isPreferNotToSay) setAnswers((a) => ({ ...a, [step.id]: [opt] }))
-                    else if (arr.includes('Prefer not to say')) setAnswers((a) => ({ ...a, [step.id]: [...arr.filter((x) => x !== 'Prefer not to say'), opt] }))
-                    else if (isExclusiveOption) setAnswers((a) => ({ ...a, [step.id]: [opt] }))
-                    else if (exclusiveOptionText) {
-                      const withoutExclusive = arr.filter((x) => x !== exclusiveOptionText)
-                      if (withoutExclusive.length < (step.maxSelections ?? Infinity)) setAnswers((a) => ({ ...a, [step.id]: [...withoutExclusive, opt] }))
-                    } else if (!atMax) setAnswers((a) => ({ ...a, [step.id]: [...arr, opt] }))
+                    if (e.button === 0) {
+                      e.preventDefault()
+                      handleMultiSelect()
+                    }
                   }}
-                  onClick={() => {
-                    if (selected) setAnswers((a) => ({ ...a, [step.id]: arr.filter((x) => x !== opt) }))
-                    else if (isPreferNotToSay) setAnswers((a) => ({ ...a, [step.id]: [opt] }))
-                    else if (arr.includes('Prefer not to say')) setAnswers((a) => ({ ...a, [step.id]: [...arr.filter((x) => x !== 'Prefer not to say'), opt] }))
-                    else if (isExclusiveOption) setAnswers((a) => ({ ...a, [step.id]: [opt] }))
-                    else if (exclusiveOptionText) {
-                      const withoutExclusive = arr.filter((x) => x !== exclusiveOptionText)
-                      if (withoutExclusive.length < (step.maxSelections ?? Infinity)) setAnswers((a) => ({ ...a, [step.id]: [...withoutExclusive, opt] }))
-                    } else if (!atMax) setAnswers((a) => ({ ...a, [step.id]: [...arr, opt] }))
+                  onClick={(e) => {
+                    e.preventDefault()
+                    handleMultiSelect()
                   }}
                   disabled={saving || (!isExclusiveOption && atMax)}
                 >
