@@ -144,7 +144,8 @@ export async function POST(request: Request) {
         const isAfterDeadline = isPastOptInDeadline(batchWeek)
         const timezone = getTimezoneFromLatLng(profile.lat ?? null, profile.lng ?? null)
         const nextMondayPhrase = getNextMondayPhrase(timezone)
-        const messages = messageEntryFirstTimeMessages(isAfterDeadline, nextMondayPhrase)
+        const appBase = (process.env.APP_CANONICAL_URL ?? '').trim().replace(/\/$/, '') || 'https://letsfika.vercel.app'
+        const messages = messageEntryFirstTimeMessages(isAfterDeadline, nextMondayPhrase, appBase)
         let lastHandle: string | undefined
         for (let i = 0; i < messages.length; i++) {
           const sent = await sendMessage(profile.phone, messages[i], { fromNumber: 'concierge' })
