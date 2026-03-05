@@ -1,10 +1,14 @@
 /**
  * POST /api/merge-sms-signup — after "Sign in with Google to finalize", merge onboarding_sessions into the authenticated user.
  * Body: { token }. Requires auth. Sets profile.phone and profile + intake from session payload.
+ * Sends entry SMS when merge includes phone so user gets "Reply YES or SKIP" after first-time signup.
  */
 
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { sendMessage } from '@/lib/sendblue'
+import { getOrCreateSmsState, messageEntry, SMS_STATES } from '@/lib/sms-agent'
+import { getCurrentBatchWeek } from '@/lib/onboarding'
 
 export async function POST(request: Request) {
   const authHeader = request.headers.get('Authorization')
@@ -119,6 +123,21 @@ export async function POST(request: Request) {
       updated_at: new Date().toISOString(),
     })
     .eq('id', session.id)
+
+  // After first-time merge: send entry SMS so they know they're in and can reply YES or SKIP
+  if (session.phone && process.env.SENDBLUE_API_KEY_ID) {
+    try {
+      const entryMsg = messageEntry()
+      const sent = await sendMessage(session.phone, entryMsg, { fromNumber: 'concierge' })
+      if (sent.success) {
+        await getOrCreateSmsState(supabase, user.id, SMS_STATES.AWAITING_OPT_IN, {
+          batch_week: getCurrentBatchWeek(),
+        })
+      }
+    } catch {
+      // Non-fatal
+    }
+  }
 
   return NextResponse.json({ ok: true })
 }

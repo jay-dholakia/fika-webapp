@@ -16,6 +16,7 @@ import {
   messageOptInSetAvailability,
   messageSkipped,
   messageEntry,
+  messageOnboardingRequired,
   messageMatchOffer,
   messageConversationContext,
   messageSchedulingDay,
@@ -26,7 +27,7 @@ import {
   pickVenueForMatch,
 } from '@/lib/sms-agent'
 import { sendConcierge, sendMatch, isSendblueConfigured } from '@/lib/sendblue'
-import { getCurrentBatchWeek } from '@/lib/onboarding'
+import { getCurrentBatchWeek, isOnboardingComplete } from '@/lib/onboarding'
 import {
   messageSmsSignupLinkSent,
   messageSmsSignupLinkAlreadySent,
@@ -200,8 +201,28 @@ export async function POST(request: Request) {
     .is('match_id', null)
     .maybeSingle()
 
-  // First contact (reply-only flow): no state yet — send entry message and set awaiting_opt_in
+  // First contact (no state yet): only send weekly opt-in if onboarding/intake is complete
   if (!stateRow) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('id, first_name, birthdate, city, avatar_url, intent_confirmed_at')
+      .eq('id', userId)
+      .maybeSingle()
+    const { data: intake } = await supabase
+      .from('intake_responses_v5')
+      .select('user_id, completed_at')
+      .eq('user_id', userId)
+      .maybeSingle()
+    if (!isOnboardingComplete(profile ?? null, intake ?? null)) {
+      console.log('[sendblue-webhook] user needs onboarding', { fromLast4 })
+      const DEFAULT_APP_BASE = 'https://letsfika.vercel.app'
+      const appBase = (process.env.APP_CANONICAL_URL ?? '').trim()
+        ? process.env.APP_CANONICAL_URL!.trim().replace(/\/$/, '')
+        : DEFAULT_APP_BASE
+      const onboardingUrl = `${appBase}/app/onboarding`
+      await sendConcierge(fromNumber, messageOnboardingRequired(onboardingUrl))
+      return NextResponse.json({ ok: true })
+    }
     console.log('[sendblue-webhook] first_contact sending entry to', fromLast4)
     const entryResult = await sendConcierge(fromNumber, messageEntry())
     console.log('[sendblue-webhook] sendConcierge result', { ok: entryResult.ok, error: entryResult.error })

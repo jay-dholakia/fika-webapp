@@ -125,10 +125,10 @@ export async function POST(request: Request) {
     }
   }
 
-  // Entry SMS: only when not in reply-only mode (user must text first when reply-only)
-  const replyOnly = process.env.SENDBLUE_REPLY_ONLY === 'true'
+  // After first-time intake completion: send entry SMS so they know they're in and can reply YES or SKIP
+  // (Send even in reply-only mode — this is the one proactive "you're set up" message.)
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!replyOnly && serviceKey && process.env.SENDBLUE_API_KEY_ID) {
+  if (serviceKey && process.env.SENDBLUE_API_KEY_ID) {
     try {
       const serviceSupabase = createClient(url, serviceKey)
       const { data: profile } = await serviceSupabase

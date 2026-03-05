@@ -95,6 +95,11 @@ export function messageEntry(): string {
   return `Hi — I'm the Fika agent.\nEach week I introduce you to one thoughtful person nearby for a real conversation.\n\nI'll handle the intro and help coordinate the meetup.\n\nWant an introduction this week?\nReply YES or SKIP`
 }
 
+/** When user is known but hasn't completed onboarding/intake — send link to finish profile. */
+export function messageOnboardingRequired(onboardingUrl: string): string {
+  return `You're in our system — we just need a bit more from you before we can match you.\n\nComplete your profile here:\n\n${onboardingUrl}\n\nReply to this number again once you're done and we'll send you the weekly intro.`
+}
+
 export function messageWeeklyOptIn(): string {
   return `Would you like a Fika introduction this week?\n\nReply IN or SKIP`
 }
