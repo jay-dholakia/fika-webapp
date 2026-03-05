@@ -340,7 +340,7 @@ export async function POST(request: Request) {
   if (!stateRow) {
     const { data: profile } = await supabase
       .from('profiles')
-      .select('id, first_name, birthdate, city, avatar_url, intent_confirmed_at')
+      .select('id, first_name, birthdate, city, avatar_url, intent_confirmed_at, lat, lng')
       .eq('id', userId)
       .maybeSingle()
     const { data: intake } = await supabase
@@ -380,7 +380,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true })
     }
     console.log('[sendblue-webhook] first_contact sending entry to', fromLast4)
-    const { data: profile } = await supabase.from('profiles').select('lat, lng').eq('id', userId).maybeSingle()
     const nextMondayPhrase = getNextMondayPhrase(getTimezoneFromLatLng(profile?.lat ?? null, profile?.lng ?? null))
     const entryMsg = isPastOptInDeadline(batchWeek) ? messageEntryAfterDeadline(nextMondayPhrase) : messageEntry()
     const entryResult = await sendConcierge(fromNumber, entryMsg)
