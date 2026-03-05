@@ -271,6 +271,7 @@ export default function SettingsProfilePage() {
               key={opt}
               type="button"
               className={`onboarding-chip ${value === opt ? 'selected' : ''}`}
+              onPointerDown={(e) => { if (e.button === 0) set(opt) }}
               onClick={() => set(opt)}
               disabled={saving}
             >
@@ -349,6 +350,7 @@ export default function SettingsProfilePage() {
                 key={opt}
                 type="button"
                 className={`onboarding-chip ${selected ? 'multi-selected' : ''}`}
+                onPointerDown={(e) => { if (e.button === 0) toggle() }}
                 onClick={toggle}
                 disabled={saving || (!isExclusiveOption && atMax && !selected)}
               >

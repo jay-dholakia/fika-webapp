@@ -1,4 +1,5 @@
 // SMS cron: day-of reminder for confirmed Fikas today.
+// Uses PT "today" and real time from batch_week + confirmed_slot_id (same as 3h reminder).
 // Invoked by pg_cron. Requires SENDBLUE_API_KEY_ID, SENDBLUE_API_SECRET_KEY.
 
 declare const Deno: { env: { get(key: string): string | undefined } }
@@ -9,8 +10,34 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const SENDBLUE_URL = 'https://api.sendblue.co/api/send-message'
 
+const DAY_OFFSET: Record<string, number> = { mon: 0, tue: 1, wed: 2, thu: 3, fri: 4, sat: 5, sun: 6 }
+
+/** Today (YYYY-MM-DD) in America/Los_Angeles. */
+function getTodayPT(): string {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' })
+}
+
+/** Fika date (YYYY-MM-DD) from batch_week (Monday) + slotId (e.g. wed_14_30). */
+function getFikaDateFromSlot(batchWeek: string, slotId: string): string {
+  const monday = new Date(batchWeek + 'T12:00:00Z')
+  const prefix = slotId.slice(0, 3).toLowerCase()
+  const offset = DAY_OFFSET[prefix] ?? 2
+  monday.setUTCDate(monday.getUTCDate() + offset)
+  return monday.toISOString().slice(0, 10)
+}
+
+/** Display time from slotId e.g. wed_14_30 -> "2:30pm". */
+function slotToTimeStr(slotId: string): string {
+  const parts = slotId.split('_')
+  const hour = parseInt(parts[1] ?? '14', 10)
+  const min = parseInt(parts[2] ?? '0', 10)
+  const period = hour >= 12 ? 'pm' : 'am'
+  const h12 = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour
+  return min === 0 ? `${h12}${period}` : `${h12}:${min.toString().padStart(2, '0')}${period}`
+}
+
 function buildReminderMessage(time: string, venueName: string, neighborhood: string, starter?: string): string {
-  let text = `Your Fika conversation is today at ${time} at ${venueName} (${neighborhood}).\n\nHope you both enjoy it.`
+  let text = `Your Fika conversation is today at ${time} at ${venueName} (${neighborhood}). We'll text you closer to the Fika with more details and how to update your Fika intro if you're running late.\n\nHope you both enjoy it.`
   if (starter) text += `\n\nOne question you might enjoy exploring:\n${starter}`
   return text
 }
@@ -31,14 +58,15 @@ serve(async () => {
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
-    const today = new Date().toISOString().slice(0, 10)
+    const todayPT = getTodayPT()
     const { data: matches } = await supabase
       .from('match_candidates')
-      .select('id, user_a, user_b, confirmed_at, confirmed_venue_id, reasons')
+      .select('id, user_a, user_b, batch_week, confirmed_slot_id, confirmed_venue_id, reasons')
       .eq('scheduling_status', 'confirmed')
       .not('confirmed_venue_id', 'is', null)
-    const todayMatches = (matches ?? []).filter((m: { confirmed_at: string | null }) =>
-      m.confirmed_at && m.confirmed_at.startsWith(today)
+    const todayMatches = (matches ?? []).filter(
+      (m: { batch_week: string | null; confirmed_slot_id: string | null }) =>
+        m.batch_week && m.confirmed_slot_id && getFikaDateFromSlot(m.batch_week, m.confirmed_slot_id) === todayPT
     )
 
     let sent = 0
@@ -53,7 +81,7 @@ serve(async () => {
       const reasons = (match.reasons as Record<string, unknown>) ?? {}
       const hooks = (reasons.conversation_hooks as string[]) ?? []
       const starter = hooks[0] as string | undefined
-      const timeStr = '7pm'
+      const timeStr = slotToTimeStr(match.confirmed_slot_id)
 
       for (const userId of [match.user_a, match.user_b]) {
         const { data: profile } = await supabase
@@ -78,7 +106,7 @@ serve(async () => {
         if (res.ok) sent++
       }
     }
-    return new Response(JSON.stringify({ ok: true, date: today, sent }))
+    return new Response(JSON.stringify({ ok: true, date: todayPT, sent }))
   } catch (e) {
     return new Response(JSON.stringify({ error: String(e) }), { status: 500 })
   }

@@ -13,6 +13,7 @@ export type ProfileRow = {
   lat: number | null
   lng: number | null
   phone: string | null // E.164 for SMS (Sendblue)
+  sms_opted_out_at?: string | null // ISO; when set, we don't send SMS until they text back
   languages?: string[] | null
   avatar_url?: string | null
   intent_confirmed_at: string | null // ISO
@@ -99,4 +100,13 @@ export type VenueRow = {
   lat: number | null
   lng: number | null
   created_at: string | null
+}
+
+/** Post-Fika feedback: reply to "How did your Fika go?" SMS. One row per message. */
+export type FikaFeedbackRow = {
+  id: string
+  match_id: string
+  user_id: string
+  content: string
+  created_at: string // ISO
 }

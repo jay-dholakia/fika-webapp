@@ -1,0 +1,126 @@
+// SMS cron: 3 hours before Fika — reminder + "reply HERE or RUNNING LATE and we'll let your match know".
+// Invoked by pg_cron every hour. Requires SENDBLUE_API_KEY_ID, SENDBLUE_API_SECRET_KEY.
+
+declare const Deno: { env: { get(key: string): string | undefined } }
+// @ts-ignore Deno
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+// @ts-ignore Deno
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+
+const SENDBLUE_URL = 'https://api.sendblue.co/api/send-message'
+
+const DAY_OFFSET: Record<string, number> = { mon: 0, tue: 1, wed: 2, thu: 3, fri: 4, sat: 5, sun: 6 }
+
+/** Fika datetime (PT) from batch_week (Monday YYYY-MM-DD) + slotId (e.g. wed_14_30). Uses PST (-08:00). */
+function getFikaTimeMs(batchWeek: string, slotId: string): number | null {
+  const monday = new Date(batchWeek + 'T12:00:00Z')
+  const prefix = slotId.slice(0, 3).toLowerCase()
+  const offset = DAY_OFFSET[prefix] ?? 2
+  monday.setUTCDate(monday.getUTCDate() + offset)
+  const dateStr = monday.toISOString().slice(0, 10)
+  const parts = slotId.split('_')
+  const hour = parseInt(parts[1] ?? '14', 10)
+  const min = parseInt(parts[2] ?? '0', 10)
+  const iso = `${dateStr}T${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}:00-08:00`
+  const d = new Date(iso)
+  return isNaN(d.getTime()) ? null : d.getTime()
+}
+
+/** Display time from slotId e.g. wed_14_30 -> "2:30pm". */
+function slotToTimeStr(slotId: string): string {
+  const parts = slotId.split('_')
+  const hour = parseInt(parts[1] ?? '14', 10)
+  const min = parseInt(parts[2] ?? '0', 10)
+  const period = hour >= 12 ? 'pm' : 'am'
+  const h12 = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour
+  return min === 0 ? `${h12}${period}` : `${h12}:${min.toString().padStart(2, '0')}${period}`
+}
+
+const MS_2_5_H = 2.5 * 60 * 60 * 1000
+const MS_3_5_H = 3.5 * 60 * 60 * 1000
+
+function buildThreeHourMessage(time: string, venueName: string, neighborhood: string): string {
+  return `Your Fika is in about 3 hours — ${time} at ${venueName} (${neighborhood}).\n\nYou can update your Fika intro in case you're running late: reply HERE when you arrive, or RUNNING LATE if you're behind, and we'll let them know.`
+}
+
+serve(async () => {
+  try {
+    if (Deno.env.get('SENDBLUE_REPLY_ONLY') === 'true') {
+      return new Response(JSON.stringify({ ok: true, reply_only: true }), {
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+    const apiKeyId = Deno.env.get('SENDBLUE_API_KEY_ID')
+    const apiSecret = Deno.env.get('SENDBLUE_API_SECRET_KEY')
+    if (!apiKeyId || !apiSecret) {
+      return new Response(JSON.stringify({ error: 'Sendblue not configured' }), { status: 503 })
+    }
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    )
+    const now = Date.now()
+    const { data: matches } = await supabase
+      .from('match_candidates')
+      .select('id, user_a, user_b, batch_week, confirmed_slot_id, confirmed_venue_id, three_hour_reminder_sent_at')
+      .eq('scheduling_status', 'confirmed')
+      .not('confirmed_venue_id', 'is', null)
+      .not('confirmed_slot_id', 'is', null)
+      .not('batch_week', 'is', null)
+      .is('three_hour_reminder_sent_at', null)
+
+    const toSend: { id: string; timeStr: string; venueName: string; neighborhood: string; userIds: string[] }[] = []
+    for (const m of matches ?? []) {
+      const fikaMs = getFikaTimeMs(m.batch_week, m.confirmed_slot_id)
+      if (fikaMs == null) continue
+      const diff = fikaMs - now
+      if (diff >= MS_2_5_H && diff <= MS_3_5_H) {
+        const { data: venue } = await supabase
+          .from('venues')
+          .select('name, neighborhood, city')
+          .eq('id', m.confirmed_venue_id)
+          .single()
+        toSend.push({
+          id: m.id,
+          timeStr: slotToTimeStr(m.confirmed_slot_id),
+          venueName: venue?.name ?? 'the spot',
+          neighborhood: venue?.neighborhood ?? venue?.city ?? '',
+          userIds: [m.user_a, m.user_b],
+        })
+      }
+    }
+
+    let sent = 0
+    for (const item of toSend) {
+      const message = buildThreeHourMessage(item.timeStr, item.venueName, item.neighborhood)
+      for (const userId of item.userIds) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('phone')
+          .eq('id', userId)
+          .single()
+        if (!profile?.phone?.trim()) continue
+        const res = await fetch(SENDBLUE_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'sb-api-key-id': apiKeyId,
+            'sb-api-secret-key': apiSecret,
+          },
+          body: JSON.stringify({
+            number: (profile.phone as string).trim(),
+            content: message,
+          }),
+        })
+        if (res.ok) sent++
+      }
+      await supabase
+        .from('match_candidates')
+        .update({ three_hour_reminder_sent_at: new Date().toISOString() })
+        .eq('id', item.id)
+    }
+    return new Response(JSON.stringify({ ok: true, sent, matches_processed: toSend.length }))
+  } catch (e) {
+    return new Response(JSON.stringify({ error: String(e) }), { status: 500 })
+  }
+})

@@ -568,6 +568,9 @@ function AppOnboardingContent() {
                 key={opt}
                 type="button"
                 className={`onboarding-chip ${value === opt ? 'selected' : ''}`}
+                onPointerDown={(e) => {
+                  if (e.button === 0) setAnswers((a) => ({ ...a, [step.id]: opt }))
+                }}
                 onClick={() => setAnswers((a) => ({ ...a, [step.id]: opt }))}
                 disabled={saving}
               >
@@ -642,6 +645,17 @@ function AppOnboardingContent() {
                   key={opt}
                   type="button"
                   className={`onboarding-chip ${selected ? 'multi-selected' : ''}`}
+                  onPointerDown={(e) => {
+                    if (e.button !== 0) return
+                    if (selected) setAnswers((a) => ({ ...a, [step.id]: arr.filter((x) => x !== opt) }))
+                    else if (isPreferNotToSay) setAnswers((a) => ({ ...a, [step.id]: [opt] }))
+                    else if (arr.includes('Prefer not to say')) setAnswers((a) => ({ ...a, [step.id]: [...arr.filter((x) => x !== 'Prefer not to say'), opt] }))
+                    else if (isExclusiveOption) setAnswers((a) => ({ ...a, [step.id]: [opt] }))
+                    else if (exclusiveOptionText) {
+                      const withoutExclusive = arr.filter((x) => x !== exclusiveOptionText)
+                      if (withoutExclusive.length < (step.maxSelections ?? Infinity)) setAnswers((a) => ({ ...a, [step.id]: [...withoutExclusive, opt] }))
+                    } else if (!atMax) setAnswers((a) => ({ ...a, [step.id]: [...arr, opt] }))
+                  }}
                   onClick={() => {
                     if (selected) setAnswers((a) => ({ ...a, [step.id]: arr.filter((x) => x !== opt) }))
                     else if (isPreferNotToSay) setAnswers((a) => ({ ...a, [step.id]: [opt] }))

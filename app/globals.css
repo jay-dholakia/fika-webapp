@@ -1494,13 +1494,17 @@ a {
   outline: none;
   -webkit-tap-highlight-color: transparent;
   tap-highlight-color: transparent;
+  touch-action: manipulation;
   box-shadow: 0 0 0 1px var(--color-border);
-  transition: background 0.2s, color 0.2s;
+  transition: background 0.08s ease-out, color 0.08s ease-out, box-shadow 0.08s ease-out, transform 0.08s ease-out;
 }
 .onboarding-chip.selected {
   background: #4a85b8;
   color: #fff;
   box-shadow: none;
+}
+.onboarding-chip:active {
+  transform: scale(0.98);
 }
 .onboarding-chip.multi-selected {
   background: #4a85b8;

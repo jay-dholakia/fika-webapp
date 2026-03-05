@@ -1,8 +1,8 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { sendMessage } from '@/lib/sendblue'
-import { getOrCreateSmsState, messageEntry, SMS_STATES } from '@/lib/sms-agent'
-import { getCurrentBatchWeek } from '@/lib/onboarding'
+import { getOrCreateSmsState, messageEntry, messageEntryAfterDeadline, SMS_STATES } from '@/lib/sms-agent'
+import { getCurrentBatchWeek, isPastOptInDeadline } from '@/lib/onboarding'
 
 const OPEN_ENDED_IDS: string[] = []
 
@@ -137,16 +137,17 @@ export async function POST(request: Request) {
         .eq('id', user.id)
         .single()
       if (profile?.phone) {
+        const batchWeek = getCurrentBatchWeek()
         await getOrCreateSmsState(serviceSupabase, user.id, SMS_STATES.AWAITING_OPT_IN, {
-          batch_week: getCurrentBatchWeek(),
+          batch_week: batchWeek,
         })
-        const entryMsg = messageEntry()
+        const entryMsg = isPastOptInDeadline(batchWeek) ? messageEntryAfterDeadline() : messageEntry()
         const sent = await sendMessage(profile.phone, entryMsg, { fromNumber: 'concierge' })
         if (sent.message_handle) {
           await serviceSupabase.from('sms_conversation_states').update({
             last_sendblue_message_handle: sent.message_handle,
             updated_at: new Date().toISOString(),
-          }).eq('user_id', user.id).eq('batch_week', getCurrentBatchWeek()).is('match_id', null)
+          }).eq('user_id', user.id).eq('batch_week', batchWeek).is('match_id', null)
         }
       }
     } catch {

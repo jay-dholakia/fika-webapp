@@ -9,8 +9,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const SENDBLUE_URL = 'https://api.sendblue.co/api/send-message'
 
-const MESSAGE = `Quick check — should I look for someone for you this week?
-IN / SKIP`
+const MESSAGE = `Quick check — reply IN or SKIP and set availability by Tuesday 11:59pm PT to get your intro Wednesday.`
 
 function getCurrentBatchWeek(): string {
   const d = new Date()

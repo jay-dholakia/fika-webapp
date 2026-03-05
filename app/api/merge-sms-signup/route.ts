@@ -7,8 +7,8 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { sendMessage } from '@/lib/sendblue'
-import { getOrCreateSmsState, messageEntry, SMS_STATES } from '@/lib/sms-agent'
-import { getCurrentBatchWeek } from '@/lib/onboarding'
+import { getOrCreateSmsState, messageEntry, messageEntryAfterDeadline, SMS_STATES } from '@/lib/sms-agent'
+import { getCurrentBatchWeek, isPastOptInDeadline } from '@/lib/onboarding'
 
 export async function POST(request: Request) {
   const authHeader = request.headers.get('Authorization')
@@ -127,16 +127,17 @@ export async function POST(request: Request) {
   // After first-time merge: send entry SMS. Create state before sending so a quick YES reply progresses.
   if (session.phone && process.env.SENDBLUE_API_KEY_ID) {
     try {
+      const batchWeek = getCurrentBatchWeek()
       await getOrCreateSmsState(supabase, user.id, SMS_STATES.AWAITING_OPT_IN, {
-        batch_week: getCurrentBatchWeek(),
+        batch_week: batchWeek,
       })
-      const entryMsg = messageEntry()
+      const entryMsg = isPastOptInDeadline(batchWeek) ? messageEntryAfterDeadline() : messageEntry()
       const sent = await sendMessage(session.phone, entryMsg, { fromNumber: 'concierge' })
       if (sent.message_handle) {
         await supabase.from('sms_conversation_states').update({
           last_sendblue_message_handle: sent.message_handle,
           updated_at: new Date().toISOString(),
-        }).eq('user_id', user.id).eq('batch_week', getCurrentBatchWeek()).is('match_id', null)
+        }).eq('user_id', user.id).eq('batch_week', batchWeek).is('match_id', null)
       }
     } catch {
       // Non-fatal

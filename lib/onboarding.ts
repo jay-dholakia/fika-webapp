@@ -48,6 +48,32 @@ export function getCurrentBatchWeek(): string {
   return monday.toISOString().slice(0, 10)
 }
 
+/** Opt-in deadline: Tuesday 11:59pm PT for the given batch week (Monday). Used for "opt in + set availability by Tuesday 11:59pm". */
+const OPT_IN_DEADLINE_HOUR_UTC = 7
+const OPT_IN_DEADLINE_MINUTE_UTC = 59
+
+/**
+ * Returns the opt-in deadline for a batch week (Monday YYYY-MM-DD).
+ * Deadline = Tuesday 23:59 PT (PST) ≈ Wednesday 07:59 UTC.
+ */
+export function getOptInDeadlineForBatchWeek(batchWeek: string): Date {
+  const monday = new Date(batchWeek + 'T00:00:00Z')
+  const wednesday = new Date(monday)
+  wednesday.setUTCDate(wednesday.getUTCDate() + 2)
+  wednesday.setUTCHours(OPT_IN_DEADLINE_HOUR_UTC, OPT_IN_DEADLINE_MINUTE_UTC, 59, 999)
+  return wednesday
+}
+
+/**
+ * True if the opt-in deadline for the given batch week has passed.
+ * Uses current batch week if batchWeek is omitted.
+ */
+export function isPastOptInDeadline(batchWeek?: string): boolean {
+  const week = batchWeek ?? getCurrentBatchWeek()
+  const deadline = getOptInDeadlineForBatchWeek(week)
+  return new Date() >= deadline
+}
+
 /**
  * Returns intake step ids that have no answer (LA Beta: no branching).
  * When intake already has completed_at, we do not count confirm_intent as missing.

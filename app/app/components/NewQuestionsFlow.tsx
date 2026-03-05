@@ -153,6 +153,10 @@ export function NewQuestionsFlow({ orderedSteps, intake, userId, onComplete }: N
               key={opt}
               type="button"
               className={`onboarding-chip ${isSelected ? 'selected' : ''}`}
+              onPointerDown={(e) => {
+                if (e.button === 0)
+                  setAnswers((a) => (isSelected ? { ...a, [step.id]: '' } : { ...a, [step.id]: opt }))
+              }}
               onClick={() =>
                 setAnswers((a) => (isSelected ? { ...a, [step.id]: '' } : { ...a, [step.id]: opt }))
               }
@@ -186,6 +190,25 @@ export function NewQuestionsFlow({ orderedSteps, intake, userId, onComplete }: N
                 key={opt}
                 type="button"
                 className={`onboarding-chip ${selected ? 'multi-selected' : ''}`}
+                onPointerDown={(e) => {
+                  if (e.button !== 0) return
+                  if (selected) {
+                    setAnswers((a) => ({ ...a, [step.id]: arr.filter((x) => x !== opt) }))
+                  } else if (isPreferNotToSay) {
+                    setAnswers((a) => ({ ...a, [step.id]: [opt] }))
+                  } else if (arr.includes('Prefer not to say')) {
+                    setAnswers((a) => ({ ...a, [step.id]: [...arr.filter((x) => x !== 'Prefer not to say'), opt] }))
+                  } else if (isExclusiveOption) {
+                    setAnswers((a) => ({ ...a, [step.id]: [opt] }))
+                  } else if (exclusiveOptionText) {
+                    const withoutExclusive = arr.filter((x) => x !== exclusiveOptionText)
+                    const max = step.maxSelections ?? Infinity
+                    if (withoutExclusive.length < max)
+                      setAnswers((a) => ({ ...a, [step.id]: [...withoutExclusive, opt] }))
+                  } else if (!atMax) {
+                    setAnswers((a) => ({ ...a, [step.id]: [...arr, opt] }))
+                  }
+                }}
                 onClick={() => {
                   if (selected) {
                     setAnswers((a) => ({ ...a, [step.id]: arr.filter((x) => x !== opt) }))

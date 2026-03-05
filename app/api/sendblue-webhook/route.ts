@@ -13,9 +13,11 @@ import {
   SMS_STATES,
   getDaysFromSlotIds,
   slotIdToDayAndWindow,
+  slotIdToDisplayTime,
   messageOptInSetAvailability,
   messageSkipped,
   messageEntry,
+  messageEntryAfterDeadline,
   messageOnboardingRequired,
   messageEntryReminder,
   messageMatchOffer,
@@ -25,10 +27,41 @@ import {
   messageVenueProposed,
   messageYoureAllSet,
   messagePassConfirmation,
+  messageYesWaitingForOther,
+  messageMatchPassed,
+  messageProposalToConfirm,
+  detectRelayIntent,
+  messageRelayConfirmToSender,
+  messageRelayToOther,
+  messageRelayHint,
+  messageRelayCouldNotDeliver,
+  isFikaToday,
+  isFikaTimeInPast,
+  messageFikaInPast,
+  messageThanksForFeedback,
+  messageThanksForFeedbackAgain,
+  messageSmsOptOut,
+  messageSmsOptBackIn,
+  messageConfirmedUpcoming,
+  messageRescheduleAck,
+  messageCancelAck,
+  getFallbackForState,
+  fallbackGeneric,
+  isOptInKeyword,
+  isSkipKeyword,
+  isMatchYesKeyword,
+  isMatchPassKeyword,
+  isConfirmKeyword,
+  isResendLinkKeyword,
+  isHelpKeyword,
+  isStopKeyword,
+  isRescheduleKeyword,
+  isCancelKeyword,
+  getFikaTimeMs,
   pickVenueForMatch,
 } from '@/lib/sms-agent'
-import { sendConcierge, sendMatch, isSendblueConfigured } from '@/lib/sendblue'
-import { getCurrentBatchWeek, isOnboardingComplete } from '@/lib/onboarding'
+import { sendConcierge, isSendblueConfigured } from '@/lib/sendblue'
+import { getCurrentBatchWeek, isOnboardingComplete, isPastOptInDeadline } from '@/lib/onboarding'
 import type { ProfileRow, IntakeResponsesV5Row } from '@/lib/db-types'
 import {
   messageSmsSignupLinkSent,
@@ -36,16 +69,21 @@ import {
 } from '@/lib/sms-signup'
 
 const CONCIERGE = (process.env.SENDBLUE_CONCIERGE_NUMBER || '').replace(/\D/g, '')
-const MATCH = (process.env.SENDBLUE_MATCH_NUMBER || '').replace(/\D/g, '')
+
+function getAppBase(): string {
+  const base = (process.env.APP_CANONICAL_URL ?? '').trim().replace(/\/$/, '')
+  return base || 'https://letsfika.vercel.app'
+}
+
+function formatConciergeNumber(digits: string): string {
+  if (digits.length === 10) return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`
+  if (digits.length === 11 && digits.startsWith('1')) return `(${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(7)}`
+  return digits
+}
 
 function isConciergeNumber(toNumber: string): boolean {
   const digits = toNumber.replace(/\D/g, '')
   return Boolean(CONCIERGE && (digits === CONCIERGE || digits.endsWith(CONCIERGE)))
-}
-
-function isMatchNumber(toNumber: string): boolean {
-  const digits = toNumber.replace(/\D/g, '')
-  return Boolean(MATCH && (digits === MATCH || digits.endsWith(MATCH)))
 }
 
 function verifyWebhookSignature(rawBody: string, signatureHeader: string | null, secret: string): boolean {
@@ -110,45 +148,9 @@ export async function POST(request: Request) {
   const fromPhone = normalizeIncomingPhone(fromNumber)
 
   const isConcierge = isConciergeNumber(toNumber)
-  const isMatch = isMatchNumber(toNumber)
-  console.log('[sendblue-webhook] route', { isConcierge, isMatch, toNumber: toNumber ? 'set' : 'empty' })
+  console.log('[sendblue-webhook] route', { isConcierge, toNumber: toNumber ? 'set' : 'empty' })
 
-  // ----- Relay (Fika Match number) -----
-  if (isMatchNumber(toNumber)) {
-    const userId = await getUserIdByPhone(supabase, fromPhone)
-    if (!userId) {
-      await sendMatch(fromNumber, "We don't have your number on file. Text the Fika Concierge number to get set up.")
-      return NextResponse.json({ ok: true })
-    }
-    const { data: match } = await supabase
-      .from('match_candidates')
-      .select('id, user_a, user_b, confirmed_venue_id')
-      .or(`user_a.eq.${userId},user_b.eq.${userId}`)
-      .eq('scheduling_status', 'confirmed')
-      .not('confirmed_venue_id', 'is', null)
-      .order('confirmed_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-    if (!match) {
-      await sendMatch(fromNumber, "You don't have an active Fika to coordinate right now.")
-      return NextResponse.json({ ok: true })
-    }
-    const otherUserId = match.user_a === userId ? match.user_b : match.user_a
-    const { data: otherProfile } = await supabase
-      .from('profiles')
-      .select('first_name, phone')
-      .eq('id', otherUserId)
-      .maybeSingle()
-    if (!otherProfile?.phone) {
-      await sendMatch(fromNumber, "We can't reach your Fika partner right now.")
-      return NextResponse.json({ ok: true })
-    }
-    const firstName = otherProfile.first_name?.trim() || 'Your match'
-    await sendMatch(otherProfile.phone, `${firstName}: ${content}`)
-    return NextResponse.json({ ok: true })
-  }
-
-  // ----- Concierge flow -----
+  // ----- Concierge only (no Match number) -----
   if (!isConciergeNumber(toNumber)) {
     return NextResponse.json({ ok: true })
   }
@@ -189,6 +191,135 @@ export async function POST(request: Request) {
     }
     const link = `${appBase}/signup?token=${token}`
     await sendConcierge(fromNumber, messageSmsSignupLinkSent(link))
+    return NextResponse.json({ ok: true })
+  }
+
+  // ----- STOP / opt-out and opt-back-in -----
+  const { data: profileForSms } = await supabase
+    .from('profiles')
+    .select('sms_opted_out_at')
+    .eq('id', userId)
+    .maybeSingle()
+  if (isStopKeyword(content)) {
+    await supabase.from('profiles').update({ sms_opted_out_at: new Date().toISOString() }).eq('id', userId)
+    await sendConcierge(fromNumber, messageSmsOptOut(getAppBase(), formatConciergeNumber(CONCIERGE)))
+    return NextResponse.json({ ok: true })
+  }
+  if (profileForSms?.sms_opted_out_at) {
+    await supabase.from('profiles').update({ sms_opted_out_at: null }).eq('id', userId)
+    await sendConcierge(fromNumber, messageSmsOptBackIn())
+    return NextResponse.json({ ok: true })
+  }
+
+  // ----- Post-Fika feedback: if we already sent "How did your Fika go?" and they're replying, store it -----
+  const { data: feedbackMatches } = await supabase
+    .from('match_candidates')
+    .select('id, user_a, user_b, batch_week, confirmed_slot_id, post_fika_sent_at')
+    .or(`user_a.eq.${userId},user_b.eq.${userId}`)
+    .eq('scheduling_status', 'confirmed')
+    .not('post_fika_sent_at', 'is', null)
+    .not('batch_week', 'is', null)
+    .not('confirmed_slot_id', 'is', null)
+    .order('post_fika_sent_at', { ascending: false })
+  const feedbackMatch = (feedbackMatches ?? []).find(
+    (m: { batch_week: string; confirmed_slot_id: string }) =>
+      m.batch_week && m.confirmed_slot_id && isFikaTimeInPast(m.batch_week, m.confirmed_slot_id)
+  )
+  if (feedbackMatch) {
+    const { data: existingFeedback } = await supabase
+      .from('fika_feedback')
+      .select('id')
+      .eq('match_id', feedbackMatch.id)
+      .eq('user_id', userId)
+      .limit(1)
+    const isRepeat = (existingFeedback?.length ?? 0) > 0
+    const { error: insertErr } = await supabase.from('fika_feedback').insert({
+      match_id: feedbackMatch.id,
+      user_id: userId,
+      content,
+    })
+    if (!insertErr) {
+      await sendConcierge(fromNumber, isRepeat ? messageThanksForFeedbackAgain() : messageThanksForFeedback())
+    }
+    return NextResponse.json({ ok: true })
+  }
+
+  // ----- Day-of relay: if user has a confirmed Fika today, handle HERE / ON MY WAY / RUNNING LATE / CAN'T MAKE IT -----
+  const { data: todayMatches } = await supabase
+    .from('match_candidates')
+    .select('id, user_a, user_b, batch_week, confirmed_slot_id')
+    .or(`user_a.eq.${userId},user_b.eq.${userId}`)
+    .eq('scheduling_status', 'confirmed')
+    .not('confirmed_slot_id', 'is', null)
+    .not('batch_week', 'is', null)
+  const todayMatch = (todayMatches ?? []).find(
+    (m: { batch_week: string; confirmed_slot_id: string }) =>
+      m.batch_week && m.confirmed_slot_id && isFikaToday(m.batch_week, m.confirmed_slot_id)
+  )
+  if (todayMatch) {
+    if (isFikaTimeInPast(todayMatch.batch_week, todayMatch.confirmed_slot_id)) {
+      await sendConcierge(fromNumber, messageFikaInPast())
+      return NextResponse.json({ ok: true })
+    }
+    const otherId = todayMatch.user_a === userId ? todayMatch.user_b : todayMatch.user_a
+    const { data: otherProfile } = await supabase
+      .from('profiles')
+      .select('first_name, phone')
+      .eq('id', otherId)
+      .maybeSingle()
+    const { data: senderProfile } = await supabase
+      .from('profiles')
+      .select('first_name')
+      .eq('id', userId)
+      .maybeSingle()
+    const intent = detectRelayIntent(content)
+    const otherFirstName = otherProfile?.first_name?.trim() ?? 'Your match'
+    const senderFirstName = senderProfile?.first_name?.trim() ?? 'Your match'
+    if (intent) {
+      const otherPhone = otherProfile?.phone?.trim()
+      if (otherPhone) {
+        await sendConcierge(otherPhone, messageRelayToOther(senderFirstName, intent))
+        await sendConcierge(fromNumber, messageRelayConfirmToSender(otherFirstName, intent))
+      } else {
+        await sendConcierge(fromNumber, messageRelayCouldNotDeliver())
+      }
+    } else {
+      await sendConcierge(fromNumber, messageRelayHint())
+    }
+    return NextResponse.json({ ok: true })
+  }
+
+  // ----- Confirmed Fika upcoming (not today, or they text on non–Fika day): fun reminder + CTA -----
+  const { data: upcomingMatches } = await supabase
+    .from('match_candidates')
+    .select('id, user_a, user_b, batch_week, confirmed_slot_id, confirmed_venue_id')
+    .or(`user_a.eq.${userId},user_b.eq.${userId}`)
+    .eq('scheduling_status', 'confirmed')
+    .not('batch_week', 'is', null)
+    .not('confirmed_slot_id', 'is', null)
+    .not('confirmed_venue_id', 'is', null)
+  const upcomingMatch = (upcomingMatches ?? []).find((m: { batch_week: string; confirmed_slot_id: string }) => {
+    const ms = getFikaTimeMs(m.batch_week, m.confirmed_slot_id)
+    return ms != null && ms > Date.now()
+  })
+  if (upcomingMatch) {
+    if (isRescheduleKeyword(content)) {
+      await sendConcierge(fromNumber, messageRescheduleAck())
+      return NextResponse.json({ ok: true })
+    }
+    if (isCancelKeyword(content)) {
+      await sendConcierge(fromNumber, messageCancelAck())
+      return NextResponse.json({ ok: true })
+    }
+    const { data: venue } = await supabase
+      .from('venues')
+      .select('name, neighborhood, city')
+      .eq('id', upcomingMatch.confirmed_venue_id)
+      .single()
+    const { day, time } = slotIdToDisplayTime(upcomingMatch.confirmed_slot_id)
+    const venueName = venue?.name ?? 'the spot'
+    const neighborhood = venue?.neighborhood ?? venue?.city ?? ''
+    await sendConcierge(fromNumber, messageConfirmedUpcoming(day, time, venueName, neighborhood, getAppBase()))
     return NextResponse.json({ ok: true })
   }
 
@@ -247,7 +378,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true })
     }
     console.log('[sendblue-webhook] first_contact sending entry to', fromLast4)
-    const entryResult = await sendConcierge(fromNumber, messageEntry())
+    const entryMsg = isPastOptInDeadline(batchWeek) ? messageEntryAfterDeadline() : messageEntry()
+    const entryResult = await sendConcierge(fromNumber, entryMsg)
     console.log('[sendblue-webhook] sendConcierge result', { ok: entryResult.ok, error: entryResult.error, message_handle: entryResult.message_handle })
     if (entryResult.message_handle) {
       await supabase.from('sms_conversation_states').update({
@@ -267,9 +399,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true })
   }
 
-  // ----- Awaiting opt-in: IN / SKIP (and FIKA / HI to re-send the prompt) -----
+  // ----- Awaiting opt-in: IN / SKIP (and FIKA / HI to re-send the prompt); post-deadline = no opt-in -----
   if (state === SMS_STATES.AWAITING_OPT_IN) {
-    if (keyword === 'IN' || keyword === 'YES') {
+    if (isPastOptInDeadline(batchWeek)) {
+      await sendConcierge(fromNumber, messageEntryAfterDeadline())
+      return NextResponse.json({ ok: true })
+    }
+    if (isOptInKeyword(content) || keyword === 'IN' || keyword === 'YES') {
       await supabase.from('weekly_match_opt_ins').upsert(
         { user_id: userId, batch_week: batchWeek, opted_in_at: new Date().toISOString() },
         { onConflict: 'user_id,batch_week' }
@@ -287,7 +423,7 @@ export async function POST(request: Request) {
         : DEFAULT_APP_BASE
       const availabilityUrl = `${appBase}/app/availability`
       await sendConcierge(fromNumber, messageOptInSetAvailability(availabilityUrl))
-    } else if (keyword === 'SKIP') {
+    } else if (isSkipKeyword(content) || keyword === 'SKIP') {
       await supabase.rpc('upsert_global_sms_conversation_state', {
         p_user_id: userId,
         p_batch_week: batchWeek,
@@ -299,6 +435,8 @@ export async function POST(request: Request) {
     } else if (keyword === 'FIKA' || keyword === 'HI') {
       // Short reminder only — don't re-send the full intro
       await sendConcierge(fromNumber, messageEntryReminder())
+    } else {
+      await sendConcierge(fromNumber, getFallbackForState(SMS_STATES.AWAITING_OPT_IN))
     }
     return NextResponse.json({ ok: true })
   }
@@ -319,51 +457,224 @@ export async function POST(request: Request) {
   const matchId = matchStateRow?.match_id
   const matchPayload = (matchStateRow?.payload as Record<string, unknown>) ?? {}
 
+  // ----- HELP: state-aware fallback -----
+  if (isHelpKeyword(content)) {
+    await sendConcierge(fromNumber, getFallbackForState(matchState ?? state))
+    return NextResponse.json({ ok: true })
+  }
+
+  // ----- Opted in: re-send availability link on request -----
+  if (state === SMS_STATES.OPTED_IN && isResendLinkKeyword(content)) {
+    const availabilityUrl = `${getAppBase()}/app/availability`
+    await sendConcierge(fromNumber, messageOptInSetAvailability(availabilityUrl))
+    return NextResponse.json({ ok: true })
+  }
+
   if (matchState === SMS_STATES.MATCH_OFFERED && matchId) {
-    if (keyword === 'YES') {
+    if (isMatchYesKeyword(content) || keyword === 'YES') {
+      const { data: otherOpt } = await supabase
+        .from('opt_ins')
+        .select('decision')
+        .eq('match_id', matchId)
+        .neq('user_id', userId)
+        .maybeSingle()
+      if (otherOpt?.decision === 'no') {
+        await sendConcierge(fromNumber, messageMatchPassed())
+        await supabase.from('sms_conversation_states').delete().eq('id', matchStateRow!.id)
+        return NextResponse.json({ ok: true })
+      }
+      await supabase.from('opt_ins').upsert(
+        { match_id: matchId, user_id: userId, decision: 'yes' },
+        { onConflict: 'match_id,user_id' }
+      )
       const { data: match } = await supabase
         .from('match_candidates')
-        .select('id, user_a, user_b, reasons, overlapping_slot_ids')
+        .select('id, user_a, user_b, reasons, overlapping_slot_ids, default_slot_id')
         .eq('id', matchId)
         .single()
       if (!match) {
         await sendConcierge(fromNumber, "That match is no longer available. We'll send you another soon.")
         return NextResponse.json({ ok: true })
       }
-      const reasons = (match.reasons as Record<string, unknown>) ?? {}
-      const sharedInterests = (reasons.shared_interests as string[]) ?? (reasons.sharedInterests as string[]) ?? []
-      const hooks = (reasons.conversation_hooks as string[]) ?? (reasons.conversationHooks as string[]) ?? []
-      const starterQuestion = hooks[0] ?? "What's on your mind lately?"
-      await sendConcierge(fromNumber, messageConversationContext({
-        sharedInterests: sharedInterests.slice(0, 3),
-        starterQuestion,
-      }))
-      const days = getDaysFromSlotIds((match.overlapping_slot_ids as string[]) ?? [])
-      await sendConcierge(fromNumber, messageSchedulingDay(days.length ? days : ['WED', 'THU', 'FRI', 'SAT', 'SUN']))
-      await supabase.from('sms_conversation_states').upsert(
-        {
-          user_id: userId,
-          batch_week: batchWeek,
-          match_id: matchId,
-          state: SMS_STATES.ACCEPTED_SCHEDULING_DAY,
-          payload: { ...matchPayload },
-          last_sendblue_message_handle: messageHandle,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'user_id,batch_week,match_id' }
-      )
-      await supabase.from('opt_ins').upsert(
-        { match_id: matchId, user_id: userId, decision: 'yes' },
-        { onConflict: 'match_id,user_id' }
-      )
-    } else if (keyword === 'PASS') {
+      const { data: yesOpts } = await supabase
+        .from('opt_ins')
+        .select('user_id, answered_at')
+        .eq('match_id', matchId)
+        .eq('decision', 'yes')
+        .order('answered_at', { ascending: true })
+      const yesUsers = yesOpts ?? []
+      if (yesUsers.length === 1) {
+        await sendConcierge(fromNumber, messageYesWaitingForOther())
+        await supabase.from('sms_conversation_states').upsert(
+          {
+            user_id: userId,
+            batch_week: batchWeek,
+            match_id: matchId,
+            state: SMS_STATES.YES_WAITING,
+            payload: { ...matchPayload },
+            last_sendblue_message_handle: messageHandle,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'user_id,batch_week,match_id' }
+        )
+      } else {
+        const firstYesUserId = yesUsers[0].user_id
+        const overlapping = (match.overlapping_slot_ids as string[]) ?? []
+        const wedSun = overlapping.filter((id: string) => /^(wed|thu|fri|sat|sun)_/.test(id))
+        const slotId = (match.default_slot_id as string) ?? wedSun[0]
+        if (!slotId) {
+          await sendConcierge(fromNumber, "We couldn't find a time that works for both. We'll try again next week.")
+          return NextResponse.json({ ok: true })
+        }
+        const { data: userA } = await supabase.from('profiles').select('city').eq('id', match.user_a).single()
+        const { data: userB } = await supabase.from('profiles').select('city').eq('id', match.user_b).single()
+        const venue = await pickVenueForMatch(supabase, userA?.city ?? null, userB?.city ?? null)
+        if (!venue) {
+          await sendConcierge(fromNumber, "We're setting up a spot — we'll text you in a moment.")
+          return NextResponse.json({ ok: true })
+        }
+        const { day: proposedDay, time: proposedTime } = slotIdToDisplayTime(slotId)
+        const { data: otherProfile } = await supabase
+          .from('profiles')
+          .select('first_name')
+          .eq('id', firstYesUserId)
+          .single()
+        const otherName = otherProfile?.first_name?.trim() ?? 'Your match'
+        await sendConcierge(fromNumber, messageProposalToConfirm({
+          otherFirstName: otherName,
+          day: proposedDay,
+          time: proposedTime,
+          venueName: venue.name,
+          neighborhood: venue.neighborhood ?? venue.city,
+        }))
+        await supabase.from('match_candidates').update({
+          suggested_venue_id: venue.id,
+          default_slot_id: slotId,
+        }).eq('id', matchId)
+        await supabase.from('sms_conversation_states').upsert(
+          {
+            user_id: userId,
+            batch_week: batchWeek,
+            match_id: matchId,
+            state: SMS_STATES.AWAITING_SECOND_CONFIRM,
+            payload: {
+              proposed_slot_id: slotId,
+              proposed_venue_id: venue.id,
+              proposed_day: proposedDay,
+              proposed_time: proposedTime,
+              venue_name: venue.name,
+              neighborhood: venue.neighborhood ?? venue.city,
+              first_yes_user_id: firstYesUserId,
+            },
+            last_sendblue_message_handle: messageHandle,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'user_id,batch_week,match_id' }
+        )
+      }
+    } else if (isMatchPassKeyword(content) || keyword === 'PASS') {
       await supabase.from('opt_ins').upsert(
         { match_id: matchId, user_id: userId, decision: 'no' },
         { onConflict: 'match_id,user_id' }
       )
       await sendConcierge(fromNumber, messagePassConfirmation())
+      const { data: matchRow } = await supabase.from('match_candidates').select('user_a, user_b').eq('id', matchId).single()
+      const otherId = matchRow ? (matchRow.user_a === userId ? matchRow.user_b : matchRow.user_a) : null
+      if (otherId) {
+        const { data: otherOpt } = await supabase.from('opt_ins').select('decision').eq('match_id', matchId).eq('user_id', otherId).maybeSingle()
+        if (otherOpt?.decision === 'yes') {
+          const { data: otherProf } = await supabase.from('profiles').select('phone').eq('id', otherId).maybeSingle()
+          if (otherProf?.phone) {
+            await sendConcierge(otherProf.phone, messageMatchPassed())
+          }
+        }
+        await supabase.from('sms_conversation_states').delete().eq('user_id', otherId).eq('batch_week', batchWeek).eq('match_id', matchId)
+      }
       await supabase.from('sms_conversation_states').delete().eq('id', matchStateRow!.id)
+    } else {
+      await sendConcierge(fromNumber, getFallbackForState(SMS_STATES.MATCH_OFFERED))
     }
+    return NextResponse.json({ ok: true })
+  }
+
+  if (matchState === SMS_STATES.AWAITING_SECOND_CONFIRM && matchId && (isMatchYesKeyword(content) || keyword === 'YES')) {
+    const proposedSlotId = matchPayload.proposed_slot_id as string
+    const proposedVenueId = matchPayload.proposed_venue_id as string
+    const proposedDay = matchPayload.proposed_day as string
+    const proposedTime = matchPayload.proposed_time as string
+    const venueName = (matchPayload.venue_name as string) ?? 'the spot'
+    const neighborhood = (matchPayload.neighborhood as string) ?? ''
+    const firstYesUserId = matchPayload.first_yes_user_id as string
+    const { data: match } = await supabase.from('match_candidates').select('user_a, user_b').eq('id', matchId).single()
+    if (!match) return NextResponse.json({ ok: true })
+    const { data: firstProfile } = await supabase.from('profiles').select('phone, first_name').eq('id', firstYesUserId).single()
+    const currentName = (await supabase.from('profiles').select('first_name').eq('id', userId).single()).data?.first_name?.trim() ?? 'Your match'
+    if (firstProfile?.phone) {
+      await sendConcierge(firstProfile.phone, messageProposalToConfirm({
+        otherFirstName: currentName,
+        day: proposedDay,
+        time: proposedTime,
+        venueName,
+        neighborhood,
+      }))
+    }
+    await supabase.from('match_candidates').update({
+      suggested_venue_id: proposedVenueId,
+      default_slot_id: proposedSlotId,
+    }).eq('id', matchId)
+    await supabase.from('sms_conversation_states').upsert(
+      {
+        user_id: firstYesUserId,
+        batch_week: batchWeek,
+        match_id: matchId,
+        state: SMS_STATES.AWAITING_FIRST_CONFIRM,
+        payload: {
+          proposed_slot_id: proposedSlotId,
+          proposed_venue_id: proposedVenueId,
+          proposed_day: proposedDay,
+          proposed_time: proposedTime,
+          venue_name: venueName,
+          neighborhood,
+        },
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'user_id,batch_week,match_id' }
+    )
+    await supabase.from('sms_conversation_states').update({
+      state: SMS_STATES.CONFIRMED,
+      updated_at: new Date().toISOString(),
+    }).eq('id', matchStateRow!.id)
+    return NextResponse.json({ ok: true })
+  }
+
+  if (matchState === SMS_STATES.AWAITING_FIRST_CONFIRM && matchId && (isMatchYesKeyword(content) || keyword === 'YES')) {
+    const { data: match } = await supabase.from('match_candidates').select('user_a, user_b, suggested_venue_id').eq('id', matchId).single()
+    if (!match?.suggested_venue_id) return NextResponse.json({ ok: true })
+    const proposedSlotId = matchPayload.proposed_slot_id as string
+    const { data: venue } = await supabase.from('venues').select('name, neighborhood, city').eq('id', match.suggested_venue_id).single()
+    const venueName = venue?.name ?? 'the spot'
+    const neighborhood = venue?.neighborhood ?? venue?.city ?? ''
+    const { day: dayLabel, time: timeStr } = slotIdToDisplayTime(proposedSlotId)
+    await supabase.from('match_candidates').update({
+      confirmed_venue_id: match.suggested_venue_id,
+      confirmed_slot_id: proposedSlotId,
+      scheduling_status: 'confirmed',
+      confirmed_at: new Date().toISOString(),
+    }).eq('id', matchId)
+    await supabase.from('sms_conversation_states').update({
+      state: SMS_STATES.CONFIRMED,
+      updated_at: new Date().toISOString(),
+    }).eq('id', matchStateRow!.id)
+    await sendConcierge(fromNumber, messageYoureAllSet(dayLabel, timeStr, venueName, neighborhood))
+    const otherUserId = match.user_a === userId ? match.user_b : match.user_a
+    const { data: otherProfile } = await supabase.from('profiles').select('phone').eq('id', otherUserId).maybeSingle()
+    if (otherProfile?.phone) {
+      await sendConcierge(otherProfile.phone, messageYoureAllSet(dayLabel, timeStr, venueName, neighborhood))
+    }
+    await supabase.from('sms_conversation_states').update({
+      state: SMS_STATES.CONFIRMED,
+      updated_at: new Date().toISOString(),
+    }).eq('user_id', otherUserId).eq('batch_week', batchWeek).eq('match_id', matchId)
     return NextResponse.json({ ok: true })
   }
 
@@ -377,6 +688,8 @@ export async function POST(request: Request) {
         updated_at: new Date().toISOString(),
       }).eq('id', matchStateRow!.id)
       await sendConcierge(fromNumber, messageSchedulingWindow())
+    } else {
+      await sendConcierge(fromNumber, getFallbackForState(SMS_STATES.ACCEPTED_SCHEDULING_DAY))
     }
     return NextResponse.json({ ok: true })
   }
@@ -412,12 +725,14 @@ export async function POST(request: Request) {
         }).eq('id', matchStateRow!.id)
         await sendConcierge(fromNumber, messageVenueProposed(selectedDay, timeStr, venue.name, venue.neighborhood ?? venue.city))
       }
+    } else {
+      await sendConcierge(fromNumber, getFallbackForState(SMS_STATES.SCHEDULING_WINDOW))
     }
     return NextResponse.json({ ok: true })
   }
 
   if (matchState === SMS_STATES.VENUE_PROPOSED && matchId) {
-    if (keyword === 'CONFIRM') {
+    if (isConfirmKeyword(content) || keyword === 'CONFIRM') {
       const { data: match } = await supabase.from('match_candidates').select('user_a, user_b, suggested_venue_id').eq('id', matchId).single()
       if (match?.suggested_venue_id) {
         await supabase.from('match_candidates').update({
@@ -443,9 +758,13 @@ export async function POST(request: Request) {
           await sendConcierge(otherProfile.phone, messageYoureAllSet(dayLabel, timeStr, venueName, neighborhood))
         }
       }
+    } else {
+      await sendConcierge(fromNumber, getFallbackForState(SMS_STATES.VENUE_PROPOSED))
     }
     return NextResponse.json({ ok: true })
   }
 
+  // ----- Unrecognized: state-aware fallback so we always respond -----
+  await sendConcierge(fromNumber, getFallbackForState((matchState as string) || state))
   return NextResponse.json({ ok: true })
 }
