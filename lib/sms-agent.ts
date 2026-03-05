@@ -189,7 +189,16 @@ export async function getOrCreateSmsState(
 ): Promise<void> {
   const batchWeek = opts.batch_week ?? null
   const matchId = opts.match_id ?? null
-  const onConflict = matchId == null ? 'user_id,batch_week' : 'user_id,batch_week,match_id'
+  if (matchId == null) {
+    await supabase.rpc('upsert_global_sms_conversation_state', {
+      p_user_id: userId,
+      p_batch_week: batchWeek,
+      p_state: state,
+      p_payload: opts.payload ?? {},
+      p_last_sendblue_message_handle: null,
+    })
+    return
+  }
   await supabase.from('sms_conversation_states').upsert(
     {
       user_id: userId,
@@ -199,6 +208,6 @@ export async function getOrCreateSmsState(
       payload: opts.payload ?? {},
       updated_at: new Date().toISOString(),
     },
-    { onConflict }
+    { onConflict: 'user_id,batch_week,match_id' }
   )
 }

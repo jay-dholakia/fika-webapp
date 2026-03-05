@@ -71,17 +71,13 @@ serve(async () => {
       })
       if (res.ok) {
         sent++
-        await supabase.from('sms_conversation_states').upsert(
-          {
-            user_id: p.id,
-            batch_week: batchWeek,
-            match_id: null,
-            state: 'awaiting_opt_in',
-            payload: {},
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: 'user_id,batch_week' }
-        )
+        await supabase.rpc('upsert_global_sms_conversation_state', {
+          p_user_id: p.id,
+          p_batch_week: batchWeek,
+          p_state: 'awaiting_opt_in',
+          p_payload: {},
+          p_last_sendblue_message_handle: null,
+        })
       }
     }
     return new Response(JSON.stringify({ ok: true, batch_week: batchWeek, sent }))

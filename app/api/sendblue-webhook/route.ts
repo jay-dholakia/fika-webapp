@@ -274,18 +274,13 @@ export async function POST(request: Request) {
         { user_id: userId, batch_week: batchWeek, opted_in_at: new Date().toISOString() },
         { onConflict: 'user_id,batch_week' }
       )
-      await supabase.from('sms_conversation_states').upsert(
-        {
-          user_id: userId,
-          batch_week: batchWeek,
-          match_id: null,
-          state: SMS_STATES.OPTED_IN,
-          payload: {},
-          last_sendblue_message_handle: messageHandle,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'user_id,batch_week' }
-      )
+      await supabase.rpc('upsert_global_sms_conversation_state', {
+        p_user_id: userId,
+        p_batch_week: batchWeek,
+        p_state: SMS_STATES.OPTED_IN,
+        p_payload: {},
+        p_last_sendblue_message_handle: messageHandle,
+      })
       const DEFAULT_APP_BASE = 'https://letsfika.vercel.app'
       const appBase = (process.env.APP_CANONICAL_URL ?? '').trim()
         ? process.env.APP_CANONICAL_URL!.trim().replace(/\/$/, '')
@@ -293,18 +288,13 @@ export async function POST(request: Request) {
       const availabilityUrl = `${appBase}/app/availability`
       await sendConcierge(fromNumber, messageOptInSetAvailability(availabilityUrl))
     } else if (keyword === 'SKIP') {
-      await supabase.from('sms_conversation_states').upsert(
-        {
-          user_id: userId,
-          batch_week: batchWeek,
-          match_id: null,
-          state: SMS_STATES.AWAITING_OPT_IN,
-          payload: { skipped: true },
-          last_sendblue_message_handle: messageHandle,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'user_id,batch_week' }
-      )
+      await supabase.rpc('upsert_global_sms_conversation_state', {
+        p_user_id: userId,
+        p_batch_week: batchWeek,
+        p_state: SMS_STATES.AWAITING_OPT_IN,
+        p_payload: { skipped: true },
+        p_last_sendblue_message_handle: messageHandle,
+      })
       await sendConcierge(fromNumber, messageSkipped())
     } else if (keyword === 'FIKA' || keyword === 'HI') {
       // Short reminder only — don't re-send the full intro
