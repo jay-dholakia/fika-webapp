@@ -120,7 +120,6 @@ serve(async () => {
           body: JSON.stringify({
             number: (myProfile.phone as string).trim(),
             content: message,
-            send_style: 'invisible',
           }),
         })
         if (res.ok) {

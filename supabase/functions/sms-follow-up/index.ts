@@ -74,7 +74,6 @@ serve(async () => {
         body: JSON.stringify({
           number: phone,
           content: MESSAGE,
-          send_style: 'invisible',
         }),
       })
       if (res.ok) sent++

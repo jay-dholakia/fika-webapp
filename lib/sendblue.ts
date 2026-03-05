@@ -53,7 +53,6 @@ export async function sendSendblueMessage(
         from_number: fromNumber,
         number: to,
         content,
-        send_style: 'invisible',
       }),
     })
     if (!res.ok) {
