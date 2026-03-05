@@ -28,6 +28,7 @@ import {
 } from '@/lib/sms-agent'
 import { sendConcierge, sendMatch, isSendblueConfigured } from '@/lib/sendblue'
 import { getCurrentBatchWeek, isOnboardingComplete } from '@/lib/onboarding'
+import type { ProfileRow, IntakeResponsesV5Row } from '@/lib/db-types'
 import {
   messageSmsSignupLinkSent,
   messageSmsSignupLinkAlreadySent,
@@ -213,7 +214,7 @@ export async function POST(request: Request) {
       .select('user_id, completed_at')
       .eq('user_id', userId)
       .maybeSingle()
-    if (!isOnboardingComplete(profile ?? null, intake ?? null)) {
+    if (!isOnboardingComplete((profile ?? null) as ProfileRow | null, (intake ?? null) as IntakeResponsesV5Row | null)) {
       console.log('[sendblue-webhook] user needs onboarding', { fromLast4 })
       const DEFAULT_APP_BASE = 'https://letsfika.vercel.app'
       const appBase = (process.env.APP_CANONICAL_URL ?? '').trim()
