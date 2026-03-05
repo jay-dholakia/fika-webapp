@@ -6,6 +6,6 @@ export function messageSmsSignupLinkSent(link: string): string {
   return `Welcome to Fika! Open this link to complete your profile and get matched:\n${link}`
 }
 
-export function messageSmsSignupLinkAlreadySent(): string {
-  return `You already have a signup link — check your texts. Open it to finish your onboarding and finalize your Fika account.`
+export function messageSmsSignupLinkAlreadySent(link: string): string {
+  return `Here's your link again: ${link}\n\nOpen it to finish your onboarding and finalize your Fika account.`
 }

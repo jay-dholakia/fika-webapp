@@ -174,7 +174,8 @@ export async function POST(request: Request) {
       .limit(1)
       .maybeSingle()
     if (existing?.token) {
-      await sendConcierge(fromNumber, messageSmsSignupLinkAlreadySent())
+      const link = `${appBase}/signup?token=${existing.token}`
+      await sendConcierge(fromNumber, messageSmsSignupLinkAlreadySent(link))
       return NextResponse.json({ ok: true })
     }
     const token = crypto.randomUUID()
