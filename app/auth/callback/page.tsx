@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useEffect, useState } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { getSupabase } from '@/lib/supabase'
 
@@ -8,6 +8,7 @@ function AuthCallbackContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [error, setError] = useState<string | null>(null)
+  const mergeCalledRef = useRef(false)
 
   useEffect(() => {
     const next = searchParams.get('next') ?? '/app'
@@ -26,32 +27,9 @@ function AuthCallbackContent() {
       return
     }
 
-    // Implicit flow: Supabase redirects with tokens in the URL hash. The client
-    // parses the hash automatically (detectSessionInUrl). Wait for session then redirect.
-    let mounted = true
-    const timeout = setTimeout(() => {
-      if (!mounted) return
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        if (!mounted || !session) return
-        if (smsToken) {
-          fetch('/api/merge-sms-signup', {
-            method: 'POST',
-            headers: {
-              Authorization: `Bearer ${session.access_token}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ token: smsToken }),
-          })
-            .then((res) => { if (!res.ok) console.error('merge-sms-signup failed', res.status) })
-            .finally(() => { router.replace(nextPath) })
-        } else {
-          router.replace(nextPath)
-        }
-      })
-    }, 100)
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!mounted || !session) return
+    function doMergeAndRedirect(session: { access_token: string }) {
+      if (mergeCalledRef.current) return
+      mergeCalledRef.current = true
       if (smsToken) {
         fetch('/api/merge-sms-signup', {
           method: 'POST',
@@ -66,6 +44,22 @@ function AuthCallbackContent() {
       } else {
         router.replace(nextPath)
       }
+    }
+
+    // Implicit flow: Supabase redirects with tokens in the URL hash. The client
+    // parses the hash automatically (detectSessionInUrl). Wait for session then redirect.
+    let mounted = true
+    const timeout = setTimeout(() => {
+      if (!mounted) return
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (!mounted || !session) return
+        doMergeAndRedirect(session)
+      })
+    }, 100)
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!mounted || !session) return
+      doMergeAndRedirect(session)
     })
 
     return () => {
