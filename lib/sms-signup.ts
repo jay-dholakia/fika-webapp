@@ -7,5 +7,5 @@ export function messageSmsSignupLinkSent(link: string): string {
 }
 
 export function messageSmsSignupLinkAlreadySent(): string {
-  return `You already have a signup link — check your texts. Open it to finish your profile, then sign in with Google to finalize.`
+  return `You already have a signup link — check your texts. Open it to finish your onboarding and finalize your Fika account.`
 }
