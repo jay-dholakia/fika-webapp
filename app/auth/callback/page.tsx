@@ -21,6 +21,7 @@ function AuthCallbackContent() {
       setError('App is not configured.')
       return
     }
+    const client = supabase
 
     if (errorParam) {
       setError(decodeURIComponent(errorParam))
@@ -47,14 +48,14 @@ function AuthCallbackContent() {
       }
 
       // No SMS token: only allow if they have an existing profile (existing account).
-      const { data: profile } = await supabase
+      const { data: profile } = await client
         .from('profiles')
         .select('id')
         .eq('id', session.user.id)
         .maybeSingle()
 
       if (!profile) {
-        await supabase.auth.signOut()
+        await client.auth.signOut()
         router.replace('/login?no_account=1')
         return
       }
@@ -65,13 +66,13 @@ function AuthCallbackContent() {
     let mounted = true
     const timeout = setTimeout(() => {
       if (!mounted) return
-      supabase.auth.getSession().then(({ data: { session } }) => {
+      client.auth.getSession().then(({ data: { session } }) => {
         if (!mounted || !session) return
         checkExistingAccountAndRedirect(session)
       })
     }, 100)
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = client.auth.onAuthStateChange((_event, session) => {
       if (!mounted || !session) return
       checkExistingAccountAndRedirect(session)
     })
