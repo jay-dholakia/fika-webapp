@@ -733,6 +733,18 @@ a {
   flex-direction: column;
   gap: 0.75rem;
 }
+@media (min-width: 500px) {
+  .cta-form:has(.cta-form-row-waitlist) {
+    align-items: center;
+  }
+  .cta-form:has(.cta-form-row-waitlist) .cta-consent {
+    max-width: 28rem;
+  }
+  .cta-form:has(.cta-form-row-waitlist) .btn-block {
+    width: auto;
+    min-width: 10rem;
+  }
+}
 .cta-form-row {
   display: flex;
   flex-direction: column;
