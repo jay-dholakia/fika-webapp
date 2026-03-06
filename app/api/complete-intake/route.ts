@@ -126,7 +126,7 @@ export async function POST(request: Request) {
     }
   }
 
-  // After first-time intake completion: send entry SMS sequence (4 messages) so they know they're in and can reply YES or SKIP
+  // After first-time intake completion: send entry SMS sequence (3 messages) so they know they're in and can reply YES or SKIP
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (serviceKey && process.env.SENDBLUE_API_KEY_ID) {
     try {

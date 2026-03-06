@@ -748,17 +748,14 @@ function passesStructuredFilters(
     }
   }
 
-  // Filter 2.5: Age preference — when user prefers "around my age", require candidate within ±3 years
+  // Filter 2.5: Age preference — when either prefers "around my age", require within ±3 years (both directions). Skip if either age is null.
   const PREFER_AROUND_MY_AGE = 'Prefer around my age'
-  if (
-    userProfile.age_preference != null &&
-    userProfile.age_preference.trim() === PREFER_AROUND_MY_AGE &&
-    userProfile.age != null &&
-    candidateProfile.age != null
-  ) {
-    const diff = Math.abs(userProfile.age - candidateProfile.age)
-    if (diff > 3) {
-      console.log(`Age filter: User prefers around own age; candidate age ${candidateProfile.age} is ${diff} years from user age ${userProfile.age}`)
+  const userPrefersAroundMyAge = userProfile.age_preference != null && userProfile.age_preference.trim() === PREFER_AROUND_MY_AGE
+  const candidatePrefersAroundMyAge = candidateProfile.age_preference != null && candidateProfile.age_preference.trim() === PREFER_AROUND_MY_AGE
+  if ((userPrefersAroundMyAge || candidatePrefersAroundMyAge) && userProfile.age != null && candidateProfile.age != null) {
+    const ageDiff = Math.abs(userProfile.age - candidateProfile.age)
+    if (ageDiff > 3) {
+      console.log(`Age filter: at least one prefers around own age; ages ${userProfile.age} vs ${candidateProfile.age} (diff ${ageDiff})`)
       return false
     }
   }
