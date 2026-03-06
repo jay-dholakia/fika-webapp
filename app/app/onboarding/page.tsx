@@ -172,7 +172,7 @@ function AppOnboardingContent() {
       .maybeSingle()
       .then(({ data }) => {
         if (!data) {
-          supabase.from('profiles').insert({ id: sessionUserId, first_name: ' ' }).then(() => {})
+          supabase.from('profiles').insert({ id: sessionUserId, first_name: ' ', updated_at: new Date().toISOString() }).then(() => {})
         }
       })
   }, [sessionUserId])

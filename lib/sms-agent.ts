@@ -115,12 +115,12 @@ export async function pickVenueForMatch(
  * appBase = site origin (no trailing slash), e.g. https://letsfika.vercel.app — used for portal link at end of msg 3. */
 export function messageEntryFirstTimeMessages(isAfterDeadline: boolean, nextMondayPhrase: string = 'next Monday', appBase: string = 'https://letsfika.vercel.app'): string[] {
   const base = appBase.trim().replace(/\/$/, '') || 'https://letsfika.vercel.app'
-  const portalLine = `\n\nIf you want to learn more about how Fika works or edit your profile, you can use this link: ${base}/app`
-  const msg1 = `You're in. I'm your Fika concierge — once a week I send you one intro to someone nearby worth a real conversation. Mondays I ask if you'd like a Fika; you opt in and give me your availability for the rest of the week, and Tuesday morning I send an intro I think you'd have a good conversation with.`
-  const msg2 = `You both say yes? I suggest a time and place, you confirm, have your Fika, and I'll follow up after. Skip a week? No big deal — I'll catch you the following Monday.`
-  const msg3OnTime = `I'll text you ${nextMondayPhrase} to see if you're up for a Fika this week. Have a great week!${portalLine}`
-  const msg3AfterDeadline = `This week's window is already closed, so ${nextMondayPhrase} I'll check in to see if you're up for a Fika. Have a great week.${portalLine}`
-  return [msg1, msg2, isAfterDeadline ? msg3AfterDeadline : msg3OnTime]
+  const msg1 = `You're in. I'm your Fika concierge — once a week I'll ask if you want a Fika, send you one intro, and help you set it up if you both say yes.`
+  const msg2AfterDeadline = `This week's window is already closed, so I'll check in ${nextMondayPhrase}. Have a great week!`
+  const msg2OnTime = `I'll check in ${nextMondayPhrase} to see if you're up for a Fika this week. Have a great week!`
+  const msg2 = isAfterDeadline ? msg2AfterDeadline : msg2OnTime
+  const msg3 = `To learn more or edit your profile: ${base}/app`
+  return [msg1, msg2, msg3]
 }
 
 export function messageEntry(): string {
