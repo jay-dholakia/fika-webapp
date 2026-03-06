@@ -6,9 +6,9 @@ import { useRouter } from 'next/navigation'
 import { getSupabase } from '@/lib/supabase'
 import type { User } from '@supabase/supabase-js'
 
-const navLinks: { href: string; label: string; cta?: boolean }[] = [
-  { href: '#how', label: 'How it works' },
-  { href: '/login', label: 'Login' },
+const navLinks: { href: string; label: string; cta?: boolean; when?: 'always' | 'guest' }[] = [
+  { href: '#how', label: 'How it works', when: 'always' },
+  { href: '/login', label: 'Login', when: 'guest' },
 ]
 
 export default function Header() {
@@ -43,7 +43,9 @@ export default function Header() {
           fika
         </Link>
         <nav className="nav" aria-label="Main">
-          {navLinks.map(({ href, label, cta }) => (
+          {navLinks
+            .filter((l) => l.when === 'always' || (l.when === 'guest' && !user))
+            .map(({ href, label, cta }) => (
             <Link
               key={href}
               href={href}
@@ -85,7 +87,9 @@ export default function Header() {
         aria-hidden={!isMenuOpen}
       >
         <nav className="nav-mobile-inner" aria-label="Mobile">
-          {navLinks.map(({ href, label, cta }) => (
+          {navLinks
+            .filter((l) => l.when === 'always' || (l.when === 'guest' && !user))
+            .map(({ href, label, cta }) => (
             <Link
               key={href}
               href={href}

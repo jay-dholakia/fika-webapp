@@ -950,6 +950,20 @@ a {
   font-size: 0.9rem;
   color: var(--color-textSecondary);
 }
+.footer-waitlist {
+  margin-top: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+.footer-waitlist-label {
+  font-size: 0.9rem;
+  color: var(--color-textSecondary);
+  margin-bottom: 0.75rem;
+}
+.footer-waitlist .cta-form {
+  max-width: 320px;
+  margin: 0 auto;
+  text-align: left;
+}
 .footer-links {
   display: flex;
   justify-content: center;
