@@ -768,6 +768,7 @@ a {
   .cta-form-row-waitlist {
     flex-direction: row;
     align-items: stretch;
+    justify-content: center;
     gap: 1rem;
   }
   .cta-form-row-waitlist .cta-waitlist-field:first-child {
