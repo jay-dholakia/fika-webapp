@@ -105,9 +105,8 @@ export const INTAKE_STEPS: ProfileStep[] = [
   {
     id: 'q_life_chapter',
     question: 'What life chapter are you in now?',
-    body: 'Choose up to 5.',
+    body: 'Select all that apply.',
     type: 'multi_select',
-    maxSelections: 5,
     required: true,
     options: [
       "Exploring what's next",
@@ -125,9 +124,8 @@ export const INTAKE_STEPS: ProfileStep[] = [
   {
     id: 'q_lately',
     question: "Lately, I've been thinking a lot about…",
-    body: 'Choose up to 5.',
+    body: 'Select all that apply.',
     type: 'multi_select',
-    maxSelections: 5,
     options: [
       'My career direction',
       'A big life decision',
@@ -144,9 +142,8 @@ export const INTAKE_STEPS: ProfileStep[] = [
   {
     id: 'q_everyday_anchor',
     question: "What's something that plays a meaningful role in your everyday life?",
-    body: 'Select up to 6.',
+    body: 'Select all that apply.',
     type: 'multi_select',
-    maxSelections: 6,
     options: [
       'Pets',
       'Family responsibilities',
@@ -191,6 +188,7 @@ export const INTAKE_STEPS: ProfileStep[] = [
       'Pickleball',
       'Golf',
       'Soccer',
+      'Football',
       'Basketball',
       'Volleyball',
       'Baseball',
@@ -230,9 +228,8 @@ export const INTAKE_STEPS: ProfileStep[] = [
   {
     id: 'q_topics',
     question: 'Which topics do you genuinely enjoy discussing?',
-    body: 'Choose up to 8.',
+    body: 'Select all that apply.',
     type: 'multi_select',
-    maxSelections: 8,
     required: true,
     options: [
       'Philosophy & big questions',
@@ -289,9 +286,18 @@ export const INTAKE_STEPS: ProfileStep[] = [
   {
     id: 'gender_preference',
     question: "Do you have a gender preference for who you'd like to meet?",
+    body: 'Just a friendly FYI — Fika is solely intended for platonic conversations.',
     type: 'chips_single',
     required: true,
     options: ['No preference', 'Same gender', 'Different gender'],
+  },
+  {
+    id: 'age_preference',
+    question: "Do you have an age preference for who you'd like to meet?",
+    body: "Either way works! While meeting people in a similar life stage gives you both something to relate to, meeting people in different phases of life can bring fresh perspectives.",
+    type: 'chips_single',
+    required: true,
+    options: ['Open to any age/life stage', 'Prefer around my age'],
   },
   {
     id: 'q_hoping_for',

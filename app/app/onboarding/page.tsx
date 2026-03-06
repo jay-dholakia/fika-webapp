@@ -17,7 +17,7 @@ import type { ProfileRow } from '@/lib/db-types'
 import type { IntakeResponsesV5Row } from '@/lib/db-types'
 
 const SECTION_2_IDS = ['q_life_chapter', 'q_lately', 'q_everyday_anchor', 'q_interests']
-const SECTION_3_IDS = ['q_topics', 'q_prefer_not_to_discuss', 'q_openness', 'gender_preference', 'q_hoping_for', 'q_radius']
+const SECTION_3_IDS = ['q_topics', 'q_prefer_not_to_discuss', 'q_openness', 'gender_preference', 'age_preference', 'q_hoping_for', 'q_radius']
 const SECTION_2_STEPS = INTAKE_STEPS.filter((s) => SECTION_2_IDS.includes(s.id))
 const SECTION_3_STEPS = INTAKE_STEPS.filter((s) => SECTION_3_IDS.includes(s.id))
 const CONFIRM_STEP = INTAKE_STEPS.find((s) => s.id === 'confirm_intent')!
@@ -38,11 +38,14 @@ function getInitialAnswers(
     else if (s.id === 'location' && profile?.city) answers.location = { city: profile.city, lat: profile.lat ?? 0, lng: profile.lng ?? 0 }
   }
   answers.gender_preference = profile?.gender_preference ?? ''
+  answers.age_preference = profile?.age_preference ?? ''
   const responses = intake?.responses ?? []
   for (const s of INTAKE_STEPS) {
     const r = responses.find((x: IntakeResponseItem) => x.question_id === s.id)
     answers[s.id] = r ? (r.answer as string | string[] | number) : (s.type === 'multi_select' ? [] : '')
   }
+  answers.gender_preference = profile?.gender_preference ?? ''
+  answers.age_preference = profile?.age_preference ?? ''
   return answers
 }
 
@@ -224,6 +227,7 @@ function AppOnboardingContent() {
       birthdate: answers.birthdate ?? null,
       gender: (typeof answers.gender === 'string' ? answers.gender : null) ?? null,
       gender_preference: (typeof answers.gender_preference === 'string' ? answers.gender_preference : null) ?? null,
+      age_preference: (typeof answers.age_preference === 'string' ? answers.age_preference : null) ?? null,
       languages: Array.isArray(answers.languages) ? answers.languages : null,
       city: loc?.city ?? null,
       lat: typeof loc?.lat === 'number' ? loc.lat : null,
@@ -239,7 +243,7 @@ function AppOnboardingContent() {
     if (!sessionUserId) return
     const supabase = getSupabase()
     if (!supabase) return
-    const responses: IntakeResponseItem[] = INTAKE_STEPS.filter((s) => s.id !== 'gender_preference').map((s) => {
+    const responses: IntakeResponseItem[] = INTAKE_STEPS.filter((s) => s.id !== 'gender_preference' && s.id !== 'age_preference').map((s) => {
       const raw = answers[s.id]
       const value = raw === undefined || (typeof raw === 'object' && 'city' in (raw as object)) ? (s.type === 'multi_select' ? [] : '') : raw
       return {

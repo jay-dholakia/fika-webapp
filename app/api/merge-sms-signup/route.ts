@@ -49,6 +49,7 @@ export async function POST(request: Request) {
   const birthdate = payload.birthdate as string | null
   const gender = payload.gender as string | null
   const gender_preference = payload.gender_preference as string | null
+  const age_preference = payload.age_preference as string | null
   const languages = Array.isArray(payload.languages) ? payload.languages : null
   const city = (payload.city as string) ?? null
   const lat = typeof payload.lat === 'number' ? payload.lat : null
@@ -74,6 +75,7 @@ export async function POST(request: Request) {
       birthdate: birthdate || null,
       gender: gender || null,
       gender_preference: gender_preference || null,
+      age_preference: age_preference || null,
       languages,
       city: city || null,
       lat,
@@ -125,7 +127,7 @@ export async function POST(request: Request) {
     })
     .eq('id', session.id)
 
-  // After first-time merge: send entry SMS sequence (4 messages). Create state before sending so a quick YES reply progresses.
+  // After first-time merge: send entry SMS sequence (3 messages). Create state before sending so a quick YES reply progresses.
   if (session.phone && process.env.SENDBLUE_API_KEY_ID) {
     try {
       const batchWeek = getCurrentBatchWeek()

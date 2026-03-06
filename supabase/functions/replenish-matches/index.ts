@@ -74,6 +74,7 @@ interface UserProfile {
   age_range_preference: number | null;
   gender: string | null;
   gender_preference: string | null;
+  age_preference: string | null;
 }
 
 interface IntakeResponse {
@@ -269,6 +270,7 @@ async function replenishUserMatches(supabaseClient: any, userId: string) {
     age: ageFromBirthdate(userProfile.birthdate),
     gender: userProfile.gender ?? null,
     gender_preference: userProfile.gender_preference ?? null,
+    age_preference: userProfile.age_preference ?? null,
   }
 
   // Find potential matches - get enough candidates to fill up to 5 matches (only from users opted in for this week)
@@ -408,6 +410,7 @@ async function findPotentialMatches(
       age: ageFromBirthdate(candidate.birthdate),
       gender: candidate.gender ?? null,
       gender_preference: candidate.gender_preference ?? null,
+      age_preference: candidate.age_preference ?? null,
     }
 
     // Apply structured filters (availability, geography, gender preference, meetup format, first conversation feel)
@@ -741,6 +744,21 @@ function passesStructuredFilters(
     }
     if (!preferenceAllowsCandidate(userPref, userGenderNorm, candidateGenderNorm)) {
       console.log(`Gender filter: User preference "${userProfile.gender_preference}" does not include candidate gender "${candidateProfile.gender}"`)
+      return false
+    }
+  }
+
+  // Filter 2.5: Age preference — when user prefers "around my age", require candidate within ±3 years
+  const PREFER_AROUND_MY_AGE = 'Prefer around my age'
+  if (
+    userProfile.age_preference != null &&
+    userProfile.age_preference.trim() === PREFER_AROUND_MY_AGE &&
+    userProfile.age != null &&
+    candidateProfile.age != null
+  ) {
+    const diff = Math.abs(userProfile.age - candidateProfile.age)
+    if (diff > 3) {
+      console.log(`Age filter: User prefers around own age; candidate age ${candidateProfile.age} is ${diff} years from user age ${userProfile.age}`)
       return false
     }
   }

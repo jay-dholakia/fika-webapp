@@ -25,6 +25,7 @@ export function buildOnboardingSessionPayload(answers: AnswersState): Record<str
     birthdate: answers.birthdate ?? null,
     gender: answers.gender ?? null,
     gender_preference: answers.gender_preference ?? null,
+    age_preference: answers.age_preference ?? null,
     languages: Array.isArray(answers.languages) ? answers.languages : null,
     city: loc?.city ?? null,
     lat: typeof loc?.lat === 'number' ? loc.lat : null,
@@ -42,6 +43,7 @@ export function payloadToAnswers(payload: Record<string, unknown>): AnswersState
   if (typeof payload.birthdate === 'string') answers.birthdate = payload.birthdate
   if (typeof payload.gender === 'string') answers.gender = payload.gender
   if (typeof payload.gender_preference === 'string') answers.gender_preference = payload.gender_preference
+  if (typeof payload.age_preference === 'string') answers.age_preference = payload.age_preference
   if (Array.isArray(payload.languages)) answers.languages = payload.languages
   if (
     typeof payload.city === 'string' &&

@@ -67,6 +67,7 @@ export default function SettingsProfilePage() {
       birthdate: typeof answers.birthdate === 'string' ? answers.birthdate || null : null,
       gender: typeof answers.gender === 'string' ? answers.gender || null : null,
       gender_preference: typeof answers.gender_preference === 'string' ? answers.gender_preference || null : null,
+      age_preference: typeof answers.age_preference === 'string' ? answers.age_preference || null : null,
       pronouns: typeof answers.pronouns === 'string' ? answers.pronouns || null : null,
       relationship_status: typeof answers.relationship_status === 'string' ? answers.relationship_status || null : null,
       languages: Array.isArray(answers.languages) ? answers.languages : null,
@@ -97,7 +98,7 @@ export default function SettingsProfilePage() {
     const existingResponses: IntakeResponseItem[] = Array.isArray(existing?.responses) ? [...(existing.responses as IntakeResponseItem[])] : []
     const responses: IntakeResponseItem[] = []
     for (const step of INTAKE_STEPS) {
-      if (step.id === 'gender_preference') continue
+      if (step.id === 'gender_preference' || step.id === 'age_preference') continue
       const answer = answers[step.id]
       const normalized =
         step.id === 'q12_first_conversation' &&
@@ -115,7 +116,7 @@ export default function SettingsProfilePage() {
       if (idx >= 0) existingResponses[idx] = newItem
       else existingResponses.push(newItem)
     }
-    const filteredResponses = existingResponses.filter((r) => r.question_id !== 'gender_preference')
+    const filteredResponses = existingResponses.filter((r) => r.question_id !== 'gender_preference' && r.question_id !== 'age_preference')
     const availabilityTimes = answers.q9_availability as string[] | undefined
     const payload: Record<string, unknown> = {
       user_id: userId,

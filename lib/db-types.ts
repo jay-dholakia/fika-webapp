@@ -7,6 +7,7 @@ export type ProfileRow = {
   birthdate: string | null // YYYY-MM-DD
   gender: string | null
   gender_preference: string | null
+  age_preference: string | null
   pronouns: string | null
   relationship_status: string | null
   city: string | null
