@@ -1,12 +1,13 @@
 'use client'
 
+import { Suspense } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import Footer from '../components/Footer'
 import CtaWithLocation from '../components/CtaWithLocation'
 import { getSupabase } from '@/lib/supabase'
 
-export default function LoginPage() {
+function LoginContent() {
   const searchParams = useSearchParams()
   const noAccount = searchParams.get('no_account') === '1'
 
@@ -64,5 +65,17 @@ export default function LoginPage() {
 
       <Footer />
     </>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="auth-page" style={{ padding: '2rem', textAlign: 'center' }}>
+        <p style={{ color: 'var(--color-textSecondary)' }}>Loading…</p>
+      </div>
+    }>
+      <LoginContent />
+    </Suspense>
   )
 }
