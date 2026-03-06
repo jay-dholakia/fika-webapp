@@ -753,6 +753,70 @@ a {
 .cta-form-row-single .cta-input {
   width: 100%;
 }
+
+/* Waitlist: email + zip row (desktop side-by-side, mobile stacked); floating labels */
+.cta-form-row-waitlist {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+@media (min-width: 500px) {
+  .cta-form-row-waitlist {
+    flex-direction: row;
+    align-items: stretch;
+    gap: 1rem;
+  }
+  .cta-form-row-waitlist .cta-waitlist-field:first-child {
+    flex: 1;
+    min-width: 0;
+  }
+  .cta-form-row-waitlist .cta-waitlist-field-zip {
+    flex: 0 0 auto;
+    width: 6.5rem;
+  }
+  .cta-form-row-waitlist .cta-input-zip {
+    width: 100%;
+    max-width: 6.5rem;
+  }
+}
+.cta-waitlist-field {
+  position: relative;
+  width: 100%;
+}
+.cta-waitlist-field .cta-input {
+  padding-top: 1.35rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+.cta-waitlist-field .cta-input::placeholder {
+  color: transparent;
+  opacity: 0;
+}
+.cta-waitlist-label {
+  position: absolute;
+  left: 1.25rem;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 1rem;
+  color: var(--color-textSecondary);
+  pointer-events: none;
+  transition: transform 0.2s ease, font-size 0.2s ease, color 0.2s ease, top 0.2s ease;
+}
+.cta-waitlist-field:focus-within .cta-waitlist-label,
+.cta-waitlist-field.cta-waitlist-filled .cta-waitlist-label {
+  top: 0.65rem;
+  transform: translateY(0);
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--color-textSecondary);
+}
+.cta-waitlist-field:focus-within .cta-waitlist-label {
+  color: var(--color-primary);
+}
+.cta-input-zip {
+  max-width: 100%;
+}
+
 .cta-place-wrapper {
   position: relative;
 }

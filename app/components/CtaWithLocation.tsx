@@ -75,41 +75,41 @@ export default function CtaWithLocation() {
 
   return (
     <form className="cta-form" onSubmit={handleWaitlistSubmit}>
-      <label htmlFor="cta-waitlist-email" className="cta-waitlist-hint">
-        Email
-      </label>
-      <div className="cta-form-row cta-form-row-single">
-        <input
-          id="cta-waitlist-email"
-          name="email"
-          type="email"
-          placeholder="you@example.com"
-          className="cta-input"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          disabled={waitlistStatus === 'loading'}
-          autoComplete="email"
-          required
-        />
-      </div>
-      <label htmlFor="cta-waitlist-zip" className="cta-waitlist-hint">
-        Zip code
-      </label>
-      <div className="cta-form-row cta-form-row-single">
-        <input
-          id="cta-waitlist-zip"
-          name="zip_code"
-          type="text"
-          inputMode="numeric"
-          placeholder="90210"
-          className="cta-input"
-          value={zipCode}
-          onChange={(e) => setZipCode(e.target.value.replace(/\D/g, '').slice(0, 10))}
-          disabled={waitlistStatus === 'loading'}
-          autoComplete="postal-code"
-          maxLength={10}
-          required
-        />
+      <div className="cta-form-row cta-form-row-waitlist">
+        <div className={`cta-waitlist-field${email.trim() ? ' cta-waitlist-filled' : ''}`}>
+          <input
+            id="cta-waitlist-email"
+            name="email"
+            type="email"
+            placeholder=" "
+            className="cta-input"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            disabled={waitlistStatus === 'loading'}
+            autoComplete="email"
+            required
+            aria-label="Email"
+          />
+          <span className="cta-waitlist-label">Email</span>
+        </div>
+        <div className={`cta-waitlist-field cta-waitlist-field-zip${zipCode.trim() ? ' cta-waitlist-filled' : ''}`}>
+          <input
+            id="cta-waitlist-zip"
+            name="zip_code"
+            type="text"
+            inputMode="numeric"
+            placeholder=" "
+            className="cta-input cta-input-zip"
+            value={zipCode}
+            onChange={(e) => setZipCode(e.target.value.replace(/\D/g, '').slice(0, 10))}
+            disabled={waitlistStatus === 'loading'}
+            autoComplete="postal-code"
+            maxLength={10}
+            required
+            aria-label="Zip code"
+          />
+          <span className="cta-waitlist-label">Zip code</span>
+        </div>
       </div>
       <label className="cta-consent">
         <input
