@@ -110,18 +110,17 @@ export async function pickVenueForMatch(
 // ---------- Message templates ----------
 // Cadence: Monday opt-in → Tuesday morning intros run (deadline) → Wed–Sun meet.
 
-/** First-time "you're all set" sequence (Option B): intro concierge + cadence. Returns 4 messages to send in order.
+/** First-time "you're all set" sequence: intro concierge + cadence. Returns 3 messages to send in order.
  * nextMondayPhrase = day-aware "tomorrow" | "Monday" | "next Monday" from getNextMondayPhrase(timezone).
- * appBase = site origin (no trailing slash), e.g. https://letsfika.vercel.app — used for portal link at end of msg 4. */
+ * appBase = site origin (no trailing slash), e.g. https://letsfika.vercel.app — used for portal link at end of msg 3. */
 export function messageEntryFirstTimeMessages(isAfterDeadline: boolean, nextMondayPhrase: string = 'next Monday', appBase: string = 'https://letsfika.vercel.app'): string[] {
   const base = appBase.trim().replace(/\/$/, '') || 'https://letsfika.vercel.app'
   const portalLine = `\n\nIf you want to learn more about how Fika works or edit your profile, you can use this link: ${base}/app`
-  const msg1 = `You're in. I'm your Fika concierge — once a week I send you one intro to someone nearby worth a real conversation. That's it.`
-  const msg2 = `Mondays I ask if you'd like a Fika this week. If you opt in, I'll ask for the times you're available for the rest of the week. On Tuesday morning I'll send over an intro based on who I think you could have a good conversation with.`
-  const msg3 = `You both say yes? I suggest a time and place, you confirm, have your Fika, and I'll follow up after to see how it went. Skip a week? No big deal — I'll just catch you the following Monday.`
-  const msg4OnTime = `I'll text you ${nextMondayPhrase} to see if you're up for a Fika this week. Have a great week!${portalLine}`
-  const msg4AfterDeadline = `This week's window is already closed, so ${nextMondayPhrase} I'll check in to see if you're up for a Fika. Have a great week.${portalLine}`
-  return [msg1, msg2, msg3, isAfterDeadline ? msg4AfterDeadline : msg4OnTime]
+  const msg1 = `You're in. I'm your Fika concierge — once a week I send you one intro to someone nearby worth a real conversation. Mondays I ask if you'd like a Fika; you opt in and give me your availability for the rest of the week, and Tuesday morning I send an intro I think you'd have a good conversation with.`
+  const msg2 = `You both say yes? I suggest a time and place, you confirm, have your Fika, and I'll follow up after. Skip a week? No big deal — I'll catch you the following Monday.`
+  const msg3OnTime = `I'll text you ${nextMondayPhrase} to see if you're up for a Fika this week. Have a great week!${portalLine}`
+  const msg3AfterDeadline = `This week's window is already closed, so ${nextMondayPhrase} I'll check in to see if you're up for a Fika. Have a great week.${portalLine}`
+  return [msg1, msg2, isAfterDeadline ? msg3AfterDeadline : msg3OnTime]
 }
 
 export function messageEntry(): string {
@@ -129,8 +128,18 @@ export function messageEntry(): string {
 }
 
 /** When sign-in completes after the Tuesday morning intro run — set expectation for next week. nextMondayPhrase = day-aware "tomorrow" | "Monday" | "next Monday". */
-export function messageEntryAfterDeadline(nextMondayPhrase: string = 'next Monday'): string {
-  return `You're all set! This week's window has closed, but we'll text you ${nextMondayPhrase} so you can opt in for next week.`
+export function messageEntryAfterDeadline(
+  nextMondayPhrase: string = 'next Monday',
+  options?: { firstName?: string | null; isGreeting?: boolean }
+): string {
+  const base = `You're all set! This week's window has closed, but we'll text you ${nextMondayPhrase} so you can opt in for next week.`
+  if (options?.isGreeting && options?.firstName != null) {
+    const name = String(options.firstName).trim()
+    if (name && name !== ' ') {
+      return `Hi ${name}! ${base}`
+    }
+  }
+  return base
 }
 
 /** Short reminder when they text HI/FIKA again — avoid re-sending the full intro. */
@@ -503,6 +512,18 @@ export function isRescheduleKeyword(content: string): boolean {
 export function isCancelKeyword(content: string): boolean {
   const k = normalizeKeyword(content)
   return ['cancel', 'cancelled', 'canceled'].includes(k)
+}
+
+/** Incoming message is a short greeting (Hi, Yo, Hey, etc.) — for personalizing reply. */
+export function isGreetingKeyword(content: string): boolean {
+  const k = normalizeKeyword(content).replace(/[!.]/g, '')
+  const greetings = [
+    'hi', 'hey', 'hello', 'yo', 'sup', 'howdy', 'hiya', 'heyy', 'helloo', 'hola',
+    "what's up", 'whats up', 'hey there', 'hi there', 'good morning', 'good afternoon', 'good evening',
+  ]
+  if (greetings.includes(k)) return true
+  if (/^(hi|hey|hello|yo|sup)\s*!?\.?$/.test(k)) return true
+  return false
 }
 
 /** Human fallback / help message for a given state. */

@@ -57,6 +57,7 @@ import {
   isStopKeyword,
   isRescheduleKeyword,
   isCancelKeyword,
+  isGreetingKeyword,
   getFikaTimeMs,
   pickVenueForMatch,
 } from '@/lib/sms-agent'
@@ -381,7 +382,8 @@ export async function POST(request: Request) {
     }
     console.log('[sendblue-webhook] first_contact sending entry to', fromLast4)
     const nextMondayPhrase = getNextMondayPhrase(getTimezoneFromLatLng(profile?.lat ?? null, profile?.lng ?? null))
-    const entryMsg = isPastOptInDeadline(batchWeek) ? messageEntryAfterDeadline(nextMondayPhrase) : messageEntry()
+    const isGreeting = isGreetingKeyword(content)
+    const entryMsg = isPastOptInDeadline(batchWeek) ? messageEntryAfterDeadline(nextMondayPhrase, { firstName: profile?.first_name ?? null, isGreeting }) : messageEntry()
     const entryResult = await sendConcierge(fromNumber, entryMsg)
     console.log('[sendblue-webhook] sendConcierge result', { ok: entryResult.ok, error: entryResult.error, message_handle: entryResult.message_handle })
     if (entryResult.message_handle) {
@@ -405,9 +407,10 @@ export async function POST(request: Request) {
   // ----- Awaiting opt-in: IN / SKIP (and FIKA / HI to re-send the prompt); post-deadline = no opt-in -----
   if (state === SMS_STATES.AWAITING_OPT_IN) {
     if (isPastOptInDeadline(batchWeek)) {
-      const { data: profile } = await supabase.from('profiles').select('lat, lng').eq('id', userId).maybeSingle()
+      const { data: profile } = await supabase.from('profiles').select('lat, lng, first_name').eq('id', userId).maybeSingle()
       const nextMondayPhrase = getNextMondayPhrase(getTimezoneFromLatLng(profile?.lat ?? null, profile?.lng ?? null))
-      await sendConcierge(fromNumber, messageEntryAfterDeadline(nextMondayPhrase))
+      const isGreeting = isGreetingKeyword(content)
+      await sendConcierge(fromNumber, messageEntryAfterDeadline(nextMondayPhrase, { firstName: profile?.first_name ?? null, isGreeting }))
       return NextResponse.json({ ok: true })
     }
     if (isOptInKeyword(content) || keyword === 'IN' || keyword === 'YES') {
