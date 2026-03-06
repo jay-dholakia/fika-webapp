@@ -27,11 +27,13 @@ function AuthCallbackContent() {
       return
     }
 
-    function doMergeAndRedirect(session: { access_token: string }) {
+    async function checkExistingAccountAndRedirect(session: { access_token: string; user: { id: string } }) {
       if (mergeCalledRef.current) return
       mergeCalledRef.current = true
+
+      // If they came with an SMS merge token, allow through (merge will create/update profile).
       if (smsToken) {
-        fetch('/api/merge-sms-signup', {
+        const res = await fetch('/api/merge-sms-signup', {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${session.access_token}`,
@@ -39,27 +41,39 @@ function AuthCallbackContent() {
           },
           body: JSON.stringify({ token: smsToken }),
         })
-          .then((res) => { if (!res.ok) console.error('merge-sms-signup failed', res.status) })
-          .finally(() => { router.replace(nextPath) })
-      } else {
+        if (!res.ok) console.error('merge-sms-signup failed', res.status)
         router.replace(nextPath)
+        return
       }
+
+      // No SMS token: only allow if they have an existing profile (existing account).
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('id', session.user.id)
+        .maybeSingle()
+
+      if (!profile) {
+        await supabase.auth.signOut()
+        router.replace('/login?no_account=1')
+        return
+      }
+
+      router.replace(nextPath)
     }
 
-    // Implicit flow: Supabase redirects with tokens in the URL hash. The client
-    // parses the hash automatically (detectSessionInUrl). Wait for session then redirect.
     let mounted = true
     const timeout = setTimeout(() => {
       if (!mounted) return
       supabase.auth.getSession().then(({ data: { session } }) => {
         if (!mounted || !session) return
-        doMergeAndRedirect(session)
+        checkExistingAccountAndRedirect(session)
       })
     }, 100)
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!mounted || !session) return
-      doMergeAndRedirect(session)
+      checkExistingAccountAndRedirect(session)
     })
 
     return () => {

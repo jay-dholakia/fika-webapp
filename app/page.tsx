@@ -86,7 +86,7 @@ export default function Home() {
           <div className="section-inner cta-inner">
             <h2 className="cta-title">Ready for a real Fika?</h2>
             <p className="cta-sub">Join the waitlist and we&apos;ll let you know when Fika is ready for you.</p>
-            <CtaWithLocation waitlistOnly />
+            <CtaWithLocation />
           </div>
         </section>
         </main>

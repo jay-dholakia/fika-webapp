@@ -8,6 +8,7 @@ import type { User } from '@supabase/supabase-js'
 
 const navLinks: { href: string; label: string; cta?: boolean }[] = [
   { href: '#how', label: 'How it works' },
+  { href: '/login', label: 'Login' },
 ]
 
 export default function Header() {

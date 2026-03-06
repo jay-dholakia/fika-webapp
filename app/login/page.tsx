@@ -1,10 +1,23 @@
 'use client'
 
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import Footer from '../components/Footer'
 import CtaWithLocation from '../components/CtaWithLocation'
+import { getSupabase } from '@/lib/supabase'
 
 export default function LoginPage() {
+  const searchParams = useSearchParams()
+  const noAccount = searchParams.get('no_account') === '1'
+
+  async function handleSignInWithGoogle() {
+    const supabase = getSupabase()
+    if (!supabase) return
+    const origin = typeof window !== 'undefined' ? window.location.origin : ''
+    const redirectTo = `${origin}/auth/callback?next=/app`
+    await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo } })
+  }
+
   return (
     <>
       <header className="header">
@@ -24,9 +37,24 @@ export default function LoginPage() {
           <div className="section-inner cta-inner">
             <h2 className="cta-title">Get started with Fika</h2>
             <p className="cta-sub">
-              Text <strong>FIKA</strong> to our number to receive a link and create your account. Or join the waitlist below and we&apos;ll be in touch.
+              Have an account? Sign in with Google. Otherwise join the waitlist and we&apos;ll be in touch.
             </p>
-            <CtaWithLocation waitlistOnly />
+            {noAccount && (
+              <p className="cta-message cta-message-error" role="alert" style={{ marginBottom: '1rem' }}>
+                No account found for that sign-in. Join the waitlist below and we&apos;ll notify you when Fika is ready for you.
+              </p>
+            )}
+            <button
+              type="button"
+              className="btn btn-primary btn-block"
+              onClick={handleSignInWithGoogle}
+            >
+              Sign in with Google
+            </button>
+            <p className="cta-waitlist-hint" style={{ marginTop: '1.5rem', marginBottom: '0.5rem' }}>
+              New to Fika? Join the waitlist
+            </p>
+            <CtaWithLocation />
             <p className="auth-switch auth-switch-cta" style={{ marginTop: '1.5rem' }}>
               <Link href="/">Back to home</Link>
             </p>
