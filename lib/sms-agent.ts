@@ -117,7 +117,7 @@ export function messageEntryFirstTimeMessages(isAfterDeadline: boolean, nextMond
   const base = appBase.trim().replace(/\/$/, '') || 'https://letsfika.vercel.app'
   const portalLine = `\n\nIf you want to learn more about how Fika works or edit your profile, you can use this link: ${base}/app`
   const msg1 = `You're in. I'm your Fika concierge — once a week I send you one intro to someone nearby worth a real conversation. That's it.`
-  const msg2 = `How it works: Mondays I ask if you want an intro that week. Opt in and I'll ask for your Wed–Sun availability (30–45 min block). Tuesday morning you get the intro — someone I think you'll actually click with.`
+  const msg2 = `Mondays I ask if you'd like a Fika this week. If you opt in, I'll ask for the times you're available for the rest of the week. On Tuesday morning I'll send over an intro based on who I think you could have a good conversation with.`
   const msg3 = `You both say yes? I suggest a time and place, you confirm, have your Fika, and I'll follow up after to see how it went. Skip a week? No big deal — I'll just catch you the following Monday.`
   const msg4OnTime = `I'll text you ${nextMondayPhrase} to see if you're up for a Fika this week. Have a great week!${portalLine}`
   const msg4AfterDeadline = `This week's window is already closed, so ${nextMondayPhrase} I'll check in to see if you're up for a Fika. Have a great week.${portalLine}`
