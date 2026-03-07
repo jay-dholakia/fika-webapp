@@ -12,6 +12,7 @@ import {
   type ProfileStep,
 } from '@/lib/onboarding-data'
 import { buildOnboardingSessionPayload, payloadToAnswers } from '@/lib/onboarding-session-payload'
+import { getMarketFromCity } from '@/lib/markets'
 import type { IntakeResponseItem } from '@/lib/db-types'
 import type { ProfileRow } from '@/lib/db-types'
 import type { IntakeResponsesV5Row } from '@/lib/db-types'
@@ -232,6 +233,7 @@ function AppOnboardingContent() {
       city: loc?.city ?? null,
       lat: typeof loc?.lat === 'number' ? loc.lat : null,
       lng: typeof loc?.lng === 'number' ? loc.lng : null,
+      market: getMarketFromCity(loc?.city)?.slug ?? null,
       intent_confirmed_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }
@@ -352,7 +354,7 @@ function AppOnboardingContent() {
     const supabase = getSupabase()
     if (!supabase) return
     const origin = typeof window !== 'undefined' ? window.location.origin : ''
-    const redirectTo = `${origin}/auth/callback?next=/app&sms_token=${encodeURIComponent(smsToken)}`
+    const redirectTo = `${origin}/auth/callback?next=/app/how-it-works&sms_token=${encodeURIComponent(smsToken)}`
     await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo } })
   }
 

@@ -4,17 +4,17 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useOnboardingStatus } from '@/lib/use-onboarding'
 import { getSupabase } from '@/lib/supabase'
+import { TARGET_COUNT_PER_MARKET, getMarketFromCity } from '@/lib/markets'
 
-const TARGET_USERS = 250
-const LA_LABEL = 'Los Angeles, CA'
+const TARGET_USERS = TARGET_COUNT_PER_MARKET
 const SHARE_URL = 'https://letsfika.vercel.app'
-const SHARE_TEXT = "Help me unlock Fika in our city — create an account and get first access to your weekly intro when we hit 250 people in the LA area."
 
 export default function HowItWorksPage() {
   const [userId, setUserId] = useState<string | null>(null)
   const [profileCount, setProfileCount] = useState<number | null>(null)
+  const [marketLabel, setMarketLabel] = useState<string | null>(null)
   const [shareCopied, setShareCopied] = useState(false)
-  const { loading: onboardingLoading, isComplete: questionnaireComplete, intake } = useOnboardingStatus(userId ?? undefined)
+  const { loading: onboardingLoading, isComplete: questionnaireComplete, intake, profile } = useOnboardingStatus(userId ?? undefined)
 
   useEffect(() => {
     getSupabase()?.auth.getSession().then(({ data: { session } }) => {
@@ -22,16 +22,25 @@ export default function HowItWorksPage() {
     })
   }, [])
 
+  const marketSlug = profile?.market ?? (profile?.city ? getMarketFromCity(profile.city)?.slug ?? null : null)
   useEffect(() => {
-    fetch('/api/profile-count')
+    const url = marketSlug ? `/api/profile-count?market=${encodeURIComponent(marketSlug)}` : '/api/profile-count'
+    fetch(url)
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
-        if (data != null && typeof data.count === 'number') setProfileCount(data.count)
+        if (data != null && typeof data.count === 'number') {
+          setProfileCount(data.count)
+          setMarketLabel(typeof data.label === 'string' ? data.label : null)
+        }
       })
       .catch(() => {})
-  }, [])
+  }, [marketSlug])
 
   const communityUnlocked = profileCount !== null && profileCount >= TARGET_USERS
+  const cityLabel = marketLabel ?? 'your city'
+  const SHARE_TEXT = marketLabel
+    ? `Help me unlock Fika in ${marketLabel} — create an account and get first access to your weekly intro when we hit ${TARGET_USERS} people.`
+    : `Help me unlock Fika in our city — create an account and get first access to your weekly intro when we hit ${TARGET_USERS} people.`
 
   function copyShareToClipboard(url: string, text: string) {
     const combined = `${text}\n\n${url}`
@@ -92,9 +101,9 @@ export default function HowItWorksPage() {
               )}
             </span>
             <div className="app-how-it-works-step-content">
-              <span className="app-how-it-works-when">We hit {TARGET_USERS} people in {LA_LABEL}</span>
+              <span className="app-how-it-works-when">We hit {TARGET_USERS} people in {cityLabel}</span>
               <span className="app-how-it-works-what">
-                Once {TARGET_USERS} people have signed up, we run our first intros. Opt-in opens on the Your Weekly Fika tab and you can set your availability.
+                Once {TARGET_USERS} people have signed up in your area, we run our first intros. Opt-in opens on the Your Weekly Fika tab and you can set your availability.
               </span>
               {!communityUnlocked && (
                 <div className="app-how-it-works-250-block">

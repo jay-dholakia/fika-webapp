@@ -14,6 +14,7 @@ import {
 } from '@/lib/profile-answers'
 import type { IntakeResponseItem } from '@/lib/db-types'
 import { toE164, isValidPhone } from '@/lib/phone'
+import { getMarketFromCity } from '@/lib/markets'
 import { SmsConciergeCta } from '@/app/app/components/SmsConciergeCta'
 
 function parseDate(s: string): string | null {
@@ -77,6 +78,7 @@ export default function SettingsProfilePage() {
       updates.city = loc.city
       updates.lat = loc.lat
       updates.lng = loc.lng
+      updates.market = getMarketFromCity(loc.city)?.slug ?? null
     }
     if (typeof answers.phone === 'string') {
       updates.phone = toE164(answers.phone.trim()) || null

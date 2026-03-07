@@ -15,7 +15,7 @@ function LoginContent() {
     const supabase = getSupabase()
     if (!supabase) return
     const origin = typeof window !== 'undefined' ? window.location.origin : ''
-    const redirectTo = `${origin}/auth/callback?next=/app`
+    const redirectTo = `${origin}/auth/callback?next=/app/how-it-works`
     await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo } })
   }
 

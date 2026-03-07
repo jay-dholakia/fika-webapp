@@ -10,6 +10,7 @@ import { sendMessage } from '@/lib/sendblue'
 import { getOrCreateSmsState, messageEntryFirstTimeMessages, SMS_STATES } from '@/lib/sms-agent'
 import { getTimezoneFromLatLng, getNextMondayPhrase } from '@/lib/sms-day-aware'
 import { getCurrentBatchWeek, isPastOptInDeadline } from '@/lib/onboarding'
+import { getMarketFromCity } from '@/lib/markets'
 
 export async function POST(request: Request) {
   const authHeader = request.headers.get('Authorization')
@@ -54,6 +55,7 @@ export async function POST(request: Request) {
   const city = (payload.city as string) ?? null
   const lat = typeof payload.lat === 'number' ? payload.lat : null
   const lng = typeof payload.lng === 'number' ? payload.lng : null
+  const market = getMarketFromCity(city)?.slug ?? null
   const responses = Array.isArray(payload.responses) ? payload.responses : []
   const avatarPath = typeof payload.avatar_path === 'string' ? payload.avatar_path : null
 
@@ -80,6 +82,7 @@ export async function POST(request: Request) {
       city: city || null,
       lat,
       lng,
+      market: market ?? null,
       phone: session.phone || null,
       avatar_url: avatarUrl ?? null,
       intent_confirmed_at: new Date().toISOString(),

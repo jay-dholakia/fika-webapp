@@ -33,7 +33,7 @@ const portalFaqItems = [
   },
   {
     q: 'How much does it cost?',
-    a: 'Intro tokens are $5 each (with discounts when you buy more). Use them to opt in to your Fika matches—a little skin in the game to cut down on flaking and get people actually meeting up for Fikas.',
+    a: '$5 curation fee—and it\'s only charged if you both actually meet up.',
   },
   {
     q: 'Is meeting people through Fika safe?',

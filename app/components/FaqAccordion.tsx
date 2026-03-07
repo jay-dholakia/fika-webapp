@@ -13,7 +13,7 @@ const faqItems = [
   },
   {
     q: 'What does it cost?',
-    a: '$5 curation fee—and it’s only charged when you opt in to meet up. That helps ensure you actually meet in person instead of endless back-and-forth that fizzles.',
+    a: '$5 curation fee—and it\'s only charged if you both actually meet up.',
   },
   {
     q: 'Do I have to meet in person?',

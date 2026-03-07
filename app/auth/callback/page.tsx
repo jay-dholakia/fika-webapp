@@ -11,8 +11,8 @@ function AuthCallbackContent() {
   const mergeCalledRef = useRef(false)
 
   useEffect(() => {
-    const next = searchParams.get('next') ?? '/app'
-    const nextPath = next.startsWith('/') ? next : '/app'
+    const next = searchParams.get('next') ?? '/app/how-it-works'
+    const nextPath = next.startsWith('/') ? next : '/app/how-it-works'
     const smsToken = searchParams.get('sms_token')
     const errorParam = searchParams.get('error_description') || searchParams.get('error')
 

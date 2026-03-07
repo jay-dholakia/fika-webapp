@@ -13,6 +13,7 @@ export type ProfileRow = {
   city: string | null
   lat: number | null
   lng: number | null
+  market: string | null // City market slug for progress/opt-in (la, sf, nyc)
   phone: string | null // E.164 for SMS (Sendblue)
   sms_opted_out_at?: string | null // ISO; when set, we don't send SMS until they text back
   languages?: string[] | null

@@ -8,6 +8,7 @@ import type { RealtimeChannel } from '@supabase/supabase-js'
 import { authLog } from '@/lib/auth-log'
 import { getCurrentBatchWeek, getMissingIntakeStepIds, getOrderedMissingIntakeSteps } from '@/lib/onboarding'
 import { isAvailabilityLocked } from '@/lib/availability-slots'
+import { TARGET_COUNT_PER_MARKET, getMarketFromCity } from '@/lib/markets'
 import { useOnboardingStatus } from '@/lib/use-onboarding'
 import { formatIntakeAnswer, ageFromBirthdate } from '@/lib/intro-detail'
 import { IntroDetailModal, type IntroMatch } from '@/app/app/components/IntroDetailModal'
@@ -27,6 +28,7 @@ function AppHomeContent() {
   const [modalIntro, setModalIntro] = useState<IntroMatch | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [profileCount, setProfileCount] = useState<number | null>(null)
+  const [marketLabel, setMarketLabel] = useState<string | null>(null)
   const [shareCopied, setShareCopied] = useState(false)
   const [fillingMissingMode, setFillingMissingMode] = useState(false)
   const [showJustCompletedThankYou, setShowJustCompletedThankYou] = useState(false)
@@ -38,11 +40,14 @@ function AppHomeContent() {
     }
   }, [searchParams, router])
 
-  const TARGET_USERS = 250
-  const showOptIn = profileCount !== null && profileCount >= TARGET_USERS
+  const TARGET_USERS = TARGET_COUNT_PER_MARKET
   const batchWeek = getCurrentBatchWeek()
-  const optInLocked = showOptIn && isAvailabilityLocked(batchWeek)
-  const { loading: onboardingLoading, isComplete: onboardingComplete, intake, refetch } = useOnboardingStatus(userId ?? undefined)
+  const communityNotReady = profileCount !== null && profileCount < TARGET_USERS
+  const optInLocked =
+    profileCount === null ||
+    communityNotReady ||
+    (profileCount >= TARGET_USERS && isAvailabilityLocked(batchWeek))
+  const { loading: onboardingLoading, isComplete: onboardingComplete, intake, refetch, profile } = useOnboardingStatus(userId ?? undefined)
   const showQuestionnaireCard = !onboardingLoading && !onboardingComplete
   const missingIntakeSteps = onboardingComplete && intake ? getMissingIntakeStepIds(intake) : []
   const showNewQuestionsCard = !onboardingLoading && onboardingComplete && missingIntakeSteps.length > 0 && !fillingMissingMode
@@ -58,28 +63,31 @@ function AppHomeContent() {
     }
   }
 
-  function fetchProfileCount(reason: 'initial' | 'realtime' | 'polling' | 'accuracy') {
-    authLog('profile-count:fetch', { reason })
-    fetch('/api/profile-count')
+  function fetchProfileCount(reason: 'initial' | 'realtime' | 'polling' | 'accuracy', marketSlug: string | null) {
+    const url = marketSlug ? `/api/profile-count?market=${encodeURIComponent(marketSlug)}` : '/api/profile-count'
+    authLog('profile-count:fetch', { reason, market: marketSlug })
+    fetch(url)
       .then((res) => res.ok ? res.json() : null)
       .then((data) => {
         if (data != null && typeof data.count === 'number') {
           setProfileCount(data.count)
-          authLog('profile-count:done', { reason, count: data.count })
+          setMarketLabel(typeof data.label === 'string' ? data.label : null)
+          authLog('profile-count:done', { reason, count: data.count, market: marketSlug })
         }
       })
       .catch((err) => authLog('profile-count:error', { reason, error: String(err) }))
   }
 
-  // Single effect: initial fetch, realtime subscription, and polling. Runs once per mount.
+  // Single effect: initial fetch, realtime subscription, and polling. Runs when userId or profile (for market) changes.
+  const marketSlug = profile?.market ?? (profile?.city ? getMarketFromCity(profile.city)?.slug ?? null : null)
   useEffect(() => {
     const supabase = getSupabase()
     let channel: RealtimeChannel | null = null
     let intervalId: ReturnType<typeof setInterval> | null = null
     let accuracyTimeoutId: ReturnType<typeof setTimeout> | null = null
 
-    // Initial fetch
-    fetchProfileCount('initial')
+    // Initial fetch (by user's market when available)
+    fetchProfileCount('initial', marketSlug)
 
     if (supabase) {
       authLog('profile-count:realtime', { status: 'subscribing', table: 'profiles' })
@@ -90,21 +98,20 @@ function AppHomeContent() {
           { event: 'INSERT', schema: 'public', table: 'profiles' },
           () => {
             authLog('profile-count:realtime', { event: 'INSERT', refetch: true })
-            fetchProfileCount('realtime')
+            fetchProfileCount('realtime', marketSlug)
           }
         )
         .subscribe((status) => {
           authLog('profile-count:realtime', { subscriptionStatus: status })
-          // One-time refetch after subscription is live so count is accurate (e.g. after Strict Mode remount)
           if (status === 'SUBSCRIBED') {
             accuracyTimeoutId = setTimeout(() => {
-              fetchProfileCount('accuracy')
+              fetchProfileCount('accuracy', marketSlug)
             }, 1500)
           }
         })
       intervalId = setInterval(() => {
         authLog('profile-count:poll', {})
-        fetchProfileCount('polling')
+        fetchProfileCount('polling', marketSlug)
       }, 30_000)
     } else {
       authLog('profile-count:realtime', { status: 'no-supabase' })
@@ -116,7 +123,7 @@ function AppHomeContent() {
       if (supabase && channel) supabase.removeChannel(channel)
       authLog('profile-count:realtime', { status: 'unsubscribed' })
     }
-  }, [])
+  }, [userId, marketSlug])
 
   useEffect(() => {
     getSupabase()?.auth.getSession().then(({ data: { session } }) => {
@@ -393,99 +400,54 @@ function AppHomeContent() {
 
   return (
     <>
-      {showOptIn ? (
-        <div className="app-card">
-          <h2>Weekly introduction</h2>
-          <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem', marginBottom: '1rem' }}>
-            Opt in to be included in this week&apos;s match run. You&apos;ll get one intro—someone we think you&apos;ll click with, when you&apos;re both free. Set your availability (Wed–Sun) on the <Link href="/app/availability">Your Availability</Link> page; opt in when you&apos;re ready. Both lock Sunday at 11:59pm.
+      <div className="app-card">
+        <h2>Weekly introduction</h2>
+        <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem', marginBottom: '1rem' }}>
+          Opt in to be included in this week&apos;s match run. You&apos;ll get one intro—someone we think you&apos;ll click with, when you&apos;re both free. Set your availability (Wed–Sun) on the <Link href="/app/availability">Your Availability</Link> page; opt in when you&apos;re ready. Both lock Sunday at 11:59pm.
+        </p>
+        {communityNotReady && (
+          <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.9rem', marginBottom: '0.75rem' }}>
+            {marketLabel
+              ? `We're still building community in ${marketLabel}! Stay tuned for our first round of intros.`
+              : "We're still building community! Stay tuned for our first round of intros."}
           </p>
-          {optInLocked && (
-            <p className="onboarding-error" style={{ marginBottom: '0.75rem' }}>
-              Opt-in and availability are locked (Sunday 11:59pm). Matches run Tuesday morning.
-            </p>
-          )}
-          <div className="app-opt-in-toggle">
-            <label className="app-toggle-label">
-              <input
-                type="checkbox"
-                role="switch"
-                checked={optedIn ?? false}
-                onChange={() => toggleOptIn()}
-                disabled={toggling || optInLocked}
-                aria-label="Opt in to this week's introduction"
-                className="app-toggle-input"
-              />
-              <span className="app-toggle-track" aria-hidden>
-                <span className="app-toggle-thumb" />
-              </span>
-              <span className="app-toggle-text">
-                {optedIn ? "I'm opted in this week" : "Opt in to this week's introduction"}
-              </span>
-            </label>
-          </div>
-          {optedIn && (
-            <p style={{ marginTop: '0.75rem', fontSize: '0.95rem' }}>
-              <Link href="/app/availability">Edit your availability for next week</Link>
-            </p>
-          )}
-          {!optedIn && !optInLocked && (
-            <p style={{ marginTop: '0.75rem', fontSize: '0.95rem' }}>
-              <Link href="/app/availability">Set your availability for next week</Link> so we can match you when you opt in.
-            </p>
-          )}
-          {error && <p className="onboarding-error" style={{ marginTop: '0.75rem' }}>{error}</p>}
-        </div>
-      ) : (
-        <div className="app-card app-waitlist-counter">
-          <h2>Weekly introduction</h2>
-          <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem', marginBottom: '1rem' }}>
-            We&apos;re building community in Los Angeles. Once {TARGET_USERS} people have signed up we&apos;ll run our first intro and reach out so you can opt in for week one!
+        )}
+        {optInLocked && !communityNotReady && (
+          <p className="onboarding-error" style={{ marginBottom: '0.75rem' }}>
+            Opt-in and availability are locked (Sunday 11:59pm). Matches run Tuesday morning.
           </p>
-          <p className="app-counter-text">
-            <span className="app-counter-value">{profileCount !== null ? profileCount : '—'}</span>
-            <span className="app-counter-sep"> / </span>
-            <span className="app-counter-target">{TARGET_USERS}</span>
-            <span className="app-counter-label"> people</span>
-          </p>
-          <div className="app-counter-bar" role="progressbar" aria-valuenow={profileCount ?? 0} aria-valuemin={0} aria-valuemax={TARGET_USERS}>
-            <div
-              className="app-counter-bar-fill"
-              style={{ width: `${profileCount !== null ? Math.min(100, (profileCount / TARGET_USERS) * 100) : 0}%` }}
+        )}
+        <div className="app-opt-in-toggle">
+          <label className="app-toggle-label">
+            <input
+              type="checkbox"
+              role="switch"
+              checked={optedIn ?? false}
+              onChange={() => toggleOptIn()}
+              disabled={toggling || optInLocked}
+              aria-label="Opt in to this week's introduction"
+              className="app-toggle-input"
             />
-          </div>
-          <button
-            type="button"
-            className="app-waitlist-share-btn"
-            onClick={async () => {
-              const url = 'https://letsfika.vercel.app'
-              const text = "Help me unlock Fika in our city — create an account and get first access to your weekly intro when we hit 250 people in the LA area."
-              if (typeof navigator !== 'undefined' && navigator.share) {
-                try {
-                  await navigator.share({
-                    title: 'Fika – Weekly introduction',
-                    text,
-                    url,
-                  })
-                } catch (e) {
-                  if ((e as Error)?.name !== 'AbortError') copyShareToClipboard(url, text)
-                }
-              } else {
-                copyShareToClipboard(url, text)
-              }
-            }}
-            aria-label="Invite friends"
-          >
-            <span className="app-waitlist-share-icon" aria-hidden>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-              </svg>
+            <span className="app-toggle-track" aria-hidden>
+              <span className="app-toggle-thumb" />
             </span>
-            <span>Invite friends</span>
-          </button>
-          {shareCopied && <p className="app-waitlist-share-feedback">Link copied!</p>}
+            <span className="app-toggle-text">
+              {optedIn ? "I'm opted in this week" : "Opt in to this week's introduction"}
+            </span>
+          </label>
         </div>
-      )}
+        {optedIn && (
+          <p style={{ marginTop: '0.75rem', fontSize: '0.95rem' }}>
+            <Link href="/app/availability">Edit your availability for next week</Link>
+          </p>
+        )}
+        {!optedIn && !optInLocked && (
+          <p style={{ marginTop: '0.75rem', fontSize: '0.95rem' }}>
+            <Link href="/app/availability">Set your availability for next week</Link> so we can match you when you opt in.
+          </p>
+        )}
+        {error && <p className="onboarding-error" style={{ marginTop: '0.75rem' }}>{error}</p>}
+      </div>
 
       {showJustCompletedThankYou && (
         <div className="app-card">
