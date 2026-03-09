@@ -121,7 +121,7 @@ export default function AvailabilityPage() {
 
       {locked && (
         <p className="onboarding-error" style={{ marginBottom: '1rem' }}>
-          Availability for this week is locked. Set your availability before Sunday 11:59pm for the next run.
+          Availability for this week is locked. Set your availability before Monday 11:59pm for the next run.
         </p>
       )}
 

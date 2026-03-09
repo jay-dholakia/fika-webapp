@@ -148,6 +148,31 @@ function isWedSunSlot(slotId: string): boolean {
   return WED_SUN_PREFIXES.some((p) => slotId.startsWith(p))
 }
 
+/** Slugs of markets where Monday opt-in and match run are enabled. */
+async function getActiveMarketSlugs(supabaseClient: any): Promise<string[]> {
+  const { data, error } = await supabaseClient
+    .from('markets')
+    .select('slug')
+    .eq('active', true)
+  if (error) return []
+  return (data ?? []).map((r: { slug: string }) => r.slug).filter(Boolean)
+}
+
+/** Filter user IDs to only those in an active market. */
+async function filterOptedInByActiveMarket(supabaseClient: any, userIds: string[]): Promise<string[]> {
+  if (userIds.length === 0) return []
+  const activeSlugs = await getActiveMarketSlugs(supabaseClient)
+  if (activeSlugs.length === 0) return []
+  const { data: profiles } = await supabaseClient
+    .from('profiles')
+    .select('id, market')
+    .in('id', userIds)
+  const activeSet = new Set(activeSlugs)
+  return (profiles ?? [])
+    .filter((p: { id: string; market: string | null }) => p.market && activeSet.has(p.market))
+    .map((p: { id: string }) => p.id)
+}
+
 async function replenishAllUsers(supabaseClient: any) {
   const batchWeek = getBatchWeekMonday(new Date())
   // Get user IDs who opted in for this week's match run
@@ -157,9 +182,10 @@ async function replenishAllUsers(supabaseClient: any) {
     .eq('batch_week', batchWeek)
 
   if (optInError) throw optInError
-  const optedInIds = (optIns || []).map((r: { user_id: string }) => r.user_id)
+  let optedInIds = (optIns || []).map((r: { user_id: string }) => r.user_id)
+  optedInIds = await filterOptedInByActiveMarket(supabaseClient, optedInIds)
   if (optedInIds.length === 0) {
-    console.log(`No users opted in for batch_week ${batchWeek}. Skipping replenish.`)
+    console.log(`No users opted in for batch_week ${batchWeek} in active markets. Skipping replenish.`)
     return
   }
 
@@ -332,9 +358,10 @@ async function findPotentialMatches(
     .eq('batch_week', batchWeek)
 
   if (optInError) throw optInError
-  const optedInIds = (optIns || []).map((r: { user_id: string }) => r.user_id).filter((id: string) => id !== userProfile.id)
+  let optedInIds = (optIns || []).map((r: { user_id: string }) => r.user_id).filter((id: string) => id !== userProfile.id)
+  optedInIds = await filterOptedInByActiveMarket(supabaseClient, optedInIds)
   if (optedInIds.length === 0) {
-    console.log('No other users opted in for this batch_week')
+    console.log('No other users opted in for this batch_week in active markets')
     return []
   }
 

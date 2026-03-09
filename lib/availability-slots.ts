@@ -6,7 +6,7 @@
 
 const DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const
 
-/** Days we collect availability for: Wed–Sun (no Mon/Tue; matches run Tuesday, confirm by Tuesday 11:59pm). */
+/** Days we collect availability for: Wed–Sun (opt-in Monday 11am; lock Monday 11:59pm; intros Tuesday morning). */
 export const AVAILABILITY_DAYS = ['wed', 'thu', 'fri', 'sat', 'sun'] as const
 
 // 9am to 7pm in 30-min increments (9:00, 9:30, ... 18:30; 7pm is end of last slot)
@@ -171,21 +171,20 @@ export function getAvailabilityWeekWednesday(batchWeek: string): string {
   return d.toISOString().slice(0, 10)
 }
 
-/** Sunday before batch_week (lock day). Lock at 11:59pm. */
-function getLockSunday(batchWeek: string): Date {
+/** Monday of batch_week (lock day). Opt-in text sent Monday 11am PT; availability locks Monday 11:59pm before Tuesday morning intros. */
+function getLockMonday(batchWeek: string): Date {
   const d = new Date(batchWeek + 'T12:00:00')
-  d.setDate(d.getDate() - 1)
   return d
 }
 
-/** Sunday 11:59pm before the match week. Opt-in + availability close at this time. */
+/** Monday 11:59pm of the match week. Opt-in + availability close at this time; intros run Tuesday morning. */
 export function getAvailabilityLockDate(batchWeek: string): Date {
-  const d = getLockSunday(batchWeek)
+  const d = getLockMonday(batchWeek)
   d.setHours(23, 59, 59, 999)
   return d
 }
 
-/** True when availability for that week can no longer be edited (Sunday 11:59pm has passed). */
+/** True when availability for that week can no longer be edited (Monday 11:59pm has passed). */
 export function isAvailabilityLocked(batchWeek: string): boolean {
   const lockAt = getAvailabilityLockDate(batchWeek)
   return new Date() >= lockAt

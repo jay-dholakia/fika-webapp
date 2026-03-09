@@ -21,6 +21,7 @@ export type ProfileRow = {
   intent_confirmed_at: string | null // ISO
   in_match_bowl?: boolean
   intro_balance?: number
+  role?: string | null // 'user' | 'admin'; admin can access /admin
   updated_at?: string
   created_at?: string
 }

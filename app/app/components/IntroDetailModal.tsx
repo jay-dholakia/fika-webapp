@@ -297,6 +297,51 @@ export function IntroDetailModal({
                 </div>
               </div>
 
+              {(() => {
+                const getAnswer = (questionId: string) => {
+                  const r = detail?.intakeResponses?.find((x) => x.question_id === questionId)
+                  if (!r?.answer) return null
+                  const s = formatIntakeAnswer(r.answer).trim()
+                  return s || null
+                }
+                const book = getAnswer('q_book_recommendation')
+                const movieShow = getAnswer('q_movie_show_recommendation')
+                const place = getAnswer('q_place_recommendation')
+                const roleModel = getAnswer('q_role_model')
+                if (!book && !movieShow && !place && !roleModel) return null
+                return (
+                  <section className="app-intro-detail-section">
+                    <h3 className="app-intro-detail-section-title">More about them</h3>
+                    <dl className="app-intro-detail-more">
+                      {book ? (
+                        <>
+                          <dt>Book they&apos;d recommend</dt>
+                          <dd>{book}</dd>
+                        </>
+                      ) : null}
+                      {movieShow ? (
+                        <>
+                          <dt>Movie or show they&apos;d recommend</dt>
+                          <dd>{movieShow}</dd>
+                        </>
+                      ) : null}
+                      {place ? (
+                        <>
+                          <dt>Place they&apos;d recommend</dt>
+                          <dd>{place}</dd>
+                        </>
+                      ) : null}
+                      {roleModel ? (
+                        <>
+                          <dt>Role model</dt>
+                          <dd>{roleModel}</dd>
+                        </>
+                      ) : null}
+                    </dl>
+                  </section>
+                )
+              })()}
+
               {(intro.reasons?.whyWeIntroducedYou?.length ?? 0) > 0 ? (
                 <section className="app-intro-detail-section">
                   <h3 className="app-intro-detail-section-title">Why we introduced you</h3>

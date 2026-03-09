@@ -8,6 +8,7 @@ import { getCurrentBatchWeek } from './onboarding'
 import { sendMessage } from './sendblue'
 import { getOrCreateSmsState, SMS_STATES } from './sms-agent'
 import { ageFromBirthdate } from './intro-detail'
+import { getActiveMarketSlugs } from './admin-markets'
 
 function getSupabase(): SupabaseClient | null {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()
@@ -16,11 +17,16 @@ function getSupabase(): SupabaseClient | null {
   return createClient(url, key)
 }
 
-/** Send weekly opt-in to users who have phone and haven't opted in yet for this week. */
+/** Send weekly opt-in to users who have phone, are in an active market, and haven't opted in yet for this week. */
 export async function runWeeklyOptIn(): Promise<{ sent: number; error?: string }> {
   const supabase = getSupabase()
   if (!supabase) return { sent: 0, error: 'No Supabase' }
   if (!process.env.SENDBLUE_API_KEY_ID) return { sent: 0, error: 'Sendblue not configured' }
+
+  const activeSlugs = await getActiveMarketSlugs(supabase)
+  if (activeSlugs.length === 0) {
+    return { sent: 0 }
+  }
 
   const batchWeek = getCurrentBatchWeek()
   const { data: optedInUserIds } = await supabase
@@ -34,6 +40,7 @@ export async function runWeeklyOptIn(): Promise<{ sent: number; error?: string }
     .from('profiles')
     .select('id, phone')
     .not('phone', 'is', null)
+    .in('market', activeSlugs)
   const withPhone = (profiles ?? []).filter((p) => p.phone && !optedSet.has(p.id))
   let sent = 0
   const msg = "Would you like a Fika introduction this week? Reply IN or SKIP."

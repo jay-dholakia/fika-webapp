@@ -1,6 +1,7 @@
 /**
  * Helpers for showing intro detail in the modal.
- * LA Beta: safe intake IDs = life_chapter, lately, everyday_anchor, topics, convo_feel, hoping_for, openness.
+ * LA Beta: safe intake IDs = life_chapter, lately, everyday_anchor, topics, convo_feel, hoping_for, openness,
+ * plus profile-card-only: book/movie/place/role model (for opt-in evaluation).
  */
 
 import { INTAKE_STEPS } from './onboarding-data'
@@ -14,6 +15,12 @@ export const SAFE_INTAKE_QUESTION_IDS = new Set([
   'q_convo_feel',
   'q_hoping_for',
   'q_openness',
+  // Profile card only (shown so user can evaluate when opting in)
+  'q_book_recommendation',
+  'q_movie_show_recommendation',
+  'q_place_recommendation',
+  'q_role_model',
+  'q_role_model_why',
 ])
 
 const questionById = new Map(INTAKE_STEPS.map((s) => [s.id, s.question]))

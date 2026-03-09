@@ -21,7 +21,7 @@ const portalFaqItems = [
   },
   {
     q: 'How often do matches run?',
-    a: 'Weekly. Opt in and set your availability (Wed–Sun) before the run; both lock Sunday at 11:59pm. Matches run Tuesday morning; your intro appears then.',
+    a: 'Weekly. Opt in and set your availability (Wed–Sun) before the run; both lock Monday 11:59pm. Matches run Tuesday morning; your intro appears then.',
   },
   {
     q: 'What happens when I get an intro?',

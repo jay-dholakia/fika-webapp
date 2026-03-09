@@ -44,12 +44,20 @@ export async function GET(request: Request) {
 
     const marketInfo = marketSlug ? getMarketBySlug(marketSlug) : null
     const label = marketInfo?.label ?? null
+
+    let active: boolean | null = null
+    if (marketSlug) {
+      const { data: row } = await supabase.from('markets').select('active').eq('slug', marketSlug).maybeSingle()
+      active = row?.active ?? false
+    }
+
     console.log('[fika] profile-count:api', { count, market: marketSlug, host })
     const res = NextResponse.json({
       count,
       target: TARGET_COUNT_PER_MARKET,
       market: marketSlug,
       label,
+      ...(marketSlug != null ? { active: active ?? false } : {}),
     })
     res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
     return res

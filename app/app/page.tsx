@@ -29,6 +29,7 @@ function AppHomeContent() {
   const [error, setError] = useState<string | null>(null)
   const [profileCount, setProfileCount] = useState<number | null>(null)
   const [marketLabel, setMarketLabel] = useState<string | null>(null)
+  const [marketActive, setMarketActive] = useState<boolean | null>(null)
   const [shareCopied, setShareCopied] = useState(false)
   const [fillingMissingMode, setFillingMissingMode] = useState(false)
   const [showJustCompletedThankYou, setShowJustCompletedThankYou] = useState(false)
@@ -40,14 +41,18 @@ function AppHomeContent() {
     }
   }, [searchParams, router])
 
+  const { loading: onboardingLoading, isComplete: onboardingComplete, intake, refetch, profile } = useOnboardingStatus(userId ?? undefined)
+  const marketSlug = profile?.market ?? (profile?.city ? getMarketFromCity(profile.city)?.slug ?? null : null)
+
   const TARGET_USERS = TARGET_COUNT_PER_MARKET
   const batchWeek = getCurrentBatchWeek()
   const communityNotReady = profileCount !== null && profileCount < TARGET_USERS
+  const marketNotActive = marketSlug != null && marketActive === false
   const optInLocked =
     profileCount === null ||
     communityNotReady ||
+    marketNotActive ||
     (profileCount >= TARGET_USERS && isAvailabilityLocked(batchWeek))
-  const { loading: onboardingLoading, isComplete: onboardingComplete, intake, refetch, profile } = useOnboardingStatus(userId ?? undefined)
   const showQuestionnaireCard = !onboardingLoading && !onboardingComplete
   const missingIntakeSteps = onboardingComplete && intake ? getMissingIntakeStepIds(intake) : []
   const showNewQuestionsCard = !onboardingLoading && onboardingComplete && missingIntakeSteps.length > 0 && !fillingMissingMode
@@ -72,6 +77,8 @@ function AppHomeContent() {
         if (data != null && typeof data.count === 'number') {
           setProfileCount(data.count)
           setMarketLabel(typeof data.label === 'string' ? data.label : null)
+          if (marketSlug == null) setMarketActive(null)
+          else if (typeof data.active === 'boolean') setMarketActive(data.active)
           authLog('profile-count:done', { reason, count: data.count, market: marketSlug })
         }
       })
@@ -79,7 +86,6 @@ function AppHomeContent() {
   }
 
   // Single effect: initial fetch, realtime subscription, and polling. Runs when userId or profile (for market) changes.
-  const marketSlug = profile?.market ?? (profile?.city ? getMarketFromCity(profile.city)?.slug ?? null : null)
   useEffect(() => {
     const supabase = getSupabase()
     let channel: RealtimeChannel | null = null
@@ -155,7 +161,7 @@ function AppHomeContent() {
       })
   }, [userId])
 
-  // Load all match_candidates (intros) for this user; show only unopted or passed (exclude opted-in)
+  // Load this week's match (one intro per week)
   useEffect(() => {
     if (!userId) {
       setIntros([])
@@ -403,18 +409,18 @@ function AppHomeContent() {
       <div className="app-card">
         <h2>Weekly introduction</h2>
         <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem', marginBottom: '1rem' }}>
-          Opt in to be included in this week&apos;s match run. You&apos;ll get one intro—someone we think you&apos;ll click with, when you&apos;re both free. Set your availability (Wed–Sun) on the <Link href="/app/availability">Your Availability</Link> page; opt in when you&apos;re ready. Both lock Sunday at 11:59pm.
+          Opt in to be included in this week&apos;s match run. You&apos;ll get one intro—someone we think you&apos;ll click with, when you&apos;re both free. Set your availability (Wed–Sun) on the <Link href="/app/availability">Your Availability</Link> page; opt in when you&apos;re ready. Both lock Monday 11:59pm.
         </p>
-        {communityNotReady && (
+        { (communityNotReady || marketNotActive) && (
           <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.9rem', marginBottom: '0.75rem' }}>
             {marketLabel
-              ? `We're still building community in ${marketLabel}! Stay tuned for our first round of intros.`
-              : "We're still building community! Stay tuned for our first round of intros."}
+              ? `We're still building community in ${marketLabel}! Stay tuned for your first intro.`
+              : "We're still building community! Stay tuned for your first intro."}
           </p>
         )}
-        {optInLocked && !communityNotReady && (
+        {optInLocked && !communityNotReady && !marketNotActive && (
           <p className="onboarding-error" style={{ marginBottom: '0.75rem' }}>
-            Opt-in and availability are locked (Sunday 11:59pm). Matches run Tuesday morning.
+            Opt-in and availability are locked (Monday 11:59pm). Matches run Tuesday morning.
           </p>
         )}
         <div className="app-opt-in-toggle">
@@ -461,7 +467,7 @@ function AppHomeContent() {
         <div className="app-card app-questionnaire-card">
           <h2>Complete intro questionnaire</h2>
           <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem', marginBottom: '1rem' }}>
-            Answer a few questions so we can intro you to people for your Fika. Takes about 5 minutes.
+            Answer a few questions so we can match you with someone for your Fika. Takes about 5 minutes.
           </p>
           <Link href="/app/onboarding" className="btn btn-primary btn-block auth-submit" style={{ display: 'inline-block', textAlign: 'center' }}>
             Start questionnaire
@@ -473,7 +479,7 @@ function AppHomeContent() {
         <div className="app-card app-new-questions-card">
           <h2>New intro questions added</h2>
           <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem', marginBottom: '1rem' }}>
-            We&apos;ve added a few new questions to help match you better. Complete them so your intros stay up to date.
+            We&apos;ve added a few new questions to help match you better. Complete them so your intro stays up to date.
           </p>
           <button
             type="button"
@@ -507,9 +513,9 @@ function AppHomeContent() {
             This week&apos;s Fika will appear here after the next weekly run.
           </p>
         ) : (
-          <ul className="app-intro-list" aria-label="This week's Fika">
+          <div className="app-intro-list" aria-label="This week's Fika">
             {intros.map((intro) => (
-              <li key={intro.id} className="app-intro-card">
+              <div key={intro.id} className="app-intro-card">
                 <button
                   type="button"
                   className="app-intro-card-trigger"
@@ -547,9 +553,9 @@ function AppHomeContent() {
                     <span className="app-intro-card-cta">View details →</span>
                   )}
                 </button>
-              </li>
+              </div>
             ))}
-          </ul>
+          </div>
         )}
       </div>
 

@@ -170,7 +170,7 @@ export default function HowItWorksPage() {
             <span className="app-how-it-works-step-marker" aria-hidden><span className="app-how-it-works-num">1</span></span>
             <div className="app-how-it-works-step-content">
               <span className="app-how-it-works-when">Sunday</span>
-              <span className="app-how-it-works-what">Opt in + share when you&apos;re available (Wed–Sun). Choose a few times you&apos;re genuinely free for a 30–45 minute meetup. The more flexibility, the easier it is to make a great match.</span>
+              <span className="app-how-it-works-what">Opt in + share when you&apos;re available (Wed–Sun). Choose a few times you&apos;re genuinely free. Lock is Monday 11:59pm; intros go out Tuesday morning.</span>
             </div>
           </li>
           <li className="app-how-it-works-step">

@@ -3013,6 +3013,25 @@ a {
   color: var(--color-textSecondary);
   margin: 0 0 0.5rem;
 }
+.app-intro-detail-more {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+.app-intro-detail-more dt {
+  font-weight: 500;
+  color: var(--color-textSecondary);
+  margin: 0.5rem 0 0.15rem;
+  font-size: 0.85rem;
+}
+.app-intro-detail-more dt:first-child {
+  margin-top: 0;
+}
+.app-intro-detail-more dd {
+  margin: 0;
+  color: var(--color-text);
+  padding-left: 0;
+}
 .app-intro-pills {
   display: flex;
   flex-wrap: wrap;
