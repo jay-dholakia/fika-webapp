@@ -82,87 +82,108 @@ export default function AdminMarketsPage() {
 
   if (loading) {
     return (
-      <div className="auth-page" style={{ padding: '2rem', textAlign: 'center' }}>
-        <p style={{ color: 'var(--color-textSecondary)' }}>Loading…</p>
+      <div className="admin-layout">
+        <header className="admin-header">
+          <div className="admin-header-inner">
+            <Link href="/" className="admin-logo">fika</Link>
+            <span className="admin-badge">Admin</span>
+          </div>
+        </header>
+        <main className="admin-main">
+          <div className="admin-loading">Loading…</div>
+        </main>
       </div>
     )
   }
 
-  if (error) {
+  if (error && !markets.length) {
     return (
-      <div className="auth-page" style={{ padding: '2rem', maxWidth: '28rem', margin: '0 auto' }}>
-        <header className="header" style={{ marginBottom: '1.5rem' }}>
-          <div className="header-inner">
-            <Link href="/" className="logo">fika</Link>
+      <div className="admin-layout">
+        <header className="admin-header">
+          <div className="admin-header-inner">
+            <Link href="/" className="admin-logo">fika</Link>
           </div>
         </header>
-        <p className="auth-message auth-message-error" role="alert" style={{ marginBottom: '1rem' }}>
-          {error}
-        </p>
-        <Link href="/login?next=/admin" className="btn btn-primary">
-          Sign in with Google
-        </Link>
-        <p style={{ marginTop: '1rem' }}>
-          <Link href="/">Back to home</Link>
-        </p>
+        <main className="admin-main">
+          <div className="admin-card admin-card-narrow">
+            <p className="admin-error" role="alert">{error}</p>
+            <Link href="/login?next=/admin" className="admin-btn admin-btn-primary">
+              Sign in with Google
+            </Link>
+            <p className="admin-back">
+              <Link href="/">Back to home</Link>
+            </p>
+          </div>
+        </main>
       </div>
     )
   }
 
   return (
-    <div className="auth-page" style={{ padding: '2rem', maxWidth: '42rem', margin: '0 auto' }}>
-      <header className="header" style={{ marginBottom: '1.5rem' }}>
-        <div className="header-inner">
-          <Link href="/" className="logo">fika</Link>
-          <span style={{ marginLeft: '1rem', color: 'var(--color-textSecondary)', fontSize: '0.9rem' }}>Admin</span>
+    <div className="admin-layout">
+      <header className="admin-header">
+        <div className="admin-header-inner">
+          <Link href="/" className="admin-logo">fika</Link>
+          <nav className="admin-nav">
+            <span className="admin-badge">Admin</span>
+            <Link href="/app" className="admin-link">Back to app</Link>
+          </nav>
         </div>
       </header>
 
-      <h1 style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>Markets</h1>
-      <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem', marginBottom: '1.25rem' }}>
-        Signups by city. Turn a market <strong>Active</strong> to send Monday opt-in texts and run intros there.
-      </p>
+      <main className="admin-main">
+        <div className="admin-card">
+          <h1 className="admin-title">Markets</h1>
+          <p className="admin-description">
+            Markets are added automatically when users sign up or set their location (onboarding or settings).
+            Each row is a city group (e.g. LA, SF, NYC). Turn a market <strong>Active</strong> to send Monday
+            opt-in texts and run weekly intros there.
+          </p>
 
-      {markets.length === 0 ? (
-        <p style={{ color: 'var(--color-textSecondary)' }}>No markets yet. They appear when users sign up in a supported city.</p>
-      ) : (
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.95rem' }}>
-          <thead>
-            <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
-              <th style={{ textAlign: 'left', padding: '0.6rem 0.5rem 0.6rem 0', fontWeight: 600 }}>Market</th>
-              <th style={{ textAlign: 'right', padding: '0.6rem 0.5rem', fontWeight: 600 }}>Signups</th>
-              <th style={{ textAlign: 'left', padding: '0.6rem 0 0.6rem 0.5rem', fontWeight: 600 }}>Active</th>
-            </tr>
-          </thead>
-          <tbody>
-            {markets.map((m) => (
-              <tr key={m.slug} style={{ borderBottom: '1px solid var(--color-border)' }}>
-                <td style={{ padding: '0.75rem 0.5rem 0.75rem 0' }}>{m.label}</td>
-                <td style={{ textAlign: 'right', padding: '0.75rem 0.5rem' }}>{m.signupCount}</td>
-                <td style={{ padding: '0.75rem 0 0.75rem 0.5rem' }}>
-                  <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', cursor: togglingSlug ? 'not-allowed' : 'pointer' }}>
-                    <input
-                      type="checkbox"
-                      checked={m.active}
-                      disabled={togglingSlug !== null}
-                      onChange={() => toggleActive(m.slug, m.active)}
-                      aria-label={`${m.label} active`}
-                    />
-                    <span>{m.active ? 'Yes' : 'No'}</span>
-                  </label>
-                  {togglingSlug === m.slug && <span style={{ marginLeft: '0.5rem', color: 'var(--color-textSecondary)', fontSize: '0.85rem' }}>Updating…</span>}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+          {markets.length === 0 ? (
+            <p className="admin-empty">No markets yet. They appear when users sign up in a supported city.</p>
+          ) : (
+            <div className="admin-table-wrap">
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Market</th>
+                    <th className="admin-table-num">Signups</th>
+                    <th>Active</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {markets.map((m) => (
+                    <tr key={m.slug}>
+                      <td className="admin-table-market">{m.label}</td>
+                      <td className="admin-table-num">{m.signupCount}</td>
+                      <td>
+                        <label className="admin-toggle">
+                          <input
+                            type="checkbox"
+                            checked={m.active}
+                            disabled={togglingSlug !== null}
+                            onChange={() => toggleActive(m.slug, m.active)}
+                            aria-label={`${m.label} active`}
+                          />
+                          <span className="admin-toggle-label">{m.active ? 'Yes' : 'No'}</span>
+                          {togglingSlug === m.slug && <span className="admin-toggle-busy">Updating…</span>}
+                        </label>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
 
-      {error && <p className="auth-message auth-message-error" role="alert" style={{ marginTop: '1rem' }}>{error}</p>}
+          {error && <p className="admin-error admin-error-inline" role="alert">{error}</p>}
 
-      <p style={{ marginTop: '1.5rem' }}>
-        <Link href="/">Back to home</Link>
-      </p>
+          <p className="admin-back">
+            <Link href="/app">Back to app</Link>
+          </p>
+        </div>
+      </main>
     </div>
   )
 }

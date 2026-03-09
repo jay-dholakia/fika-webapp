@@ -3375,3 +3375,183 @@ a {
 .profile-edit .onboarding-body p {
   margin: 0 0 0.25rem;
 }
+
+/* Admin layout */
+.admin-layout {
+  min-height: 100vh;
+  background: var(--color-background);
+  padding-top: 0;
+}
+.admin-header {
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.admin-header-inner {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 1rem 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.admin-logo {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 1.25rem;
+  color: var(--color-text);
+  text-transform: lowercase;
+}
+.admin-nav {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+.admin-badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-textSecondary);
+  background: var(--color-bg-soft);
+  padding: 0.35rem 0.6rem;
+  border-radius: 6px;
+}
+.admin-link {
+  font-size: 0.9rem;
+  color: var(--color-primary);
+}
+.admin-link:hover {
+  text-decoration: underline;
+}
+.admin-main {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+}
+.admin-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 1.75rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+.admin-card-narrow {
+  max-width: 24rem;
+}
+.admin-title {
+  font-family: var(--font-heading);
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 0 0 0.5rem;
+  color: var(--color-text);
+}
+.admin-description {
+  font-size: 0.95rem;
+  color: var(--color-textSecondary);
+  line-height: 1.55;
+  margin: 0 0 1.5rem;
+}
+.admin-empty {
+  font-size: 0.95rem;
+  color: var(--color-textSecondary);
+  margin: 0 0 1rem;
+}
+.admin-table-wrap {
+  overflow-x: auto;
+  margin-bottom: 1rem;
+}
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+.admin-table th,
+.admin-table td {
+  padding: 0.75rem 1rem;
+  text-align: left;
+  border-bottom: 1px solid var(--color-border);
+}
+.admin-table th {
+  font-weight: 600;
+  color: var(--color-textSecondary);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.admin-table tbody tr:hover {
+  background: var(--color-bg-soft);
+}
+.admin-table-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.admin-table-market {
+  font-weight: 500;
+}
+.admin-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+.admin-toggle input {
+  width: 1.1rem;
+  height: 1.1rem;
+  accent-color: var(--color-primary);
+  cursor: pointer;
+}
+.admin-toggle input:disabled {
+  cursor: not-allowed;
+}
+.admin-toggle-label {
+  font-size: 0.9rem;
+}
+.admin-toggle-busy {
+  font-size: 0.85rem;
+  color: var(--color-textSecondary);
+  margin-left: 0.25rem;
+}
+.admin-error {
+  color: var(--color-error);
+  font-size: 0.95rem;
+  margin: 0 0 1rem;
+}
+.admin-error-inline {
+  margin-top: 0.5rem;
+}
+.admin-btn {
+  display: inline-block;
+  padding: 0.6rem 1.25rem;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  text-align: center;
+}
+.admin-btn-primary {
+  background: var(--color-primary);
+  color: white;
+  margin-bottom: 1rem;
+}
+.admin-btn-primary:hover {
+  opacity: 0.95;
+}
+.admin-loading {
+  text-align: center;
+  padding: 3rem;
+  color: var(--color-textSecondary);
+}
+.admin-back {
+  font-size: 0.9rem;
+  margin: 0;
+}
+.admin-back a {
+  color: var(--color-primary);
+}
+.admin-back a:hover {
+  text-decoration: underline;
+}
