@@ -41,9 +41,10 @@ export default function AdminMarketsPage() {
         if (!cancelled && data?.markets) setMarkets(data.markets)
       } catch (e) {
         if (!cancelled) {
-          const msg = e?.message === 'unauthorized'
+          const err = e instanceof Error ? e : new Error(String(e))
+          const msg = err.message === 'unauthorized'
             ? 'Sign in with an admin account.'
-            : e?.message === 'not_admin'
+            : err.message === 'not_admin'
               ? "Your account doesn't have admin access."
               : 'Failed to load.'
           setError(msg)
