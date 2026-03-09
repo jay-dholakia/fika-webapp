@@ -7,14 +7,26 @@ import { getMarketBySlug } from '@/lib/markets'
 export const dynamic = 'force-dynamic'
 
 /** GET /api/admin/markets — list markets with signup count and active status. Admin only (profiles.role = 'admin'). */
-export async function GET() {
+export async function GET(request: Request) {
   const supabaseAuth = await createServerSupabase()
   if (!supabaseAuth) {
     return NextResponse.json({ error: 'Not configured' }, { status: 500 })
   }
-  const { data: { user } } = await supabaseAuth.auth.getUser()
-  if (!user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  let userId: string | null = null
+  const { data: { session } } = await supabaseAuth.auth.getSession()
+  if (session?.user?.id) {
+    userId = session.user.id
+  }
+  if (!userId) {
+    const authHeader = request.headers.get('Authorization')
+    if (authHeader?.startsWith('Bearer ')) {
+      const token = authHeader.slice(7)
+      const { data: { user } } = await supabaseAuth.auth.getUser(token)
+      if (user?.id) userId = user.id
+    }
+  }
+  if (!userId) {
+    return NextResponse.json({ error: 'Not signed in', code: 'NO_SESSION' }, { status: 401 })
   }
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()
@@ -24,9 +36,9 @@ export async function GET() {
   }
   const supabase = createClient(url, key)
 
-  const isAdmin = await isAdminByUserId(supabase, user.id)
+  const isAdmin = await isAdminByUserId(supabase, userId)
   if (!isAdmin) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    return NextResponse.json({ error: 'Admin role required', code: 'NOT_ADMIN' }, { status: 403 })
   }
 
   const { data: markets, error: marketsError } = await supabase

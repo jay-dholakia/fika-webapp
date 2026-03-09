@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { getSupabase } from '@/lib/supabase'
 
 type MarketRow = {
   slug: string
@@ -18,31 +19,54 @@ export default function AdminMarketsPage() {
 
   useEffect(() => {
     let cancelled = false
-    fetch('/api/admin/markets', { credentials: 'include' })
-      .then((res) => {
-        if (res.status === 401) throw new Error('unauthorized')
-        return res.json()
-      })
-      .then((data) => {
+    async function load() {
+      const supabase = getSupabase()
+      const { data: { session } } = await supabase?.auth.getSession() ?? { data: { session: null } }
+      const headers: HeadersInit = { 'Content-Type': 'application/json' }
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`
+      }
+      try {
+        const res = await fetch('/api/admin/markets', { credentials: 'include', headers })
+        if (res.status === 401) {
+          const data = await res.json().catch(() => ({}))
+          if (data?.code === 'NO_SESSION' && !cancelled) {
+            window.location.href = '/login?next=/admin'
+            return
+          }
+          throw new Error('unauthorized')
+        }
+        if (res.status === 403) throw new Error('not_admin')
+        const data = await res.json()
         if (!cancelled && data?.markets) setMarkets(data.markets)
-      })
-      .catch((e) => {
-        if (!cancelled) setError(e?.message === 'unauthorized' ? 'Sign in with an admin account.' : 'Failed to load.')
-      })
-      .finally(() => {
+      } catch (e) {
+        if (!cancelled) {
+          const msg = e?.message === 'unauthorized'
+            ? 'Sign in with an admin account.'
+            : e?.message === 'not_admin'
+              ? "Your account doesn't have admin access."
+              : 'Failed to load.'
+          setError(msg)
+        }
+      } finally {
         if (!cancelled) setLoading(false)
-      })
-    return () => { cancelled = true }
+      }
+    }
+    load()
   }, [])
 
   async function toggleActive(slug: string, current: boolean) {
     setTogglingSlug(slug)
     setError(null)
     try {
+      const supabase = getSupabase()
+      const { data: { session } } = await supabase?.auth.getSession() ?? { data: { session: null } }
+      const headers: HeadersInit = { 'Content-Type': 'application/json' }
+      if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`
       const res = await fetch(`/api/admin/markets/${encodeURIComponent(slug)}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
+        headers,
         body: JSON.stringify({ active: !current }),
       })
       const data = await res.json().catch(() => ({}))
