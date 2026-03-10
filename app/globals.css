@@ -3442,6 +3442,13 @@ a {
 .admin-link:hover {
   text-decoration: underline;
 }
+.admin-link-active {
+  font-weight: 600;
+  color: var(--color-text);
+}
+.admin-link-active:hover {
+  text-decoration: none;
+}
 .admin-main {
   max-width: 960px;
   margin: 0 auto;
@@ -3507,6 +3514,53 @@ a {
 .admin-table-market {
   font-weight: 500;
 }
+/* On/Off toggle switch for market active */
+.admin-switch-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.admin-switch {
+  display: inline-flex;
+  align-items: center;
+  min-width: 3.5rem;
+  height: 1.75rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-soft);
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+}
+.admin-switch:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+.admin-switch-off {
+  justify-content: flex-start;
+}
+.admin-switch-on {
+  justify-content: flex-end;
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+}
+.admin-switch-on .admin-switch-label {
+  color: white;
+}
+.admin-switch-knob {
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 50%;
+  background: white;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  flex-shrink: 0;
+}
+.admin-switch-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin: 0 0.25rem;
+  color: var(--color-textSecondary);
+}
 .admin-toggle {
   display: inline-flex;
   align-items: center;
@@ -3570,4 +3624,150 @@ a {
 }
 .admin-back a:hover {
   text-decoration: underline;
+}
+
+/* Sign-ups dashboard */
+.admin-dashboard {
+  margin-bottom: 1.5rem;
+}
+.admin-dashboard-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-textSecondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0 0 0.75rem;
+}
+.admin-dashboard-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+.admin-dashboard-card {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.6rem 1rem;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.admin-dashboard-card:hover {
+  background: var(--color-bg-soft);
+}
+.admin-dashboard-card-active {
+  border-color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+}
+.admin-dashboard-label {
+  color: var(--color-text);
+}
+.admin-dashboard-count {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--color-textSecondary);
+}
+.admin-dashboard-filter {
+  font-size: 0.9rem;
+  color: var(--color-textSecondary);
+  margin: 0.5rem 0 0;
+}
+.admin-table-row-clickable {
+  cursor: pointer;
+}
+.admin-table-row-clickable:focus {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
+/* Modal */
+.admin-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+.admin-modal {
+  background: var(--color-surface);
+  border-radius: 12px;
+  max-width: 32rem;
+  width: 100%;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+.admin-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--color-border);
+}
+.admin-modal-header h2 {
+  font-family: var(--font-heading);
+  font-size: 1.15rem;
+  font-weight: 600;
+  margin: 0;
+}
+.admin-modal-close {
+  width: 2rem;
+  height: 2rem;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--color-textSecondary);
+}
+.admin-modal-close:hover {
+  background: var(--color-bg-soft);
+  color: var(--color-text);
+}
+.admin-modal-body {
+  padding: 1.25rem;
+  overflow-y: auto;
+}
+.admin-modal-section {
+  margin-bottom: 1.5rem;
+}
+.admin-modal-section:last-child {
+  margin-bottom: 0;
+}
+.admin-modal-section-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-textSecondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0 0 0.75rem;
+}
+.admin-modal-meta {
+  font-size: 0.9rem;
+  color: var(--color-textSecondary);
+  margin: 0 0 0.5rem;
+}
+.admin-modal-dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.25rem 1rem;
+  font-size: 0.95rem;
+}
+.admin-modal-dl dt {
+  color: var(--color-textSecondary);
+  margin: 0;
+}
+.admin-modal-dl dd {
+  margin: 0;
+}
+.admin-modal-dl span {
+  display: contents;
 }

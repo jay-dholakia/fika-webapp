@@ -82,108 +82,85 @@ export default function AdminMarketsPage() {
 
   if (loading) {
     return (
-      <div className="admin-layout">
-        <header className="admin-header">
-          <div className="admin-header-inner">
-            <Link href="/" className="admin-logo">fika</Link>
-            <span className="admin-badge">Admin</span>
-          </div>
-        </header>
-        <main className="admin-main">
-          <div className="admin-loading">Loading…</div>
-        </main>
-      </div>
+      <main className="admin-main">
+        <div className="admin-loading">Loading…</div>
+      </main>
     )
   }
 
   if (error && !markets.length) {
     return (
-      <div className="admin-layout">
-        <header className="admin-header">
-          <div className="admin-header-inner">
-            <Link href="/" className="admin-logo">fika</Link>
-          </div>
-        </header>
-        <main className="admin-main">
-          <div className="admin-card admin-card-narrow">
-            <p className="admin-error" role="alert">{error}</p>
-            <Link href="/login?next=/admin" className="admin-btn admin-btn-primary">
-              Sign in with Google
-            </Link>
-            <p className="admin-back">
-              <Link href="/">Back to home</Link>
-            </p>
-          </div>
-        </main>
-      </div>
+      <main className="admin-main">
+        <div className="admin-card admin-card-narrow">
+          <p className="admin-error" role="alert">{error}</p>
+          <Link href="/login?next=/admin" className="admin-btn admin-btn-primary">
+            Sign in with Google
+          </Link>
+          <p className="admin-back">
+            <Link href="/">Back to home</Link>
+          </p>
+        </div>
+      </main>
     )
   }
 
   return (
-    <div className="admin-layout">
-      <header className="admin-header">
-        <div className="admin-header-inner">
-          <Link href="/" className="admin-logo">fika</Link>
-          <nav className="admin-nav">
-            <span className="admin-badge">Admin</span>
-            <Link href="/app" className="admin-link">Back to app</Link>
-          </nav>
-        </div>
-      </header>
+    <main className="admin-main">
+      <div className="admin-card">
+        <h1 className="admin-title">Markets</h1>
+        <p className="admin-description">
+          Markets are added automatically when users sign up or set their location (onboarding or settings).
+          Each row is a city group (e.g. LA, SF, NYC). Turn a market <strong>Active</strong> to send Monday
+          opt-in texts and run weekly intros there.
+        </p>
 
-      <main className="admin-main">
-        <div className="admin-card">
-          <h1 className="admin-title">Markets</h1>
-          <p className="admin-description">
-            Markets are added automatically when users sign up or set their location (onboarding or settings).
-            Each row is a city group (e.g. LA, SF, NYC). Turn a market <strong>Active</strong> to send Monday
-            opt-in texts and run weekly intros there.
-          </p>
-
-          {markets.length === 0 ? (
-            <p className="admin-empty">No markets yet. They appear when users sign up in a supported city.</p>
-          ) : (
-            <div className="admin-table-wrap">
-              <table className="admin-table">
-                <thead>
-                  <tr>
-                    <th>Market</th>
-                    <th className="admin-table-num">Signups</th>
-                    <th>Active</th>
+        {markets.length === 0 ? (
+          <p className="admin-empty">No markets yet. They appear when users sign up in a supported city.</p>
+        ) : (
+          <div className="admin-table-wrap">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>Market</th>
+                  <th className="admin-table-num">Signups</th>
+                  <th>Active</th>
+                </tr>
+              </thead>
+              <tbody>
+                {markets.map((m) => (
+                  <tr key={m.slug}>
+                    <td className="admin-table-market">{m.label}</td>
+                    <td className="admin-table-num">{m.signupCount}</td>
+                    <td>
+                      <div className="admin-switch-wrap">
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={m.active}
+                          aria-label={`${m.label} market: ${m.active ? 'on' : 'off'}`}
+                          disabled={togglingSlug !== null}
+                          className={`admin-switch ${m.active ? 'admin-switch-on' : 'admin-switch-off'}`}
+                          onClick={() => toggleActive(m.slug, m.active)}
+                        >
+                          <span className="admin-switch-knob" />
+                          <span className="admin-switch-label">{m.active ? 'On' : 'Off'}</span>
+                        </button>
+                        {togglingSlug === m.slug && <span className="admin-toggle-busy">Updating…</span>}
+                      </div>
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {markets.map((m) => (
-                    <tr key={m.slug}>
-                      <td className="admin-table-market">{m.label}</td>
-                      <td className="admin-table-num">{m.signupCount}</td>
-                      <td>
-                        <label className="admin-toggle">
-                          <input
-                            type="checkbox"
-                            checked={m.active}
-                            disabled={togglingSlug !== null}
-                            onChange={() => toggleActive(m.slug, m.active)}
-                            aria-label={`${m.label} active`}
-                          />
-                          <span className="admin-toggle-label">{m.active ? 'Yes' : 'No'}</span>
-                          {togglingSlug === m.slug && <span className="admin-toggle-busy">Updating…</span>}
-                        </label>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
 
-          {error && <p className="admin-error admin-error-inline" role="alert">{error}</p>}
+        {error && <p className="admin-error admin-error-inline" role="alert">{error}</p>}
 
-          <p className="admin-back">
-            <Link href="/app">Back to app</Link>
-          </p>
-        </div>
-      </main>
-    </div>
+        <p className="admin-back">
+          <Link href="/app">Back to app</Link>
+        </p>
+      </div>
+    </main>
   )
 }
