@@ -79,8 +79,6 @@ export function IntroDetailModal({
 }: IntroDetailModalProps) {
   const [detail, setDetail] = useState<ModalDetail | null>(null)
   const [loading, setLoading] = useState(true)
-  const [schedulingActionLoading, setSchedulingActionLoading] = useState(false)
-  const [pickSlotFor, setPickSlotFor] = useState<'change_time' | 'choose_another' | null>(null)
 
   useEffect(() => {
     const supabase = getSupabase()
@@ -229,23 +227,10 @@ export function IntroDetailModal({
       : []
   const hasRemainingAfterCounter = remainingAfterCounter.length > 0
 
-  async function handleSchedulingAction(action: string, slotId?: string) {
-    if (!onSchedulingAction) return
-    setSchedulingActionLoading(true)
-    try {
-      await onSchedulingAction(intro, action, slotId)
-      setPickSlotFor(null)
-    } finally {
-      setSchedulingActionLoading(false)
-    }
-  }
-
   const showScheduling =
     schedulingStatus &&
     schedulingStatus !== 'expired' &&
-    onSchedulingAction &&
     slots.length > 0
-  const busy = actionMatchId !== null || schedulingActionLoading
 
   return (
     <div className="app-modal-overlay" onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="intro-modal-title">
@@ -408,131 +393,45 @@ export function IntroDetailModal({
         </div>
 
         <footer className="app-modal-footer">
-          {pickSlotFor ? (
-            <div className="app-scheduling-picker">
-              <p className="app-scheduling-picker-title">
-                {pickSlotFor === 'change_time' ? 'Choose an alternate time' : 'Choose another time'}
-              </p>
-              <ul className="app-scheduling-slot-list">
-                {(pickSlotFor === 'change_time' ? alternateSlots : remainingAfterCounter).map((slotId) => (
-                  <li key={slotId}>
-                    <button
-                      type="button"
-                      className="app-intro-btn app-intro-btn-secondary"
-                      onClick={() => handleSchedulingAction(pickSlotFor === 'change_time' ? 'change_time' : 'choose_another_time', slotId)}
-                      disabled={busy}
-                    >
-                      {getAvailabilitySlotLabel(slotId)}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-              <button
-                type="button"
-                className="app-intro-btn app-intro-btn-secondary"
-                onClick={() => setPickSlotFor(null)}
-                disabled={busy}
-              >
-                Cancel
-              </button>
-            </div>
-          ) : schedulingStatus === 'confirmed' ? (
-            <span className="app-intro-status">
-              Confirmed for {confirmedSlotId ? getAvailabilitySlotLabel(confirmedSlotId) : 'your Fika'}
-            </span>
+          {schedulingStatus === 'confirmed' ? (
+            <>
+              <span className="app-intro-status">
+                Confirmed for {confirmedSlotId ? getAvailabilitySlotLabel(confirmedSlotId) : 'your Fika'}
+              </span>
+              {CONCIERGE_NUMBER && (
+                <p style={{ marginTop: '0.75rem', fontSize: '0.9rem' }}>
+                  Running late or can&apos;t make it?{' '}
+                  <a href={`sms:${CONCIERGE_NUMBER}`} className="app-intro-btn app-intro-btn-secondary" style={{ display: 'inline-block', marginTop: '0.25rem' }}>
+                    Text your Fika concierge
+                  </a>
+                </p>
+              )}
+            </>
           ) : schedulingStatus === 'expired' ? (
             <span className="app-intro-status">Expired</span>
-          ) : showScheduling && schedulingStatus === 'proposed_default' ? (
+          ) : showScheduling && (schedulingStatus === 'proposed_default' || schedulingStatus === 'counter_proposed' || schedulingStatus === 'final_proposed') ? (
             <>
               <p className="app-scheduling-proposal">
-                Suggested time: <strong>{defaultSlotId ? getAvailabilitySlotLabel(defaultSlotId) : '—'}</strong>
-              </p>
-              <div className="app-scheduling-actions">
-                <button
-                  type="button"
-                  className="app-intro-btn app-intro-btn-primary"
-                  onClick={() => handleSchedulingAction('confirm_default')}
-                  disabled={busy}
-                >
-                  {schedulingActionLoading ? 'Confirming…' : 'Confirm'}
-                </button>
-                {alternateSlots.length > 0 && (
-                  <button
-                    type="button"
-                    className="app-intro-btn app-intro-btn-secondary"
-                    onClick={() => setPickSlotFor('change_time')}
-                    disabled={busy}
-                  >
-                    Change time
-                  </button>
+                {schedulingStatus === 'proposed_default' && (
+                  <>Suggested time: <strong>{defaultSlotId ? getAvailabilitySlotLabel(defaultSlotId) : '—'}</strong></>
                 )}
-                <button
-                  type="button"
-                  className="app-intro-btn app-intro-btn-secondary"
-                  onClick={() => handleSchedulingAction('cant_make_it')}
-                  disabled={busy}
-                >
-                  Can&apos;t make it
-                </button>
-              </div>
-            </>
-          ) : showScheduling && schedulingStatus === 'counter_proposed' ? (
-            <>
-              <p className="app-scheduling-proposal">
-                {intro.otherFirstName} suggested: <strong>{counterSlotId ? getAvailabilitySlotLabel(counterSlotId) : '—'}</strong>
-              </p>
-              <div className="app-scheduling-actions">
-                <button
-                  type="button"
-                  className="app-intro-btn app-intro-btn-primary"
-                  onClick={() => handleSchedulingAction('accept_counter')}
-                  disabled={busy}
-                >
-                  {schedulingActionLoading ? 'Accepting…' : 'Accept'}
-                </button>
-                {hasRemainingAfterCounter && (
-                  <button
-                    type="button"
-                    className="app-intro-btn app-intro-btn-secondary"
-                    onClick={() => setPickSlotFor('choose_another')}
-                    disabled={busy}
-                  >
-                    Choose another time
-                  </button>
+                {schedulingStatus === 'counter_proposed' && (
+                  <>{intro.otherFirstName} suggested: <strong>{counterSlotId ? getAvailabilitySlotLabel(counterSlotId) : '—'}</strong></>
                 )}
-                <button
-                  type="button"
-                  className="app-intro-btn app-intro-btn-secondary"
-                  onClick={() => handleSchedulingAction('cant_make_it')}
-                  disabled={busy}
-                >
-                  Can&apos;t make it
-                </button>
-              </div>
-            </>
-          ) : showScheduling && schedulingStatus === 'final_proposed' ? (
-            <>
-              <p className="app-scheduling-proposal">
-                {intro.otherFirstName} suggested: <strong>{finalSlotId ? getAvailabilitySlotLabel(finalSlotId) : '—'}</strong>
+                {schedulingStatus === 'final_proposed' && (
+                  <>{intro.otherFirstName} suggested: <strong>{finalSlotId ? getAvailabilitySlotLabel(finalSlotId) : '—'}</strong></>
+                )}
               </p>
-              <div className="app-scheduling-actions">
-                <button
-                  type="button"
-                  className="app-intro-btn app-intro-btn-primary"
-                  onClick={() => handleSchedulingAction('confirm_final')}
-                  disabled={busy}
-                >
-                  {schedulingActionLoading ? 'Confirming…' : 'Confirm'}
-                </button>
-                <button
-                  type="button"
-                  className="app-intro-btn app-intro-btn-secondary"
-                  onClick={() => handleSchedulingAction('cant_make_it')}
-                  disabled={busy}
-                >
-                  Can&apos;t make it
-                </button>
-              </div>
+              <p className="app-intro-sms-cta" style={{ marginBottom: '0.75rem', fontSize: '0.95rem', color: 'var(--color-textSecondary)' }}>
+                To confirm this time, suggest a different time, or say you can&apos;t make it, text your Fika concierge.
+              </p>
+              {CONCIERGE_NUMBER ? (
+                <a href={`sms:${CONCIERGE_NUMBER}`} className="app-intro-btn app-intro-btn-primary">
+                  Text your Fika concierge
+                </a>
+              ) : (
+                <span className="app-intro-status">Text your Fika concierge from your account or welcome message.</span>
+              )}
             </>
           ) : intro.myDecision === 'yes' ? (
             intro.conversationId ? (
@@ -547,7 +446,7 @@ export function IntroDetailModal({
           ) : (
             <>
               <p className="app-intro-sms-cta" style={{ marginBottom: '0.75rem', fontSize: '0.95rem', color: 'var(--color-textSecondary)' }}>
-                Reply <strong>YES</strong> or <strong>PASS</strong> to the Fika number to accept or pass on this intro.
+                To accept or pass on this intro, text your Fika concierge.
               </p>
               <div className="app-scheduling-actions" style={{ flexWrap: 'wrap', gap: '0.5rem' }}>
                 {CONCIERGE_NUMBER ? (
@@ -566,7 +465,7 @@ export function IntroDetailModal({
                     </a>
                   </>
                 ) : (
-                  <span className="app-intro-status">Text YES or PASS to the Fika number from your account or welcome message.</span>
+                  <span className="app-intro-status">Text YES or PASS to your Fika concierge.</span>
                 )}
               </div>
               <p style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: 'var(--color-textSecondary)' }}>

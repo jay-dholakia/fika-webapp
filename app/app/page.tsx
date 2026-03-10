@@ -23,7 +23,6 @@ function AppHomeContent() {
   const [intros, setIntros] = useState<IntroMatch[]>([])
   const [introsLoading, setIntrosLoading] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [actionMatchId, setActionMatchId] = useState<string | null>(null)
   const [modalIntro, setModalIntro] = useState<IntroMatch | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [profileCount, setProfileCount] = useState<number | null>(null)
@@ -274,102 +273,6 @@ const TARGET_USERS = TARGET_COUNT_PER_MARKET
       })
   }, [userId])
 
-  async function optInToIntro(intro: IntroMatch) {
-    if (!userId) return
-    const supabase = getSupabase()
-    if (!supabase) return
-    setError(null)
-    setActionMatchId(intro.id)
-    try {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session?.access_token) throw new Error('Not signed in.')
-      const res = await fetch('/api/opt-in-to-match', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify({ match_id: intro.id }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data?.error ?? 'Opt-in failed.')
-      setIntros((prev) => prev.map((i) => i.id === intro.id ? { ...i, myDecision: 'yes' as const, conversationId: data?.conversation_id ?? null } : i))
-      setModalIntro((prev) => (prev?.id === intro.id ? { ...prev, myDecision: 'yes' as const, conversationId: data?.conversation_id ?? null } : prev))
-      if (data?.conversation_id) {
-        router.push(`/app/chats/${data.conversation_id}`)
-        return
-      }
-      setModalIntro(null)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not opt in.')
-    } finally {
-      setActionMatchId(null)
-    }
-  }
-
-  async function passOnIntro(intro: IntroMatch) {
-    if (!userId) return
-    const supabase = getSupabase()
-    if (!supabase) return
-    setError(null)
-    setActionMatchId(intro.id)
-    try {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session?.access_token) throw new Error('Not signed in.')
-      const res = await fetch('/api/pass-on-match', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify({ match_id: intro.id }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data?.error ?? 'Pass failed.')
-      setIntros((prev) => prev.map((i) => i.id === intro.id ? { ...i, myDecision: 'no' as const } : i))
-      setModalIntro(null)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not pass.')
-    } finally {
-      setActionMatchId(null)
-    }
-  }
-
-  async function handleSchedulingAction(intro: IntroMatch, action: string, slotId?: string) {
-    if (!userId) return
-    const supabase = getSupabase()
-    if (!supabase) return
-    setError(null)
-    try {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session?.access_token) throw new Error('Not signed in.')
-      const res = await fetch('/api/scheduling', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify({ action, match_id: intro.id, ...(slotId != null ? { slot_id: slotId } : {}) }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data?.error ?? 'Action failed.')
-      const updated: Partial<IntroMatch> = {
-        schedulingStatus: data.scheduling_status ?? intro.schedulingStatus,
-      }
-      if (action === 'change_time' && slotId) {
-        updated.counterSlotId = slotId
-        updated.counterProposedByUserId = userId
-      }
-      if (action === 'choose_another_time' && slotId) {
-        updated.finalSlotId = slotId
-      }
-      if (data.scheduling_status === 'confirmed') {
-        updated.myDecision = 'yes'
-        updated.confirmedSlotId = intro.finalSlotId ?? intro.counterSlotId ?? intro.defaultSlotId ?? slotId
-      }
-      if (data.scheduling_status === 'expired') {
-        setIntros((prev) => prev.filter((i) => i.id !== intro.id))
-        setModalIntro(null)
-        return
-      }
-      setIntros((prev) => prev.map((i) => i.id === intro.id ? { ...i, ...updated } : i))
-      setModalIntro((prev) => (prev?.id === intro.id ? { ...prev, ...updated } : prev))
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Action failed.')
-    }
-  }
-
   if (loading) {
     return (
       <div className="app-empty">
@@ -425,7 +328,7 @@ const TARGET_USERS = TARGET_COUNT_PER_MARKET
         ) : (
           <>
             <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem', marginBottom: '1rem' }}>
-              Opt in via text to be included in this week&apos;s match run. Set your availability (Wed–Sun) on the <Link href="/app/availability">Your Availability</Link> page first; then text <strong>IN</strong> to the Fika number. Both lock Monday 11:59pm.
+              Opt in via text to be included in this week&apos;s match run. Set your availability (Wed–Sun) on the <Link href="/app/availability">Your Availability</Link> page first; then text <strong>IN</strong> to your Fika concierge. Both lock Monday 11:59pm.
             </p>
             {optInLocked && (
               <p className="onboarding-error" style={{ marginBottom: '0.75rem' }}>
@@ -453,7 +356,7 @@ const TARGET_USERS = TARGET_COUNT_PER_MARKET
                   </>
                 ) : (
                   <p style={{ fontSize: '0.95rem' }}>
-                    Text <strong>IN</strong> to the Fika number to opt in. <Link href="/app/availability">Set your availability for next week</Link> so we can match you.
+                    Text <strong>IN</strong> to your Fika concierge to opt in. <Link href="/app/availability">Set your availability for next week</Link> so we can match you.
                   </p>
                 )}
               </>
@@ -571,10 +474,7 @@ const TARGET_USERS = TARGET_COUNT_PER_MARKET
         <IntroDetailModal
           intro={modalIntro}
           onClose={() => setModalIntro(null)}
-          onOptIn={optInToIntro}
-          onPass={passOnIntro}
-          onSchedulingAction={handleSchedulingAction}
-          actionMatchId={actionMatchId}
+          actionMatchId={null}
           error={error}
           currentUserId={userId}
         />

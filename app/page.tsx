@@ -60,15 +60,22 @@ export default function Home() {
               <li className="step">
                 <span className="step-num">2</span>
                 <div className="step-content">
-                  <h3 className="step-title">Get your weekly introductions</h3>
-                  <p className="step-text">Each week you get one thoughtful intro—someone aligned enough to connect and different enough to keep it interesting. We only match you when you have overlapping availability, so we can suggest a real time.</p>
+                  <h3 className="step-title">Get your weekly introduction</h3>
+                  <p className="step-text">
+                    Fika sends you a text message with one thoughtful intro each week—someone aligned enough to connect and
+                    different enough to keep it interesting. You&apos;ll see who they are, where they&apos;re based, what
+                    they&apos;re into, and a few conversation starters to make it easy to say yes.
+                  </p>
                 </div>
               </li>
               <li className="step">
                 <span className="step-num">3</span>
                 <div className="step-content">
                   <h3 className="step-title">Opt in and meet in real life</h3>
-                  <p className="step-text">We suggest a time when you’re both free. Confirm it or pick another—one quick round if either of you wants to change. Then meet in person and see where the conversation goes. Your call.</p>
+                  <p className="step-text">
+                    If you both opt in to meet, we&apos;ll send you a time and place based on your availability and your
+                    location. Then simply meet up—no apps, no endless chatting, just real conversation with someone new.
+                  </p>
                 </div>
               </li>
             </ol>

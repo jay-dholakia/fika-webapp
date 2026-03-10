@@ -5,15 +5,15 @@ import { useState } from 'react'
 const faqItems = [
   {
     q: 'How often do I get intros?',
-    a: 'Once a week. You opt in each week and set your availability for the upcoming week. We match you with one person you have overlapping time with. Skip a week and you’re out until you opt in again.',
+    a: 'Once a week. Your Fika concierge texts you to ask if you’re in for this week—reply IN to your Fika concierge to be included or SKIP to sit it out. When you’re in, you get one introduction to someone nearby for that week.',
   },
   {
     q: 'How does matching work?',
-    a: 'We suggest a time when you’re both free. You can confirm it, pick a different time from your shared options, or say you can’t make it. If someone wants to change the time, you get one round to choose an alternate—then the other confirms or can’t make it. No in-app chat: once you’re both confirmed, you just show up.',
+    a: 'We only match you when you have overlapping availability. Your intro arrives from your Fika concierge by text with who they are, where they’re based, what they’re into, and a suggested time and place. You can confirm or adjust once if needed—then simply meet up. No separate app to manage, no endless messaging.',
   },
   {
     q: 'What does it cost?',
-    a: '$5 curation fee—and it\'s only charged if you both actually meet up.',
+    a: 'Fika is currently free to use.',
   },
   {
     q: 'Do I have to meet in person?',

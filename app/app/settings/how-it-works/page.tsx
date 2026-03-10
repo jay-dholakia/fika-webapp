@@ -9,7 +9,7 @@ const portalFaqItems = [
   },
   {
     q: 'How do I get introductions?',
-    a: 'Opt in each week to be included in that week’s match run. Set your availability for Wed–Sun on the Your Availability page—we use when you’re free to suggest a time. Your intro appears Tuesday morning after the run. Skip a week and you’re out until you opt in again.',
+    a: 'Each week your Fika concierge texts you to see if you’re in for a Fika. Set your availability for Wed–Sun on the Your Availability page, then reply IN to your Fika concierge to be included in that week’s run (or SKIP to sit it out). Your intro is sent by text and appears in the app after the run.',
   },
   {
     q: 'How many intros do I get per week?',
@@ -17,15 +17,15 @@ const portalFaqItems = [
   },
   {
     q: 'How are intros chosen?',
-    a: 'We use your profile and preferences to find a good fit, and we only match you when you have overlapping availability—so we can suggest a real time you’re both free.',
+    a: 'We use your profile and preferences to find a good fit, and we only match you when you have overlapping availability—so we can suggest a real time you’re both free. Intros are delivered over SMS so you don’t have to manage a separate app.',
   },
   {
     q: 'How often do matches run?',
-    a: 'Weekly. Opt in and set your availability (Wed–Sun) before the run; both lock Monday 11:59pm. Matches run Tuesday morning; your intro appears then.',
+    a: 'Weekly. Set your availability (Wed–Sun) and reply IN to your Fika concierge before the run; both lock Monday 11:59pm. Matches run Tuesday morning; your intro is sent by text and reflected in the app.',
   },
   {
     q: 'What happens when I get an intro?',
-    a: 'You’ll see a suggested time based on when you’re both free. You can confirm that time, choose a different time from your shared options, or say you can’t make it. If you or they want to change the time, you get one round to pick an alternate—then the other person confirms or can’t make it. Once you’re both confirmed, you’re set. No in-app chat—just show up at the time you agreed on.',
+    a: 'Your Fika concierge sends you who they are, where they’re based, what they’re into, and a suggested time based on when you’re both free. Reply to your Fika concierge to confirm that time, suggest a different time, or say you can’t make it. If either of you wants to change the time, you get one round to pick an alternate—then the other person confirms or can’t make it. Once you’re both confirmed, you’re set. No endless chat—just show up at the time you agreed on.',
   },
   {
     q: 'How long do I have to respond?',
@@ -33,7 +33,11 @@ const portalFaqItems = [
   },
   {
     q: 'How much does it cost?',
-    a: '$5 curation fee—and it\'s only charged if you both actually meet up.',
+    a: 'Fika is currently free to use.',
+  },
+  {
+    q: "I scheduled a Fika but I can't make it anymore—what should I do?",
+    a: 'If you know you can’t make it, let your Fika concierge know via text. We’ll let your intro know as well. You can always opt in again for a future week when your schedule works.',
   },
   {
     q: 'Is meeting people through Fika safe?',
