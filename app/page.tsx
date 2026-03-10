@@ -48,33 +48,41 @@ export default function Home() {
         <section id="how" data-animate className="section section-how">
           <div className="section-inner">
             <h2 className="section-title">How it works</h2>
-            <p className="section-lead">Three steps to your first Fika.</p>
+            <p className="section-lead">Four steps to your first Fika.</p>
             <ol className="steps">
               <li className="step">
                 <span className="step-num">1</span>
                 <div className="step-content">
-                  <h3 className="step-title">Share a bit about you</h3>
-                  <p className="step-text">Answer a few quick questions about what you care about, how you spend your time, and the kind of conversation you want. No essays. No long forms.</p>
+                  <h3 className="step-title">Text your Fika concierge</h3>
+                  <p className="step-text">
+                    Get started by texting your Fika concierge—an AI agent that facilitates your Fikas. They&apos;ll collect some info about you—which city you live in, your current life chapter, and a few more questions to get to know you.
+                  </p>
                 </div>
               </li>
               <li className="step">
                 <span className="step-num">2</span>
                 <div className="step-content">
-                  <h3 className="step-title">Get your weekly introduction</h3>
+                  <h3 className="step-title">Do you want to Fika this week?</h3>
                   <p className="step-text">
-                    Fika sends you a text message with one thoughtful intro each week—someone aligned enough to connect and
-                    different enough to keep it interesting. You&apos;ll see who they are, where they&apos;re based, what
-                    they&apos;re into, and a few conversation starters to make it easy to say yes.
+                    Each week your concierge texts you asking if you&apos;d like to meet someone new this week. Reply Yes or Skip. No pressure.
                   </p>
                 </div>
               </li>
               <li className="step">
                 <span className="step-num">3</span>
                 <div className="step-content">
-                  <h3 className="step-title">Opt in and meet in real life</h3>
+                  <h3 className="step-title">Get your intro</h3>
                   <p className="step-text">
-                    If you both opt in to meet, we&apos;ll send you a time and place based on your availability and your
-                    location. Then simply meet up—no apps, no endless chatting, just real conversation with someone new.
+                    If you&apos;re in, your concierge sends a link to set when you&apos;re free during the week for a Fika. They send you an intro—someone similar enough to connect, and different enough to keep it interesting. If you both say yes, your concierge recommends a time and place based on your shared availability.
+                  </p>
+                </div>
+              </li>
+              <li className="step">
+                <span className="step-num">4</span>
+                <div className="step-content">
+                  <h3 className="step-title">Show up</h3>
+                  <p className="step-text">
+                    Once you&apos;re both confirmed, your concierge texts you a quick reminder on the day of your Fika and checks in after to ask about how it went. No app, no endless chat—just a real conversation with someone new.
                   </p>
                 </div>
               </li>
