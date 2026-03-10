@@ -39,7 +39,7 @@ export default function Home() {
               We built Fika to bring that feeling back.
             </p>
             <p className="section-body section-body-follow">
-              No swiping. No endless chats.
+              No app. No endless chats.
             </p>
           </div>
         </section>
