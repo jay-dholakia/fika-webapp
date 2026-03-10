@@ -253,6 +253,13 @@ a {
   z-index: 1;
   max-width: 680px;
 }
+@media (max-width: 899px) {
+  .hero-inner {
+    text-align: center;
+    margin-left: auto;
+    margin-right: auto;
+  }
+}
 .hero-label {
   font-size: 0.875rem;
   letter-spacing: 0.04em;
