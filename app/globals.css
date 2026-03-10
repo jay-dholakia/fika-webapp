@@ -1424,9 +1424,25 @@ a {
   min-width: 0;
 }
 .onboarding-wrap input[type="date"].auth-input {
-  /* Keep date field within card on mobile; native picker still opens full-screen */
-  max-width: 100%;
+  /* Shorter on mobile so the date box doesn't stretch full width */
+  max-width: 12rem;
   min-width: 0;
+}
+@media (min-width: 480px) {
+  .onboarding-wrap input[type="date"].auth-input {
+    max-width: 14rem;
+  }
+}
+.onboarding-confirm-pill-wrap {
+  display: flex;
+  justify-content: center;
+  margin-top: 0.75rem;
+}
+.onboarding-consent-card {
+  margin-bottom: 1.5rem;
+}
+.onboarding-section-confirm .onboarding-consent-card .onboarding-chip {
+  min-width: 6rem;
 }
 .onboarding-avatar-zone {
   display: flex;

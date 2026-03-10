@@ -18,7 +18,7 @@ import type { ProfileRow } from '@/lib/db-types'
 import type { IntakeResponsesV5Row } from '@/lib/db-types'
 
 const SECTION_2_IDS = ['q_life_chapter', 'q_curiosity', 'q_everyday_anchor', 'q_interests', 'q_book_recommendation', 'q_movie_show_recommendation', 'q_place_recommendation']
-const SECTION_3_IDS = ['q_topics', 'q_avoid_topics', 'q_role_model', 'q_role_model_why', 'q_openness', 'gender_preference', 'age_preference', 'q_hoping_for', 'q_what_makes_great_fika', 'q_radius', 'confirm_intent']
+const SECTION_3_IDS = ['q_topics', 'q_avoid_topics', 'q_role_model', 'q_role_model_why', 'q_openness', 'gender_preference', 'age_preference', 'q_hoping_for', 'q_what_makes_great_fika', 'q_radius']
 const SECTION_2_STEPS = INTAKE_STEPS.filter((s) => SECTION_2_IDS.includes(s.id))
 const SECTION_3_STEPS = INTAKE_STEPS.filter((s) => SECTION_3_IDS.includes(s.id))
 const CONFIRM_STEP = INTAKE_STEPS.find((s) => s.id === 'confirm_intent')!
@@ -740,7 +740,7 @@ function AppOnboardingContent() {
           {SECTION_3_STEPS.map(renderField)}
         </section>
 
-        <section className="onboarding-section onboarding-section-card">
+        <section className="onboarding-section onboarding-section-card onboarding-section-confirm">
           <h2 className="onboarding-section-title">Confirm & finish</h2>
           <div className="onboarding-field-wrap">
             <label className="onboarding-question" htmlFor="onboarding-avatar">Profile photo</label>
@@ -772,8 +772,32 @@ function AppOnboardingContent() {
               </label>
             </div>
           </div>
-
-          {CONFIRM_STEP && renderField(CONFIRM_STEP)}
+          <div className="onboarding-field-wrap onboarding-consent-card">
+            <h3 className="onboarding-question">{CONFIRM_STEP.question}</h3>
+            {CONFIRM_STEP.body && (
+              <div className="onboarding-body">
+                {CONFIRM_STEP.body.split(/\n\n+/).map((p, i) => (
+                  <p key={i}>{p}</p>
+                ))}
+                <p className="onboarding-body-links">
+                  By continuing, you agree to our{' '}
+                  <Link href="/terms" target="_blank" rel="noopener noreferrer">Terms of Service</Link>
+                  {' '}and{' '}
+                  <Link href="/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</Link>.
+                </p>
+              </div>
+            )}
+            <div className="onboarding-confirm-pill-wrap">
+              <button
+                type="button"
+                className={`onboarding-chip ${answers.confirm_intent === "I'm in" ? 'selected' : ''}`}
+                onClick={() => setAnswers((a) => ({ ...a, confirm_intent: "I'm in" }))}
+                disabled={saving}
+              >
+                I&apos;m in
+              </button>
+            </div>
+          </div>
 
           <button
             ref={submitRef}

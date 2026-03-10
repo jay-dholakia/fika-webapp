@@ -1087,9 +1087,11 @@ async function generateMatchReasonsV4(
   user_b_talk_topics.push(...getMultiSelectValue(userBIntake, 'q_openness').slice(0, 4))
   user_b_interests.push(...getMultiSelectValue(userBIntake, 'q_interests').slice(0, 6))
 
-  // Prefer not to discuss (legacy) + q_avoid_topics (Final): exclude these topics from reasons/starters
-  const userPreferNot = getMultiSelectValue(userIntake, 'q_prefer_not_to_discuss').filter((s: string) => s !== 'Nothing in particular' && s !== 'Prefer not to say')
-  const candidatePreferNot = getMultiSelectValue(candidateIntake, 'q_prefer_not_to_discuss').filter((s: string) => s !== 'Nothing in particular' && s !== 'Prefer not to say')
+  // Prefer not to discuss: q_avoid_topics multi_select (Final) or legacy q_prefer_not_to_discuss; legacy text q_avoid_topics for topicExcludedByPreferNot
+  const userAvoidMulti = getMultiSelectValue(userIntake, 'q_avoid_topics').filter((s: string) => s !== 'Nothing in particular' && s !== 'Prefer not to say')
+  const candidateAvoidMulti = getMultiSelectValue(candidateIntake, 'q_avoid_topics').filter((s: string) => s !== 'Nothing in particular' && s !== 'Prefer not to say')
+  const userPreferNot = userAvoidMulti.length > 0 ? userAvoidMulti : getMultiSelectValue(userIntake, 'q_prefer_not_to_discuss').filter((s: string) => s !== 'Nothing in particular' && s !== 'Prefer not to say')
+  const candidatePreferNot = candidateAvoidMulti.length > 0 ? candidateAvoidMulti : getMultiSelectValue(candidateIntake, 'q_prefer_not_to_discuss').filter((s: string) => s !== 'Nothing in particular' && s !== 'Prefer not to say')
   const userAvoidText = getSingleSelectValue(userIntake, 'q_avoid_topics')
   const candidateAvoidText = getSingleSelectValue(candidateIntake, 'q_avoid_topics')
 
