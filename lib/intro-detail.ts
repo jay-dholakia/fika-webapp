@@ -1,7 +1,6 @@
 /**
  * Helpers for showing intro detail in the modal.
- * LA Beta: safe intake IDs = life_chapter, lately, everyday_anchor, topics, convo_feel, hoping_for, openness,
- * plus profile-card-only: book/movie/place/role model (for opt-in evaluation).
+ * Safe intake IDs for profile card and reasons (Final intake).
  */
 
 import { INTAKE_STEPS } from './onboarding-data'
@@ -9,18 +8,19 @@ import type { IntakeResponseItem } from './db-types'
 
 export const SAFE_INTAKE_QUESTION_IDS = new Set([
   'q_life_chapter',
-  'q_lately',
+  'q_curiosity',
   'q_everyday_anchor',
-  'q_topics',
-  'q_convo_feel',
-  'q_hoping_for',
-  'q_openness',
-  // Profile card only (shown so user can evaluate when opting in)
+  'q_interests',
   'q_book_recommendation',
   'q_movie_show_recommendation',
   'q_place_recommendation',
+  'q_topics',
+  'q_avoid_topics',
   'q_role_model',
   'q_role_model_why',
+  'q_hoping_for',
+  'q_what_makes_great_fika',
+  'q_openness',
 ])
 
 const questionById = new Map(INTAKE_STEPS.map((s) => [s.id, s.question]))
@@ -39,7 +39,7 @@ export function filterSafeIntakeResponses(responses: IntakeResponseItem[]): Inta
   return responses.filter((r) => SAFE_INTAKE_QUESTION_IDS.has(r.question_id))
 }
 
-/** Build a short prose summary from "about them" intake (LA Beta). */
+/** Build a short prose summary from "about them" intake (Final). */
 export function buildIntroSummary(responses: IntakeResponseItem[]): string | null {
   const byId = new Map(responses.map((r) => [r.question_id, r]))
   const str = (id: string) => {
@@ -49,7 +49,6 @@ export function buildIntroSummary(responses: IntakeResponseItem[]): string | nul
     return s || null
   }
   const life = str('q_life_chapter')
-  const convoFeel = str('q_convo_feel')
   const hopingFor = str('q_hoping_for')
   const who = str('q_openness')
 
@@ -58,7 +57,6 @@ export function buildIntroSummary(responses: IntakeResponseItem[]): string | nul
     parts.push(`Right now they're in a chapter of ${life.toLowerCase()}.`)
   }
   const connectParts: string[] = []
-  if (convoFeel) connectParts.push(`like first conversations to feel ${convoFeel.toLowerCase()}`)
   if (hopingFor) connectParts.push(`hoping for ${hopingFor.toLowerCase()}`)
   if (who) connectParts.push(`open to ${who.toLowerCase()}`)
   if (connectParts.length > 0) {

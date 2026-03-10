@@ -17,8 +17,8 @@ import type { IntakeResponseItem } from '@/lib/db-types'
 import type { ProfileRow } from '@/lib/db-types'
 import type { IntakeResponsesV5Row } from '@/lib/db-types'
 
-const SECTION_2_IDS = ['q_life_chapter', 'q_lately', 'q_everyday_anchor', 'q_interests']
-const SECTION_3_IDS = ['q_topics', 'q_prefer_not_to_discuss', 'q_openness', 'gender_preference', 'age_preference', 'q_hoping_for', 'q_radius']
+const SECTION_2_IDS = ['q_life_chapter', 'q_curiosity', 'q_everyday_anchor', 'q_interests', 'q_book_recommendation', 'q_movie_show_recommendation', 'q_place_recommendation']
+const SECTION_3_IDS = ['q_topics', 'q_avoid_topics', 'q_role_model', 'q_role_model_why', 'q_openness', 'gender_preference', 'age_preference', 'q_hoping_for', 'q_what_makes_great_fika', 'q_radius', 'confirm_intent']
 const SECTION_2_STEPS = INTAKE_STEPS.filter((s) => SECTION_2_IDS.includes(s.id))
 const SECTION_3_STEPS = INTAKE_STEPS.filter((s) => SECTION_3_IDS.includes(s.id))
 const CONFIRM_STEP = INTAKE_STEPS.find((s) => s.id === 'confirm_intent')!
@@ -43,7 +43,9 @@ function getInitialAnswers(
   const responses = intake?.responses ?? []
   for (const s of INTAKE_STEPS) {
     const r = responses.find((x: IntakeResponseItem) => x.question_id === s.id)
-    answers[s.id] = r ? (r.answer as string | string[] | number) : (s.type === 'multi_select' ? [] : '')
+    let val: string | string[] | number = r ? (r.answer as string | string[] | number) : (s.type === 'multi_select' ? [] : '')
+    if (s.type === 'multi_select' && typeof val === 'string') val = [val]
+    answers[s.id] = val
   }
   answers.gender_preference = profile?.gender_preference ?? ''
   answers.age_preference = profile?.age_preference ?? ''

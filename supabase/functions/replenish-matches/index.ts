@@ -787,7 +787,7 @@ function passesStructuredFilters(
     }
   }
 
-  // Filter 3: What you're hoping for (q_hoping_for) - don't match "conversation only" with "actively looking for friends"
+  // Filter 3: What you're hoping for (q_hoping_for) — don't match "conversation only" with "actively looking for friends"
   const HOPING_CONVERSATION_ONLY = 'Conversation with new people — not necessarily friendship'
   const HOPING_ACTIVELY_FRIENDS = 'Actively looking for new friends'
   const userHoping = getSingleSelectValue(userIntake, 'q_hoping_for')
@@ -896,8 +896,12 @@ function multiSelectOverlapScore(userValues: string[], candidateValues: string[]
   return maxSelections > 0 ? overlap / maxSelections : 0
 }
 
-const OPEN_ENDED_IDS: string[] = []
-// Stricter: need ~50 words across open-ended for full embedding weight (was 30)
+const OPEN_ENDED_IDS: string[] = [
+  'q_book_recommendation',
+  'q_movie_show_recommendation',
+  'q_place_recommendation',
+]
+// Optional: minimum words in open-ended for full embed weight (currently not used; we use embed when both have vectors)
 const EMBEDDING_FULL_WORD_THRESHOLD = 50
 
 function getOpenEndedWordCount(intake: any): number {
@@ -909,7 +913,7 @@ function getOpenEndedWordCount(intake: any): number {
   return text.split(/\s+/).filter((w: string) => w.length > 0).length
 }
 
-// Calculate compatibility using embeddings + structured data (structured-only plan: embed q12 at 8%, rest explicit weights)
+// Calculate compatibility: embed (book/movie/place) 8% + structured 92%. No distance in score (handled by geography filter).
 async function calculateCompatibilityScoreV4(
   userProfile: UserProfile,
   userIntake: any,
@@ -918,66 +922,67 @@ async function calculateCompatibilityScoreV4(
 ): Promise<number> {
   let score = 0
 
-  // Recalibrated: q_topics, q_interests, q_life_chapter, q_lately, q_everyday_anchor, q_openness, q_hoping_for, distance (no q_convo_feel)
+  // 0. Embedding similarity (8% weight) — book/movie/place recommendations; only when both have embed_vector
+  const userVec = ensureEmbedVector(userIntake?.embed_vector)
+  const candidateVec = ensureEmbedVector(candidateIntake?.embed_vector)
+  const EMBED_WEIGHT = 0.08
+  if (userVec && candidateVec && userVec.length > 0 && candidateVec.length > 0) {
+    const embeddingSimilarity = cosineSimilarity(userVec, candidateVec)
+    score += Math.max(0, embeddingSimilarity) * EMBED_WEIGHT
+  }
 
-  // 1. Topics (40% weight) - q_topics
+  // 1. Topics (24% weight) - q_topics
   const userTalkAbout = getMultiSelectValue(userIntake, 'q_topics')
   const candidateTalkAbout = getMultiSelectValue(candidateIntake, 'q_topics')
-  score += multiSelectOverlapScore(userTalkAbout, candidateTalkAbout) * 0.40
+  score += multiSelectOverlapScore(userTalkAbout, candidateTalkAbout) * 0.24
 
-  // 2. Interests (8% weight) - q_interests
+  // 2. Interests (16% weight) - q_interests
   const userInterests = getMultiSelectValue(userIntake, 'q_interests')
   const candidateInterests = getMultiSelectValue(candidateIntake, 'q_interests')
-  score += multiSelectOverlapScore(userInterests, candidateInterests) * 0.08
+  score += multiSelectOverlapScore(userInterests, candidateInterests) * 0.16
 
-  // 3. Life chapter (15% weight) - q_life_chapter
+  // 3. Life chapter (19% weight) - q_life_chapter
   const userLifeChapter = getMultiSelectValue(userIntake, 'q_life_chapter')
   const candidateLifeChapter = getMultiSelectValue(candidateIntake, 'q_life_chapter')
-  score += multiSelectOverlapScore(userLifeChapter, candidateLifeChapter) * 0.15
+  score += multiSelectOverlapScore(userLifeChapter, candidateLifeChapter) * 0.19
 
-  // 4. Lately (12% weight) - q_lately
+  // 4. Curiosity (12% weight) - q_curiosity (Final); fallback q_lately for legacy
+  const userCuriosity = getMultiSelectValue(userIntake, 'q_curiosity')
+  const candidateCuriosity = getMultiSelectValue(candidateIntake, 'q_curiosity')
   const userLately = getMultiSelectValue(userIntake, 'q_lately')
   const candidateLately = getMultiSelectValue(candidateIntake, 'q_lately')
-  score += multiSelectOverlapScore(userLately, candidateLately) * 0.12
+  const curiosityScore = userCuriosity.length > 0 || candidateCuriosity.length > 0
+    ? multiSelectOverlapScore(userCuriosity, candidateCuriosity)
+    : multiSelectOverlapScore(userLately, candidateLately)
+  score += curiosityScore * 0.12
 
-  // 5. Everyday anchor (8% weight) - q_everyday_anchor
+  // 5. Everyday anchor (12% weight) - q_everyday_anchor
   const userAnchor = getMultiSelectValue(userIntake, 'q_everyday_anchor')
   const candidateAnchor = getMultiSelectValue(candidateIntake, 'q_everyday_anchor')
-  score += multiSelectOverlapScore(userAnchor, candidateAnchor) * 0.08
+  score += multiSelectOverlapScore(userAnchor, candidateAnchor) * 0.12
 
-  // 6. Who open to meet (5% weight) - q_openness
+  // 6. Who open to meet (5% weight) - q_openness (chips_single in Final; getMultiSelectValue returns [val] for string)
   const userExcitedToMeet = getMultiSelectValue(userIntake, 'q_openness')
   const candidateExcitedToMeet = getMultiSelectValue(candidateIntake, 'q_openness')
   const openToAnyone = "I'm open to anyone"
-  let openScore = 0.5 // neutral default
+  let openScore = 0.5
   if (!userExcitedToMeet.some((o: string) => o.trim() === openToAnyone) && !candidateExcitedToMeet.some((o: string) => o.trim() === openToAnyone)) {
     openScore = multiSelectOverlapScore(userExcitedToMeet, candidateExcitedToMeet)
   }
   score += openScore * 0.05
 
-  // 7. Hoping for (4% weight) - q_hoping_for; same pill = full, else neutral
-  const userHoping = getSingleSelectValue(userIntake, 'q_hoping_for')
-  const candidateHoping = getSingleSelectValue(candidateIntake, 'q_hoping_for')
-  if (userHoping && candidateHoping && userHoping.trim() === candidateHoping.trim()) {
+  // 7. What makes a great Fika (4% weight) - q_what_makes_great_fika multi_select overlap; legacy fallback q_hoping_for single match
+  const userGreatFika = getMultiSelectValue(userIntake, 'q_what_makes_great_fika')
+  const candidateGreatFika = getMultiSelectValue(candidateIntake, 'q_what_makes_great_fika')
+  const userHopingSingle = getSingleSelectValue(userIntake, 'q_hoping_for')
+  const candidateHopingSingle = getSingleSelectValue(candidateIntake, 'q_hoping_for')
+  if (userGreatFika.length > 0 && candidateGreatFika.length > 0) {
+    score += multiSelectOverlapScore(userGreatFika, candidateGreatFika) * 0.04
+  } else if (userHopingSingle && candidateHopingSingle && userHopingSingle.trim() === candidateHopingSingle.trim()) {
     score += 0.04
   }
 
-  // 8. Distance (8% weight)
-  if (
-    userProfile.lat != null && userProfile.lng != null &&
-    candidateProfile.lat != null && candidateProfile.lng != null &&
-    (userProfile.radius_km ?? 40) > 0
-  ) {
-    const distanceKm = calculateDistance(
-      userProfile.lat, userProfile.lng,
-      candidateProfile.lat, candidateProfile.lng
-    )
-    const totalMaxKm = (userProfile.radius_km ?? 40) + (candidateProfile.radius_km ?? 40)
-    if (totalMaxKm > 0 && distanceKm <= totalMaxKm) {
-      const distanceScore = Math.max(0, 1 - distanceKm / totalMaxKm)
-      score += distanceScore * 0.08
-    }
-  }
+  // Distance is not in score; geography filter already enforces within combined radius.
 
   const final = Math.min(1, score)
   return isNaN(final) ? 0 : final
@@ -1014,24 +1019,38 @@ function cosineSimilarity(vecA: number[], vecB: number[]): number {
   return isNaN(result) ? 0 : result
 }
 
-// Map q_prefer_not_to_discuss pills to q_topics labels we might show in reasons (avoid suggesting these)
+// Map q_prefer_not_to_discuss pills (legacy) to q_topics labels. Also used for q_avoid_topics text matching (Final).
 const PREFER_NOT_TO_TOPIC_MAP: Record<string, string[]> = {
-  'Politics': ['Current events & global affairs'],
+  'Politics': ['Current events'],
   'Religion': ['Religion & spirituality'],
-  'Work & career': ['Career journeys', 'Entrepreneurship & building things'],
-  'Relationship status': ['Relationships & modern dating'],
-  'Health': ['Mental health & emotional growth'],
+  'Work & career': ['Career journeys', 'Entrepreneurship and building things'],
+  'Relationship status': ['Relationships and human connection'],
+  'Health': ['Health and wellbeing'],
   'Personal finances': [],
 }
 
-function topicExcludedByPreferNot(topic: string, preferNot: string[]): boolean {
-  if (!preferNot || preferNot.length === 0) return false
+/** Parse q_avoid_topics free text into words/phrases; topic is excluded if its label (lowercase) contains any of these. */
+function avoidTextToKeywords(avoidText: string | null | undefined): string[] {
+  if (!avoidText || typeof avoidText !== 'string') return []
+  return avoidText
+    .split(/[\s,;]+/)
+    .map((s) => s.trim().toLowerCase())
+    .filter((s) => s.length > 1)
+}
+
+function topicExcludedByPreferNot(topic: string, preferNot: string[], avoidTopicsText?: string | null): boolean {
   const excludeLabels = new Set<string>()
-  for (const p of preferNot) {
-    const mapped = PREFER_NOT_TO_TOPIC_MAP[p?.trim() ?? '']
-    if (mapped) mapped.forEach((l: string) => excludeLabels.add(l))
+  if (preferNot?.length) {
+    for (const p of preferNot) {
+      const mapped = PREFER_NOT_TO_TOPIC_MAP[p?.trim() ?? '']
+      if (mapped) mapped.forEach((l: string) => excludeLabels.add(l))
+    }
   }
-  return excludeLabels.has(topic)
+  if (excludeLabels.has(topic)) return true
+  const avoidWords = avoidTextToKeywords(avoidTopicsText)
+  if (avoidWords.length === 0) return false
+  const topicLower = topic.toLowerCase()
+  return avoidWords.some((w) => topicLower.includes(w))
 }
 
 // Generate match reasons from v4 responses (bidirectional - includes both users' info)
@@ -1068,14 +1087,19 @@ async function generateMatchReasonsV4(
   user_b_talk_topics.push(...getMultiSelectValue(userBIntake, 'q_openness').slice(0, 4))
   user_b_interests.push(...getMultiSelectValue(userBIntake, 'q_interests').slice(0, 6))
 
-  // Prefer not to discuss: exclude these topics from reasons/starters
+  // Prefer not to discuss (legacy) + q_avoid_topics (Final): exclude these topics from reasons/starters
   const userPreferNot = getMultiSelectValue(userIntake, 'q_prefer_not_to_discuss').filter((s: string) => s !== 'Nothing in particular' && s !== 'Prefer not to say')
   const candidatePreferNot = getMultiSelectValue(candidateIntake, 'q_prefer_not_to_discuss').filter((s: string) => s !== 'Nothing in particular' && s !== 'Prefer not to say')
+  const userAvoidText = getSingleSelectValue(userIntake, 'q_avoid_topics')
+  const candidateAvoidText = getSingleSelectValue(candidateIntake, 'q_avoid_topics')
 
-  // Shared interests from topic overlap (only topics neither marked prefer-not-to-discuss)
+  const topicExcluded = (t: string) =>
+    topicExcludedByPreferNot(t, userPreferNot, userAvoidText) || topicExcludedByPreferNot(t, candidatePreferNot, candidateAvoidText)
+
+  // Shared interests from topic overlap (only topics neither marked prefer-not / avoid)
   const userTalk = getMultiSelectValue(userIntake, 'q_topics')
   const candidateTalk = getMultiSelectValue(candidateIntake, 'q_topics')
-  const overlap = userTalk.filter((t: string) => candidateTalk.includes(t) && !topicExcludedByPreferNot(t, userPreferNot) && !topicExcludedByPreferNot(t, candidatePreferNot))
+  const overlap = userTalk.filter((t: string) => candidateTalk.includes(t) && !topicExcluded(t))
   shared_interests.push(...overlap.slice(0, 5))
 
   // Shared interests from q_interests (activities/hobbies)
@@ -1086,24 +1110,33 @@ async function generateMatchReasonsV4(
 
   const userLately = getMultiSelectValue(userIntake, 'q_lately')
   const candidateLately = getMultiSelectValue(candidateIntake, 'q_lately')
+  const userCuriosity = getMultiSelectValue(userIntake, 'q_curiosity')
+  const candidateCuriosity = getMultiSelectValue(candidateIntake, 'q_curiosity')
   const userAnchor = getMultiSelectValue(userIntake, 'q_everyday_anchor')
   const candidateAnchor = getMultiSelectValue(candidateIntake, 'q_everyday_anchor')
   const userLife = getMultiSelectValue(userIntake, 'q_life_chapter')
   const candidateLife = getMultiSelectValue(candidateIntake, 'q_life_chapter')
 
   const sharedLately = userLately.filter((l: string) => candidateLately.includes(l))
+  const sharedCuriosity = userCuriosity.filter((c: string) => candidateCuriosity.includes(c))
   const sharedAnchor = userAnchor.filter((a: string) => candidateAnchor.includes(a))
   const sharedLife = userLife.filter((l: string) => candidateLife.includes(l))
 
-  // Hoping for (same pill) - add to reasons
+  // Hoping for (q_hoping_for single-choice) + what makes a great Fika (q_what_makes_great_fika multi)
   const userHoping = getSingleSelectValue(userIntake, 'q_hoping_for')
   const candidateHoping = getSingleSelectValue(candidateIntake, 'q_hoping_for')
-  const sameHoping = userHoping && candidateHoping && userHoping.trim() === candidateHoping.trim()
+  const sameHoping = !!(userHoping && candidateHoping && userHoping.trim() === candidateHoping.trim())
+  const hopingLabel = userHoping ?? null
+  const userGreatFika = getMultiSelectValue(userIntake, 'q_what_makes_great_fika')
+  const candidateGreatFika = getMultiSelectValue(candidateIntake, 'q_what_makes_great_fika')
+  const sharedGreatFika = userGreatFika.filter((h: string) => candidateGreatFika.includes(h))
 
   const whyWeIntroducedYou: string[] = []
-  if (sameHoping && userHoping) whyWeIntroducedYou.push(`You're both looking for: ${userHoping.trim()}`)
+  if (sameHoping && hopingLabel) whyWeIntroducedYou.push(`You're both looking for: ${String(hopingLabel).trim()}`)
+  if (sharedGreatFika.length > 0) whyWeIntroducedYou.push(`You both want: ${sharedGreatFika[0].toLowerCase()}`)
   for (const t of overlap.slice(0, 2)) whyWeIntroducedYou.push(`You both selected "${t}"`)
   for (const l of sharedLately.slice(0, 1)) whyWeIntroducedYou.push(`You both said "${l}" has been on your mind`)
+  for (const c of sharedCuriosity.slice(0, 1)) whyWeIntroducedYou.push(`You're both curious about ${c.toLowerCase()}`)
   for (const a of sharedAnchor.slice(0, 1)) {
     if (a !== 'Prefer not to say') whyWeIntroducedYou.push(`You both have "${a}" in your everyday life`)
   }
@@ -1121,18 +1154,18 @@ async function generateMatchReasonsV4(
   }
   if (overlap.length > 0 && conversationStarters.length < 3) {
     const topic = overlap[0]
-    if (topic === 'Travel & different cultures') conversationStarters.push(`You both enjoy talking about travel — What place changed you more than you expected?`)
-    else if (topic === 'Psychology & human behavior' || topic === 'Philosophy & big questions') conversationStarters.push(`You both like going deep — What's a belief you've questioned recently?`)
-    else if (topic === 'Career journeys' || topic === 'Entrepreneurship & building things') conversationStarters.push(`You both care about building and careers — What's one thing you've learned the hard way?`)
+    if (topic === 'Travel and places in the world' || topic === 'Travel & different cultures') conversationStarters.push(`You both enjoy talking about travel — What place changed you more than you expected?`)
+    else if (topic === 'Psychology and human behavior' || topic === 'Psychology & human behavior' || topic === 'Big ideas about life' || topic === 'Philosophy & big questions') conversationStarters.push(`You both like going deep — What's a belief you've questioned recently?`)
+    else if (topic === 'Career journeys' || topic === 'Entrepreneurship and building things' || topic === 'Entrepreneurship & building things') conversationStarters.push(`You both care about building and careers — What's one thing you've learned the hard way?`)
     else conversationStarters.push(`You both enjoy ${topic} — What got you into it?`)
   }
-  if (conversationStarters.length < 2 && (sharedAnchor.includes('A creative pursuit') || overlap.includes('Visual art & design'))) {
+  if (conversationStarters.length < 2 && (sharedAnchor.includes('Creative work') || sharedAnchor.includes('A creative pursuit') || overlap.includes('Creative work and art') || overlap.includes('Visual art & design'))) {
     conversationStarters.push(`You both seem creatively wired — What's something you're currently working on that excites you?`)
   }
   if (conversationStarters.length < 2 && sharedLife.length > 0) {
     const life = sharedLife[0]
-    if (life === "Exploring what's next" || life === 'Starting over / reinventing') conversationStarters.push(`You're both in a chapter of change — What's something you've learned about yourself in the past year?`)
-    else if (life === 'Building something meaningful' || life === 'Growing professionally') conversationStarters.push(`You're both in a building phase — Has your definition of success changed recently?`)
+    if (life === "I'm exploring a new direction" || life === "I'm taking time to figure out what's next" || life === "Exploring what's next" || life === 'Starting over / reinventing') conversationStarters.push(`You're both in a chapter of change — What's something you've learned about yourself in the past year?`)
+    else if (life === "I'm building something (startup, project, business)" || life === "I'm growing in my career" || life === 'Building something meaningful' || life === 'Growing professionally') conversationStarters.push(`You're both in a building phase — Has your definition of success changed recently?`)
   }
   if (conversationStarters.length < 2 && interestOverlap.length > 0) {
     conversationStarters.push(`You're both into ${interestOverlap[0]} — What do you like about it?`)

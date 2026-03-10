@@ -5,7 +5,18 @@ import { getOrCreateSmsState, messageEntryFirstTimeMessages, SMS_STATES } from '
 import { getTimezoneFromLatLng, getNextMondayPhrase } from '@/lib/sms-day-aware'
 import { getCurrentBatchWeek, isPastOptInDeadline } from '@/lib/onboarding'
 
-const OPEN_ENDED_IDS: string[] = []
+// Book, movie/show, and place recommendations — embedded for taste similarity in matching.
+const OPEN_ENDED_IDS: string[] = [
+  'q_book_recommendation',
+  'q_movie_show_recommendation',
+  'q_place_recommendation',
+]
+
+const OPEN_ENDED_LABELS: Record<string, string> = {
+  q_book_recommendation: 'Book',
+  q_movie_show_recommendation: 'Movie or show',
+  q_place_recommendation: 'Place',
+}
 
 interface IntakeResponseItem {
   question_id: string
@@ -20,7 +31,8 @@ function buildOpenEndedText(responses: IntakeResponseItem[]): string {
     if (typeof val !== 'string') continue
     const trimmed = val.trim()
     if (!trimmed || trimmed === 'N/A') continue
-    parts.push(trimmed)
+    const label = OPEN_ENDED_LABELS[id] ?? id
+    parts.push(`${label}: ${trimmed}`)
   }
   return parts.join('\n\n') || 'No open-ended answers.'
 }
