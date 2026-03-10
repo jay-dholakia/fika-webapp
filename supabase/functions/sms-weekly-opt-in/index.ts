@@ -19,7 +19,7 @@ function getCurrentBatchWeek(): string {
   return monday.toISOString().slice(0, 10)
 }
 
-const MESSAGE = `Want a Fika intro this week? Reply IN or SKIP. If IN, set your availability for Wed–Sun by Tuesday 11:59pm PT — we'll send your intro Wednesday morning.`
+const MESSAGE = `Want a Fika intro this week? Reply Yes or Skip. If Yes, set your availability for Wed–Sun by Tuesday 11:59pm PT — we'll send your intro Wednesday morning.`
 
 serve(async () => {
   try {

@@ -5,7 +5,7 @@ import { useState } from 'react'
 const faqItems = [
   {
     q: 'How often do I get intros?',
-    a: 'Once a week. Your Fika concierge texts you to ask if you’re in for this week—reply IN to your Fika concierge to be included or SKIP to sit it out. When you’re in, you get one introduction to someone nearby for that week.',
+    a: 'Once a week. Your Fika concierge texts you to ask if you’re in for this week—reply Yes to your Fika concierge to be included or Skip to sit it out. When you’re in, you get one introduction to someone nearby for that week.',
   },
   {
     q: 'How does matching work?',

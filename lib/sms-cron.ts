@@ -43,7 +43,7 @@ export async function runWeeklyOptIn(): Promise<{ sent: number; error?: string }
     .in('market', activeSlugs)
   const withPhone = (profiles ?? []).filter((p) => p.phone && !optedSet.has(p.id))
   let sent = 0
-  const msg = "Would you like a Fika introduction this week? Reply IN or SKIP."
+  const msg = "Would you like a Fika introduction this week? Reply Yes or Skip."
   for (const p of withPhone) {
     const result = await sendMessage(p.phone!, msg, { fromNumber: 'concierge' })
     if (result.success) {

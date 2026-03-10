@@ -141,7 +141,7 @@ export function messageMarketGoLive(cityLabel: string, nextMondayPhrase: string 
 }
 
 export function messageEntry(): string {
-  return `Hey! I'm Fika — think of me as your friend who sets up intros. 😊\n\nEach week I match you with one person nearby for a real conversation. Want in this week? Reply IN or SKIP. If you're in, set your availability for Wed–Sun before Tuesday morning and we'll send your intro Tuesday morning.`
+  return `Hey! I'm Fika — think of me as your friend who sets up intros. 😊\n\nEach week I match you with one person nearby for a real conversation. Want in this week? Reply Yes or Skip. If you're in, set your availability for Wed–Sun before Tuesday morning and we'll send your intro Tuesday morning.`
 }
 
 /** When sign-in completes after the Tuesday morning intro run — set expectation for next week. nextMondayPhrase = day-aware "tomorrow" | "Monday" | "next Monday". */
@@ -161,7 +161,7 @@ export function messageEntryAfterDeadline(
 
 /** Short reminder when they text HI/FIKA again — avoid re-sending the full intro. */
 export function messageEntryReminder(): string {
-  return `Want an intro this week? Just reply IN or SKIP — and if you're in, set your availability for Wed–Sun before Tuesday morning.`
+  return `Want an intro this week? Just reply Yes or Skip — and if you're in, set your availability for Wed–Sun before Tuesday morning.`
 }
 
 /** When user is known but hasn't completed onboarding/intake — send link to finish profile. */
@@ -170,11 +170,11 @@ export function messageOnboardingRequired(onboardingUrl: string): string {
 }
 
 export function messageWeeklyOptIn(): string {
-  return `Want a Fika intro this week? Reply IN or SKIP. If you're in, set your availability for Wed–Sun before Tuesday morning and we'll send your intro Tuesday morning.`
+  return `Want a Fika intro this week? Reply Yes or Skip. If you're in, set your availability for Wed–Sun before Tuesday morning and we'll send your intro Tuesday morning.`
 }
 
 export function messageWeeklyOptInFollowUp(): string {
-  return `Quick ping — reply IN or SKIP and set your availability before Tuesday morning to get your intro.`
+  return `Quick ping — reply Yes or Skip and set your availability before Tuesday morning to get your intro.`
 }
 
 export function messageMatchOffer(params: {
@@ -427,7 +427,7 @@ export function messageCancelAck(): string {
 // ---------- Human fallbacks when message doesn't match a keyword ----------
 
 export function fallbackAwaitingOptIn(): string {
-  return `No worries — just reply IN or SKIP for this week and we'll go from there.`
+  return `No worries — just reply Yes or Skip for this week and we'll go from there.`
 }
 
 export function fallbackOptedIn(): string {

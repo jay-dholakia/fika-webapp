@@ -9,7 +9,7 @@ const portalFaqItems = [
   },
   {
     q: 'How do I get introductions?',
-    a: 'Each week your Fika concierge texts you to see if you’re in for a Fika. Set your availability for Wed–Sun on the Your Availability page, then reply IN to your Fika concierge to be included in that week’s run (or SKIP to sit it out). Your intro is sent by text and appears in the app after the run.',
+    a: 'Each week your Fika concierge texts you to see if you’re in for a Fika. Set your availability for Wed–Sun on the Your Availability page, then reply Yes to your Fika concierge to be included in that week’s run (or SKIP to sit it out). Your intro is sent by text and appears in the app after the run.',
   },
   {
     q: 'How many intros do I get per week?',
@@ -21,7 +21,7 @@ const portalFaqItems = [
   },
   {
     q: 'How often do matches run?',
-    a: 'Weekly. Set your availability (Wed–Sun) and reply IN to your Fika concierge before the run; both lock Monday 11:59pm. Matches run Tuesday morning; your intro is sent by text and reflected in the app.',
+    a: 'Weekly. Set your availability (Wed–Sun) and reply Yes to your Fika concierge before the run; both lock Monday 11:59pm. Matches run Tuesday morning; your intro is sent by text and reflected in the app.',
   },
   {
     q: 'What happens when I get an intro?',
