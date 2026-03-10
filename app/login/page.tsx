@@ -60,6 +60,8 @@ function LoginContent() {
               </p>
             </div>
 
+            <div className="auth-login-divider" aria-hidden="true" />
+
             <div className="auth-login-side">
               <h3 className="auth-login-side-title">New to Fika?</h3>
               <p className="auth-login-side-sub">

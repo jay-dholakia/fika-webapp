@@ -1149,12 +1149,22 @@ a {
   color: var(--color-textSecondary);
   margin-bottom: 1rem;
 }
+.auth-login-divider {
+  display: none;
+}
 @media (min-width: 800px) {
   .auth-login-inner {
     display: grid;
-    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1.1fr) auto minmax(0, 1fr);
     gap: 3rem;
     align-items: flex-start;
+  }
+  .auth-login-divider {
+    display: block;
+    width: 1px;
+    background: var(--color-border);
+    align-self: stretch;
+    min-height: 120px;
   }
   .auth-login-side {
     margin-top: 0;
