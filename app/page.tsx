@@ -55,7 +55,7 @@ export default function Home() {
                 <div className="step-content">
                   <h3 className="step-title">Text your Fika concierge</h3>
                   <p className="step-text">
-                    Get started by texting your Fika concierge—an AI agent that facilitates your Fikas. They&apos;ll collect some info about you—which city you live in, your current life chapter, and a few more questions to get to know you.
+                    Text your Fika concierge—an AI agent that sets up your Fikas for you. They&apos;ll ask you a few questions to get to know you: where you&apos;re based, your life chapter right now, your interests, and what kind of conversations and connections you&apos;re open to. Then they take it from there.
                   </p>
                 </div>
               </li>
@@ -64,7 +64,7 @@ export default function Home() {
                 <div className="step-content">
                   <h3 className="step-title">Do you want to Fika this week?</h3>
                   <p className="step-text">
-                    Each week your concierge texts you asking if you&apos;d like to meet someone new this week. Reply Yes or Skip. No pressure.
+                    Each week your concierge texts you asking if you&apos;d like to meet someone new this week—someone similar enough to connect, and different enough to keep it interesting. Reply Yes or Skip. No pressure.
                   </p>
                 </div>
               </li>
@@ -73,7 +73,7 @@ export default function Home() {
                 <div className="step-content">
                   <h3 className="step-title">Get your intro</h3>
                   <p className="step-text">
-                    If you&apos;re in, your concierge sends a link to set when you&apos;re free during the week for a Fika. They send you an intro—someone similar enough to connect, and different enough to keep it interesting. If you both say yes, your concierge recommends a time and place based on your shared availability.
+                    If you&apos;re in, your concierge sends you a link to set your availability for the rest of the week for a Fika. They send you an intro every Tuesday morning. If you both say yes, your concierge recommends a time and place based on your shared availability.
                   </p>
                 </div>
               </li>
