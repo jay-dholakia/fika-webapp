@@ -7,10 +7,12 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { sendMessage } from '@/lib/sendblue'
-import { getOrCreateSmsState, messageEntryFirstTimeMessages, SMS_STATES } from '@/lib/sms-agent'
+import { getOrCreateSmsState, messageEntryFirstTimeMessages, messageEntryFirstTimeMessagesInactiveMarket, SMS_STATES } from '@/lib/sms-agent'
 import { getTimezoneFromLatLng, getNextMondayPhrase } from '@/lib/sms-day-aware'
 import { getCurrentBatchWeek, isPastOptInDeadline } from '@/lib/onboarding'
 import { getMarketFromCity } from '@/lib/markets'
+import { getActiveMarketSlugs } from '@/lib/admin-markets'
+import { getMarketBySlug } from '@/lib/markets'
 
 export async function POST(request: Request) {
   const authHeader = request.headers.get('Authorization')
@@ -137,11 +139,17 @@ export async function POST(request: Request) {
       await getOrCreateSmsState(supabase, user.id, SMS_STATES.AWAITING_OPT_IN, {
         batch_week: batchWeek,
       })
-      const isAfterDeadline = isPastOptInDeadline(batchWeek)
-      const timezone = getTimezoneFromLatLng(lat, lng)
-      const nextMondayPhrase = getNextMondayPhrase(timezone)
       const appBase = (process.env.APP_CANONICAL_URL ?? '').trim().replace(/\/$/, '') || 'https://letsfika.vercel.app'
-      const messages = messageEntryFirstTimeMessages(isAfterDeadline, nextMondayPhrase, appBase)
+      const activeSlugs = await getActiveMarketSlugs(supabase)
+      const isActiveMarket = market != null && activeSlugs.includes(market)
+      const messages = isActiveMarket
+        ? (() => {
+            const isAfterDeadline = isPastOptInDeadline(batchWeek)
+            const timezone = getTimezoneFromLatLng(lat, lng)
+            const nextMondayPhrase = getNextMondayPhrase(timezone)
+            return messageEntryFirstTimeMessages(isAfterDeadline, nextMondayPhrase, appBase)
+          })()
+        : messageEntryFirstTimeMessagesInactiveMarket(appBase, getMarketBySlug(market)?.label ?? market)
       let lastHandle: string | undefined
       for (let i = 0; i < messages.length; i++) {
         const sent = await sendMessage(session.phone, messages[i], { fromNumber: 'concierge' })

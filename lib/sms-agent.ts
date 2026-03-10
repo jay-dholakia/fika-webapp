@@ -123,6 +123,23 @@ export function messageEntryFirstTimeMessages(isAfterDeadline: boolean, nextMond
   return [msg1, msg2, msg3]
 }
 
+/** First-time entry when user's market is inactive: "building community" messaging. Returns 2 messages. No opt-in CTA. */
+export function messageEntryFirstTimeMessagesInactiveMarket(
+  appBase: string = 'https://letsfika.vercel.app',
+  cityLabel?: string | null
+): string[] {
+  const base = appBase.trim().replace(/\/$/, '') || 'https://letsfika.vercel.app'
+  const place = cityLabel?.trim() || 'your city'
+  const msg1 = `You're in. We're currently building community for ${place} — we'll reach back out when we're ready to run our first Fika intros.`
+  const msg2 = `In the meantime, learn more or edit your profile anytime on the web portal: ${base}/app`
+  return [msg1, msg2]
+}
+
+/** One-time when a market is turned active: inform user we'll reach out on the Monday cadence (no immediate opt-in). */
+export function messageMarketGoLive(cityLabel: string, nextMondayPhrase: string = 'next Monday'): string {
+  return `Fika is live in ${cityLabel}! We'll reach out ${nextMondayPhrase} to ask if you'd like a Fika.`
+}
+
 export function messageEntry(): string {
   return `Hey! I'm Fika — think of me as your friend who sets up intros. 😊\n\nEach week I match you with one person nearby for a real conversation. Want in this week? Reply IN or SKIP. If you're in, set your availability for Wed–Sun before Tuesday morning and we'll send your intro Tuesday morning.`
 }
