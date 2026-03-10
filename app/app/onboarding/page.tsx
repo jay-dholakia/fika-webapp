@@ -466,9 +466,6 @@ function AppOnboardingContent() {
     authLog('onboarding:render', { show: 'Loading', sessionChecked: false })
     return (
       <div className="onboarding-wrap">
-        <div className="onboarding-progress">
-          <div className="onboarding-progress-inner" style={{ width: '0%' }} />
-        </div>
         <p className="onboarding-question">Loading…</p>
       </div>
     )
@@ -477,9 +474,6 @@ function AppOnboardingContent() {
   if (tokenMode && !sessionLoadedForToken && sessionUserId == null) {
     return (
       <div className="onboarding-wrap">
-        <div className="onboarding-progress">
-          <div className="onboarding-progress-inner" style={{ width: '0%' }} />
-        </div>
         <p className="onboarding-question">Loading…</p>
       </div>
     )
@@ -499,9 +493,6 @@ function AppOnboardingContent() {
   if (showGoogleSignIn && token) {
     return (
       <div className="onboarding-wrap">
-        <div className="onboarding-progress">
-          <div className="onboarding-progress-inner" style={{ width: '100%' }} />
-        </div>
         <h2 className="onboarding-question">You&apos;re all set</h2>
         <p className="onboarding-body" style={{ marginTop: '0.5rem' }}>
           Sign in with Google to finalize your account and start matching.
@@ -529,9 +520,6 @@ function AppOnboardingContent() {
     authLog('onboarding:render', { show: 'Loading', statusLoading: true })
     return (
       <div className="onboarding-wrap">
-        <div className="onboarding-progress">
-          <div className="onboarding-progress-inner" style={{ width: '0%' }} />
-        </div>
         <p className="onboarding-question">Loading…</p>
       </div>
     )
@@ -720,10 +708,6 @@ function AppOnboardingContent() {
 
   return (
     <div className="onboarding-wrap">
-      <div className="onboarding-progress">
-        <div className="onboarding-progress-inner" style={{ width: '25%' }} />
-      </div>
-
       <div className="onboarding-single-page">
         <section className="onboarding-section onboarding-section-card">
           <h2 className="onboarding-section-title">About you</h2>
@@ -820,9 +804,6 @@ export default function AppOnboardingPage() {
   return (
     <Suspense fallback={
       <div className="onboarding-wrap">
-        <div className="onboarding-progress">
-          <div className="onboarding-progress-inner" style={{ width: '0%' }} />
-        </div>
         <p className="onboarding-question">Loading…</p>
       </div>
     }>

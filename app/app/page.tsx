@@ -23,7 +23,6 @@ function AppHomeContent() {
   const [intros, setIntros] = useState<IntroMatch[]>([])
   const [introsLoading, setIntrosLoading] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [toggling, setToggling] = useState(false)
   const [actionMatchId, setActionMatchId] = useState<string | null>(null)
   const [modalIntro, setModalIntro] = useState<IntroMatch | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -44,15 +43,21 @@ function AppHomeContent() {
   const { loading: onboardingLoading, isComplete: onboardingComplete, intake, refetch, profile } = useOnboardingStatus(userId ?? undefined)
   const marketSlug = profile?.market ?? (profile?.city ? getMarketFromCity(profile.city)?.slug ?? null : null)
 
-  const TARGET_USERS = TARGET_COUNT_PER_MARKET
+const TARGET_USERS = TARGET_COUNT_PER_MARKET
   const batchWeek = getCurrentBatchWeek()
   const communityNotReady = profileCount !== null && profileCount < TARGET_USERS
   const marketNotActive = marketSlug != null && marketActive === false
+  const isInactiveMarket = communityNotReady || marketNotActive
   const optInLocked =
     profileCount === null ||
     communityNotReady ||
     marketNotActive ||
     (profileCount >= TARGET_USERS && isAvailabilityLocked(batchWeek))
+  const CONCIERGE_NUMBER = process.env.NEXT_PUBLIC_SENDBLUE_CONCIERGE_NUMBER?.trim() || null
+  const SHARE_URL = 'https://letsfika.vercel.app'
+  const SHARE_TEXT = marketLabel
+    ? `Help me unlock Fika in ${marketLabel} — create an account and get first access to your weekly intro when we hit ${TARGET_USERS} people.`
+    : `Help me unlock Fika in our city — create an account and get first access to your weekly intro when we hit ${TARGET_USERS} people.`
   const showQuestionnaireCard = !onboardingLoading && !onboardingComplete
   const missingIntakeSteps = onboardingComplete && intake ? getMissingIntakeStepIds(intake) : []
   const showNewQuestionsCard = !onboardingLoading && onboardingComplete && missingIntakeSteps.length > 0 && !fillingMissingMode
@@ -269,37 +274,6 @@ function AppHomeContent() {
       })
   }, [userId])
 
-  async function toggleOptIn() {
-    if (!userId) return
-    const supabase = getSupabase()
-    if (!supabase) return
-    setError(null)
-    const previousOptedIn = optedIn
-    setOptedIn(!optedIn)
-    setToggling(true)
-    const batchWeek = getCurrentBatchWeek()
-    try {
-      if (previousOptedIn) {
-        const { error: e } = await supabase
-          .from('weekly_match_opt_ins')
-          .delete()
-          .eq('user_id', userId)
-          .eq('batch_week', batchWeek)
-        if (e) throw e
-      } else {
-        const { error: e } = await supabase
-          .from('weekly_match_opt_ins')
-          .insert({ user_id: userId, batch_week: batchWeek, opted_in_at: new Date().toISOString() })
-        if (e) throw e
-      }
-    } catch (err) {
-      setOptedIn(previousOptedIn)
-      setError(err instanceof Error ? err.message : 'Could not update opt-in.')
-    } finally {
-      setToggling(false)
-    }
-  }
-
   async function optInToIntro(intro: IntroMatch) {
     if (!userId) return
     const supabase = getSupabase()
@@ -407,52 +381,86 @@ function AppHomeContent() {
   return (
     <>
       <div className="app-card">
-        <h2>Weekly introduction</h2>
-        <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem', marginBottom: '1rem' }}>
-          Opt in to be included in this week&apos;s match run. You&apos;ll get one intro—someone we think you&apos;ll click with, when you&apos;re both free. Set your availability (Wed–Sun) on the <Link href="/app/availability">Your Availability</Link> page; opt in when you&apos;re ready. Both lock Monday 11:59pm.
-        </p>
-        { (communityNotReady || marketNotActive) && (
-          <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.9rem', marginBottom: '0.75rem' }}>
-            {marketLabel
-              ? `We're still building community in ${marketLabel}! Stay tuned for your first intro.`
-              : "We're still building community! Stay tuned for your first intro."}
-          </p>
+        <h2>Your weekly Fika</h2>
+        {isInactiveMarket ? (
+          <>
+            <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem', marginBottom: '1rem' }}>
+              We&apos;re still building community in {marketLabel ?? 'your city'}. Invite friends to help unlock your first intro.
+            </p>
+            <div className="app-how-it-works-invite-row" style={{ marginTop: '0.5rem' }}>
+              <button
+                type="button"
+                className="app-waitlist-share-btn"
+                onClick={async () => {
+                  if (typeof navigator !== 'undefined' && navigator.share) {
+                    try {
+                      await navigator.share({
+                        title: 'Fika – Weekly introduction',
+                        text: SHARE_TEXT,
+                        url: SHARE_URL,
+                      })
+                    } catch (e) {
+                      if ((e as Error)?.name !== 'AbortError') copyShareToClipboard(SHARE_URL, SHARE_TEXT)
+                    }
+                  } else {
+                    copyShareToClipboard(SHARE_URL, SHARE_TEXT)
+                  }
+                }}
+                aria-label="Invite friends"
+              >
+                <span className="app-waitlist-share-icon" aria-hidden>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                  </svg>
+                </span>
+                <span>Invite friends</span>
+              </button>
+              {shareCopied && <p className="app-waitlist-share-feedback">Link copied!</p>}
+            </div>
+            <p style={{ marginTop: '0.5rem', marginBottom: 0 }}>
+              <button type="button" className="app-how-it-works-invite-link" style={{ background: 'none', border: 'none', padding: 0, font: 'inherit', color: 'var(--color-primary)', cursor: 'pointer', textDecoration: 'underline' }} onClick={() => copyShareToClipboard(SHARE_URL, SHARE_TEXT)}>Copy invite link</button>
+            </p>
+          </>
+        ) : (
+          <>
+            <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem', marginBottom: '1rem' }}>
+              Opt in via text to be included in this week&apos;s match run. Set your availability (Wed–Sun) on the <Link href="/app/availability">Your Availability</Link> page first; then text <strong>IN</strong> to the Fika number. Both lock Monday 11:59pm.
+            </p>
+            {optInLocked && (
+              <p className="onboarding-error" style={{ marginBottom: '0.75rem' }}>
+                Opt-in and availability are locked (Monday 11:59pm). Matches run Tuesday morning.
+              </p>
+            )}
+            {!optInLocked && (
+              <>
+                {optedIn ? (
+                  <p style={{ marginBottom: '0.75rem' }}>
+                    You&apos;re opted in this week. <Link href="/app/availability">Edit your availability</Link> for next week if needed.
+                  </p>
+                ) : CONCIERGE_NUMBER ? (
+                  <>
+                    <a
+                      href={`sms:${CONCIERGE_NUMBER}?body=IN`}
+                      className="btn btn-primary auth-submit"
+                      style={{ display: 'inline-block', textAlign: 'center', marginBottom: '0.75rem' }}
+                    >
+                      Opt in via text
+                    </a>
+                    <p style={{ fontSize: '0.95rem' }}>
+                      <Link href="/app/availability">Set your availability for next week</Link> so we can match you when you opt in.
+                    </p>
+                  </>
+                ) : (
+                  <p style={{ fontSize: '0.95rem' }}>
+                    Text <strong>IN</strong> to the Fika number to opt in. <Link href="/app/availability">Set your availability for next week</Link> so we can match you.
+                  </p>
+                )}
+              </>
+            )}
+            {error && <p className="onboarding-error" style={{ marginTop: '0.75rem' }}>{error}</p>}
+          </>
         )}
-        {optInLocked && !communityNotReady && !marketNotActive && (
-          <p className="onboarding-error" style={{ marginBottom: '0.75rem' }}>
-            Opt-in and availability are locked (Monday 11:59pm). Matches run Tuesday morning.
-          </p>
-        )}
-        <div className="app-opt-in-toggle">
-          <label className="app-toggle-label">
-            <input
-              type="checkbox"
-              role="switch"
-              checked={optedIn ?? false}
-              onChange={() => toggleOptIn()}
-              disabled={toggling || optInLocked}
-              aria-label="Opt in to this week's introduction"
-              className="app-toggle-input"
-            />
-            <span className="app-toggle-track" aria-hidden>
-              <span className="app-toggle-thumb" />
-            </span>
-            <span className="app-toggle-text">
-              {optedIn ? "I'm opted in this week" : "Opt in to this week's introduction"}
-            </span>
-          </label>
-        </div>
-        {optedIn && (
-          <p style={{ marginTop: '0.75rem', fontSize: '0.95rem' }}>
-            <Link href="/app/availability">Edit your availability for next week</Link>
-          </p>
-        )}
-        {!optedIn && !optInLocked && (
-          <p style={{ marginTop: '0.75rem', fontSize: '0.95rem' }}>
-            <Link href="/app/availability">Set your availability for next week</Link> so we can match you when you opt in.
-          </p>
-        )}
-        {error && <p className="onboarding-error" style={{ marginTop: '0.75rem' }}>{error}</p>}
       </div>
 
       {showJustCompletedThankYou && (

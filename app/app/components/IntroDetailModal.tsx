@@ -57,13 +57,15 @@ type ModalDetail = {
 type IntroDetailModalProps = {
   intro: IntroMatch
   onClose: () => void
-  onOptIn: (intro: IntroMatch) => void
-  onPass: (intro: IntroMatch) => void
+  onOptIn?: (intro: IntroMatch) => void
+  onPass?: (intro: IntroMatch) => void
   onSchedulingAction?: (intro: IntroMatch, action: string, slotId?: string) => Promise<void>
   actionMatchId: string | null
   error: string | null
   currentUserId?: string | null
 }
+
+const CONCIERGE_NUMBER = process.env.NEXT_PUBLIC_SENDBLUE_CONCIERGE_NUMBER?.trim() || null
 
 export function IntroDetailModal({
   intro,
@@ -544,22 +546,32 @@ export function IntroDetailModal({
             <span className="app-intro-status">Passed</span>
           ) : (
             <>
-              <button
-                type="button"
-                className="app-intro-btn app-intro-btn-primary"
-                onClick={() => onOptIn(intro)}
-                disabled={busy}
-              >
-                {actionMatchId === intro.id ? 'Opting in…' : 'Opt in'}
-              </button>
-              <button
-                type="button"
-                className="app-intro-btn app-intro-btn-secondary"
-                onClick={() => onPass(intro)}
-                disabled={busy}
-              >
-                Pass
-              </button>
+              <p className="app-intro-sms-cta" style={{ marginBottom: '0.75rem', fontSize: '0.95rem', color: 'var(--color-textSecondary)' }}>
+                Reply <strong>YES</strong> or <strong>PASS</strong> to the Fika number to accept or pass on this intro.
+              </p>
+              <div className="app-scheduling-actions" style={{ flexWrap: 'wrap', gap: '0.5rem' }}>
+                {CONCIERGE_NUMBER ? (
+                  <>
+                    <a
+                      href={`sms:${CONCIERGE_NUMBER}?body=YES`}
+                      className="app-intro-btn app-intro-btn-primary"
+                    >
+                      Accept (reply YES)
+                    </a>
+                    <a
+                      href={`sms:${CONCIERGE_NUMBER}?body=PASS`}
+                      className="app-intro-btn app-intro-btn-secondary"
+                    >
+                      Pass (reply PASS)
+                    </a>
+                  </>
+                ) : (
+                  <span className="app-intro-status">Text YES or PASS to the Fika number from your account or welcome message.</span>
+                )}
+              </div>
+              <p style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: 'var(--color-textSecondary)' }}>
+                After you reply, refresh the page to see your status.
+              </p>
             </>
           )}
           {error && <p className="onboarding-error" style={{ marginTop: '0.5rem' }}>{error}</p>}

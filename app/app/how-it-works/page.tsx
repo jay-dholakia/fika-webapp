@@ -113,12 +113,6 @@ export default function HowItWorksPage() {
                     <span className="app-counter-target">{TARGET_USERS}</span>
                     <span className="app-counter-label"> people</span>
                   </p>
-                  <div className="app-counter-bar" role="progressbar" aria-valuenow={profileCount ?? 0} aria-valuemin={0} aria-valuemax={TARGET_USERS}>
-                    <div
-                      className="app-counter-bar-fill"
-                      style={{ width: `${profileCount !== null ? Math.min(100, (profileCount / TARGET_USERS) * 100) : 0}%` }}
-                    />
-                  </div>
                   <div className="app-how-it-works-invite-row">
                     <button
                       type="button"

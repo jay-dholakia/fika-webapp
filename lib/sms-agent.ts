@@ -131,7 +131,7 @@ export function messageEntryFirstTimeMessagesInactiveMarket(
   const base = appBase.trim().replace(/\/$/, '') || 'https://letsfika.vercel.app'
   const place = cityLabel?.trim() || 'your city'
   const msg1 = `You're in. We're currently building community for ${place} — we'll reach back out when we're ready to run our first Fika intros.`
-  const msg2 = `In the meantime, learn more or edit your profile anytime on the web portal: ${base}/app`
+  const msg2 = `In the meantime, learn more or edit your profile on the Fika web portal: ${base}/app`
   return [msg1, msg2]
 }
 
