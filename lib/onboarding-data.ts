@@ -126,6 +126,7 @@ export const INTAKE_STEPS: ProfileStep[] = [
       "I'm exploring a new direction",
       "I'm taking time to figure out what's next",
       "I'm taking a break or sabbatical",
+      "I'm starting a family",
       "I'm raising kids",
       "I'm caring for family members",
       "I'm semi-retired",

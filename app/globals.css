@@ -1102,7 +1102,7 @@ a {
 }
 .auth-page-cta .section-cta-full {
   width: 100%;
-  max-width: 560px;
+  max-width: 960px;
   margin: 0 auto;
 }
 .auth-switch-cta {
@@ -1124,6 +1124,41 @@ a {
   font-size: 1rem;
   color: var(--color-textSecondary);
   margin-bottom: 1.75rem;
+}
+
+/* Login layout (desktop-friendly) */
+.auth-login-inner {
+  text-align: left;
+}
+.auth-login-main,
+.auth-login-side {
+  width: 100%;
+}
+.auth-login-side {
+  margin-top: 2rem;
+}
+.auth-login-side-title {
+  font-family: var(--font-heading);
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+  color: var(--color-text);
+}
+.auth-login-side-sub {
+  font-size: 0.95rem;
+  color: var(--color-textSecondary);
+  margin-bottom: 1rem;
+}
+@media (min-width: 800px) {
+  .auth-login-inner {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+    gap: 3rem;
+    align-items: flex-start;
+  }
+  .auth-login-side {
+    margin-top: 0;
+  }
 }
 .auth-form {
   display: flex;

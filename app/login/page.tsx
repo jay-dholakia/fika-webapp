@@ -37,30 +37,36 @@ function LoginContent() {
 
       <main className="auth-page auth-page-cta">
         <section id="cta" className="section section-cta section-cta-full">
-          <div className="section-inner cta-inner">
-            <h2 className="cta-title">Get started with Fika</h2>
-            <p className="cta-sub">
-              Have an account? Sign in with Google. Otherwise join the waitlist and we&apos;ll be in touch.
-            </p>
-            {noAccount && (
-              <p className="cta-message cta-message-error" role="alert" style={{ marginBottom: '1rem' }}>
-                No account found for that sign-in. Join the waitlist below and we&apos;ll notify you when Fika is ready for you.
+          <div className="section-inner cta-inner auth-login-inner">
+            <div className="auth-login-main">
+              <h2 className="cta-title">Sign in to Fika</h2>
+              <p className="cta-sub">
+                Use your Google account to continue. If you&apos;re new to Fika, you can join the waitlist instead.
               </p>
-            )}
-            <button
-              type="button"
-              className="btn btn-primary btn-block"
-              onClick={handleSignInWithGoogle}
-            >
-              Sign in with Google
-            </button>
-            <p className="cta-waitlist-hint" style={{ marginTop: '1.5rem', marginBottom: '0.5rem' }}>
-              New to Fika? Join the waitlist
-            </p>
-            <CtaWithLocation />
-            <p className="auth-switch auth-switch-cta" style={{ marginTop: '1.5rem' }}>
-              <Link href="/">Back to home</Link>
-            </p>
+              {noAccount && (
+                <p className="cta-message cta-message-error" role="alert" style={{ marginBottom: '1rem' }}>
+                  No account found. Join the waitlist and we&apos;ll let you know when Fika&apos;s ready for you.
+                </p>
+              )}
+              <button
+                type="button"
+                className="btn btn-primary btn-block"
+                onClick={handleSignInWithGoogle}
+              >
+                Sign in with Google
+              </button>
+              <p className="auth-switch auth-switch-cta" style={{ marginTop: '1.5rem' }}>
+                <Link href="/">Back to home</Link>
+              </p>
+            </div>
+
+            <div className="auth-login-side">
+              <h3 className="auth-login-side-title">New to Fika?</h3>
+              <p className="auth-login-side-sub">
+                Join the waitlist and we&apos;ll invite you when Fika is live in your city.
+              </p>
+              <CtaWithLocation />
+            </div>
           </div>
         </section>
       </main>
