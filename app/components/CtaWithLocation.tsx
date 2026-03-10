@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { getSupabase } from '@/lib/supabase'
 
 export default function CtaWithLocation() {
   const [email, setEmail] = useState('')
@@ -41,25 +40,24 @@ export default function CtaWithLocation() {
       setWaitlistMessage('Enter a valid US zip code (5 or 9 digits).')
       return
     }
-    const supabase = getSupabase()
-    if (!supabase) {
-      setWaitlistStatus('error')
-      setWaitlistMessage('Unable to submit. Please try again.')
-      return
-    }
     setWaitlistStatus('loading')
-    const { error } = await supabase.from('waitlist').insert({
-      email: emailTrim,
-      zip_code: zipNormalized,
-      marketing_consent_at: new Date().toISOString(),
+    const res = await fetch('/api/waitlist', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: emailTrim,
+        zip_code: zipNormalized,
+        marketing_consent: true,
+      }),
     })
-    if (error) {
+    const data = (await res.json()) as { error?: string; message?: string }
+    if (!res.ok) {
       setWaitlistStatus('error')
-      setWaitlistMessage(error.code === '23505' ? 'This email is already on the list.' : 'Something went wrong. Please try again.')
+      setWaitlistMessage(data.error ?? 'Something went wrong. Please try again.')
       return
     }
     setWaitlistStatus('success')
-    setWaitlistMessage("You're on the list. We'll be in touch.")
+    setWaitlistMessage(data.message ?? "You're on the list. We'll be in touch.")
     setEmail('')
     setZipCode('')
     setEmailConsent(false)
