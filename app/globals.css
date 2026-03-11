@@ -1112,6 +1112,9 @@ a {
   max-width: 960px;
   margin: 0 auto;
 }
+.auth-page-cta .section-inner.cta-inner.auth-login-inner {
+  max-width: 960px;
+}
 .auth-switch-cta {
   margin-top: 1.5rem;
 }
