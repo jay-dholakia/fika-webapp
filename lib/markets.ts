@@ -100,6 +100,7 @@ export const MARKETS: Market[] = [
     ],
   },
   {
+    slug: 'la',
     label: 'Los Angeles',
     cityPatterns: [
       'los angeles',
