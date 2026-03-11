@@ -1109,11 +1109,14 @@ a {
 }
 .auth-page-cta .section-cta-full {
   width: 100%;
-  max-width: 960px;
-  margin: 0 auto;
+  max-width: none;
+  margin: 0;
+  flex: 1;
 }
 .auth-page-cta .section-inner.cta-inner.auth-login-inner {
   max-width: 960px;
+  margin-left: auto;
+  margin-right: auto;
 }
 .auth-switch-cta {
   margin-top: 1.5rem;
