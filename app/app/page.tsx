@@ -298,7 +298,7 @@ const TARGET_USERS = TARGET_COUNT_PER_MARKET
                   if (typeof navigator !== 'undefined' && navigator.share) {
                     try {
                       await navigator.share({
-                        title: 'Fika – Weekly introduction',
+                        title: 'Fika — Real people. Real conversation.',
                         text: SHARE_TEXT,
                         url: SHARE_URL,
                       })

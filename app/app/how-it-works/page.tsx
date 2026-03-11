@@ -107,12 +107,6 @@ export default function HowItWorksPage() {
               </span>
               {!communityUnlocked && (
                 <div className="app-how-it-works-250-block">
-                  <p className="app-counter-text">
-                    <span className="app-counter-value">{profileCount !== null ? profileCount : '—'}</span>
-                    <span className="app-counter-sep"> / </span>
-                    <span className="app-counter-target">{TARGET_USERS}</span>
-                    <span className="app-counter-label"> people</span>
-                  </p>
                   <div className="app-how-it-works-invite-row">
                     <button
                       type="button"
@@ -121,7 +115,7 @@ export default function HowItWorksPage() {
                         if (typeof navigator !== 'undefined' && navigator.share) {
                           try {
                             await navigator.share({
-                              title: 'Fika – Weekly introduction',
+                              title: 'Fika — Real people. Real conversation.',
                               text: SHARE_TEXT,
                               url: SHARE_URL,
                             })
