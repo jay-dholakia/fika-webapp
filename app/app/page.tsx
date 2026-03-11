@@ -285,7 +285,11 @@ const TARGET_USERS = TARGET_COUNT_PER_MARKET
     <>
       <div className="app-card">
         <h2>Your weekly Fika</h2>
-        {isInactiveMarket ? (
+        {profileCount === null ? (
+          <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem', marginBottom: 0 }}>
+            Loading your weekly status…
+          </p>
+        ) : isInactiveMarket ? (
           <>
             <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem', marginBottom: '1rem' }}>
               We&apos;re still building community in {marketLabel ?? 'your city'}. Invite friends to help unlock your first intro.

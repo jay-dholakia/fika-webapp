@@ -180,11 +180,6 @@ function AppLayoutInner({
           </Link>
         </nav>
         <div className="app-sidebar-footer">
-          <div className="app-sidebar-intros" aria-label="Intro balance">
-            <span className="app-sidebar-intros-icon">☕</span>
-            <span className="app-sidebar-intros-label">Intros</span>
-            <span className="app-sidebar-intros-count">{profile?.intro_balance ?? 0}</span>
-          </div>
           <Link href="/app/settings/profile" className={pathname === '/app/settings/profile' ? 'app-sidebar-link active' : 'app-sidebar-link'} onClick={() => setMobileMenuOpen(false)}>
             Edit profile
           </Link>
