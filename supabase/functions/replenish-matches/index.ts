@@ -456,6 +456,20 @@ async function findPotentialMatches(
 
     if (blocked?.length > 0) continue
 
+    // Check permanent exclusion (e.g. either passed on this pair — never match again)
+    const orderedA = userProfile.id < candidate.id ? userProfile.id : candidate.id
+    const orderedB = userProfile.id < candidate.id ? candidate.id : userProfile.id
+    const { data: excluded } = await supabaseClient
+      .from('match_exclusions')
+      .select('id')
+      .eq('user_a', orderedA)
+      .eq('user_b', orderedB)
+      .limit(1)
+    if (excluded?.length > 0) {
+      console.log(`Skipping ${candidate.id.substring(0, 8)} - pair excluded (e.g. passed)`)
+      continue
+    }
+
     // Check cooldown
     const inCooldown = await checkCooldown(supabaseClient, userProfile.id, candidate.id)
     if (inCooldown) {
@@ -1138,7 +1152,6 @@ async function generateMatchReasonsV4(
   if (sharedGreatFika.length > 0) whyWeIntroducedYou.push(`You both want: ${sharedGreatFika[0].toLowerCase()}`)
   for (const t of overlap.slice(0, 2)) whyWeIntroducedYou.push(`You both selected "${t}"`)
   for (const l of sharedLately.slice(0, 1)) whyWeIntroducedYou.push(`You both said "${l}" has been on your mind`)
-  for (const c of sharedCuriosity.slice(0, 1)) whyWeIntroducedYou.push(`You're both curious about ${c.toLowerCase()}`)
   for (const a of sharedAnchor.slice(0, 1)) {
     if (a !== 'Prefer not to say') whyWeIntroducedYou.push(`You both have "${a}" in your everyday life`)
   }

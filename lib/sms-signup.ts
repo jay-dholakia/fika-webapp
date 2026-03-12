@@ -3,7 +3,7 @@
  */
 
 export function messageSmsSignupLinkSent(link: string): string {
-  return `Welcome to Fika! Open this link to complete your profile and we'll get you set up:\n${link}`
+  return `Welcome to Fika! I’m your Fika concierge. Open this link to tell us a bit about you so we can start sending you thoughtful intros:\n${link}`
 }
 
 export function messageSmsSignupLinkAlreadySent(link: string): string {

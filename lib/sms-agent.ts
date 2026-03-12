@@ -141,7 +141,7 @@ export function messageMarketGoLive(cityLabel: string, nextMondayPhrase: string 
 }
 
 export function messageEntry(): string {
-  return `Hey! I'm Fika — think of me as your friend who sets up intros. 😊\n\nEach week I match you with one person nearby for a real conversation. Want in this week? Reply Yes or Skip. If you're in, set your availability for Wed–Sun before Tuesday morning and we'll send your intro Tuesday morning.`
+  return `Welcome to Fika. 😊\n\nEach week I check in to see if you’re up for a Fika, send you one thoughtful intro nearby, and help you set it up if you both say yes. Want in this week? Reply Yes or Skip. If you're in, set your availability for Wed–Sun before Tuesday morning and we'll send your intro Tuesday morning.`
 }
 
 /** When sign-in completes after the Tuesday morning intro run — set expectation for next week. nextMondayPhrase = day-aware "tomorrow" | "Monday" | "next Monday". */
@@ -252,6 +252,33 @@ export function messageYesWaitingForOther(): string {
 /** Notify the person who said YES when the other passed. */
 export function messageMatchPassed(): string {
   return `They passed on this one — we'll send you another match next week.`
+}
+
+/** When someone declines the proposed time/venue (after both said YES to intro). */
+export function messageProposalDeclined(): string {
+  return `No problem — we'll match you again next week.`
+}
+
+/** When we've offered 2 times and still no match (max retries reached). */
+export function messageProposalMaxRetries(): string {
+  return `We couldn't find a time that works for both — we'll match you again next week.`
+}
+
+/** Notify the other person when their match declines the proposed time. */
+export function messageProposalDeclinedToOther(): string {
+  return `They couldn't do this time — we'll send you another match next week.`
+}
+
+/** Re-propose a new time to the person who declined (attempt 2). */
+export function messageReProposalToDecliner(params: { day: string; time: string; venueName: string; neighborhood: string }): string {
+  const { day, time, venueName, neighborhood } = params
+  return `How about ${day} ${time} at ${venueName} (${neighborhood})?\n\nReply YES or NO.`
+}
+
+/** Notify the other person we're trying a different time. */
+export function messageReProposalToOther(params: { day: string; time: string; venueName: string; neighborhood: string }): string {
+  const { day, time, venueName, neighborhood } = params
+  return `They couldn't do that time — how about ${day} ${time} at ${venueName} (${neighborhood})?\n\nReply YES to confirm.`
 }
 
 /** Propose one time from shared availability; ask them to confirm. Second YES-er gets this first, then first YES-er. */
@@ -494,6 +521,19 @@ export function isMatchYesKeyword(content: string): boolean {
 export function isMatchPassKeyword(content: string): boolean {
   const k = normalizeKeyword(content)
   return ['pass', 'no', 'nah', 'skip', 'not this one'].includes(k)
+}
+
+/** Decline the proposed time/venue (when in AWAITING_SECOND_CONFIRM or AWAITING_FIRST_CONFIRM). */
+export function isProposalDeclineKeyword(content: string): boolean {
+  const k = normalizeKeyword(content)
+  return (
+    ['no', 'nah', 'nope', 'pass', 'change', 'no thanks', 'not this time', 'different time', "can't do that", "cant do that", "doesn't work", 'not that time', 'another time'].includes(k) ||
+    k.includes("can't do") ||
+    k.includes('cant do') ||
+    k.includes('doesn\'t work') ||
+    k.includes('dont work') ||
+    k.includes('another time')
+  )
 }
 
 /** Venue: CONFIRM. */

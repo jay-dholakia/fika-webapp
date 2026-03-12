@@ -29,6 +29,11 @@ import {
   messagePassConfirmation,
   messageYesWaitingForOther,
   messageMatchPassed,
+  messageProposalDeclined,
+  messageProposalDeclinedToOther,
+  messageProposalMaxRetries,
+  messageReProposalToDecliner,
+  messageReProposalToOther,
   messageProposalToConfirm,
   detectRelayIntent,
   messageRelayConfirmToSender,
@@ -51,6 +56,7 @@ import {
   isSkipKeyword,
   isMatchYesKeyword,
   isMatchPassKeyword,
+  isProposalDeclineKeyword,
   isConfirmKeyword,
   isResendLinkKeyword,
   isHelpKeyword,
@@ -573,6 +579,7 @@ export async function POST(request: Request) {
               venue_name: venue.name,
               neighborhood: venue.neighborhood ?? venue.city,
               first_yes_user_id: firstYesUserId,
+              proposal_attempt: 1,
             },
             last_sendblue_message_handle: messageHandle,
             updated_at: new Date().toISOString(),
@@ -588,6 +595,14 @@ export async function POST(request: Request) {
       await sendConcierge(fromNumber, messagePassConfirmation())
       const { data: matchRow } = await supabase.from('match_candidates').select('user_a, user_b').eq('id', matchId).single()
       const otherId = matchRow ? (matchRow.user_a === userId ? matchRow.user_b : matchRow.user_a) : null
+      if (matchRow?.user_a != null && matchRow?.user_b != null) {
+        const exA = matchRow.user_a < matchRow.user_b ? matchRow.user_a : matchRow.user_b
+        const exB = matchRow.user_a < matchRow.user_b ? matchRow.user_b : matchRow.user_a
+        await supabase.from('match_exclusions').upsert(
+          { user_a: exA, user_b: exB },
+          { onConflict: 'user_a,user_b' }
+        )
+      }
       if (otherId) {
         const { data: otherOpt } = await supabase.from('opt_ins').select('decision').eq('match_id', matchId).eq('user_id', otherId).maybeSingle()
         if (otherOpt?.decision === 'yes') {
@@ -605,6 +620,113 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true })
   }
 
+  // ----- Decline proposed time/venue (AWAITING_SECOND_CONFIRM or AWAITING_FIRST_CONFIRM): re-propose once (cap 2 total) or cancel -----
+  if (
+    matchId &&
+    (matchState === SMS_STATES.AWAITING_SECOND_CONFIRM || matchState === SMS_STATES.AWAITING_FIRST_CONFIRM) &&
+    isProposalDeclineKeyword(content)
+  ) {
+    const proposalAttempt = (matchPayload.proposal_attempt as number) ?? 1
+    const { data: matchRow } = await supabase
+      .from('match_candidates')
+      .select('user_a, user_b, overlapping_slot_ids')
+      .eq('id', matchId)
+      .single()
+    const otherId = matchRow ? (matchRow.user_a === userId ? matchRow.user_b : matchRow.user_a) : null
+
+    const cancelMatch = async () => {
+      await supabase.from('match_candidates').update({
+        scheduling_status: 'expired',
+        updated_at: new Date().toISOString(),
+      }).eq('id', matchId)
+      await sendConcierge(fromNumber, messageProposalMaxRetries())
+      if (otherId) {
+        const { data: otherProf } = await supabase.from('profiles').select('phone').eq('id', otherId).maybeSingle()
+        if (otherProf?.phone) {
+          await sendConcierge(otherProf.phone, messageProposalMaxRetries())
+        }
+        await supabase.from('sms_conversation_states').delete().eq('user_id', otherId).eq('batch_week', batchWeek).eq('match_id', matchId)
+      }
+      await supabase.from('sms_conversation_states').delete().eq('id', matchStateRow!.id)
+    }
+
+    if (proposalAttempt >= 2) {
+      await cancelMatch()
+      return NextResponse.json({ ok: true })
+    }
+
+    const currentSlotId = (matchPayload.proposed_slot_id as string) ?? ''
+    const overlapping = (matchRow?.overlapping_slot_ids as string[]) ?? []
+    const wedSun = overlapping.filter((id: string) => /^(wed|thu|fri|sat|sun)_/.test(id))
+    const nextSlotId = wedSun.find((id: string) => id !== currentSlotId) ?? null
+
+    if (!nextSlotId) {
+      await cancelMatch()
+      return NextResponse.json({ ok: true })
+    }
+
+    const { data: userA } = await supabase.from('profiles').select('city').eq('id', matchRow!.user_a).single()
+    const { data: userB } = await supabase.from('profiles').select('city').eq('id', matchRow!.user_b).single()
+    const venue = await pickVenueForMatch(supabase, userA?.city ?? null, userB?.city ?? null)
+    if (!venue) {
+      await cancelMatch()
+      return NextResponse.json({ ok: true })
+    }
+
+    const { day: newDay, time: newTime } = slotIdToDisplayTime(nextSlotId)
+    await supabase.from('match_candidates').update({
+      suggested_venue_id: venue.id,
+      default_slot_id: nextSlotId,
+      updated_at: new Date().toISOString(),
+    }).eq('id', matchId)
+
+    const newPayload = {
+      proposed_slot_id: nextSlotId,
+      proposed_venue_id: venue.id,
+      proposed_day: newDay,
+      proposed_time: newTime,
+      venue_name: venue.name,
+      neighborhood: venue.neighborhood ?? venue.city,
+      proposal_attempt: 2,
+    }
+
+    await sendConcierge(fromNumber, messageReProposalToDecliner({
+      day: newDay,
+      time: newTime,
+      venueName: venue.name,
+      neighborhood: venue.neighborhood ?? venue.city,
+    }))
+    if (otherId) {
+      const { data: otherProf } = await supabase.from('profiles').select('phone').eq('id', otherId).maybeSingle()
+      if (otherProf?.phone) {
+        await sendConcierge(otherProf.phone, messageReProposalToOther({
+          day: newDay,
+          time: newTime,
+          venueName: venue.name,
+          neighborhood: venue.neighborhood ?? venue.city,
+        }))
+      }
+      await supabase.from('sms_conversation_states').upsert(
+        {
+          user_id: otherId,
+          batch_week: batchWeek,
+          match_id: matchId,
+          state: SMS_STATES.AWAITING_SECOND_CONFIRM,
+          payload: newPayload,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'user_id,batch_week,match_id' }
+      )
+    }
+    await supabase.from('sms_conversation_states').update({
+      state: SMS_STATES.AWAITING_SECOND_CONFIRM,
+      payload: newPayload,
+      last_sendblue_message_handle: messageHandle,
+      updated_at: new Date().toISOString(),
+    }).eq('id', matchStateRow!.id)
+    return NextResponse.json({ ok: true })
+  }
+
   if (matchState === SMS_STATES.AWAITING_SECOND_CONFIRM && matchId && (isMatchYesKeyword(content) || keyword === 'YES')) {
     const proposedSlotId = matchPayload.proposed_slot_id as string
     const proposedVenueId = matchPayload.proposed_venue_id as string
@@ -612,13 +734,14 @@ export async function POST(request: Request) {
     const proposedTime = matchPayload.proposed_time as string
     const venueName = (matchPayload.venue_name as string) ?? 'the spot'
     const neighborhood = (matchPayload.neighborhood as string) ?? ''
-    const firstYesUserId = matchPayload.first_yes_user_id as string
+    const firstYesUserId = matchPayload.first_yes_user_id as string | undefined
     const { data: match } = await supabase.from('match_candidates').select('user_a, user_b').eq('id', matchId).single()
     if (!match) return NextResponse.json({ ok: true })
-    const { data: firstProfile } = await supabase.from('profiles').select('phone, first_name').eq('id', firstYesUserId).single()
+    const otherId = (firstYesUserId && firstYesUserId !== userId) ? firstYesUserId : (match.user_a === userId ? match.user_b : match.user_a)
+    const { data: otherProfile } = await supabase.from('profiles').select('phone, first_name').eq('id', otherId).maybeSingle()
     const currentName = (await supabase.from('profiles').select('first_name').eq('id', userId).single()).data?.first_name?.trim() ?? 'Your match'
-    if (firstProfile?.phone) {
-      await sendConcierge(firstProfile.phone, messageProposalToConfirm({
+    if (otherProfile?.phone) {
+      await sendConcierge(otherProfile.phone, messageProposalToConfirm({
         otherFirstName: currentName,
         day: proposedDay,
         time: proposedTime,
@@ -632,7 +755,7 @@ export async function POST(request: Request) {
     }).eq('id', matchId)
     await supabase.from('sms_conversation_states').upsert(
       {
-        user_id: firstYesUserId,
+        user_id: otherId,
         batch_week: batchWeek,
         match_id: matchId,
         state: SMS_STATES.AWAITING_FIRST_CONFIRM,
@@ -643,6 +766,8 @@ export async function POST(request: Request) {
           proposed_time: proposedTime,
           venue_name: venueName,
           neighborhood,
+          first_yes_user_id: userId,
+          proposal_attempt: (matchPayload.proposal_attempt as number) ?? 1,
         },
         updated_at: new Date().toISOString(),
       },
