@@ -1439,7 +1439,7 @@ a {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  padding: 1.5rem 1rem 3rem;
+  padding: 1.5rem 16px 3rem;
   max-width: 640px;
   margin: 0 auto;
 }
@@ -1460,6 +1460,15 @@ a {
   padding: 1rem 1.1rem;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
   overflow: hidden;
+}
+.onboarding-welcome-card {
+  background: #f5f3ff;
+  border-color: #c4b5fd;
+  box-shadow: 0 1px 3px rgba(124, 58, 237, 0.08);
+}
+.onboarding-welcome-card .onboarding-section-title,
+.onboarding-welcome-card .onboarding-welcome-body {
+  color: #4c1d95;
 }
 .onboarding-section-title {
   font-family: var(--font-heading);
