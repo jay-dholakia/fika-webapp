@@ -288,7 +288,7 @@ export const INTAKE_STEPS: ProfileStep[] = [
   },
   {
     id: 'q_avoid_topics',
-    question: 'Anything you'd rather steer clear of?',
+    question: "Anything you'd rather steer clear of?",
     body: "Select any topics you'd prefer to skip — we won't suggest these as conversation starters.",
     type: 'multi_select',
     required: false,
