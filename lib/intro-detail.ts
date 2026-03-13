@@ -8,6 +8,7 @@ import type { IntakeResponseItem } from './db-types'
 
 export const SAFE_INTAKE_QUESTION_IDS = new Set([
   'q_life_chapter',
+  'q_work',
   'q_curiosity',
   'q_everyday_anchor',
   'q_interests',

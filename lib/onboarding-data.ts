@@ -143,7 +143,6 @@ export const INTAKE_STEPS: ProfileStep[] = [
       'Family',
       'Fitness',
       'School',
-      'Time outdoors',
       'Travel',
       'Caring for someone in my family',
       'Close friendships',
@@ -157,6 +156,14 @@ export const INTAKE_STEPS: ProfileStep[] = [
       'Parenting',
       'Something else',
     ],
+  },
+  {
+    id: 'q_work',
+    question: 'What do you do for work?',
+    body: 'A short phrase is perfect (e.g. “Graphic designer”, “Nurse”, “Software engineer”, “Barista”). If you’re between roles, feel free to share what you’ve been doing most recently.',
+    type: 'text',
+    required: false,
+    placeholder: 'Short description (optional)',
   },
   // Block 2 — Interests: interests → curiosity → recs → free afternoon
   {
