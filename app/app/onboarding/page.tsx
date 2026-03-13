@@ -58,6 +58,13 @@ function parseDate(s: string): string | null {
   return d.toISOString().slice(0, 10)
 }
 
+/** Format ISO date (YYYY-MM-DD) for display as MM/DD/YYYY. */
+function birthdateToDisplay(iso: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso
+  const [, y, m, d] = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/)!
+  return `${m}/${d}/${y}`
+}
+
 function is18Plus(dateStr: string): boolean {
   const d = new Date(dateStr)
   const today = new Date()
@@ -224,10 +231,11 @@ function AppOnboardingContent() {
     const supabase = getSupabase()
     if (!supabase) return
     const loc = answers.location as { city: string; lat: number; lng: number } | undefined
+    const birthdateIso = typeof answers.birthdate === 'string' ? parseDate(answers.birthdate) : null
     const updates: Record<string, unknown> = {
       id: sessionUserId,
       first_name: (typeof answers.first_name === 'string' ? answers.first_name.trim() : '') || ' ',
-      birthdate: answers.birthdate ?? null,
+      birthdate: birthdateIso ?? null,
       gender: (typeof answers.gender === 'string' ? answers.gender : null) ?? null,
       gender_preference: (typeof answers.gender_preference === 'string' ? answers.gender_preference : null) ?? null,
       age_preference: (typeof answers.age_preference === 'string' ? answers.age_preference : null) ?? null,
@@ -564,9 +572,12 @@ function AppOnboardingContent() {
           <input
             id={`onboarding-${step.id}`}
             name={step.id}
-            type="date"
+            type="text"
             className="auth-input"
-            value={(value as string) ?? ''}
+            placeholder={step.placeholder ?? 'MM/DD/YYYY'}
+            value={step.id === 'birthdate' && typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
+              ? birthdateToDisplay(value)
+              : ((value as string) ?? '')}
             onChange={(e) => setAnswers((a) => ({ ...a, [step.id]: e.target.value }))}
             disabled={saving}
             autoComplete={step.id === 'birthdate' ? 'bday' : 'off'}
