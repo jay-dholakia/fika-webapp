@@ -720,6 +720,12 @@ function AppOnboardingContent() {
   return (
     <div className="onboarding-wrap">
       <div className="onboarding-single-page">
+        <section className="onboarding-section onboarding-section-card onboarding-welcome-card" aria-label="Welcome">
+          <h2 className="onboarding-section-title">Welcome to Fika ☕</h2>
+          <p className="onboarding-welcome-body">
+            We&apos;re excited you&apos;re here! Fika helps you meet people nearby for real conversations and connection. Answer a few questions below and we&apos;ll get you set up for your first Fika :)
+          </p>
+        </section>
         <section className="onboarding-section onboarding-section-card">
           <h2 className="onboarding-section-title">About you</h2>
           {PROFILE_STEPS.map(renderField)}
