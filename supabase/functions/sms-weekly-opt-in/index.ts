@@ -39,6 +39,17 @@ serve(async () => {
     )
     const batchWeek = getCurrentBatchWeek()
 
+    const { data: activeMarkets } = await supabase
+      .from('markets')
+      .select('slug')
+      .eq('active', true)
+    const activeSlugs = new Set((activeMarkets ?? []).map((r: { slug: string }) => r.slug).filter(Boolean))
+    if (activeSlugs.size === 0) {
+      return new Response(JSON.stringify({ ok: true, batch_week: batchWeek, sent: 0, reason: 'no_active_markets' }), {
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+
     const { data: optedInUserIds } = await supabase
       .from('weekly_match_opt_ins')
       .select('user_id')
@@ -47,9 +58,11 @@ serve(async () => {
 
     const { data: profiles } = await supabase
       .from('profiles')
-      .select('id, phone')
+      .select('id, phone, market')
       .not('phone', 'is', null)
-    const withPhone = (profiles ?? []).filter((p: { phone: string | null }) => p.phone?.trim())
+    const withPhone = (profiles ?? [])
+      .filter((p: { phone: string | null; market?: string | null }) => p.phone?.trim())
+      .filter((p: { market?: string | null }) => p.market != null && activeSlugs.has(p.market))
 
     let sent = 0
     for (const p of withPhone) {

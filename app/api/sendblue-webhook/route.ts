@@ -66,7 +66,10 @@ import {
   isGreetingKeyword,
   getFikaTimeMs,
   pickVenueForMatch,
+  messageInactiveMarketReply,
 } from '@/lib/sms-agent'
+import { getActiveMarketSlugs } from '@/lib/admin-markets'
+import { getMarketBySlug } from '@/lib/markets'
 import { getTimezoneFromLatLng, getNextMondayPhrase } from '@/lib/sms-day-aware'
 import { sendConcierge, isSendblueConfigured } from '@/lib/sendblue'
 import { getCurrentBatchWeek, isOnboardingComplete, isPastOptInDeadline } from '@/lib/onboarding'
@@ -347,7 +350,7 @@ export async function POST(request: Request) {
   if (!stateRow) {
     const { data: profile } = await supabase
       .from('profiles')
-      .select('id, first_name, birthdate, city, avatar_url, intent_confirmed_at, lat, lng')
+      .select('id, first_name, birthdate, city, avatar_url, intent_confirmed_at, lat, lng, market')
       .eq('id', userId)
       .maybeSingle()
     const { data: intake } = await supabase
@@ -363,6 +366,13 @@ export async function POST(request: Request) {
         : DEFAULT_APP_BASE
       const onboardingUrl = `${appBase}/app/onboarding`
       await sendConcierge(fromNumber, messageOnboardingRequired(onboardingUrl))
+      return NextResponse.json({ ok: true })
+    }
+    const activeSlugs = await getActiveMarketSlugs(supabase)
+    const profileMarket = (profile as { market?: string | null })?.market ?? null
+    if (profileMarket != null && activeSlugs.length > 0 && !activeSlugs.includes(profileMarket)) {
+      const placeLabel = getMarketBySlug(profileMarket)?.label ?? (profile as { city?: string | null })?.city ?? profileMarket
+      await sendConcierge(fromNumber, messageInactiveMarketReply(placeLabel))
       return NextResponse.json({ ok: true })
     }
     // Insert global state row. Only one can exist per (user_id, batch_week) after migration; if we get unique violation, another request already created it — don't send again.
@@ -412,6 +422,18 @@ export async function POST(request: Request) {
 
   // ----- Awaiting opt-in: IN / SKIP (and FIKA / HI to re-send the prompt); post-deadline = no opt-in -----
   if (state === SMS_STATES.AWAITING_OPT_IN) {
+    const activeSlugsForOptIn = await getActiveMarketSlugs(supabase)
+    const { data: profileForMarket } = await supabase
+      .from('profiles')
+      .select('market, city')
+      .eq('id', userId)
+      .maybeSingle()
+    const userMarket = (profileForMarket as { market?: string | null })?.market ?? null
+    if (userMarket != null && activeSlugsForOptIn.length > 0 && !activeSlugsForOptIn.includes(userMarket)) {
+      const placeLabel = getMarketBySlug(userMarket)?.label ?? (profileForMarket as { city?: string | null })?.city ?? userMarket
+      await sendConcierge(fromNumber, messageInactiveMarketReply(placeLabel))
+      return NextResponse.json({ ok: true })
+    }
     if (isPastOptInDeadline(batchWeek)) {
       const { data: profile } = await supabase.from('profiles').select('lat, lng, first_name').eq('id', userId).maybeSingle()
       const nextMondayPhrase = getNextMondayPhrase(getTimezoneFromLatLng(profile?.lat ?? null, profile?.lng ?? null))

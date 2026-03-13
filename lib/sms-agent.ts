@@ -115,7 +115,7 @@ export async function pickVenueForMatch(
  * appBase = site origin (no trailing slash), e.g. https://letsfika.vercel.app — used for portal link at end of msg 3. */
 export function messageEntryFirstTimeMessages(isAfterDeadline: boolean, nextMondayPhrase: string = 'next Monday', appBase: string = 'https://letsfika.vercel.app'): string[] {
   const base = appBase.trim().replace(/\/$/, '') || 'https://letsfika.vercel.app'
-  const msg1 = `You're in. I'm your Fika concierge — once a week I'll ask if you want a Fika, send you one intro, and help you set it up if you both say yes.`
+  const msg1 = `You're in. Once a week I'll ask if you want a Fika, send you one intro, and help you set it up if you both say yes.`
   const msg2AfterDeadline = `This week's window is already closed, so I'll check in ${nextMondayPhrase}. Have a great week!`
   const msg2OnTime = `I'll check in ${nextMondayPhrase} to see if you're up for a Fika this week. Have a great week!`
   const msg2 = isAfterDeadline ? msg2AfterDeadline : msg2OnTime
@@ -138,6 +138,12 @@ export function messageEntryFirstTimeMessagesInactiveMarket(
 /** One-time when a market is turned active: inform user we'll reach out on the Monday cadence (no immediate opt-in). */
 export function messageMarketGoLive(cityLabel: string, nextMondayPhrase: string = 'next Monday'): string {
   return `Fika is live in ${cityLabel}! We'll reach out ${nextMondayPhrase} to ask if you'd like a Fika.`
+}
+
+/** Reply when user in an inactive market texts in (waiting state): friendly, no opt-in. */
+export function messageInactiveMarketReply(placeLabel: string): string {
+  const place = placeLabel?.trim() || 'your city'
+  return `We're still building community in ${place}. We'll text you as soon as we're ready to run intros — no need to do anything.`
 }
 
 export function messageEntry(): string {
