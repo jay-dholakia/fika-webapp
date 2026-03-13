@@ -148,11 +148,9 @@ export function IntroDetailModal({
     ])
       .then(([profile, intakeResponses]) => {
         if (cancelled) return
-        const interestsResp = intakeResponses?.find((r) => r.question_id === 'q_topics')
         log('detail set', {
           hasProfile: !!profile,
           intakeCount: intakeResponses?.length ?? 0,
-          hasInterestsResp: !!interestsResp,
         })
         setDetail({
           profile: profile ?? { birthdate: null, bio_text: null, pronouns: null, avatar_url: null, languages: null },
@@ -180,10 +178,8 @@ export function IntroDetailModal({
   // Log which sections will render when detail is set (dev debugging)
   useEffect(() => {
     if (!detail || loading) return
-    const interestsResp = detail.intakeResponses?.find((r) => r.question_id === 'q_topics')
     console.log('[IntroDetailModal] sections', {
       profile: { avatar: !!detail.profile.avatar_url, languages: !!detail.profile.languages?.length, bio: !!detail.profile.bio_text?.trim() },
-      interests: !!interestsResp?.answer,
     })
   }, [detail, loading])
 
@@ -293,9 +289,8 @@ export function IntroDetailModal({
                 }
                 const book = getAnswer('q_book_recommendation')
                 const movieShow = getAnswer('q_movie_show_recommendation')
-                const place = getAnswer('q_place_recommendation')
                 const roleModel = getAnswer('q_role_model')
-                if (!book && !movieShow && !place && !roleModel) return null
+                if (!book && !movieShow && !roleModel) return null
                 return (
                   <section className="app-intro-detail-section">
                     <h3 className="app-intro-detail-section-title">More about them</h3>
@@ -310,12 +305,6 @@ export function IntroDetailModal({
                         <>
                           <dt>Movie or show they&apos;d recommend</dt>
                           <dd>{movieShow}</dd>
-                        </>
-                      ) : null}
-                      {place ? (
-                        <>
-                          <dt>Place they&apos;d recommend</dt>
-                          <dd>{place}</dd>
                         </>
                       ) : null}
                       {roleModel ? (
@@ -367,26 +356,16 @@ export function IntroDetailModal({
                 )
               })()}
 
-              {(() => {
-                const interestsResp = detail?.intakeResponses?.find((r) => r.question_id === 'q_topics')
-                const interestsText = interestsResp ? formatIntakeAnswer(interestsResp.answer) : null
-                const interestsList = interestsResp && Array.isArray(interestsResp.answer)
-                  ? (interestsResp.answer as string[]).filter(Boolean)
-                  : interestsText
-                    ? interestsText.split(/\s*,\s*/).map((s) => s.trim()).filter(Boolean)
-                    : displayInterests
-                if (!interestsList?.length) return null
-                return (
-                  <section className="app-intro-detail-section">
-                    <h3 className="app-intro-detail-section-title">Interests</h3>
-                    <div className="app-intro-pills">
-                      {interestsList.map((interest, i) => (
-                        <span key={i} className="app-intro-pill">{interest.trim()}</span>
-                      ))}
-                    </div>
-                  </section>
-                )
-              })()}
+              {displayInterests.length > 0 ? (
+                <section className="app-intro-detail-section">
+                  <h3 className="app-intro-detail-section-title">Interests</h3>
+                  <div className="app-intro-pills">
+                    {displayInterests.map((interest, i) => (
+                      <span key={i} className="app-intro-pill">{interest.trim()}</span>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
 
             </>
           )}

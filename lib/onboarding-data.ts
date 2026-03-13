@@ -141,7 +141,6 @@ export const INTAKE_STEPS: ProfileStep[] = [
     type: 'multi_select',
     options: [
       'Work',
-      'Building a business',
       'Side hustles',
       'Job search',
       'School',
@@ -215,8 +214,8 @@ export const INTAKE_STEPS: ProfileStep[] = [
     options: [
       'Take a pottery class',
       'Learn how to paint',
-      'Learn an instrument (e.g. guitar, piano, violin)',
-      'Take a dance class (e.g. salsa, hip hop, ballroom)',
+      'Learn an instrument',
+      'Take a dance class',
       'Take a cooking class',
       'Start learning a new language',
       'Join a storytelling workshop',
@@ -230,8 +229,15 @@ export const INTAKE_STEPS: ProfileStep[] = [
       'Take a human behavior course',
       'Join a public speaking group',
       'Take a course on how to build a business',
-      'Take a class on personal finance or investing',
+      'Take a class on personal finance',
     ],
+  },
+  {
+    id: 'q_movie_show_recommendation',
+    question: "What's a movie or show you'd recommend?",
+    type: 'text',
+    required: false,
+    placeholder: 'Movie or show',
   },
   {
     id: 'q_book_recommendation',
@@ -240,13 +246,6 @@ export const INTAKE_STEPS: ProfileStep[] = [
     type: 'text',
     required: false,
     placeholder: 'Book recommendation',
-  },
-  {
-    id: 'q_movie_show_recommendation',
-    question: "What's a movie or show you'd recommend?",
-    type: 'text',
-    required: false,
-    placeholder: 'Movie or show',
   },
   {
     id: 'q_role_model',
@@ -261,14 +260,6 @@ export const INTAKE_STEPS: ProfileStep[] = [
     type: 'text',
     required: false,
     placeholder: 'Optional',
-  },
-  {
-    id: 'q_place_recommendation',
-    question: "What's one place you'd recommend for someone to visit in your city?",
-    body: 'Café, park, restaurant, hidden spot — whatever comes to mind.',
-    type: 'text',
-    required: false,
-    placeholder: 'Place recommendation',
   },
   {
     id: 'q_what_makes_great_fika',

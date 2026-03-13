@@ -17,7 +17,7 @@ import type { IntakeResponseItem } from '@/lib/db-types'
 import type { ProfileRow } from '@/lib/db-types'
 import type { IntakeResponsesV5Row } from '@/lib/db-types'
 
-const SECTION_2_IDS = ['q_life_chapter', 'q_everyday_anchor', 'q_work', 'q_interests', 'q_curiosity', 'q_book_recommendation', 'q_movie_show_recommendation', 'q_role_model', 'q_role_model_why', 'q_place_recommendation']
+const SECTION_2_IDS = ['q_life_chapter', 'q_everyday_anchor', 'q_work', 'q_interests', 'q_curiosity', 'q_movie_show_recommendation', 'q_book_recommendation', 'q_role_model', 'q_role_model_why']
 const SECTION_3_IDS = ['q_topics', 'q_avoid_topics', 'q_openness', 'gender_preference', 'age_preference', 'q_hoping_for', 'q_what_makes_great_fika', 'q_radius']
 const SECTION_2_STEPS = INTAKE_STEPS.filter((s) => SECTION_2_IDS.includes(s.id))
 const SECTION_3_STEPS = INTAKE_STEPS.filter((s) => SECTION_3_IDS.includes(s.id))
@@ -63,6 +63,26 @@ function birthdateToDisplay(iso: string): string {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso
   const [, y, m, d] = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/)!
   return `${m}/${d}/${y}`
+}
+
+/** Format raw input as MM/DD/YYYY with slashes inserted automatically (digits only, max 8). */
+function formatBirthdateInput(raw: string): string {
+  const digits = raw.replace(/\D/g, '').slice(0, 8)
+  if (digits.length <= 2) return digits
+  if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`
+  return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`
+}
+
+/** If pasted value looks like YYYYMMDD or YYYY-MM-DD, return MM/DD/YYYY; else return formatted digits. */
+function normalizeBirthdatePaste(raw: string): string {
+  const digits = raw.replace(/\D/g, '').slice(0, 8)
+  if (digits.length === 8 && (digits.startsWith('19') || digits.startsWith('20'))) {
+    const yyyy = digits.slice(0, 4)
+    const mm = digits.slice(4, 6)
+    const dd = digits.slice(6, 8)
+    return `${mm}/${dd}/${yyyy}`
+  }
+  return formatBirthdateInput(raw)
 }
 
 function is18Plus(dateStr: string): boolean {
@@ -578,7 +598,10 @@ function AppOnboardingContent() {
             value={step.id === 'birthdate' && typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
               ? birthdateToDisplay(value)
               : ((value as string) ?? '')}
-            onChange={(e) => setAnswers((a) => ({ ...a, [step.id]: e.target.value }))}
+            onChange={(e) => setAnswers((a) => ({
+              ...a,
+              [step.id]: step.id === 'birthdate' ? normalizeBirthdatePaste(e.target.value) : e.target.value,
+            }))}
             disabled={saving}
             autoComplete={step.id === 'birthdate' ? 'bday' : 'off'}
           />
