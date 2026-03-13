@@ -15,7 +15,6 @@ export const SAFE_INTAKE_QUESTION_IDS = new Set([
   'q_book_recommendation',
   'q_movie_show_recommendation',
   'q_place_recommendation',
-  'q_topics',
   'q_avoid_topics',
   'q_role_model',
   'q_role_model_why',
