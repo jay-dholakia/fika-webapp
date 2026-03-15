@@ -4,6 +4,8 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { haversineKm } from '@/lib/distance'
+import { DEFAULT_RADIUS_KM } from '@/lib/intake-radius'
 
 export const SMS_STATES = {
   AWAITING_OPT_IN: 'awaiting_opt_in',
@@ -85,12 +87,72 @@ export async function getUserIdByPhone(
   return data?.id ?? null
 }
 
-/** Pick a venue for a match: first venue in same city as both users, or first by id. */
+/** User location and travel willingness for venue selection. */
+export type UserLocation = {
+  city?: string | null
+  lat?: number | null
+  lng?: number | null
+  /** Max distance (km) user is willing to travel to venue; from intake q_radius. Uses default if omitted. */
+  radius_km?: number | null
+}
+
+function hasValidLatLng(u: UserLocation): boolean {
+  const lat = u.lat != null ? Number(u.lat) : NaN
+  const lng = u.lng != null ? Number(u.lng) : NaN
+  return Number.isFinite(lat) && Number.isFinite(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180
+}
+
+/**
+ * Pick a venue for a match using lat/lng when both users have coordinates:
+ * only considers venues within each user's willing-to-travel radius (from intake q_radius),
+ * then chooses the venue that minimizes the maximum distance to either user (fair to both).
+ * Falls back to city-based selection when lat/lng are missing.
+ */
 export async function pickVenueForMatch(
   supabase: SupabaseClient,
-  userACity: string | null,
-  userBCity: string | null
+  userA: UserLocation,
+  userB: UserLocation
 ): Promise<{ id: string; name: string; neighborhood: string | null; city: string } | null> {
+  const userACity = userA.city ?? null
+  const userBCity = userB.city ?? null
+  const maxDistA = userA.radius_km != null && Number.isFinite(Number(userA.radius_km)) ? Number(userA.radius_km) : DEFAULT_RADIUS_KM
+  const maxDistB = userB.radius_km != null && Number.isFinite(Number(userB.radius_km)) ? Number(userB.radius_km) : DEFAULT_RADIUS_KM
+
+  if (hasValidLatLng(userA) && hasValidLatLng(userB)) {
+    const latA = Number(userA.lat)
+    const lngA = Number(userA.lng)
+    const latB = Number(userB.lat)
+    const lngB = Number(userB.lng)
+
+    const { data: venues } = await supabase
+      .from('venues')
+      .select('id, name, neighborhood, city, lat, lng')
+      .not('lat', 'is', null)
+      .not('lng', 'is', null)
+
+    if (venues?.length) {
+      type VenueRow = { id: string; name: string; neighborhood: string | null; city: string; lat: number; lng: number }
+      const withScores = (venues as VenueRow[])
+        .map((v) => {
+          const latV = typeof v.lat === 'number' ? v.lat : Number(v.lat)
+          const lngV = typeof v.lng === 'number' ? v.lng : Number(v.lng)
+          if (!Number.isFinite(latV) || !Number.isFinite(lngV)) return null
+          const distA = haversineKm(latA, lngA, latV, lngV)
+          const distB = haversineKm(latB, lngB, latV, lngV)
+          if (distA > maxDistA || distB > maxDistB) return null
+          const maxDist = Math.max(distA, distB)
+          return { venue: v, maxDist }
+        })
+        .filter((x): x is { venue: VenueRow; maxDist: number } => x != null)
+        .sort((a, b) => a.maxDist - b.maxDist)
+
+      if (withScores.length > 0) {
+        const { venue } = withScores[0]
+        return { id: venue.id, name: venue.name, neighborhood: venue.neighborhood, city: venue.city }
+      }
+    }
+  }
+
   const city = userACity || userBCity || 'Los Angeles'
   const { data } = await supabase
     .from('venues')

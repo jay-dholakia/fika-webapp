@@ -72,6 +72,7 @@ import { getActiveMarketSlugs } from '@/lib/admin-markets'
 import { getMarketBySlug } from '@/lib/markets'
 import { getTimezoneFromLatLng, getNextMondayPhrase } from '@/lib/sms-day-aware'
 import { sendConcierge, isSendblueConfigured } from '@/lib/sendblue'
+import { getIntakeRadiusKm } from '@/lib/intake-radius'
 import { getCurrentBatchWeek, isOnboardingComplete, isPastOptInDeadline } from '@/lib/onboarding'
 import type { ProfileRow, IntakeResponsesV5Row } from '@/lib/db-types'
 import {
@@ -589,9 +590,15 @@ export async function POST(request: Request) {
           await sendConciergeAndLog(fromNumber, "We couldn't find a time that works for both. We'll try again next week.", 'no_overlap', { userId, batchWeek, matchId })
           return NextResponse.json({ ok: true })
         }
-        const { data: userA } = await supabase.from('profiles').select('city').eq('id', match.user_a).single()
-        const { data: userB } = await supabase.from('profiles').select('city').eq('id', match.user_b).single()
-        const venue = await pickVenueForMatch(supabase, userA?.city ?? null, userB?.city ?? null)
+        const { data: userA } = await supabase.from('profiles').select('city, lat, lng').eq('id', match.user_a).single()
+        const { data: userB } = await supabase.from('profiles').select('city, lat, lng').eq('id', match.user_b).single()
+        const [intakeA, intakeB] = await Promise.all([
+          supabase.from('intake_responses_v5').select('responses').eq('user_id', match.user_a).maybeSingle(),
+          supabase.from('intake_responses_v5').select('responses').eq('user_id', match.user_b).maybeSingle(),
+        ])
+        const radiusA = getIntakeRadiusKm(intakeA?.data?.responses ?? null)
+        const radiusB = getIntakeRadiusKm(intakeB?.data?.responses ?? null)
+        const venue = await pickVenueForMatch(supabase, { city: userA?.city ?? null, lat: userA?.lat ?? null, lng: userA?.lng ?? null, radius_km: radiusA }, { city: userB?.city ?? null, lat: userB?.lat ?? null, lng: userB?.lng ?? null, radius_km: radiusB })
         if (!venue) {
           await sendConciergeAndLog(fromNumber, "We're setting up a spot — we'll text you in a moment.", 'venue_setup', { userId, batchWeek, matchId })
           return NextResponse.json({ ok: true })
@@ -714,9 +721,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true })
     }
 
-    const { data: userA } = await supabase.from('profiles').select('city').eq('id', matchRow!.user_a).single()
-    const { data: userB } = await supabase.from('profiles').select('city').eq('id', matchRow!.user_b).single()
-    const venue = await pickVenueForMatch(supabase, userA?.city ?? null, userB?.city ?? null)
+    const { data: userA } = await supabase.from('profiles').select('city, lat, lng').eq('id', matchRow!.user_a).single()
+    const { data: userB } = await supabase.from('profiles').select('city, lat, lng').eq('id', matchRow!.user_b).single()
+    const [intakeA, intakeB] = await Promise.all([
+      supabase.from('intake_responses_v5').select('responses').eq('user_id', matchRow!.user_a).maybeSingle(),
+      supabase.from('intake_responses_v5').select('responses').eq('user_id', matchRow!.user_b).maybeSingle(),
+    ])
+    const radiusA = getIntakeRadiusKm(intakeA?.data?.responses ?? null)
+    const radiusB = getIntakeRadiusKm(intakeB?.data?.responses ?? null)
+    const venue = await pickVenueForMatch(supabase, { city: userA?.city ?? null, lat: userA?.lat ?? null, lng: userA?.lng ?? null, radius_km: radiusA }, { city: userB?.city ?? null, lat: userB?.lat ?? null, lng: userB?.lng ?? null, radius_km: radiusB })
     if (!venue) {
       await cancelMatch()
       return NextResponse.json({ ok: true })
@@ -890,9 +903,15 @@ export async function POST(request: Request) {
         if (dw?.window === window) { chosenSlot = id; break }
         chosenSlot = id
       }
-      const { data: userA } = await supabase.from('profiles').select('city').eq('id', match!.user_a).single()
-      const { data: userB } = await supabase.from('profiles').select('city').eq('id', match!.user_b).single()
-      const venue = await pickVenueForMatch(supabase, userA?.city ?? null, userB?.city ?? null)
+      const { data: userA } = await supabase.from('profiles').select('city, lat, lng').eq('id', match!.user_a).single()
+      const { data: userB } = await supabase.from('profiles').select('city, lat, lng').eq('id', match!.user_b).single()
+      const [intakeA, intakeB] = await Promise.all([
+        supabase.from('intake_responses_v5').select('responses').eq('user_id', match!.user_a).maybeSingle(),
+        supabase.from('intake_responses_v5').select('responses').eq('user_id', match!.user_b).maybeSingle(),
+      ])
+      const radiusA = getIntakeRadiusKm(intakeA?.data?.responses ?? null)
+      const radiusB = getIntakeRadiusKm(intakeB?.data?.responses ?? null)
+      const venue = await pickVenueForMatch(supabase, { city: userA?.city ?? null, lat: userA?.lat ?? null, lng: userA?.lng ?? null, radius_km: radiusA }, { city: userB?.city ?? null, lat: userB?.lat ?? null, lng: userB?.lng ?? null, radius_km: radiusB })
       const timeStr = chosenSlot ? (slotIdToDayAndWindow(chosenSlot) ? '7pm' : '2pm') : '7pm'
       if (venue) {
         await supabase.from('match_candidates').update({
