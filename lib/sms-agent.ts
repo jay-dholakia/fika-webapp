@@ -110,9 +110,9 @@ export async function pickVenueForMatch(
 // ---------- Message templates ----------
 // Cadence: Monday opt-in → Tuesday morning intros run (deadline) → Wed–Sun meet.
 
-/** One-line hint so users can save the concierge number as "Fika ☕" in their contacts. */
+/** One-line hint so users save the concierge number and don't miss intros. */
 export function messageSaveAsContactHint(): string {
-  return 'Save this number as "Fika ☕" to add us to your contacts.'
+  return 'Save this number as Fika ☕ so you never miss an intro.'
 }
 
 /** First-time "you're all set" sequence: intro concierge + cadence. Returns 3 messages to send in order.
@@ -120,9 +120,9 @@ export function messageSaveAsContactHint(): string {
  * appBase = site origin (no trailing slash), e.g. https://letsfika.vercel.app — used for portal link at end of msg 3. */
 export function messageEntryFirstTimeMessages(isAfterDeadline: boolean, nextMondayPhrase: string = 'next Monday', appBase: string = 'https://letsfika.vercel.app'): string[] {
   const base = appBase.trim().replace(/\/$/, '') || 'https://letsfika.vercel.app'
-  const msg1 = `You're in. Once a week I'll ask if you want a Fika, send you one intro, and help you set it up if you both say yes.\n\n${messageSaveAsContactHint()}`
-  const msg2AfterDeadline = `This week's window is already closed, so I'll check in ${nextMondayPhrase}. Have a great week!`
-  const msg2OnTime = `I'll check in ${nextMondayPhrase} to see if you're up for a Fika this week. Have a great week!`
+  const msg1 = `You're in. Once a week I'll ask if you want a Fika, send you one intro, and help you set it up if you both say yes.`
+  const msg2AfterDeadline = `This week's window is already closed, so I'll check in ${nextMondayPhrase}. Have a great week!\n\n${messageSaveAsContactHint()}`
+  const msg2OnTime = `I'll check in ${nextMondayPhrase} to see if you're up for a Fika this week. Have a great week!\n\n${messageSaveAsContactHint()}`
   const msg2 = isAfterDeadline ? msg2AfterDeadline : msg2OnTime
   const msg3 = `To learn more or edit your profile: ${base}/app`
   return [msg1, msg2, msg3]
@@ -135,8 +135,8 @@ export function messageEntryFirstTimeMessagesInactiveMarket(
 ): string[] {
   const base = appBase.trim().replace(/\/$/, '') || 'https://letsfika.vercel.app'
   const place = cityLabel?.trim() || 'your city'
-  const msg1 = `You're in. We're currently building community for ${place} — we'll reach back out when we're ready to run our first Fika intros.\n\n${messageSaveAsContactHint()}`
-  const msg2 = `In the meantime, learn more or edit your profile on the Fika web portal: ${base}/app`
+  const msg1 = `You're in. We're currently building community for ${place} — we'll reach back out when we're ready to run our first Fika intros.`
+  const msg2 = `In the meantime, learn more or edit your profile on the Fika web portal: ${base}/app\n\n${messageSaveAsContactHint()}`
   return [msg1, msg2]
 }
 

@@ -74,7 +74,6 @@ import { getTimezoneFromLatLng, getNextMondayPhrase } from '@/lib/sms-day-aware'
 import { sendConcierge, isSendblueConfigured } from '@/lib/sendblue'
 import { getCurrentBatchWeek, isOnboardingComplete, isPastOptInDeadline } from '@/lib/onboarding'
 import type { ProfileRow, IntakeResponsesV5Row } from '@/lib/db-types'
-import { messageSaveAsContactHint } from '@/lib/sms-agent'
 import {
   messageSmsSignupLinkSent,
   messageSmsSignupLinkAlreadySent,
@@ -203,7 +202,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true })
     }
     const link = `${appBase}/signup?token=${token}`
-    await sendConcierge(fromNumber, messageSmsSignupLinkSent(link) + '\n\n' + messageSaveAsContactHint())
+    await sendConcierge(fromNumber, messageSmsSignupLinkSent(link))
     return NextResponse.json({ ok: true })
   }
 
