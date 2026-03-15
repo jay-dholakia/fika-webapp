@@ -29,9 +29,16 @@ export function getQuestionText(questionId: string): string {
   return questionById.get(questionId) ?? questionId
 }
 
+/** Sentinel for optional intake questions the user skipped (stored so they don't show as "missing"). */
+export const INTAKE_ANSWER_SKIPPED = 'N/A'
+
 export function formatIntakeAnswer(answer: string | number | string[]): string {
   if (answer == null) return ''
-  if (Array.isArray(answer)) return answer.filter(Boolean).join(', ')
+  if (answer === INTAKE_ANSWER_SKIPPED) return ''
+  if (Array.isArray(answer)) {
+    const filtered = answer.filter((v) => v != null && v !== INTAKE_ANSWER_SKIPPED && v !== '')
+    return filtered.join(', ')
+  }
   return String(answer)
 }
 
