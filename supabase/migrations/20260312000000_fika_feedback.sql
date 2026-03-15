@@ -22,6 +22,7 @@ comment on column public.fika_feedback.content is 'The message they sent.';
 -- RLS: service role only for now (webhook/cron); no direct user access.
 alter table public.fika_feedback enable row level security;
 
+drop policy if exists "Service role can do anything on fika_feedback" on public.fika_feedback;
 create policy "Service role can do anything on fika_feedback"
   on public.fika_feedback
   for all

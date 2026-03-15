@@ -78,6 +78,7 @@ import {
   messageSmsSignupLinkSent,
   messageSmsSignupLinkAlreadySent,
 } from '@/lib/sms-signup'
+import { insertMessageLedger } from '@/lib/message-ledger'
 
 const CONCIERGE = (process.env.SENDBLUE_CONCIERGE_NUMBER || '').replace(/\D/g, '')
 
@@ -158,6 +159,26 @@ export async function POST(request: Request) {
   )
   const fromPhone = normalizeIncomingPhone(fromNumber)
 
+  async function sendConciergeAndLog(
+    toPhone: string,
+    content: string,
+    context: string,
+    opts?: { userId?: string | null; batchWeek?: string; matchId?: string }
+  ) {
+    const result = await sendConcierge(toPhone, content)
+    await insertMessageLedger(supabase, {
+      user_id: opts?.userId ?? null,
+      direction: 'outbound',
+      peer_phone: toPhone,
+      content_snippet: content,
+      context,
+      message_handle: result.message_handle ?? null,
+      batch_week: opts?.batchWeek ?? null,
+      match_id: opts?.matchId ?? null,
+    })
+    return result
+  }
+
   const isConcierge = isConciergeNumber(toNumber)
   console.log('[sendblue-webhook] route', { isConcierge, toNumber: toNumber ? 'set' : 'empty' })
 
@@ -168,6 +189,12 @@ export async function POST(request: Request) {
 
   const userId = await getUserIdByPhone(supabase, fromPhone)
   console.log('[sendblue-webhook] user lookup', { fromLast4, userId: userId ? 'found' : 'not_found' })
+  await insertMessageLedger(supabase, {
+    user_id: userId ?? null,
+    direction: 'inbound',
+    peer_phone: fromPhone,
+    content_snippet: content,
+  })
   if (!userId) {
     // ----- Phone-first: unknown number → send link to profile builder; they finalize with Google -----
     // Use hardcoded production URL so the link is never the deployment/preview URL.
@@ -186,7 +213,7 @@ export async function POST(request: Request) {
       .maybeSingle()
     if (existing?.token) {
       const link = `${appBase}/signup?token=${existing.token}`
-      await sendConcierge(fromNumber, messageSmsSignupLinkAlreadySent(link))
+      await sendConciergeAndLog(fromNumber, messageSmsSignupLinkAlreadySent(link), 'signup_link_already_sent')
       return NextResponse.json({ ok: true })
     }
     const token = crypto.randomUUID()
@@ -198,11 +225,11 @@ export async function POST(request: Request) {
     })
     if (insertErr) {
       console.error('[sendblue-webhook] onboarding_sessions insert', insertErr.message)
-      await sendConcierge(fromNumber, "Something went wrong. Try again or sign up at letsfika.co")
+      await sendConciergeAndLog(fromNumber, "Something went wrong. Try again or sign up at letsfika.co", 'signup_error')
       return NextResponse.json({ ok: true })
     }
     const link = `${appBase}/signup?token=${token}`
-    await sendConcierge(fromNumber, messageSmsSignupLinkSent(link))
+    await sendConciergeAndLog(fromNumber, messageSmsSignupLinkSent(link), 'signup_link_sent')
     return NextResponse.json({ ok: true })
   }
 
@@ -214,12 +241,12 @@ export async function POST(request: Request) {
     .maybeSingle()
   if (isStopKeyword(content)) {
     await supabase.from('profiles').update({ sms_opted_out_at: new Date().toISOString() }).eq('id', userId)
-    await sendConcierge(fromNumber, messageSmsOptOut(getAppBase(), formatConciergeNumber(CONCIERGE)))
+    await sendConciergeAndLog(fromNumber, messageSmsOptOut(getAppBase(), formatConciergeNumber(CONCIERGE)), 'opt_out', { userId })
     return NextResponse.json({ ok: true })
   }
   if (profileForSms?.sms_opted_out_at) {
     await supabase.from('profiles').update({ sms_opted_out_at: null }).eq('id', userId)
-    await sendConcierge(fromNumber, messageSmsOptBackIn())
+    await sendConciergeAndLog(fromNumber, messageSmsOptBackIn(), 'opt_back_in', { userId })
     return NextResponse.json({ ok: true })
   }
 
@@ -251,7 +278,7 @@ export async function POST(request: Request) {
       content,
     })
     if (!insertErr) {
-      await sendConcierge(fromNumber, isRepeat ? messageThanksForFeedbackAgain() : messageThanksForFeedback())
+      await sendConciergeAndLog(fromNumber, isRepeat ? messageThanksForFeedbackAgain() : messageThanksForFeedback(), 'feedback_thanks', { userId })
     }
     return NextResponse.json({ ok: true })
   }
@@ -270,7 +297,7 @@ export async function POST(request: Request) {
   )
   if (todayMatch) {
     if (isFikaTimeInPast(todayMatch.batch_week, todayMatch.confirmed_slot_id)) {
-      await sendConcierge(fromNumber, messageFikaInPast())
+      await sendConciergeAndLog(fromNumber, messageFikaInPast(), 'relay_fika_in_past', { userId })
       return NextResponse.json({ ok: true })
     }
     const otherId = todayMatch.user_a === userId ? todayMatch.user_b : todayMatch.user_a
@@ -290,13 +317,13 @@ export async function POST(request: Request) {
     if (intent) {
       const otherPhone = otherProfile?.phone?.trim()
       if (otherPhone) {
-        await sendConcierge(otherPhone, messageRelayToOther(senderFirstName, intent))
-        await sendConcierge(fromNumber, messageRelayConfirmToSender(otherFirstName, intent))
+        await sendConciergeAndLog(otherPhone, messageRelayToOther(senderFirstName, intent), 'relay_to_other', { userId: otherId, matchId: todayMatch.id })
+        await sendConciergeAndLog(fromNumber, messageRelayConfirmToSender(otherFirstName, intent), 'relay_confirm_sender', { userId })
       } else {
-        await sendConcierge(fromNumber, messageRelayCouldNotDeliver())
+        await sendConciergeAndLog(fromNumber, messageRelayCouldNotDeliver(), 'relay_could_not_deliver', { userId })
       }
     } else {
-      await sendConcierge(fromNumber, messageRelayHint())
+      await sendConciergeAndLog(fromNumber, messageRelayHint(), 'relay_hint', { userId })
     }
     return NextResponse.json({ ok: true })
   }
@@ -316,11 +343,11 @@ export async function POST(request: Request) {
   })
   if (upcomingMatch) {
     if (isRescheduleKeyword(content)) {
-      await sendConcierge(fromNumber, messageRescheduleAck())
+      await sendConciergeAndLog(fromNumber, messageRescheduleAck(), 'reschedule_ack', { userId })
       return NextResponse.json({ ok: true })
     }
     if (isCancelKeyword(content)) {
-      await sendConcierge(fromNumber, messageCancelAck())
+      await sendConciergeAndLog(fromNumber, messageCancelAck(), 'cancel_ack', { userId })
       return NextResponse.json({ ok: true })
     }
     const { data: venue } = await supabase
@@ -331,7 +358,7 @@ export async function POST(request: Request) {
     const { day, time } = slotIdToDisplayTime(upcomingMatch.confirmed_slot_id)
     const venueName = venue?.name ?? 'the spot'
     const neighborhood = venue?.neighborhood ?? venue?.city ?? ''
-    await sendConcierge(fromNumber, messageConfirmedUpcoming(day, time, venueName, neighborhood, getAppBase()))
+    await sendConciergeAndLog(fromNumber, messageConfirmedUpcoming(day, time, venueName, neighborhood, getAppBase()), 'confirmed_upcoming', { userId })
     return NextResponse.json({ ok: true })
   }
 
@@ -365,14 +392,14 @@ export async function POST(request: Request) {
         ? process.env.APP_CANONICAL_URL!.trim().replace(/\/$/, '')
         : DEFAULT_APP_BASE
       const onboardingUrl = `${appBase}/app/onboarding`
-      await sendConcierge(fromNumber, messageOnboardingRequired(onboardingUrl))
+      await sendConciergeAndLog(fromNumber, messageOnboardingRequired(onboardingUrl), 'onboarding_required', { userId })
       return NextResponse.json({ ok: true })
     }
     const activeSlugs = await getActiveMarketSlugs(supabase)
     const profileMarket = (profile as { market?: string | null })?.market ?? null
     if (profileMarket != null && activeSlugs.length > 0 && !activeSlugs.includes(profileMarket)) {
       const placeLabel = getMarketBySlug(profileMarket)?.label ?? (profile as { city?: string | null })?.city ?? profileMarket
-      await sendConcierge(fromNumber, messageInactiveMarketReply(placeLabel))
+      await sendConciergeAndLog(fromNumber, messageInactiveMarketReply(placeLabel), 'inactive_market_reply', { userId })
       return NextResponse.json({ ok: true })
     }
     // Insert global state row. Only one can exist per (user_id, batch_week) after migration; if we get unique violation, another request already created it — don't send again.
@@ -400,7 +427,7 @@ export async function POST(request: Request) {
     const nextMondayPhrase = getNextMondayPhrase(getTimezoneFromLatLng(profile?.lat ?? null, profile?.lng ?? null))
     const isGreeting = isGreetingKeyword(content)
     const entryMsg = isPastOptInDeadline(batchWeek) ? messageEntryAfterDeadline(nextMondayPhrase, { firstName: profile?.first_name ?? null, isGreeting }) : messageEntry()
-    const entryResult = await sendConcierge(fromNumber, entryMsg)
+    const entryResult = await sendConciergeAndLog(fromNumber, entryMsg, 'first_contact_entry', { userId, batchWeek })
     console.log('[sendblue-webhook] sendConcierge result', { ok: entryResult.ok, error: entryResult.error, message_handle: entryResult.message_handle })
     if (entryResult.message_handle) {
       await supabase.from('sms_conversation_states').update({
@@ -431,14 +458,14 @@ export async function POST(request: Request) {
     const userMarket = (profileForMarket as { market?: string | null })?.market ?? null
     if (userMarket != null && activeSlugsForOptIn.length > 0 && !activeSlugsForOptIn.includes(userMarket)) {
       const placeLabel = getMarketBySlug(userMarket)?.label ?? (profileForMarket as { city?: string | null })?.city ?? userMarket
-      await sendConcierge(fromNumber, messageInactiveMarketReply(placeLabel))
+      await sendConciergeAndLog(fromNumber, messageInactiveMarketReply(placeLabel), 'inactive_market_reply', { userId })
       return NextResponse.json({ ok: true })
     }
     if (isPastOptInDeadline(batchWeek)) {
       const { data: profile } = await supabase.from('profiles').select('lat, lng, first_name').eq('id', userId).maybeSingle()
       const nextMondayPhrase = getNextMondayPhrase(getTimezoneFromLatLng(profile?.lat ?? null, profile?.lng ?? null))
       const isGreeting = isGreetingKeyword(content)
-      await sendConcierge(fromNumber, messageEntryAfterDeadline(nextMondayPhrase, { firstName: profile?.first_name ?? null, isGreeting }))
+      await sendConciergeAndLog(fromNumber, messageEntryAfterDeadline(nextMondayPhrase, { firstName: profile?.first_name ?? null, isGreeting }), 'entry_after_deadline', { userId, batchWeek })
       return NextResponse.json({ ok: true })
     }
     if (isOptInKeyword(content) || keyword === 'IN' || keyword === 'YES') {
@@ -458,7 +485,7 @@ export async function POST(request: Request) {
         ? process.env.APP_CANONICAL_URL!.trim().replace(/\/$/, '')
         : DEFAULT_APP_BASE
       const availabilityUrl = `${appBase}/app/availability`
-      await sendConcierge(fromNumber, messageOptInSetAvailability(availabilityUrl))
+      await sendConciergeAndLog(fromNumber, messageOptInSetAvailability(availabilityUrl), 'opt_in_set_availability', { userId, batchWeek })
     } else if (isSkipKeyword(content) || keyword === 'SKIP') {
       await supabase.rpc('upsert_global_sms_conversation_state', {
         p_user_id: userId,
@@ -467,12 +494,12 @@ export async function POST(request: Request) {
         p_payload: { skipped: true },
         p_last_sendblue_message_handle: messageHandle,
       })
-      await sendConcierge(fromNumber, messageSkipped())
+      await sendConciergeAndLog(fromNumber, messageSkipped(), 'skipped', { userId, batchWeek })
     } else if (keyword === 'FIKA' || keyword === 'HI') {
       // Short reminder only — don't re-send the full intro
-      await sendConcierge(fromNumber, messageEntryReminder())
+      await sendConciergeAndLog(fromNumber, messageEntryReminder(), 'entry_reminder', { userId, batchWeek })
     } else {
-      await sendConcierge(fromNumber, getFallbackForState(SMS_STATES.AWAITING_OPT_IN))
+      await sendConciergeAndLog(fromNumber, getFallbackForState(SMS_STATES.AWAITING_OPT_IN), 'fallback_awaiting_opt_in', { userId, batchWeek })
     }
     return NextResponse.json({ ok: true })
   }
@@ -495,14 +522,14 @@ export async function POST(request: Request) {
 
   // ----- HELP: state-aware fallback -----
   if (isHelpKeyword(content)) {
-    await sendConcierge(fromNumber, getFallbackForState(matchState ?? state))
+    await sendConciergeAndLog(fromNumber, getFallbackForState(matchState ?? state), 'help_fallback', { userId, batchWeek, matchId: matchId ?? undefined })
     return NextResponse.json({ ok: true })
   }
 
   // ----- Opted in: re-send availability link on request -----
   if (state === SMS_STATES.OPTED_IN && isResendLinkKeyword(content)) {
     const availabilityUrl = `${getAppBase()}/app/availability`
-    await sendConcierge(fromNumber, messageOptInSetAvailability(availabilityUrl))
+    await sendConciergeAndLog(fromNumber, messageOptInSetAvailability(availabilityUrl), 'opt_in_resend_link', { userId, batchWeek })
     return NextResponse.json({ ok: true })
   }
 
@@ -515,7 +542,7 @@ export async function POST(request: Request) {
         .neq('user_id', userId)
         .maybeSingle()
       if (otherOpt?.decision === 'no') {
-        await sendConcierge(fromNumber, messageMatchPassed())
+        await sendConciergeAndLog(fromNumber, messageMatchPassed(), 'match_passed', { userId, batchWeek, matchId })
         await supabase.from('sms_conversation_states').delete().eq('id', matchStateRow!.id)
         return NextResponse.json({ ok: true })
       }
@@ -529,7 +556,7 @@ export async function POST(request: Request) {
         .eq('id', matchId)
         .single()
       if (!match) {
-        await sendConcierge(fromNumber, "That match is no longer available. We'll send you another soon.")
+        await sendConciergeAndLog(fromNumber, "That match is no longer available. We'll send you another soon.", 'match_no_longer_available', { userId, batchWeek, matchId })
         return NextResponse.json({ ok: true })
       }
       const { data: yesOpts } = await supabase
@@ -540,7 +567,7 @@ export async function POST(request: Request) {
         .order('answered_at', { ascending: true })
       const yesUsers = yesOpts ?? []
       if (yesUsers.length === 1) {
-        await sendConcierge(fromNumber, messageYesWaitingForOther())
+        await sendConciergeAndLog(fromNumber, messageYesWaitingForOther(), 'yes_waiting_for_other', { userId, batchWeek, matchId })
         await supabase.from('sms_conversation_states').upsert(
           {
             user_id: userId,
@@ -559,14 +586,14 @@ export async function POST(request: Request) {
         const wedSun = overlapping.filter((id: string) => /^(wed|thu|fri|sat|sun)_/.test(id))
         const slotId = (match.default_slot_id as string) ?? wedSun[0]
         if (!slotId) {
-          await sendConcierge(fromNumber, "We couldn't find a time that works for both. We'll try again next week.")
+          await sendConciergeAndLog(fromNumber, "We couldn't find a time that works for both. We'll try again next week.", 'no_overlap', { userId, batchWeek, matchId })
           return NextResponse.json({ ok: true })
         }
         const { data: userA } = await supabase.from('profiles').select('city').eq('id', match.user_a).single()
         const { data: userB } = await supabase.from('profiles').select('city').eq('id', match.user_b).single()
         const venue = await pickVenueForMatch(supabase, userA?.city ?? null, userB?.city ?? null)
         if (!venue) {
-          await sendConcierge(fromNumber, "We're setting up a spot — we'll text you in a moment.")
+          await sendConciergeAndLog(fromNumber, "We're setting up a spot — we'll text you in a moment.", 'venue_setup', { userId, batchWeek, matchId })
           return NextResponse.json({ ok: true })
         }
         const { day: proposedDay, time: proposedTime } = slotIdToDisplayTime(slotId)
@@ -576,13 +603,13 @@ export async function POST(request: Request) {
           .eq('id', firstYesUserId)
           .single()
         const otherName = otherProfile?.first_name?.trim() ?? 'Your match'
-        await sendConcierge(fromNumber, messageProposalToConfirm({
+        await sendConciergeAndLog(fromNumber, messageProposalToConfirm({
           otherFirstName: otherName,
           day: proposedDay,
           time: proposedTime,
           venueName: venue.name,
           neighborhood: venue.neighborhood ?? venue.city,
-        }))
+        }), 'proposal_to_confirm', { userId, batchWeek, matchId })
         await supabase.from('match_candidates').update({
           suggested_venue_id: venue.id,
           default_slot_id: slotId,
@@ -614,7 +641,7 @@ export async function POST(request: Request) {
         { match_id: matchId, user_id: userId, decision: 'no' },
         { onConflict: 'match_id,user_id' }
       )
-      await sendConcierge(fromNumber, messagePassConfirmation())
+      await sendConciergeAndLog(fromNumber, messagePassConfirmation(), 'pass_confirmation', { userId, batchWeek, matchId })
       const { data: matchRow } = await supabase.from('match_candidates').select('user_a, user_b').eq('id', matchId).single()
       const otherId = matchRow ? (matchRow.user_a === userId ? matchRow.user_b : matchRow.user_a) : null
       if (matchRow?.user_a != null && matchRow?.user_b != null) {
@@ -630,14 +657,14 @@ export async function POST(request: Request) {
         if (otherOpt?.decision === 'yes') {
           const { data: otherProf } = await supabase.from('profiles').select('phone').eq('id', otherId).maybeSingle()
           if (otherProf?.phone) {
-            await sendConcierge(otherProf.phone, messageMatchPassed())
+            await sendConciergeAndLog(otherProf.phone, messageMatchPassed(), 'match_passed_to_other', { userId: otherId, batchWeek, matchId })
           }
         }
         await supabase.from('sms_conversation_states').delete().eq('user_id', otherId).eq('batch_week', batchWeek).eq('match_id', matchId)
       }
       await supabase.from('sms_conversation_states').delete().eq('id', matchStateRow!.id)
     } else {
-      await sendConcierge(fromNumber, getFallbackForState(SMS_STATES.MATCH_OFFERED))
+      await sendConciergeAndLog(fromNumber, getFallbackForState(SMS_STATES.MATCH_OFFERED), 'fallback_match_offered', { userId, batchWeek, matchId })
     }
     return NextResponse.json({ ok: true })
   }
@@ -661,11 +688,11 @@ export async function POST(request: Request) {
         scheduling_status: 'expired',
         updated_at: new Date().toISOString(),
       }).eq('id', matchId)
-      await sendConcierge(fromNumber, messageProposalMaxRetries())
+      await sendConciergeAndLog(fromNumber, messageProposalMaxRetries(), 'proposal_max_retries', { userId, batchWeek, matchId })
       if (otherId) {
         const { data: otherProf } = await supabase.from('profiles').select('phone').eq('id', otherId).maybeSingle()
         if (otherProf?.phone) {
-          await sendConcierge(otherProf.phone, messageProposalMaxRetries())
+          await sendConciergeAndLog(otherProf.phone, messageProposalMaxRetries(), 'proposal_max_retries_to_other', { userId: otherId, batchWeek, matchId })
         }
         await supabase.from('sms_conversation_states').delete().eq('user_id', otherId).eq('batch_week', batchWeek).eq('match_id', matchId)
       }
@@ -712,21 +739,21 @@ export async function POST(request: Request) {
       proposal_attempt: 2,
     }
 
-    await sendConcierge(fromNumber, messageReProposalToDecliner({
+    await sendConciergeAndLog(fromNumber, messageReProposalToDecliner({
       day: newDay,
       time: newTime,
       venueName: venue.name,
       neighborhood: venue.neighborhood ?? venue.city,
-    }))
+    }), 'reproposal_to_decliner', { userId, batchWeek, matchId })
     if (otherId) {
       const { data: otherProf } = await supabase.from('profiles').select('phone').eq('id', otherId).maybeSingle()
       if (otherProf?.phone) {
-        await sendConcierge(otherProf.phone, messageReProposalToOther({
+        await sendConciergeAndLog(otherProf.phone, messageReProposalToOther({
           day: newDay,
           time: newTime,
           venueName: venue.name,
           neighborhood: venue.neighborhood ?? venue.city,
-        }))
+        }), 'reproposal_to_other', { userId: otherId, batchWeek, matchId })
       }
       await supabase.from('sms_conversation_states').upsert(
         {
@@ -763,13 +790,13 @@ export async function POST(request: Request) {
     const { data: otherProfile } = await supabase.from('profiles').select('phone, first_name').eq('id', otherId).maybeSingle()
     const currentName = (await supabase.from('profiles').select('first_name').eq('id', userId).single()).data?.first_name?.trim() ?? 'Your match'
     if (otherProfile?.phone) {
-      await sendConcierge(otherProfile.phone, messageProposalToConfirm({
+      await sendConciergeAndLog(otherProfile.phone, messageProposalToConfirm({
         otherFirstName: currentName,
         day: proposedDay,
         time: proposedTime,
         venueName,
         neighborhood,
-      }))
+      }), 'proposal_to_confirm_other', { userId: otherId, batchWeek, matchId })
     }
     await supabase.from('match_candidates').update({
       suggested_venue_id: proposedVenueId,
@@ -820,11 +847,11 @@ export async function POST(request: Request) {
       state: SMS_STATES.CONFIRMED,
       updated_at: new Date().toISOString(),
     }).eq('id', matchStateRow!.id)
-    await sendConcierge(fromNumber, messageYoureAllSet(dayLabel, timeStr, venueName, neighborhood))
+    await sendConciergeAndLog(fromNumber, messageYoureAllSet(dayLabel, timeStr, venueName, neighborhood), 'youre_all_set', { userId, batchWeek, matchId })
     const otherUserId = match.user_a === userId ? match.user_b : match.user_a
     const { data: otherProfile } = await supabase.from('profiles').select('phone').eq('id', otherUserId).maybeSingle()
     if (otherProfile?.phone) {
-      await sendConcierge(otherProfile.phone, messageYoureAllSet(dayLabel, timeStr, venueName, neighborhood))
+      await sendConciergeAndLog(otherProfile.phone, messageYoureAllSet(dayLabel, timeStr, venueName, neighborhood), 'youre_all_set_other', { userId: otherUserId, batchWeek, matchId })
     }
     await supabase.from('sms_conversation_states').update({
       state: SMS_STATES.CONFIRMED,
@@ -842,9 +869,9 @@ export async function POST(request: Request) {
         last_sendblue_message_handle: messageHandle,
         updated_at: new Date().toISOString(),
       }).eq('id', matchStateRow!.id)
-      await sendConcierge(fromNumber, messageSchedulingWindow())
+      await sendConciergeAndLog(fromNumber, messageSchedulingWindow(), 'scheduling_window', { userId, batchWeek, matchId })
     } else {
-      await sendConcierge(fromNumber, getFallbackForState(SMS_STATES.ACCEPTED_SCHEDULING_DAY))
+      await sendConciergeAndLog(fromNumber, getFallbackForState(SMS_STATES.ACCEPTED_SCHEDULING_DAY), 'fallback_scheduling_day', { userId, batchWeek, matchId })
     }
     return NextResponse.json({ ok: true })
   }
@@ -878,10 +905,10 @@ export async function POST(request: Request) {
           last_sendblue_message_handle: messageHandle,
           updated_at: new Date().toISOString(),
         }).eq('id', matchStateRow!.id)
-        await sendConcierge(fromNumber, messageVenueProposed(selectedDay, timeStr, venue.name, venue.neighborhood ?? venue.city))
+        await sendConciergeAndLog(fromNumber, messageVenueProposed(selectedDay, timeStr, venue.name, venue.neighborhood ?? venue.city), 'venue_proposed', { userId, batchWeek, matchId })
       }
     } else {
-      await sendConcierge(fromNumber, getFallbackForState(SMS_STATES.SCHEDULING_WINDOW))
+      await sendConciergeAndLog(fromNumber, getFallbackForState(SMS_STATES.SCHEDULING_WINDOW), 'fallback_scheduling_window', { userId, batchWeek, matchId })
     }
     return NextResponse.json({ ok: true })
   }
@@ -906,20 +933,20 @@ export async function POST(request: Request) {
           state: SMS_STATES.CONFIRMED,
           updated_at: new Date().toISOString(),
         }).eq('id', matchStateRow!.id)
-        await sendConcierge(fromNumber, messageYoureAllSet(dayLabel, timeStr, venueName, neighborhood))
+        await sendConciergeAndLog(fromNumber, messageYoureAllSet(dayLabel, timeStr, venueName, neighborhood), 'youre_all_set', { userId, batchWeek, matchId })
         const otherUserId = match.user_a === userId ? match.user_b : match.user_a
         const { data: otherProfile } = await supabase.from('profiles').select('phone').eq('id', otherUserId).maybeSingle()
         if (otherProfile?.phone) {
-          await sendConcierge(otherProfile.phone, messageYoureAllSet(dayLabel, timeStr, venueName, neighborhood))
+          await sendConciergeAndLog(otherProfile.phone, messageYoureAllSet(dayLabel, timeStr, venueName, neighborhood), 'youre_all_set_other', { userId: otherUserId, batchWeek, matchId })
         }
       }
     } else {
-      await sendConcierge(fromNumber, getFallbackForState(SMS_STATES.VENUE_PROPOSED))
+      await sendConciergeAndLog(fromNumber, getFallbackForState(SMS_STATES.VENUE_PROPOSED), 'fallback_venue_proposed', { userId, batchWeek, matchId })
     }
     return NextResponse.json({ ok: true })
   }
 
   // ----- Unrecognized: state-aware fallback so we always respond -----
-  await sendConcierge(fromNumber, getFallbackForState((matchState as string) || state))
+  await sendConciergeAndLog(fromNumber, getFallbackForState((matchState as string) || state), 'fallback_generic', { userId, batchWeek, matchId: matchId ?? undefined })
   return NextResponse.json({ ok: true })
 }

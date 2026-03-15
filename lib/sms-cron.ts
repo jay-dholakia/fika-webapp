@@ -6,6 +6,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { getCurrentBatchWeek } from './onboarding'
 import { sendMessage } from './sendblue'
+import { insertMessageLedger } from './message-ledger'
 import { getOrCreateSmsState, SMS_STATES } from './sms-agent'
 import { ageFromBirthdate } from './intro-detail'
 import { getActiveMarketSlugs } from './admin-markets'
@@ -46,6 +47,15 @@ export async function runWeeklyOptIn(): Promise<{ sent: number; error?: string }
   const msg = "Would you like a Fika introduction this week? Reply Yes or Skip."
   for (const p of withPhone) {
     const result = await sendMessage(p.phone!, msg, { fromNumber: 'concierge' })
+    await insertMessageLedger(supabase, {
+      user_id: p.id,
+      direction: 'outbound',
+      peer_phone: p.phone!,
+      content_snippet: msg,
+      context: 'weekly_opt_in',
+      message_handle: result.message_handle ?? null,
+      batch_week: batchWeek,
+    })
     if (result.success) {
       await getOrCreateSmsState(supabase, p.id, SMS_STATES.AWAITING_OPT_IN, { batch_week: batchWeek })
       sent++
@@ -99,6 +109,26 @@ export async function runMatchDelivery(): Promise<{ sent: number; error?: string
     const introB = `I found someone you might enjoy meeting.\n\n${nameA}${ageA != null ? `, ${ageA}` : ''}\n${shared ? `Shared interests: ${shared}` : ''}\n\nWould you like the introduction? Reply YES or PASS.`
     const r1 = await sendMessage(a.phone, introA, { fromNumber: 'concierge' })
     const r2 = await sendMessage(b.phone, introB, { fromNumber: 'concierge' })
+    await insertMessageLedger(supabase, {
+      user_id: m.user_a,
+      direction: 'outbound',
+      peer_phone: a.phone,
+      content_snippet: introA,
+      context: 'match_delivery_intro',
+      message_handle: r1.message_handle ?? null,
+      batch_week: batchWeek,
+      match_id: m.id,
+    })
+    await insertMessageLedger(supabase, {
+      user_id: m.user_b,
+      direction: 'outbound',
+      peer_phone: b.phone,
+      content_snippet: introB,
+      context: 'match_delivery_intro',
+      message_handle: r2.message_handle ?? null,
+      batch_week: batchWeek,
+      match_id: m.id,
+    })
     if (r1.success && r2.success) {
       await getOrCreateSmsState(supabase, m.user_a, SMS_STATES.MATCH_OFFERED, { batch_week: batchWeek, match_id: m.id })
       await getOrCreateSmsState(supabase, m.user_b, SMS_STATES.MATCH_OFFERED, { batch_week: batchWeek, match_id: m.id })

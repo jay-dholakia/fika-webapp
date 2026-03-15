@@ -7,6 +7,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { sendMessage } from '@/lib/sendblue'
+import { insertMessageLedger } from '@/lib/message-ledger'
 import { getOrCreateSmsState, messageEntryFirstTimeMessages, messageEntryFirstTimeMessagesInactiveMarket, SMS_STATES } from '@/lib/sms-agent'
 import { getTimezoneFromLatLng, getNextMondayPhrase } from '@/lib/sms-day-aware'
 import { getCurrentBatchWeek, isPastOptInDeadline } from '@/lib/onboarding'
@@ -154,6 +155,15 @@ export async function POST(request: Request) {
       for (let i = 0; i < messages.length; i++) {
         const sent = await sendMessage(session.phone, messages[i], { fromNumber: 'concierge' })
         if (sent.message_handle) lastHandle = sent.message_handle
+        await insertMessageLedger(supabase, {
+          user_id: user.id,
+          direction: 'outbound',
+          peer_phone: session.phone,
+          content_snippet: messages[i],
+          context: 'first_time_entry_merge',
+          message_handle: sent.message_handle ?? null,
+          batch_week: batchWeek,
+        })
         if (i < messages.length - 1) {
           await new Promise((r) => setTimeout(r, 1600))
         }

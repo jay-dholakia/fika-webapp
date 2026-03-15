@@ -1,23 +1,28 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { sendMessage } from '@/lib/sendblue'
+import { insertMessageLedger } from '@/lib/message-ledger'
 import { getOrCreateSmsState, messageEntryFirstTimeMessages, messageEntryFirstTimeMessagesInactiveMarket, SMS_STATES } from '@/lib/sms-agent'
 import { getTimezoneFromLatLng, getNextMondayPhrase } from '@/lib/sms-day-aware'
 import { getCurrentBatchWeek, isPastOptInDeadline } from '@/lib/onboarding'
 import { getActiveMarketSlugs } from '@/lib/admin-markets'
 import { getMarketBySlug } from '@/lib/markets'
 
-// Book, movie/show, and place recommendations — embedded for taste similarity in matching.
+// Open-ended text used for matching embed: work, movie/show, book, role model, role model why.
 const OPEN_ENDED_IDS: string[] = [
-  'q_book_recommendation',
+  'q_work',
   'q_movie_show_recommendation',
-  'q_place_recommendation',
+  'q_book_recommendation',
+  'q_role_model',
+  'q_role_model_why',
 ]
 
 const OPEN_ENDED_LABELS: Record<string, string> = {
-  q_book_recommendation: 'Book',
+  q_work: 'Work',
   q_movie_show_recommendation: 'Movie or show',
-  q_place_recommendation: 'Place',
+  q_book_recommendation: 'Book',
+  q_role_model: 'Role model',
+  q_role_model_why: 'Why they resonate',
 }
 
 interface IntakeResponseItem {
@@ -174,6 +179,15 @@ export async function POST(request: Request) {
         for (let i = 0; i < messages.length; i++) {
           const sent = await sendMessage(profile.phone, messages[i], { fromNumber: 'concierge' })
           if (sent.message_handle) lastHandle = sent.message_handle
+          await insertMessageLedger(serviceSupabase, {
+            user_id: user.id,
+            direction: 'outbound',
+            peer_phone: profile.phone,
+            content_snippet: messages[i],
+            context: 'first_time_entry',
+            message_handle: sent.message_handle ?? null,
+            batch_week: batchWeek,
+          })
           if (i < messages.length - 1) {
             await new Promise((r) => setTimeout(r, 1600))
           }
