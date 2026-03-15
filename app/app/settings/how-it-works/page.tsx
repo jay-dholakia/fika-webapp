@@ -21,7 +21,7 @@ const portalFaqItems = [
   },
   {
     q: 'How often do matches run?',
-    a: 'Weekly. Set your availability (Wed–Sun) and reply Yes to your Fika concierge before the run; both lock Monday 11:59pm. Matches run Tuesday morning; your intro is sent by text and reflected in the app.',
+    a: 'Weekly. We text you Monday to ask if you’re in. Set your availability (Wed–Sun) and reply Yes before Tuesday morning; opt-in and availability lock then. Matches run Tuesday morning; your intro is sent by text and reflected in the app.',
   },
   {
     q: 'What happens when I get an intro?',

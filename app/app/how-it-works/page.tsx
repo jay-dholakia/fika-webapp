@@ -149,7 +149,7 @@ export default function HowItWorksPage() {
       </section>
 
       <section className="app-how-it-works-section" aria-labelledby="weekly-cadence-heading">
-        <h2 id="weekly-cadence-heading" className="app-how-it-works-section-title">Every week after that</h2>
+        <h2 id="weekly-cadence-heading" className="app-how-it-works-section-title">The weekly rhythm</h2>
         <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.9375rem', marginBottom: '1rem' }}>
           One intro per week. Same rhythm every time:
         </p>
@@ -157,33 +157,26 @@ export default function HowItWorksPage() {
           <li className="app-how-it-works-step">
             <span className="app-how-it-works-step-marker" aria-hidden><span className="app-how-it-works-num">1</span></span>
             <div className="app-how-it-works-step-content">
-              <span className="app-how-it-works-when">Sunday</span>
-              <span className="app-how-it-works-what">Opt in + share when you&apos;re available (Wed–Sun). Choose a few times you&apos;re genuinely free. Lock is Monday 11:59pm; intros go out Tuesday morning.</span>
+              <span className="app-how-it-works-when">Monday</span>
+              <span className="app-how-it-works-what">We text you to ask if you&apos;re in for a Fika this week. Reply Yes and set when you&apos;re available (Wed–Sun), or Skip to sit out. Opt-in and availability lock before Tuesday morning.</span>
             </div>
           </li>
           <li className="app-how-it-works-step">
             <span className="app-how-it-works-step-marker" aria-hidden><span className="app-how-it-works-num">2</span></span>
             <div className="app-how-it-works-step-content">
-              <span className="app-how-it-works-when">Monday</span>
-              <span className="app-how-it-works-what">We look at what you&apos;ve shared and when you&apos;re free, then thoughtfully prepare your intro for the week.</span>
+              <span className="app-how-it-works-when">Tuesday morning</span>
+              <span className="app-how-it-works-what">You get your intro by text with a suggested time (based on when you&apos;re both free) and a few conversation starters.</span>
             </div>
           </li>
           <li className="app-how-it-works-step">
             <span className="app-how-it-works-step-marker" aria-hidden><span className="app-how-it-works-num">3</span></span>
-            <div className="app-how-it-works-step-content">
-              <span className="app-how-it-works-when">Tuesday morning</span>
-              <span className="app-how-it-works-what">You&apos;ll receive your intro with a suggested time (based on when you&apos;re both available) and a few conversation starters based on what we think could spark a great chat.</span>
-            </div>
-          </li>
-          <li className="app-how-it-works-step">
-            <span className="app-how-it-works-step-marker" aria-hidden><span className="app-how-it-works-num">4</span></span>
             <div className="app-how-it-works-step-content">
               <span className="app-how-it-works-when">By Tuesday night</span>
               <span className="app-how-it-works-what">Confirm your Fika—or request to reschedule if your availability has changed. Unconfirmed intros expire.</span>
             </div>
           </li>
           <li className="app-how-it-works-step">
-            <span className="app-how-it-works-step-marker" aria-hidden><span className="app-how-it-works-num">5</span></span>
+            <span className="app-how-it-works-step-marker" aria-hidden><span className="app-how-it-works-num">4</span></span>
             <div className="app-how-it-works-step-content">
               <span className="app-how-it-works-when">Wednesday–Sunday</span>
               <span className="app-how-it-works-what">Meet up for your Fika. No endless texting. Just a real, face-to-face conversation.</span>
