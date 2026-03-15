@@ -279,11 +279,13 @@ function AppOnboardingContent() {
     if (!supabase) return
     const responses: IntakeResponseItem[] = INTAKE_STEPS.filter((s) => s.id !== 'gender_preference' && s.id !== 'age_preference').map((s) => {
       const raw = answers[s.id]
-      const value = raw === undefined || (typeof raw === 'object' && 'city' in (raw as object)) ? (s.type === 'multi_select' ? [] : '') : raw
+      let value: string | string[] | number = raw === undefined || (typeof raw === 'object' && 'city' in (raw as object)) ? (s.type === 'multi_select' ? [] : '') : (raw as string | string[] | number)
+      const isEmpty = value === '' || (Array.isArray(value) && value.length === 0)
+      if (s.required !== true && isEmpty) value = 'N/A'
       return {
         question_id: s.id,
         question_text: s.question,
-        answer: value as string | string[] | number,
+        answer: value,
         type: s.type,
         answered_at: new Date().toISOString(),
       }

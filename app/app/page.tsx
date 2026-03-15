@@ -8,6 +8,7 @@ import type { RealtimeChannel } from '@supabase/supabase-js'
 import { authLog } from '@/lib/auth-log'
 import { getCurrentBatchWeek, getMissingIntakeStepIds, getOrderedMissingIntakeSteps } from '@/lib/onboarding'
 import { isAvailabilityLocked } from '@/lib/availability-slots'
+import { getAvailabilitySlotLabel } from '@/lib/availability-slots'
 import { TARGET_COUNT_PER_MARKET, getMarketFromCity } from '@/lib/markets'
 import { useOnboardingStatus } from '@/lib/use-onboarding'
 import { formatIntakeAnswer, ageFromBirthdate } from '@/lib/intro-detail'
@@ -179,7 +180,7 @@ const TARGET_USERS = TARGET_COUNT_PER_MARKET
     setIntrosLoading(true)
     supabase
       .from('match_candidates')
-      .select('id, user_a, user_b, score, reasons, scheduling_status, default_slot_id, overlapping_slot_ids, counter_slot_id, counter_proposed_by_user_id, final_slot_id, confirmed_slot_id')
+      .select('id, user_a, user_b, score, reasons, scheduling_status, default_slot_id, overlapping_slot_ids, counter_slot_id, counter_proposed_by_user_id, final_slot_id, confirmed_slot_id, confirmed_venue_id')
       .or(`user_a.eq.${userId},user_b.eq.${userId}`)
       .eq('status', 'active')
       .then(({ data: matches, error: matchError }) => {
@@ -239,6 +240,7 @@ const TARGET_USERS = TARGET_COUNT_PER_MARKET
             counter_proposed_by_user_id?: string | null
             final_slot_id?: string | null
             confirmed_slot_id?: string | null
+            confirmed_venue_id?: string | null
           }) => {
             const otherId = m.user_a === userId ? m.user_b : m.user_a
             const profile = byId[otherId]
@@ -262,10 +264,26 @@ const TARGET_USERS = TARGET_COUNT_PER_MARKET
               counterProposedByUserId: m.counter_proposed_by_user_id ?? null,
               finalSlotId: m.final_slot_id ?? null,
               confirmedSlotId: m.confirmed_slot_id ?? null,
+              confirmedVenueId: m.confirmed_venue_id ?? null,
             }
           })
-          setIntros(list.filter((i) => i.myDecision !== 'no' && i.schedulingStatus !== 'expired'))
+          const filtered = list.filter((i) => i.myDecision !== 'no' && i.schedulingStatus !== 'expired')
+          setIntros(filtered)
           setIntrosLoading(false)
+          const venueIds = Array.from(new Set(filtered.map((i) => i.confirmedVenueId).filter(Boolean) as string[]))
+          if (venueIds.length > 0) {
+            supabase.from('venues').select('id, name, neighborhood, city').in('id', venueIds).then(({ data: venues }) => {
+              const byId = (venues ?? []).reduce<Record<string, { name: string; neighborhood: string }>>((acc, v: { id: string; name?: string | null; neighborhood?: string | null; city?: string | null }) => {
+                acc[v.id] = { name: v.name ?? 'Meetup spot', neighborhood: v.neighborhood ?? v.city ?? '' }
+                return acc
+              }, {} as Record<string, { name: string; neighborhood: string }>)
+              setIntros((prev) => prev.map((i) => ({
+                ...i,
+                confirmedVenueName: i.confirmedVenueId ? byId[i.confirmedVenueId]?.name ?? null : null,
+                confirmedVenueNeighborhood: i.confirmedVenueId ? byId[i.confirmedVenueId]?.neighborhood ?? null : null,
+              })))
+            })
+          }
         }).catch(() => {
           setIntros([])
           setIntrosLoading(false)
@@ -457,6 +475,12 @@ const TARGET_USERS = TARGET_COUNT_PER_MARKET
                             <strong className="app-intro-preview-label">Fika:</strong> {intro.fikaPreferencePreview}
                           </span>
                         ) : null}
+                      </p>
+                    ) : null}
+                    {intro.myDecision === 'yes' && intro.schedulingStatus === 'confirmed' && (intro.confirmedSlotId || intro.confirmedVenueName) ? (
+                      <p className="app-intro-card-confirmed" style={{ marginTop: '0.5rem', fontSize: '0.9rem', fontWeight: 500, color: 'var(--color-textSecondary)' }}>
+                        Confirmed Fika · {intro.confirmedSlotId ? getAvailabilitySlotLabel(intro.confirmedSlotId) : 'Time TBD'}
+                        {intro.confirmedVenueName ? ` · ${intro.confirmedVenueName}${intro.confirmedVenueNeighborhood ? ` (${intro.confirmedVenueNeighborhood})` : ''}` : ''}
                       </p>
                     ) : null}
                   </div>

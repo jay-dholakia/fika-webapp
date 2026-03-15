@@ -41,6 +41,10 @@ export type IntroMatch = {
   counterProposedByUserId?: string | null
   finalSlotId?: string | null
   confirmedSlotId?: string | null
+  confirmedVenueId?: string | null
+  /** When confirmed: venue name and neighborhood for card/modal display */
+  confirmedVenueName?: string | null
+  confirmedVenueNeighborhood?: string | null
 }
 
 type ModalDetail = {
@@ -375,7 +379,8 @@ export function IntroDetailModal({
           {schedulingStatus === 'confirmed' ? (
             <>
               <span className="app-intro-status">
-                Confirmed for {confirmedSlotId ? getAvailabilitySlotLabel(confirmedSlotId) : 'your Fika'}
+                Confirmed Fika · {confirmedSlotId ? getAvailabilitySlotLabel(confirmedSlotId) : 'Time TBD'}
+                {intro.confirmedVenueName ? ` · ${intro.confirmedVenueName}${intro.confirmedVenueNeighborhood ? ` (${intro.confirmedVenueNeighborhood})` : ''}` : ''}
               </span>
               {CONCIERGE_NUMBER && (
                 <p style={{ marginTop: '0.75rem', fontSize: '0.9rem' }}>

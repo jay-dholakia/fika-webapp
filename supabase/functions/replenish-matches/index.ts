@@ -75,6 +75,7 @@ interface UserProfile {
   gender: string | null;
   gender_preference: string | null;
   age_preference: string | null;
+  languages: string[] | null;
 }
 
 interface IntakeResponse {
@@ -297,6 +298,7 @@ async function replenishUserMatches(supabaseClient: any, userId: string) {
     gender: userProfile.gender ?? null,
     gender_preference: userProfile.gender_preference ?? null,
     age_preference: userProfile.age_preference ?? null,
+    languages: Array.isArray(userProfile.languages) ? userProfile.languages : null,
   }
 
   // Find potential matches - get enough candidates to fill up to 5 matches (only from users opted in for this week)
@@ -438,9 +440,18 @@ async function findPotentialMatches(
       gender: candidate.gender ?? null,
       gender_preference: candidate.gender_preference ?? null,
       age_preference: candidate.age_preference ?? null,
+      languages: Array.isArray(candidate.languages) ? candidate.languages : null,
     }
 
-    // Apply structured filters (availability, geography, gender preference, meetup format, first conversation feel)
+    // Hard filters: geography first, then languages, then other structured filters
+    if (!passesGeographyFilter(userProfile, effectiveCandidateProfile)) {
+      console.log(`Skipping ${candidate.id.substring(0, 8)} - failed geography filter`)
+      continue
+    }
+    if (!passesLanguagesFilter(userProfile, effectiveCandidateProfile)) {
+      console.log(`Skipping ${candidate.id.substring(0, 8)} - no shared fluent language`)
+      continue
+    }
     if (!passesStructuredFilters(userIntake, candidateIntake, userProfile, effectiveCandidateProfile)) {
       console.log(`Skipping ${candidate.id.substring(0, 8)} - failed structured filters`)
       continue
@@ -488,27 +499,28 @@ async function findPotentialMatches(
 
     // if (existingMatch?.length > 0) continue
 
-    // Calculate compatibility score using embeddings + structured data
-    const score = await calculateCompatibilityScoreV4(
+    // Calculate compatibility score (section-level cosine + weighted average)
+    const scoreResult = await calculateCompatibilityScoreV4(
       userProfile,
       userIntake,
       effectiveCandidateProfile,
       candidateIntake
     )
+    const score = scoreResult.score
 
     console.log(`Score for ${candidate.id.substring(0, 8)}: ${score.toFixed(3)}`)
 
     // Generate match reasons with both users' info (bidirectional)
-    // Pass both user names so hooks can use names for individual characteristics
     const reasons = await generateMatchReasonsV4(
-      userIntake, 
-      candidateIntake, 
-      userProfile.id, 
+      userIntake,
+      candidateIntake,
+      userProfile.id,
       candidate.id,
       userProfile.first_name || 'You',
       candidate.first_name || 'They'
     )
-    reasons.matchScore = score // Set the actual calculated score
+    reasons.matchScore = score
+    ;(reasons as Record<string, unknown>).sectionScores = scoreResult.sectionScores
     ;(reasons as Record<string, unknown>).overlappingAvailabilitySlots = overlappingAvailabilitySlots
 
     // Create matches for everyone - no score threshold
@@ -523,116 +535,6 @@ async function findPotentialMatches(
   return scoredMatches
     .sort((a, b) => b.score - a.score)
     .slice(0, limit)
-}
-
-function calculateCompatibilityScore(
-  userProfile: UserProfile,
-  userIntake: IntakeResponse,
-  candidateProfile: UserProfile,
-  candidateIntake: IntakeResponse
-): number {
-  let score = 0
-
-  // Distance penalty (closer is better)
-  if (userProfile.lat && userProfile.lng && candidateProfile.lat && candidateProfile.lng) {
-    const distance = calculateDistance(
-      userProfile.lat, userProfile.lng,
-      candidateProfile.lat, candidateProfile.lng
-    )
-    const maxDistance = Math.max(userProfile.radius_km, candidateProfile.radius_km)
-    if (distance > maxDistance) return 0 // Outside acceptable range
-    
-    score += Math.max(0, 1 - (distance / maxDistance)) * 0.2 // 20% weight
-  }
-
-  // Age compatibility (within reasonable range)
-  if (userProfile.age && candidateProfile.age) {
-    const ageDiff = Math.abs(userProfile.age - candidateProfile.age)
-    score += Math.max(0, 1 - (ageDiff / 15)) * 0.1 // 10% weight
-  }
-
-  // Shared interests and activities
-  const sharedActivities = calculateSharedInterests(userIntake, candidateIntake)
-  score += sharedActivities * 0.3 // 30% weight
-
-  // Complementary traits
-  const complementarity = calculateComplementarity(userIntake, candidateIntake)
-  score += complementarity * 0.2 // 20% weight
-
-  // Social compatibility
-  const socialFit = calculateSocialFit(userIntake, candidateIntake)
-  score += socialFit * 0.2 // 20% weight
-
-  return Math.min(1, score)
-}
-
-function calculateSharedInterests(userIntake: IntakeResponse, candidateIntake: IntakeResponse): number {
-  const userActivities = new Set([
-    ...(userIntake.sports_fitness || []),
-    ...(userIntake.cultural_activities || []),
-    ...(userIntake.fun_activities || [])
-  ])
-  
-  const candidateActivities = new Set([
-    ...(candidateIntake.sports_fitness || []),
-    ...(candidateIntake.cultural_activities || []),
-    ...(candidateIntake.fun_activities || [])
-  ])
-
-  const intersection = new Set([...userActivities].filter(x => candidateActivities.has(x)))
-  const union = new Set([...userActivities, ...candidateActivities])
-
-  return union.size > 0 ? intersection.size / union.size : 0
-}
-
-function calculateComplementarity(userIntake: IntakeResponse, candidateIntake: IntakeResponse): number {
-  let complementarity = 0
-  let factors = 0
-
-  // Introvert/Extrovert balance
-  if (userIntake.personality_type && candidateIntake.personality_type) {
-    const userExtroversion = userIntake.personality_type.includes('extrovert') ? 1 : 0
-    const candidateExtroversion = candidateIntake.personality_type.includes('extrovert') ? 1 : 0
-    complementarity += Math.abs(userExtroversion - candidateExtroversion) * 0.5
-    factors++
-  }
-
-  // Activity level balance
-  if (userIntake.social_activity_level && candidateIntake.social_activity_level) {
-    const levels = ['I prefer less frequent, lower-key meetups', 'A few quality hangouts each week is ideal', 'I love being busy with friends often']
-    const userLevel = levels.indexOf(userIntake.social_activity_level)
-    const candidateLevel = levels.indexOf(candidateIntake.social_activity_level)
-    if (userLevel >= 0 && candidateLevel >= 0) {
-      complementarity += 1 - (Math.abs(userLevel - candidateLevel) / 2)
-      factors++
-    }
-  }
-
-  return factors > 0 ? complementarity / factors : 0
-}
-
-function calculateSocialFit(userIntake: IntakeResponse, candidateIntake: IntakeResponse): number {
-  let fit = 0
-  let factors = 0
-
-  // Hangout frequency compatibility
-  if (userIntake.hangout_frequency && candidateIntake.hangout_frequency) {
-    const frequencies = ['Once in a while', 'Weekly', 'A few times a week', 'Daily']
-    const userFreq = frequencies.indexOf(userIntake.hangout_frequency)
-    const candidateFreq = frequencies.indexOf(candidateIntake.hangout_frequency)
-    if (userFreq >= 0 && candidateFreq >= 0) {
-      fit += 1 - (Math.abs(userFreq - candidateFreq) / 3)
-      factors++
-    }
-  }
-
-  // Social setting preference
-  if (userIntake.social_setting && candidateIntake.social_setting) {
-    fit += userIntake.social_setting === candidateIntake.social_setting ? 1 : 0.5
-    factors++
-  }
-
-  return factors > 0 ? fit / factors : 0
 }
 
 function calculateDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
@@ -730,30 +632,47 @@ async function createMatchCandidate(
   return insertData
 }
 
-// Apply structured filters (LA Beta: no availability; geography, gender preference, convo feel, open to meet)
+// Geography hard filter: distance <= radius_user + radius_candidate (each can travel their radius).
+// TODO: future enhancement — require a meetup point within both radii.
+function passesGeographyFilter(userProfile: UserProfile, candidateProfile: UserProfile): boolean {
+  if (
+    userProfile.lat == null || userProfile.lng == null ||
+    candidateProfile.lat == null || candidateProfile.lng == null
+  ) {
+    return true // no coords → don't filter out
+  }
+  const distanceKm = calculateDistance(
+    userProfile.lat, userProfile.lng,
+    candidateProfile.lat, candidateProfile.lng
+  )
+  const totalMaxKm = (userProfile.radius_km ?? 40) + (candidateProfile.radius_km ?? 40)
+  if (distanceKm > totalMaxKm) {
+    console.log(`Geography filter: User ${userProfile.id.substring(0, 8)} and candidate ${candidateProfile.id.substring(0, 8)} are ${distanceKm.toFixed(0)} km apart (max ${totalMaxKm.toFixed(0)} km)`)
+    return false
+  }
+  return true
+}
+
+// Require at least one shared fluent language (profile.languages).
+function passesLanguagesFilter(userProfile: UserProfile, candidateProfile: UserProfile): boolean {
+  const u = userProfile.languages ?? []
+  const c = candidateProfile.languages ?? []
+  if (u.length === 0 || c.length === 0) return true // no data → don't filter out
+  const uSet = new Set(u.map((l: string) => l.trim().toLowerCase()))
+  for (const lang of c) {
+    if (uSet.has(lang.trim().toLowerCase())) return true
+  }
+  return false
+}
+
+// Apply structured filters (gender preference, age preference, q_hoping_for). Geography and languages are applied separately.
 function passesStructuredFilters(
   userIntake: any,
   candidateIntake: any,
   userProfile: UserProfile,
   candidateProfile: UserProfile
 ): boolean {
-  // Filter 1: Geography - within each other's max distance (each can travel their radius, so max distance = sum)
-  if (
-    userProfile.lat != null && userProfile.lng != null &&
-    candidateProfile.lat != null && candidateProfile.lng != null
-  ) {
-    const distanceKm = calculateDistance(
-      userProfile.lat, userProfile.lng,
-      candidateProfile.lat, candidateProfile.lng
-    )
-    const totalMaxKm = (userProfile.radius_km ?? 40) + (candidateProfile.radius_km ?? 40)
-    if (distanceKm > totalMaxKm) {
-      console.log(`Geography filter: User ${userProfile.id.substring(0, 8)} and candidate ${candidateProfile.id.substring(0, 8)} are ${distanceKm.toFixed(0)} km apart (max ${totalMaxKm.toFixed(0)} km)`)
-      return false
-    }
-  }
-
-  // Filter 2: Gender preference - LA Beta: No preference / Same gender / Different gender
+  // Filter 1: Gender preference - LA Beta: No preference / Same gender / Different gender
   if (
     userProfile.gender != null && userProfile.gender !== '' &&
     candidateProfile.gender != null && candidateProfile.gender !== '' &&
@@ -815,20 +734,7 @@ function passesStructuredFilters(
     }
   }
 
-  // Filter 4: Who you're open to meet (q_openness) - compatibility
-  const OPEN_TO_ANYONE = "I'm open to anyone"
-  const INSTANTLY_RELATE = "Someone I'd instantly relate to"
-  const userQOpen = getMultiSelectValue(userIntake, 'q_openness')
-  const candidateQOpen = getMultiSelectValue(candidateIntake, 'q_openness')
-  const hasOpenToAnyone = (opts: string[]) => opts.some((o: string) => o.trim() === OPEN_TO_ANYONE)
-  const hasInstantlyRelate = (opts: string[]) => opts.some((o: string) => o.trim() === INSTANTLY_RELATE)
-  const wantsSimilarOnly = (opts: string[]) => hasInstantlyRelate(opts) && !hasOpenToAnyone(opts)
-  const aOkWithB = hasOpenToAnyone(userQOpen) || !wantsSimilarOnly(userQOpen) || (hasInstantlyRelate(candidateQOpen) || hasOpenToAnyone(candidateQOpen))
-  const bOkWithA = hasOpenToAnyone(candidateQOpen) || !wantsSimilarOnly(candidateQOpen) || (hasInstantlyRelate(userQOpen) || hasOpenToAnyone(userQOpen))
-  if (!aOkWithB || !bOkWithA) {
-    console.log(`q_openness filter: compatibility failed`)
-    return false
-  }
+  // q_openness is no longer a hard filter; it contributes to score only (openness section).
 
   return true
 }
@@ -863,11 +769,22 @@ function extractKeywords(responses: any[]): Set<string> {
   return keywords
 }
 
+// Sentinel for optional intake questions the user skipped (stored so they don't show as "missing" in portal)
+const INTAKE_ANSWER_SKIPPED = 'N/A'
+
+function isSkippedAnswer(value: any): boolean {
+  if (value == null) return true
+  if (value === INTAKE_ANSWER_SKIPPED) return true
+  if (Array.isArray(value) && value.length === 1 && value[0] === INTAKE_ANSWER_SKIPPED) return true
+  return false
+}
+
 // Helper functions to extract values from JSONB responses array
 function getResponseValue(intake: any, questionId: string): any {
   if (!intake?.responses || !Array.isArray(intake.responses)) return null
   const response = intake.responses.find((r: any) => r.question_id === questionId)
-  return response?.answer || null
+  const value = response?.answer ?? null
+  return isSkippedAnswer(value) ? null : value
 }
 
 function getMultiSelectValue(intake: any, questionId: string): string[] {
@@ -902,7 +819,57 @@ function getIntakeRadiusKm(intake: any): number {
   return miles != null ? Math.round(miles * 1.60934) : 40
 }
 
-// Helper: overlap score for multi-select (overlap / maxSelections)
+// Canonical option lists for section-level cosine (order must match onboarding-data.ts)
+const OPTIONS_LIFE_CHAPTER = [
+  "I'm in college or university", "I'm in graduate school", 'I recently graduated', "I'm early in my career", "I'm growing in my career", "I'm established in my career", "I'm building something (startup, project, business)", "I'm working independently or freelancing", "I'm transitioning into a new career", 'I recently moved to this city', 'I recently got married or entered a long-term partnership', "I'm exploring a new direction", "I'm taking time to figure out what's next", "I'm taking a break or sabbatical", "I'm starting a family", "I'm raising kids", "I'm caring for family members", "I'm semi-retired", "I'm retired",
+]
+const OPTIONS_EVERYDAY_ANCHOR = [
+  'Work', 'Side hustles', 'Job search', 'School', 'Family life', 'Parenting', 'Family caregiving', 'Romantic relationship', 'Close friendships', 'Fitness routine', 'Creative projects', 'Community or volunteering', 'Faith or spiritual practice', 'Travel', 'Something else',
+]
+const OPTIONS_INTERESTS = [
+  'Reading', 'Music', 'Film & TV', 'Podcasts', 'Cooking', 'Travel', 'Fitness', 'Dance', 'Basketball', 'Football', 'Soccer', 'Baseball', 'Running', 'Hiking', 'Outdoors', 'Yoga / Pilates', 'Weightlifting', 'Cycling', 'Swimming', 'Tennis', 'Pickleball', 'Photography', 'Art & design', 'Writing', 'Gaming', 'Entrepreneurship & startups', 'Investing & finance', 'History', 'Science', 'Philosophy', 'Politics & current events',
+]
+const OPTIONS_CURIOSITY = [
+  'Take a pottery class', 'Learn how to paint', 'Learn an instrument', 'Take a dance class', 'Take a cooking class', 'Start learning a new language', 'Join a storytelling workshop', 'Take a photography course', 'Start a fitness program', 'Join a local sports league', 'Take a coding course', 'Take an AI course', 'Take a philosophy class', 'Take an improv class', 'Take a human behavior course', 'Join a public speaking group', 'Take a course on how to build a business', 'Take a class on personal finance',
+]
+const OPTIONS_GREAT_FIKA = [
+  'Swapping stories from our lives (chapters, how we got here)',
+  "Stuff we're into lately (books, shows, podcasts, games)",
+  "Recent travel and places you've visited",
+  "What we're working on (work or projects)",
+  'Giving/getting advice for professional & personal growth',
+  'Life in our city (neighborhoods, restaurants, hangout spots)',
+  'Big questions and how we see the world',
+  "Hobbies and things we'd like to try next",
+]
+const OPTIONS_OPENNESS = [
+  "Someone I'd instantly relate to", 'Someone outside my usual bubble', 'Someone whose perspective challenges mine', "I'm open to anyone",
+]
+const OPTIONS_HOPING_FOR = [
+  'Conversation with new people — not necessarily friendship', 'Meeting people nearby — open to friendship if it happens', 'Actively looking for new friends',
+]
+
+function multiHotVector(selected: string[], options: string[]): number[] {
+  const set = new Set(selected.map((s) => s.trim()))
+  return options.map((o) => (set.has(o) ? 1 : 0))
+}
+
+function normalizeL2(vec: number[]): number[] {
+  let sum = 0
+  for (let i = 0; i < vec.length; i++) sum += vec[i] * vec[i]
+  const norm = Math.sqrt(sum)
+  if (norm === 0) return vec
+  return vec.map((x) => x / norm)
+}
+
+function sectionCosineScore(vecA: number[], vecB: number[]): number {
+  if (vecA.length !== vecB.length) return 0
+  let dot = 0
+  for (let i = 0; i < vecA.length; i++) dot += vecA[i] * vecB[i]
+  return Math.max(0, dot)
+}
+
+// Helper: overlap score for multi-select (overlap / maxSelections) — legacy, used only where section cosine not applied
 function multiSelectOverlapScore(userValues: string[], candidateValues: string[]): number {
   if (userValues.length === 0 || candidateValues.length === 0) return 0
   const overlap = userValues.filter((v: string) => candidateValues.includes(v)).length
@@ -910,10 +877,13 @@ function multiSelectOverlapScore(userValues: string[], candidateValues: string[]
   return maxSelections > 0 ? overlap / maxSelections : 0
 }
 
+// Align with complete-intake embed text: work, movie/show, book, role model, role model why (no place)
 const OPEN_ENDED_IDS: string[] = [
-  'q_book_recommendation',
+  'q_work',
   'q_movie_show_recommendation',
-  'q_place_recommendation',
+  'q_book_recommendation',
+  'q_role_model',
+  'q_role_model_why',
 ]
 // Optional: minimum words in open-ended for full embed weight (currently not used; we use embed when both have vectors)
 const EMBEDDING_FULL_WORD_THRESHOLD = 50
@@ -927,79 +897,74 @@ function getOpenEndedWordCount(intake: any): number {
   return text.split(/\s+/).filter((w: string) => w.length > 0).length
 }
 
-// Calculate compatibility: embed (book/movie/place) 8% + structured 92%. No distance in score (handled by geography filter).
+// Section-level cosine similarity + weighted average. Weights: life_chapter 22%, day_to_day_anchors 12%, interests 18%, pick_up_next 14%, great_fika 14%, openness 6%, fika_intent 6%, open_text_embedding 8%.
 async function calculateCompatibilityScoreV4(
-  userProfile: UserProfile,
+  _userProfile: UserProfile,
   userIntake: any,
-  candidateProfile: UserProfile,
+  _candidateProfile: UserProfile,
   candidateIntake: any
-): Promise<number> {
-  let score = 0
+): Promise<{ score: number; sectionScores: Record<string, number> }> {
+  const sectionScores: Record<string, number> = {}
 
-  // 0. Embedding similarity (8% weight) — book/movie/place recommendations; only when both have embed_vector
+  // 0. Open text embedding (8%)
   const userVec = ensureEmbedVector(userIntake?.embed_vector)
   const candidateVec = ensureEmbedVector(candidateIntake?.embed_vector)
-  const EMBED_WEIGHT = 0.08
-  if (userVec && candidateVec && userVec.length > 0 && candidateVec.length > 0) {
-    const embeddingSimilarity = cosineSimilarity(userVec, candidateVec)
-    score += Math.max(0, embeddingSimilarity) * EMBED_WEIGHT
+  const embedScore = (userVec && candidateVec && userVec.length > 0 && candidateVec.length > 0)
+    ? Math.max(0, cosineSimilarity(userVec, candidateVec))
+    : 0
+  sectionScores.open_text_embedding = embedScore
+
+  // 1. Life chapter (22%)
+  const uLife = normalizeL2(multiHotVector(getMultiSelectValue(userIntake, 'q_life_chapter'), OPTIONS_LIFE_CHAPTER))
+  const cLife = normalizeL2(multiHotVector(getMultiSelectValue(candidateIntake, 'q_life_chapter'), OPTIONS_LIFE_CHAPTER))
+  sectionScores.life_chapter = uLife.every((x) => x === 0) && cLife.every((x) => x === 0) ? 0 : sectionCosineScore(uLife, cLife)
+
+  // 2. Day-to-day anchors (12%)
+  const uAnchor = normalizeL2(multiHotVector(getMultiSelectValue(userIntake, 'q_everyday_anchor'), OPTIONS_EVERYDAY_ANCHOR))
+  const cAnchor = normalizeL2(multiHotVector(getMultiSelectValue(candidateIntake, 'q_everyday_anchor'), OPTIONS_EVERYDAY_ANCHOR))
+  sectionScores.day_to_day_anchors = uAnchor.every((x) => x === 0) && cAnchor.every((x) => x === 0) ? 0 : sectionCosineScore(uAnchor, cAnchor)
+
+  // 3. Interests (18%)
+  const uInt = normalizeL2(multiHotVector(getMultiSelectValue(userIntake, 'q_interests'), OPTIONS_INTERESTS))
+  const cInt = normalizeL2(multiHotVector(getMultiSelectValue(candidateIntake, 'q_interests'), OPTIONS_INTERESTS))
+  sectionScores.interests = uInt.every((x) => x === 0) && cInt.every((x) => x === 0) ? 0 : sectionCosineScore(uInt, cInt)
+
+  // 4. Pick up next / curiosity (14%)
+  const uCur = normalizeL2(multiHotVector(getMultiSelectValue(userIntake, 'q_curiosity'), OPTIONS_CURIOSITY))
+  const cCur = normalizeL2(multiHotVector(getMultiSelectValue(candidateIntake, 'q_curiosity'), OPTIONS_CURIOSITY))
+  sectionScores.pick_up_next = uCur.every((x) => x === 0) && cCur.every((x) => x === 0) ? 0 : sectionCosineScore(uCur, cCur)
+
+  // 5. Great Fika conversation (14%)
+  const uFika = normalizeL2(multiHotVector(getMultiSelectValue(userIntake, 'q_what_makes_great_fika'), OPTIONS_GREAT_FIKA))
+  const cFika = normalizeL2(multiHotVector(getMultiSelectValue(candidateIntake, 'q_what_makes_great_fika'), OPTIONS_GREAT_FIKA))
+  sectionScores.great_fika_conversation = uFika.every((x) => x === 0) && cFika.every((x) => x === 0) ? 0 : sectionCosineScore(uFika, cFika)
+
+  // 6. Openness (6%) — one-hot style (single choice); cosine of multi-hot of [val]
+  const uOpen = normalizeL2(multiHotVector(getMultiSelectValue(userIntake, 'q_openness'), OPTIONS_OPENNESS))
+  const cOpen = normalizeL2(multiHotVector(getMultiSelectValue(candidateIntake, 'q_openness'), OPTIONS_OPENNESS))
+  sectionScores.openness = sectionCosineScore(uOpen, cOpen)
+
+  // 7. Fika intent / hoping for (6%) — single choice; cosine of one-hot
+  const uHoping = normalizeL2(multiHotVector(getMultiSelectValue(userIntake, 'q_hoping_for').length ? getMultiSelectValue(userIntake, 'q_hoping_for') : [], OPTIONS_HOPING_FOR))
+  const cHoping = normalizeL2(multiHotVector(getMultiSelectValue(candidateIntake, 'q_hoping_for').length ? getMultiSelectValue(candidateIntake, 'q_hoping_for') : [], OPTIONS_HOPING_FOR))
+  sectionScores.fika_intent = sectionCosineScore(uHoping, cHoping)
+
+  const weights: Record<string, number> = {
+    life_chapter: 0.22,
+    day_to_day_anchors: 0.12,
+    interests: 0.18,
+    pick_up_next: 0.14,
+    great_fika_conversation: 0.14,
+    openness: 0.06,
+    fika_intent: 0.06,
+    open_text_embedding: 0.08,
   }
-
-  // 1. Topics (24% weight) - q_topics
-  const userTalkAbout = getMultiSelectValue(userIntake, 'q_topics')
-  const candidateTalkAbout = getMultiSelectValue(candidateIntake, 'q_topics')
-  score += multiSelectOverlapScore(userTalkAbout, candidateTalkAbout) * 0.24
-
-  // 2. Interests (16% weight) - q_interests
-  const userInterests = getMultiSelectValue(userIntake, 'q_interests')
-  const candidateInterests = getMultiSelectValue(candidateIntake, 'q_interests')
-  score += multiSelectOverlapScore(userInterests, candidateInterests) * 0.16
-
-  // 3. Life chapter (19% weight) - q_life_chapter
-  const userLifeChapter = getMultiSelectValue(userIntake, 'q_life_chapter')
-  const candidateLifeChapter = getMultiSelectValue(candidateIntake, 'q_life_chapter')
-  score += multiSelectOverlapScore(userLifeChapter, candidateLifeChapter) * 0.19
-
-  // 4. Curiosity (12% weight) - q_curiosity (Final); fallback q_lately for legacy
-  const userCuriosity = getMultiSelectValue(userIntake, 'q_curiosity')
-  const candidateCuriosity = getMultiSelectValue(candidateIntake, 'q_curiosity')
-  const userLately = getMultiSelectValue(userIntake, 'q_lately')
-  const candidateLately = getMultiSelectValue(candidateIntake, 'q_lately')
-  const curiosityScore = userCuriosity.length > 0 || candidateCuriosity.length > 0
-    ? multiSelectOverlapScore(userCuriosity, candidateCuriosity)
-    : multiSelectOverlapScore(userLately, candidateLately)
-  score += curiosityScore * 0.12
-
-  // 5. Everyday anchor (12% weight) - q_everyday_anchor
-  const userAnchor = getMultiSelectValue(userIntake, 'q_everyday_anchor')
-  const candidateAnchor = getMultiSelectValue(candidateIntake, 'q_everyday_anchor')
-  score += multiSelectOverlapScore(userAnchor, candidateAnchor) * 0.12
-
-  // 6. Who open to meet (5% weight) - q_openness (chips_single in Final; getMultiSelectValue returns [val] for string)
-  const userExcitedToMeet = getMultiSelectValue(userIntake, 'q_openness')
-  const candidateExcitedToMeet = getMultiSelectValue(candidateIntake, 'q_openness')
-  const openToAnyone = "I'm open to anyone"
-  let openScore = 0.5
-  if (!userExcitedToMeet.some((o: string) => o.trim() === openToAnyone) && !candidateExcitedToMeet.some((o: string) => o.trim() === openToAnyone)) {
-    openScore = multiSelectOverlapScore(userExcitedToMeet, candidateExcitedToMeet)
+  let total = 0
+  for (const [k, w] of Object.entries(weights)) {
+    total += (sectionScores[k] ?? 0) * w
   }
-  score += openScore * 0.05
-
-  // 7. What makes a great Fika (4% weight) - q_what_makes_great_fika multi_select overlap; legacy fallback q_hoping_for single match
-  const userGreatFika = getMultiSelectValue(userIntake, 'q_what_makes_great_fika')
-  const candidateGreatFika = getMultiSelectValue(candidateIntake, 'q_what_makes_great_fika')
-  const userHopingSingle = getSingleSelectValue(userIntake, 'q_hoping_for')
-  const candidateHopingSingle = getSingleSelectValue(candidateIntake, 'q_hoping_for')
-  if (userGreatFika.length > 0 && candidateGreatFika.length > 0) {
-    score += multiSelectOverlapScore(userGreatFika, candidateGreatFika) * 0.04
-  } else if (userHopingSingle && candidateHopingSingle && userHopingSingle.trim() === candidateHopingSingle.trim()) {
-    score += 0.04
-  }
-
-  // Distance is not in score; geography filter already enforces within combined radius.
-
-  const final = Math.min(1, score)
-  return isNaN(final) ? 0 : final
+  const score = Math.min(1, Math.max(0, isNaN(total) ? 0 : total))
+  return { score, sectionScores }
 }
 
 // Ensure embed_vector is a number[] (PostgREST may return pgvector as string "[0.1,0.2,...]")
@@ -1091,13 +1056,13 @@ async function generateMatchReasonsV4(
   const userAIntake = userId < candidateId ? userIntake : candidateIntake
   const userBIntake = userId < candidateId ? candidateIntake : userIntake
 
-  // Extract user A's information (LA Beta intake)
-  user_a_hobbies.push(...getMultiSelectValue(userAIntake, 'q_topics').slice(0, 5))
+  // Extract user A's information (q_topics removed from scoring; use q_interests + q_what_makes_great_fika for shared/conversation)
+  user_a_hobbies.push(...getMultiSelectValue(userAIntake, 'q_interests').slice(0, 5))
   user_a_talk_topics.push(...getMultiSelectValue(userAIntake, 'q_openness').slice(0, 4))
   user_a_interests.push(...getMultiSelectValue(userAIntake, 'q_interests').slice(0, 6))
 
-  // Extract user B's information (LA Beta intake)
-  user_b_hobbies.push(...getMultiSelectValue(userBIntake, 'q_topics').slice(0, 5))
+  // Extract user B's information
+  user_b_hobbies.push(...getMultiSelectValue(userBIntake, 'q_interests').slice(0, 5))
   user_b_talk_topics.push(...getMultiSelectValue(userBIntake, 'q_openness').slice(0, 4))
   user_b_interests.push(...getMultiSelectValue(userBIntake, 'q_interests').slice(0, 6))
 
@@ -1112,17 +1077,17 @@ async function generateMatchReasonsV4(
   const topicExcluded = (t: string) =>
     topicExcludedByPreferNot(t, userPreferNot, userAvoidText) || topicExcludedByPreferNot(t, candidatePreferNot, candidateAvoidText)
 
-  // Shared interests from topic overlap (only topics neither marked prefer-not / avoid)
-  const userTalk = getMultiSelectValue(userIntake, 'q_topics')
-  const candidateTalk = getMultiSelectValue(candidateIntake, 'q_topics')
-  const overlap = userTalk.filter((t: string) => candidateTalk.includes(t) && !topicExcluded(t))
-  shared_interests.push(...overlap.slice(0, 5))
-
-  // Shared interests from q_interests (activities/hobbies)
+  // Shared interests from q_interests (no q_topics)
   const userInterests = getMultiSelectValue(userIntake, 'q_interests')
   const candidateInterests = getMultiSelectValue(candidateIntake, 'q_interests')
   const interestOverlap = userInterests.filter((i: string) => candidateInterests.includes(i) && i !== 'Prefer not to say')
-  shared_interests.push(...interestOverlap.slice(0, 3))
+  shared_interests.push(...interestOverlap.slice(0, 5))
+
+  // Shared conversation preferences from q_what_makes_great_fika (exclude any marked in q_avoid_topics)
+  const userGreatFikaForOverlap = getMultiSelectValue(userIntake, 'q_what_makes_great_fika')
+  const candidateGreatFikaForOverlap = getMultiSelectValue(candidateIntake, 'q_what_makes_great_fika')
+  const greatFikaOverlap = userGreatFikaForOverlap.filter((t: string) => candidateGreatFikaForOverlap.includes(t) && !topicExcluded(t))
+  shared_interests.push(...greatFikaOverlap.slice(0, 3))
 
   const userLately = getMultiSelectValue(userIntake, 'q_lately')
   const candidateLately = getMultiSelectValue(candidateIntake, 'q_lately')
@@ -1150,12 +1115,12 @@ async function generateMatchReasonsV4(
   const whyWeIntroducedYou: string[] = []
   if (sameHoping && hopingLabel) whyWeIntroducedYou.push(`You're both looking for: ${String(hopingLabel).trim()}`)
   if (sharedGreatFika.length > 0) whyWeIntroducedYou.push(`You both want: ${sharedGreatFika[0].toLowerCase()}`)
-  for (const t of overlap.slice(0, 2)) whyWeIntroducedYou.push(`You both selected "${t}"`)
+  for (const i of interestOverlap.slice(0, 2)) whyWeIntroducedYou.push(`You're both into ${i}`)
+  for (const t of greatFikaOverlap.slice(0, 2)) whyWeIntroducedYou.push(`You both selected "${t}"`)
   for (const l of sharedLately.slice(0, 1)) whyWeIntroducedYou.push(`You both said "${l}" has been on your mind`)
   for (const a of sharedAnchor.slice(0, 1)) {
     if (a !== 'Prefer not to say') whyWeIntroducedYou.push(`You both have "${a}" in your everyday life`)
   }
-  for (const i of interestOverlap.slice(0, 2)) whyWeIntroducedYou.push(`You're both into ${i}`)
 
   const conversationStarters: string[] = []
   if (sharedLately.length > 0) {
@@ -1167,14 +1132,14 @@ async function generateMatchReasonsV4(
     else if (label === 'A big life decision') conversationStarters.push(`You're both weighing a big life decision — How do you usually approach big choices?`)
     else conversationStarters.push(`You both said "${label}" has been on your mind — What's one way that's showing up for you lately?`)
   }
-  if (overlap.length > 0 && conversationStarters.length < 3) {
-    const topic = overlap[0]
-    if (topic === 'Travel and places in the world' || topic === 'Travel & different cultures') conversationStarters.push(`You both enjoy talking about travel — What place changed you more than you expected?`)
-    else if (topic === 'Psychology and human behavior' || topic === 'Psychology & human behavior' || topic === 'Big ideas about life' || topic === 'Philosophy & big questions') conversationStarters.push(`You both like going deep — What's a belief you've questioned recently?`)
-    else if (topic === 'Career journeys' || topic === 'Entrepreneurship and building things' || topic === 'Entrepreneurship & building things') conversationStarters.push(`You both care about building and careers — What's one thing you've learned the hard way?`)
-    else conversationStarters.push(`You both enjoy ${topic} — What got you into it?`)
+  if (interestOverlap.length > 0 && conversationStarters.length < 3) {
+    const topic = interestOverlap[0]
+    if (topic === 'Travel') conversationStarters.push(`You both enjoy talking about travel — What place changed you more than you expected?`)
+    else if (topic === 'Philosophy' || topic === 'History' || topic === 'Science') conversationStarters.push(`You both like going deep — What's a belief you've questioned recently?`)
+    else if (topic === 'Entrepreneurship & startups') conversationStarters.push(`You both care about building and careers — What's one thing you've learned the hard way?`)
+    else conversationStarters.push(`You're both into ${topic} — What got you into it?`)
   }
-  if (conversationStarters.length < 2 && (sharedAnchor.includes('Creative work') || sharedAnchor.includes('A creative pursuit') || overlap.includes('Creative work and art') || overlap.includes('Visual art & design'))) {
+  if (conversationStarters.length < 2 && (sharedAnchor.includes('Creative projects') || interestOverlap.includes('Art & design') || interestOverlap.includes('Photography'))) {
     conversationStarters.push(`You both seem creatively wired — What's something you're currently working on that excites you?`)
   }
   if (conversationStarters.length < 2 && sharedLife.length > 0) {
@@ -1185,8 +1150,8 @@ async function generateMatchReasonsV4(
   if (conversationStarters.length < 2 && interestOverlap.length > 0) {
     conversationStarters.push(`You're both into ${interestOverlap[0]} — What do you like about it?`)
   }
-  if (conversationStarters.length < 1 && overlap.length > 0) {
-    conversationStarters.push(`You both enjoy ${overlap[0]} — What got you into it?`)
+  if (conversationStarters.length < 1 && interestOverlap.length > 0) {
+    conversationStarters.push(`You're both into ${interestOverlap[0]} — What do you like about it?`)
   }
 
   const starters = conversationStarters.slice(0, 3)

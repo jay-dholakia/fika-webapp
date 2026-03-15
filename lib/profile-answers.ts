@@ -1,6 +1,14 @@
 import { PROFILE_STEPS, INTAKE_STEPS } from './onboarding-data'
+import { INTAKE_ANSWER_SKIPPED } from './intro-detail'
 import type { ProfileRow, IntakeResponsesV5Row } from './db-types'
 import type { IntakeResponseItem } from './db-types'
+
+function normalizeIntakeAnswerForDisplay(answer: string | string[] | number | null | undefined, stepType?: string): string | string[] | number {
+  if (answer == null) return stepType === 'multi_select' ? [] : ''
+  if (answer === INTAKE_ANSWER_SKIPPED) return stepType === 'multi_select' ? [] : ''
+  if (Array.isArray(answer) && answer.length === 1 && answer[0] === INTAKE_ANSWER_SKIPPED) return []
+  return answer
+}
 
 export type AnswersState = Record<
   string,
@@ -27,7 +35,7 @@ export function getAnswersFromProfileAndIntake(
   const responses = intake?.responses ?? []
   for (const s of INTAKE_STEPS) {
     const r = responses.find((x: IntakeResponseItem) => x.question_id === s.id)
-    if (r != null) answers[s.id] = r.answer as string | string[] | number
+    if (r != null) answers[s.id] = normalizeIntakeAnswerForDisplay(r.answer as string | string[] | number, s.type) as string | string[] | number
   }
   answers.gender_preference = profile?.gender_preference ?? ''
   answers.age_preference = profile?.age_preference ?? ''

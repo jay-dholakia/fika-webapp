@@ -4,8 +4,8 @@ import { useState } from 'react'
 
 const portalFaqItems = [
   {
-    q: 'Can I use Fika to make friends?',
-    a: 'Our main intention for Fika is to facilitate conversations between two people who are similar enough to connect, and different enough to keep it interesting! We\'ll leave it up to you to continue conversation, or just leave it at one great Fika. No pressure.',
+    q: 'How are intros chosen?',
+    a: 'We use your profile and preferences to find a good fit, and we only match you when you have overlapping availability—so we can suggest a real time you’re both free. Intros are delivered over SMS so you don’t have to manage a separate app.',
   },
   {
     q: 'How do I get introductions?',
@@ -14,10 +14,6 @@ const portalFaqItems = [
   {
     q: 'How many intros do I get per week?',
     a: 'One. We match you with a single person each week so you can focus on making that Fika happen.',
-  },
-  {
-    q: 'How are intros chosen?',
-    a: 'We use your profile and preferences to find a good fit, and we only match you when you have overlapping availability—so we can suggest a real time you’re both free. Intros are delivered over SMS so you don’t have to manage a separate app.',
   },
   {
     q: 'How often do matches run?',
@@ -32,16 +28,20 @@ const portalFaqItems = [
     a: 'You have until Tuesday 11:59pm to confirm or change the time. If neither of you confirms by then, the intro expires and you’re back in the pool for next week.',
   },
   {
-    q: 'How much does it cost?',
-    a: 'Fika is currently free to use.',
-  },
-  {
     q: "I scheduled a Fika but I can't make it anymore—what should I do?",
     a: 'If you know you can’t make it, let your Fika concierge know via text. We’ll let your intro know as well. You can always opt in again for a future week when your schedule works.',
   },
   {
     q: 'Is meeting people through Fika safe?',
     a: 'We encourage everyone to meet in public, well-lit places—coffee shops, cafés, parks, or similar spots—to help keep things safe. Stay in public, trust your instincts, and don’t share personal details (like your address or phone number) until you’re comfortable. If something feels off, reach out to us at support@letsfika.co.',
+  },
+  {
+    q: 'How much does it cost?',
+    a: 'Fika is currently free to use.',
+  },
+  {
+    q: 'Can I use Fika to make friends?',
+    a: 'Our main intention for Fika is to facilitate conversations between two people who are similar enough to connect, and different enough to keep it interesting! We\'ll leave it up to you to continue conversation, or just leave it at one great Fika. No pressure.',
   },
   {
     q: 'My intro didn\'t show up to our Fika—now what?',
