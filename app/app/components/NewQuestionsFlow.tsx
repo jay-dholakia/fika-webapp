@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react'
 import { getSupabase } from '@/lib/supabase'
 import { INTAKE_STEPS, type ProfileStep } from '@/lib/onboarding-data'
+import { INTAKE_ANSWER_SKIPPED } from '@/lib/intro-detail'
 import type { IntakeResponseItem } from '@/lib/db-types'
 import type { IntakeResponsesV5Row } from '@/lib/db-types'
 
@@ -12,7 +13,10 @@ function buildAnswersFromIntake(intake: IntakeResponsesV5Row | null): AnswersSta
   const responses = Array.isArray(intake?.responses) ? intake.responses : []
   const out: AnswersState = {}
   for (const r of responses) {
-    if (r.answer != null) out[r.question_id] = r.answer as string | string[] | number
+    if (r.answer == null) continue
+    if (r.answer === INTAKE_ANSWER_SKIPPED) continue
+    if (Array.isArray(r.answer) && r.answer.length === 1 && r.answer[0] === INTAKE_ANSWER_SKIPPED) continue
+    out[r.question_id] = r.answer as string | string[] | number
   }
   return out
 }
@@ -93,10 +97,12 @@ export function NewQuestionsFlow({ orderedSteps, intake, userId, onComplete }: N
     setSaving(true)
     try {
       const base = raw
-      const answer =
+      let answer: string | string[] | number =
         step.id === 'q_radius' && (typeof base === 'string' && base !== '')
           ? (base.includes('miles') ? base : `${base} miles`)
           : base
+      const isEmpty = answer === undefined || answer === '' || (Array.isArray(answer) && answer.length === 0)
+      if (step.required !== true && isEmpty) answer = INTAKE_ANSWER_SKIPPED
       await saveIntakeAnswer(userId, step, answer as string | string[] | number)
       if (step.id === 'confirm_intent') {
         const supabase = getSupabase()

@@ -92,6 +92,7 @@ export function getMissingIntakeStepIds(intake: IntakeResponsesV5Row | null): st
   const missing: string[] = []
   for (const s of INTAKE_STEPS) {
     if (intake?.completed_at && s.id === 'confirm_intent') continue
+    if (s.id === 'gender_preference' || s.id === 'age_preference') continue
     if (!answered.has(s.id)) missing.push(s.id)
   }
   return missing
@@ -114,6 +115,7 @@ export function getOrderedMissingIntakeSteps(intake: IntakeResponsesV5Row | null
   const out: ProfileStep[] = []
   for (const s of INTAKE_STEPS) {
     if (intake?.completed_at && s.id === 'confirm_intent') continue
+    if (s.id === 'gender_preference' || s.id === 'age_preference') continue
     if (!answered.has(s.id)) out.push(s)
   }
   return out

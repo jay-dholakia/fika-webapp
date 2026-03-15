@@ -13,13 +13,19 @@ export type AnswersState = Record<
 export function buildOnboardingSessionPayload(answers: AnswersState): Record<string, unknown> {
   const loc = answers.location as { city: string; lat: number; lng: number } | undefined
   const intakeStepsForPayload = INTAKE_STEPS
-  const responses = intakeStepsForPayload.map((s) => ({
-    question_id: s.id,
-    question_text: s.question,
-    answer: answers[s.id] ?? (s.type === 'multi_select' ? [] : ''),
-    type: s.type,
-    answered_at: new Date().toISOString(),
-  }))
+  const responses = intakeStepsForPayload.map((s) => {
+    const raw = answers[s.id]
+    let value: string | string[] | number = raw === undefined || (typeof raw === 'object' && raw !== null && 'city' in raw) ? (s.type === 'multi_select' ? [] : '') : (raw as string | string[] | number)
+    const isEmpty = value === '' || (Array.isArray(value) && value.length === 0)
+    if (s.required !== true && isEmpty) value = 'N/A'
+    return {
+      question_id: s.id,
+      question_text: s.question,
+      answer: value,
+      type: s.type,
+      answered_at: new Date().toISOString(),
+    }
+  })
   return {
     first_name: typeof answers.first_name === 'string' ? answers.first_name.trim() || ' ' : ' ',
     birthdate: answers.birthdate ?? null,
