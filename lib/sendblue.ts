@@ -13,7 +13,7 @@ export type SendblueConfig = {
   matchNumber: string | null
 }
 
-function getConfig(): SendblueConfig | null {
+export function getConfig(): SendblueConfig | null {
   const apiKeyId = process.env.SENDBLUE_API_KEY_ID
   const apiSecretKey = process.env.SENDBLUE_API_SECRET_KEY
   const concierge = process.env.SENDBLUE_CONCIERGE_NUMBER
