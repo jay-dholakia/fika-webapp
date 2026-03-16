@@ -189,7 +189,7 @@ export async function POST(request: Request) {
             batch_week: batchWeek,
           })
           if (i < messages.length - 1) {
-            await new Promise((r) => setTimeout(r, 1600))
+            await new Promise((r) => setTimeout(r, 1000))
           }
         }
         if (lastHandle) {

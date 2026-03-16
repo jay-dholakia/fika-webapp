@@ -220,6 +220,8 @@ export async function POST(request: Request) {
     if (existing?.token) {
       const link = `${appBase}/signup?token=${existing.token}`
       await sendConciergeAndLog(fromNumber, messageSmsSignupLinkAlreadySent(link), 'signup_link_already_sent')
+      await new Promise((r) => setTimeout(r, 1000))
+      await sendConciergeAndLog(fromNumber, link, 'signup_link_already_sent_url')
       return NextResponse.json({ ok: true })
     }
     const token = crypto.randomUUID()
@@ -236,6 +238,8 @@ export async function POST(request: Request) {
     }
     const link = `${appBase}/signup?token=${token}`
     await sendConciergeAndLog(fromNumber, messageSmsSignupLinkSent(link), 'signup_link_sent')
+    await new Promise((r) => setTimeout(r, 1000))
+    await sendConciergeAndLog(fromNumber, link, 'signup_link_sent_url')
     return NextResponse.json({ ok: true })
   }
 
@@ -247,7 +251,10 @@ export async function POST(request: Request) {
     .maybeSingle()
   if (isStopKeyword(content)) {
     await supabase.from('profiles').update({ sms_opted_out_at: new Date().toISOString() }).eq('id', userId)
-    await sendConciergeAndLog(fromNumber, messageSmsOptOut(getAppBase(), formatConciergeNumber(CONCIERGE)), 'opt_out', { userId })
+    const webappUrl = getAppBase()
+    await sendConciergeAndLog(fromNumber, messageSmsOptOut(webappUrl, formatConciergeNumber(CONCIERGE)), 'opt_out', { userId })
+    await new Promise((r) => setTimeout(r, 1000))
+    await sendConciergeAndLog(fromNumber, webappUrl, 'opt_out_url', { userId })
     return NextResponse.json({ ok: true })
   }
   if (profileForSms?.sms_opted_out_at) {
@@ -364,7 +371,10 @@ export async function POST(request: Request) {
     const { day, time } = slotIdToDisplayTime(upcomingMatch.confirmed_slot_id)
     const venueName = venue?.name ?? 'the spot'
     const neighborhood = venue?.neighborhood ?? venue?.city ?? ''
-    await sendConciergeAndLog(fromNumber, messageConfirmedUpcoming(day, time, venueName, neighborhood, getAppBase()), 'confirmed_upcoming', { userId })
+    const webappUrl = getAppBase()
+    await sendConciergeAndLog(fromNumber, messageConfirmedUpcoming(day, time, venueName, neighborhood, webappUrl), 'confirmed_upcoming', { userId })
+    await new Promise((r) => setTimeout(r, 1000))
+    await sendConciergeAndLog(fromNumber, webappUrl, 'confirmed_upcoming_url', { userId })
     return NextResponse.json({ ok: true })
   }
 
@@ -399,6 +409,8 @@ export async function POST(request: Request) {
         : DEFAULT_APP_BASE
       const onboardingUrl = `${appBase}/app/onboarding`
       await sendConciergeAndLog(fromNumber, messageOnboardingRequired(onboardingUrl), 'onboarding_required', { userId })
+      await new Promise((r) => setTimeout(r, 1000))
+      await sendConciergeAndLog(fromNumber, onboardingUrl, 'onboarding_required_url', { userId })
       return NextResponse.json({ ok: true })
     }
     const activeSlugs = await getActiveMarketSlugs(supabase)
@@ -492,6 +504,8 @@ export async function POST(request: Request) {
         : DEFAULT_APP_BASE
       const availabilityUrl = `${appBase}/app/availability`
       await sendConciergeAndLog(fromNumber, messageOptInSetAvailability(availabilityUrl), 'opt_in_set_availability', { userId, batchWeek })
+      await new Promise((r) => setTimeout(r, 1000))
+      await sendConciergeAndLog(fromNumber, availabilityUrl, 'opt_in_set_availability_url', { userId, batchWeek })
     } else if (isSkipKeyword(content) || keyword === 'SKIP') {
       await supabase.rpc('upsert_global_sms_conversation_state', {
         p_user_id: userId,
@@ -536,6 +550,8 @@ export async function POST(request: Request) {
   if (state === SMS_STATES.OPTED_IN && isResendLinkKeyword(content)) {
     const availabilityUrl = `${getAppBase()}/app/availability`
     await sendConciergeAndLog(fromNumber, messageOptInSetAvailability(availabilityUrl), 'opt_in_resend_link', { userId, batchWeek })
+    await new Promise((r) => setTimeout(r, 1000))
+    await sendConciergeAndLog(fromNumber, availabilityUrl, 'opt_in_resend_link_url', { userId, batchWeek })
     return NextResponse.json({ ok: true })
   }
 

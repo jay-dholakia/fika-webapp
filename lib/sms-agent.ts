@@ -177,20 +177,21 @@ export function messageSaveAsContactHint(): string {
   return 'Save this number as Fika ☕ so you never miss an intro.'
 }
 
-/** First-time "you're all set" sequence: intro concierge + cadence. Returns 3 messages to send in order.
+/** First-time "you're all set" sequence: intro concierge + cadence. Returns 4 messages to send in order (URL is standalone).
  * nextMondayPhrase = day-aware "tomorrow" | "Monday" | "next Monday" from getNextMondayPhrase(timezone).
- * appBase = site origin (no trailing slash), e.g. https://letsfika.vercel.app — used for portal link at end of msg 3. */
+ * appBase = site origin (no trailing slash), e.g. https://letsfika.vercel.app — sent as standalone message 4. */
 export function messageEntryFirstTimeMessages(isAfterDeadline: boolean, nextMondayPhrase: string = 'next Monday', appBase: string = 'https://letsfika.vercel.app'): string[] {
   const base = appBase.trim().replace(/\/$/, '') || 'https://letsfika.vercel.app'
   const msg1 = `You're in. Once a week I'll ask if you want a Fika, send you one intro, and help you set it up if you both say yes.`
   const msg2AfterDeadline = `This week's window is already closed, so I'll check in next week. Have a great week!\n\n${messageSaveAsContactHint()}`
   const msg2OnTime = `I'll check in next week to see if you're up for a Fika. Have a great week!\n\n${messageSaveAsContactHint()}`
   const msg2 = isAfterDeadline ? msg2AfterDeadline : msg2OnTime
-  const msg3 = `To learn more or edit your profile: ${base}/app`
-  return [msg1, msg2, msg3]
+  const msg3 = `To learn more or edit your profile, use the link I'll send next.`
+  const msg4Link = `${base}/app`
+  return [msg1, msg2, msg3, msg4Link]
 }
 
-/** First-time entry when user's market is inactive: "building community" messaging. Returns 2 messages. No opt-in CTA. */
+/** First-time entry when user's market is inactive: "building community" messaging. Returns 3 messages (URL standalone). No opt-in CTA. */
 export function messageEntryFirstTimeMessagesInactiveMarket(
   appBase: string = 'https://letsfika.vercel.app',
   cityLabel?: string | null
@@ -198,8 +199,9 @@ export function messageEntryFirstTimeMessagesInactiveMarket(
   const base = appBase.trim().replace(/\/$/, '') || 'https://letsfika.vercel.app'
   const place = cityLabel?.trim() || 'your city'
   const msg1 = `You're in. We're currently building community for ${place} — we'll reach back out when we're ready to run our first Fika intros.`
-  const msg2 = `In the meantime, learn more or edit your profile on the Fika web portal: ${base}/app\n\n${messageSaveAsContactHint()}`
-  return [msg1, msg2]
+  const msg2 = `In the meantime, learn more or edit your profile on the Fika web portal (link next).\n\n${messageSaveAsContactHint()}`
+  const msg3Link = `${base}/app`
+  return [msg1, msg2, msg3Link]
 }
 
 /** One-time when a market is turned active: inform user we'll reach out on the Monday cadence (no immediate opt-in). */
@@ -237,9 +239,9 @@ export function messageEntryReminder(): string {
   return `Want an intro this week? Just reply Yes or Skip — and if you're in, set your availability for Wed–Sat by Monday 12pm PT.`
 }
 
-/** When user is known but hasn't completed onboarding/intake — send link to finish profile. */
-export function messageOnboardingRequired(onboardingUrl: string): string {
-  return `Hey, we've got you in the system — just need a few more details before we can match you.\n\nFinish up here:\n\n${onboardingUrl}\n\nReply back once you're done and we'll send you the weekly intro.`
+/** When user is known but hasn't completed onboarding/intake. Text only; send onboardingUrl as a separate message after this. */
+export function messageOnboardingRequired(_onboardingUrl: string): string {
+  return `Hey, we've got you in the system — just need a few more details before we can match you.\n\nFinish up using the link I'll send next.\n\nReply back once you're done and we'll send you the weekly intro.`
 }
 
 export function messageWeeklyOptIn(): string {
@@ -304,9 +306,9 @@ export function messageOptInConfirmation(): string {
   return `You're in! We'll send your intro Tuesday 9am PT.`
 }
 
-/** When user replies IN: send link to webapp availability page to finalize opt-in. */
-export function messageOptInSetAvailability(availabilityUrl: string): string {
-  return `Got it! Set your availability for Wed–Sat by Monday 12pm PT here:\n\n${availabilityUrl}\n\nWe'll send your intro Tuesday 9am PT.`
+/** When user replies IN: send link to webapp availability page. Text only; send availabilityUrl as a separate message after this. */
+export function messageOptInSetAvailability(_availabilityUrl: string): string {
+  return `Got it! Set your availability for Wed–Sat by Monday 12pm PT using the link I'll send next.\n\nWe'll send your intro Tuesday 9am PT.`
 }
 
 export function messageSkipped(): string {
@@ -514,9 +516,9 @@ export function messageRelayCouldNotDeliver(): string {
   return `We couldn't get your update through this time — try reaching out to them directly if you can.`
 }
 
-/** STOP: we'll stop texting; account still on web; how to opt back in. */
-export function messageSmsOptOut(webappUrl: string, conciergeNumber: string): string {
-  return `We'll stop texting you. Your Fika account is still on the web: ${webappUrl}\n\nYou can manage or delete your account there, and text ${conciergeNumber} from the number we have on file whenever you want to start getting messages again.`
+/** STOP: we'll stop texting; account still on web. Text only; send webappUrl as a separate message after this. */
+export function messageSmsOptOut(_webappUrl: string, conciergeNumber: string): string {
+  return `We'll stop texting you. Your Fika account is still on the web — I'll send you the link next.\n\nYou can manage or delete your account there, and text ${conciergeNumber} from the number we have on file whenever you want to start getting messages again.`
 }
 
 /** When they text back after opting out. */
@@ -524,9 +526,9 @@ export function messageSmsOptBackIn(): string {
   return `You're back in — we'll text you for the next round.`
 }
 
-/** Confirmed Fika upcoming: fun reminder + CTA. */
-export function messageConfirmedUpcoming(day: string, time: string, venueName: string, neighborhood: string, webappUrl: string): string {
-  return `Your Fika is coming up — ${day} at ${time} at ${venueName} (${neighborhood}). ☕\n\nQuestions? Need to reschedule or cancel? Reply with your question, or RESCHEDULE or CANCEL and we'll help. You can also manage your account here: ${webappUrl}`
+/** Confirmed Fika upcoming: fun reminder + CTA. Text only; send webappUrl as a separate message after this. */
+export function messageConfirmedUpcoming(day: string, time: string, venueName: string, neighborhood: string, _webappUrl: string): string {
+  return `Your Fika is coming up — ${day} at ${time} at ${venueName} (${neighborhood}). ☕\n\nQuestions? Need to reschedule or cancel? Reply with your question, or RESCHEDULE or CANCEL and we'll help. I'll send you the link to manage your account next.`
 }
 
 /** RESCHEDULE acknowledged. */
