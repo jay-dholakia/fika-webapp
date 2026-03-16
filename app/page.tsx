@@ -48,23 +48,23 @@ export default function Home() {
         <section id="how" data-animate className="section section-how">
           <div className="section-inner">
             <h2 className="section-title">How it works</h2>
-            <p className="section-lead">Four steps to your first Fika.</p>
+            <p className="section-lead">Four steps to your first Fika</p>
             <ol className="steps">
               <li className="step">
                 <span className="step-num">1</span>
                 <div className="step-content">
                   <h3 className="step-title">Text your Fika concierge</h3>
                   <p className="step-text">
-                    Text your Fika concierge—an AI agent that sets up your Fikas for you. They&apos;ll ask you a few questions to get to know you: where you&apos;re based, your life chapter right now, your interests, and what kind of conversations and connections you&apos;re open to. Then they take it from there.
+                    Start by texting your concierge. They&apos;ll ask a few quick questions about you—your interests, where you&apos;re based, and the kind of conversations you enjoy.
                   </p>
                 </div>
               </li>
               <li className="step">
                 <span className="step-num">2</span>
                 <div className="step-content">
-                  <h3 className="step-title">Do you want to Fika this week?</h3>
+                  <h3 className="step-title">Want a Fika this week?</h3>
                   <p className="step-text">
-                    Each week your concierge texts you asking if you&apos;d like to meet someone new this week—someone similar enough to connect, and different enough to keep it interesting. Reply Yes or Skip. No pressure.
+                    Each week your concierge texts to see if you&apos;re up for meeting someone new. Reply Yes or Skip. No pressure.
                   </p>
                 </div>
               </li>
@@ -73,7 +73,7 @@ export default function Home() {
                 <div className="step-content">
                   <h3 className="step-title">Get your intro</h3>
                   <p className="step-text">
-                    If you&apos;re in, your concierge sends you a link to set your availability for the rest of the week for a Fika. They send you an intro every Tuesday morning. If you both say yes, your concierge recommends a time and place based on your shared availability.
+                    If you&apos;re in, you&apos;ll get an intro to someone nearby with overlapping interests and availability.
                   </p>
                 </div>
               </li>
@@ -82,7 +82,7 @@ export default function Home() {
                 <div className="step-content">
                   <h3 className="step-title">Show up</h3>
                   <p className="step-text">
-                    Once you&apos;re both confirmed, your concierge texts you a quick reminder on the day of your Fika and checks in after to ask about how it went. No app, no endless chat—just a real conversation with someone new.
+                    Your concierge suggests a time and place to meet for coffee based on when you&apos;re available and where you live. Then, meet for Fika.
                   </p>
                 </div>
               </li>
