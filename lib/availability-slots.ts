@@ -1,13 +1,15 @@
 /**
  * Doodle-style availability for the match week.
- * Slots: Wed–Sun only × 30-minute increments from 9am to 7pm (20 slots per day).
- * Slot id format: day_HH_MM (e.g. wed_09_00, sun_18_30).
+ * Slots: Wed–Sat only × 30-minute increments from 9am to 7pm (20 slots per day).
+ * Slot id format: day_HH_MM (e.g. wed_09_00, sat_18_30).
  */
+
+import { getOptInDeadlineForBatchWeek } from './onboarding'
 
 const DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const
 
-/** Days we collect availability for: Wed–Sun (opt-in Monday 11am; lock Monday 11:59pm; intros Tuesday morning). */
-export const AVAILABILITY_DAYS = ['wed', 'thu', 'fri', 'sat', 'sun'] as const
+/** Days we collect availability for: Wed–Sat (opt-in Sunday 12pm PT; lock Monday 12pm PT; intros Tuesday 9am PT). */
+export const AVAILABILITY_DAYS = ['wed', 'thu', 'fri', 'sat'] as const
 
 // 9am to 7pm in 30-min increments (9:00, 9:30, ... 18:30; 7pm is end of last slot)
 const HALF_HOUR_SLOTS: { id: string; label: string }[] = (() => {
@@ -61,13 +63,13 @@ export function groupSlotsByDay(slotIds: string[]): { day: string; slots: string
   }))
 }
 
-/** Day labels for the availability grid (Wed–Sun only). */
+/** Day labels for the availability grid (Wed–Sat only). */
 export const AVAILABILITY_DAY_LABELS: string[] = AVAILABILITY_DAYS.map((d) => DAY_LABELS[d] ?? d)
 
 /** Time-slot rows for the y-axis (9a–6:30p). */
 export const AVAILABILITY_TIME_ROWS: { id: string; label: string }[] = [...HALF_HOUR_SLOTS]
 
-/** Slot id for a grid cell: dayIndex 0–4 (Wed–Sun), timeIndex 0–19. */
+/** Slot id for a grid cell: dayIndex 0–3 (Wed–Sat), timeIndex 0–19. */
 export function getAvailabilitySlotId(dayIndex: number, timeIndex: number): string {
   const day = AVAILABILITY_DAYS[dayIndex]
   const time = HALF_HOUR_SLOTS[timeIndex]
@@ -85,11 +87,11 @@ function parseSlotId(slotId: string): { dayIndex: number; timeIndex: number } | 
   return { dayIndex, timeIndex }
 }
 
-/** True if slot id is Wed–Sun (valid for availability). */
+/** True if slot id is Wed–Sat (valid for availability). */
 export function isAvailabilitySlotId(slotId: string): boolean {
   const parsed = parseSlotId(slotId)
   if (!parsed) return false
-  return parsed.dayIndex >= 2 // wed=2, thu=3, fri=4, sat=5, sun=6
+  return parsed.dayIndex >= 2 && parsed.dayIndex <= 5 // wed=2, thu=3, fri=4, sat=5 (exclude sun=6)
 }
 
 /**
@@ -171,31 +173,23 @@ export function getAvailabilityWeekWednesday(batchWeek: string): string {
   return d.toISOString().slice(0, 10)
 }
 
-/** Monday of batch_week (lock day). Opt-in text sent Monday 11am PT; availability locks Monday 11:59pm before Tuesday morning intros. */
-function getLockMonday(batchWeek: string): Date {
-  const d = new Date(batchWeek + 'T12:00:00')
-  return d
-}
-
-/** Monday 11:59pm of the match week. Opt-in + availability close at this time; intros run Tuesday morning. */
+/** Opt-in + availability lock = Monday 12pm PT (same as getOptInDeadlineForBatchWeek). */
 export function getAvailabilityLockDate(batchWeek: string): Date {
-  const d = getLockMonday(batchWeek)
-  d.setHours(23, 59, 59, 999)
-  return d
+  return getOptInDeadlineForBatchWeek(batchWeek)
 }
 
-/** True when availability for that week can no longer be edited (Monday 11:59pm has passed). */
+/** True when availability for that week can no longer be edited (Monday 12pm PT has passed). */
 export function isAvailabilityLocked(batchWeek: string): boolean {
   const lockAt = getAvailabilityLockDate(batchWeek)
   return new Date() >= lockAt
 }
 
-/** Human-readable date range for the availability week: Wed–Sun (e.g. "Wed, Mar 5 – Sun, Mar 9"). */
+/** Human-readable date range for the availability week: Wed–Sat (e.g. "Wed, Mar 5 – Sat, Mar 8"). */
 export function formatNextWeekRange(batchWeek: string): string {
   const wed = new Date(getAvailabilityWeekWednesday(batchWeek) + 'T12:00:00Z')
-  const sun = new Date(wed)
-  sun.setUTCDate(sun.getUTCDate() + 4)
+  const sat = new Date(wed)
+  sat.setUTCDate(sat.getUTCDate() + 3)
   const wedStr = wed.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })
-  const sunStr = sun.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })
-  return `${wedStr} – ${sunStr}`
+  const satStr = sat.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })
+  return `${wedStr} – ${satStr}`
 }

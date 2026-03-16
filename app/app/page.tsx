@@ -196,12 +196,10 @@ const TARGET_USERS = TARGET_COUNT_PER_MARKET
         Promise.allSettled([
           supabase.from('profiles').select('id, first_name, city, birthdate').in('id', otherIds),
           supabase.from('opt_ins').select('match_id, decision').eq('user_id', userId).in('match_id', matchIds),
-          supabase.from('conversations').select('id, match_id').or(`user_a.eq.${userId},user_b.eq.${userId}`).eq('conversation_type', 'match').in('match_id', matchIds),
           supabase.from('intake_responses_v5').select('user_id, responses').in('user_id', otherIds),
-        ]).then(([profilesSettled, optInsSettled, convosSettled, intakeSettled]) => {
+        ]).then(([profilesSettled, optInsSettled, intakeSettled]) => {
           const profilesRes = profilesSettled.status === 'fulfilled' ? profilesSettled.value : { data: null, error: { message: 'Profiles request failed' } }
           const optInsRes = optInsSettled.status === 'fulfilled' ? optInsSettled.value : { data: null, error: null }
-          const convosRes = convosSettled.status === 'fulfilled' ? convosSettled.value : { data: null, error: null }
           const intakeRes = intakeSettled.status === 'fulfilled' ? intakeSettled.value : { data: null, error: null }
           // Build list even when profiles fail (e.g. RLS) so we don't hide matches – use empty profile data
           const profiles = (profilesRes?.data ?? []) as { id: string; first_name: string | null; city: string | null; birthdate: string | null }[]
@@ -211,10 +209,6 @@ const TARGET_USERS = TARGET_COUNT_PER_MARKET
           }, {})
           const myOptIns = ((optInsRes?.data ?? []) as { match_id: string; decision: string }[]).reduce<Record<string, 'yes' | 'no'>>((acc, o) => {
             acc[o.match_id] = o.decision === 'yes' ? 'yes' : 'no'
-            return acc
-          }, {})
-          const convoByMatch = ((convosRes?.data ?? []) as { id: string; match_id: string | null }[]).reduce<Record<string, string>>((acc, c) => {
-            if (c.match_id) acc[c.match_id] = c.id
             return acc
           }, {})
           const intakeByUserId: Record<string, { topicsPreview: string | null; fikaPreference: string | null }> = {}
@@ -254,7 +248,6 @@ const TARGET_USERS = TARGET_COUNT_PER_MARKET
               score: m.score ?? null,
               reasons: (m.reasons as IntroMatch['reasons']) ?? null,
               myDecision: myOptIns[m.id],
-              conversationId: convoByMatch[m.id] ?? null,
               conversationTypesPreview: intake?.topicsPreview ?? null,
               fikaPreferencePreview: intake?.fikaPreference ?? null,
               schedulingStatus: m.scheduling_status ?? null,
@@ -350,11 +343,11 @@ const TARGET_USERS = TARGET_COUNT_PER_MARKET
         ) : (
           <>
             <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem', marginBottom: '1rem' }}>
-              Opt in via text to be included in this week&apos;s match run. Set your availability (Wed–Sun) on the <Link href="/app/availability">Your Availability</Link> page first; then text <strong>IN</strong> to your Fika concierge. Both lock Monday 11:59pm.
+              Opt in via text to be included in this week&apos;s match run. Set your availability (Wed–Sat) on the <Link href="/app/availability">Your Availability</Link> page first; then text <strong>IN</strong> to your Fika concierge. Both lock on Monday at midday.
             </p>
             {optInLocked && (
               <p className="onboarding-error" style={{ marginBottom: '0.75rem' }}>
-                Opt-in and availability are locked (Monday 11:59pm). Matches run Tuesday morning.
+                Opt-in and availability are locked (Monday at midday). Intros go out on Tuesday morning.
               </p>
             )}
             {!optInLocked && (

@@ -9,7 +9,7 @@ const portalFaqItems = [
   },
   {
     q: 'How do I get introductions?',
-    a: 'Each week your Fika concierge texts you to see if you’re in for a Fika. Set your availability for Wed–Sun on the Your Availability page, then reply Yes to your Fika concierge to be included in that week’s run (or SKIP to sit it out). Your intro is sent by text and appears in the app after the run.',
+    a: 'Each week your Fika concierge texts you to see if you’re in for a Fika. Set your availability for Wed–Sat on the Your Availability page, then reply Yes to your Fika concierge to be included in that week’s run (or SKIP to sit it out). Your intro is sent by text and appears in the app after the run.',
   },
   {
     q: 'How many intros do I get per week?',
@@ -17,7 +17,7 @@ const portalFaqItems = [
   },
   {
     q: 'How often do matches run?',
-    a: 'Weekly. We text you Monday to ask if you’re in. Set your availability (Wed–Sun) and reply Yes before Tuesday morning; opt-in and availability lock then. Matches run Tuesday morning; your intro is sent by text and reflected in the app.',
+    a: 'Weekly. We check in on Sunday to ask if you’re in. Set your availability (Wed–Sat) and reply Yes by Monday; after that, opt-in and availability lock for that run. Intros go out on Tuesday, and you have until Tuesday evening to accept or pass. Your intro is sent by text and reflected in the app.',
   },
   {
     q: 'What happens when I get an intro?',
@@ -25,7 +25,7 @@ const portalFaqItems = [
   },
   {
     q: 'How long do I have to respond?',
-    a: 'You have until Tuesday 11:59pm to confirm or change the time. If neither of you confirms by then, the intro expires and you’re back in the pool for next week.',
+    a: 'You have until Tuesday evening to confirm or change the time. If neither of you confirms by then, the intro expires and you’re back in the pool for next week.',
   },
   {
     q: "I scheduled a Fika but I can't make it anymore—what should I do?",

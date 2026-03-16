@@ -16,7 +16,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-const AVAILABILITY_DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
+const AVAILABILITY_DAYS = ['wed', 'thu', 'fri', 'sat']
 const HALF_HOUR_IDS: string[] = (() => {
   const out: string[] = []
   for (let h = 9; h <= 18; h++) {
@@ -144,9 +144,9 @@ function getExpiresAtWednesdayMidnight(batchWeek: string): string {
   return d.toISOString()
 }
 
-const WED_SUN_PREFIXES = ['wed_', 'thu_', 'fri_', 'sat_', 'sun_']
-function isWedSunSlot(slotId: string): boolean {
-  return WED_SUN_PREFIXES.some((p) => slotId.startsWith(p))
+const WED_SAT_PREFIXES = ['wed_', 'thu_', 'fri_', 'sat_']
+function isWedSatSlot(slotId: string): boolean {
+  return WED_SAT_PREFIXES.some((p) => slotId.startsWith(p))
 }
 
 /** Slugs of markets where Monday opt-in and match run are enabled. */
@@ -330,9 +330,9 @@ async function replenishUserMatches(supabaseClient: any, userId: string) {
     if (match.score >= MATCH_SCORE_THRESHOLD) {
       try {
         const overlappingSlots = (match.reasons?.overlappingAvailabilitySlots ?? []) as string[]
-        const wedSunOnly = overlappingSlots.filter((id) => isWedSunSlot(id))
-        const defaultSlotId = wedSunOnly.length > 0 ? getBestDefaultSlot(wedSunOnly) : null
-        await createMatchCandidate(supabaseClient, userId, match.id, match.score, match.reasons, batchWeek, wedSunOnly, defaultSlotId)
+        const wedSatOnly = overlappingSlots.filter((id) => isWedSatSlot(id))
+        const defaultSlotId = wedSatOnly.length > 0 ? getBestDefaultSlot(wedSatOnly) : null
+        await createMatchCandidate(supabaseClient, userId, match.id, match.score, match.reasons, batchWeek, wedSatOnly, defaultSlotId)
         createdCount++
         console.log(`Created match ${createdCount}/${needed}: score ${match.score.toFixed(3)}`)
       } catch (error) {

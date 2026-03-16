@@ -157,8 +157,8 @@ export default function HowItWorksPage() {
           <li className="app-how-it-works-step">
             <span className="app-how-it-works-step-marker" aria-hidden><span className="app-how-it-works-num">1</span></span>
             <div className="app-how-it-works-step-content">
-              <span className="app-how-it-works-when">Monday</span>
-              <span className="app-how-it-works-what">We text you to ask if you&apos;re in for a Fika this week. Reply Yes and set when you&apos;re available (Wed–Sun), or Skip to sit out. Opt-in and availability lock before Tuesday morning.</span>
+              <span className="app-how-it-works-when">Sunday–Monday</span>
+              <span className="app-how-it-works-what">We text you on Sunday to ask if you&apos;re in for a Fika this week. Reply Yes and set when you&apos;re available (Wed–Sat) by Monday; after that, opt-in and availability lock for that run. Intros go out on Tuesday, and you can accept or pass until that evening.</span>
             </div>
           </li>
           <li className="app-how-it-works-step">
@@ -178,7 +178,7 @@ export default function HowItWorksPage() {
           <li className="app-how-it-works-step">
             <span className="app-how-it-works-step-marker" aria-hidden><span className="app-how-it-works-num">4</span></span>
             <div className="app-how-it-works-step-content">
-              <span className="app-how-it-works-when">Wednesday–Sunday</span>
+              <span className="app-how-it-works-when">Wednesday–Saturday</span>
               <span className="app-how-it-works-what">Meet up for your Fika. No endless texting. Just a real, face-to-face conversation.</span>
             </div>
           </li>

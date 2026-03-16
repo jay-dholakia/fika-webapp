@@ -584,8 +584,8 @@ export async function POST(request: Request) {
       } else {
         const firstYesUserId = yesUsers[0].user_id
         const overlapping = (match.overlapping_slot_ids as string[]) ?? []
-        const wedSun = overlapping.filter((id: string) => /^(wed|thu|fri|sat|sun)_/.test(id))
-        const slotId = (match.default_slot_id as string) ?? wedSun[0]
+        const wedSat = overlapping.filter((id: string) => /^(wed|thu|fri|sat)_/.test(id))
+        const slotId = (match.default_slot_id as string) ?? wedSat[0]
         if (!slotId) {
           await sendConciergeAndLog(fromNumber, "We couldn't find a time that works for both. We'll try again next week.", 'no_overlap', { userId, batchWeek, matchId })
           return NextResponse.json({ ok: true })
@@ -713,8 +713,8 @@ export async function POST(request: Request) {
 
     const currentSlotId = (matchPayload.proposed_slot_id as string) ?? ''
     const overlapping = (matchRow?.overlapping_slot_ids as string[]) ?? []
-    const wedSun = overlapping.filter((id: string) => /^(wed|thu|fri|sat|sun)_/.test(id))
-    const nextSlotId = wedSun.find((id: string) => id !== currentSlotId) ?? null
+    const wedSat = overlapping.filter((id: string) => /^(wed|thu|fri|sat)_/.test(id))
+    const nextSlotId = wedSat.find((id: string) => id !== currentSlotId) ?? null
 
     if (!nextSlotId) {
       await cancelMatch()
@@ -874,7 +874,7 @@ export async function POST(request: Request) {
   }
 
   if (matchState === SMS_STATES.ACCEPTED_SCHEDULING_DAY && matchId) {
-    const dayMatch = ['WED','THU','FRI','SAT','SUN'].find(d => keyword.includes(d))
+    const dayMatch = ['WED','THU','FRI','SAT'].find(d => keyword.includes(d))
     if (dayMatch) {
       await supabase.from('sms_conversation_states').update({
         state: SMS_STATES.SCHEDULING_WINDOW,
