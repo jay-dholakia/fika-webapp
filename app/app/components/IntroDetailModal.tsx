@@ -28,7 +28,6 @@ export type IntroMatch = {
     overlappingAvailabilitySlots?: string[]
   } | null
   myDecision?: 'yes' | 'no'
-  conversationId?: string | null
   /** Preview for card: topics they enjoy (q5) */
   conversationTypesPreview?: string | null
   /** Preview for card: fika preference (q4) */
@@ -418,13 +417,7 @@ export function IntroDetailModal({
               )}
             </>
           ) : intro.myDecision === 'yes' ? (
-            intro.conversationId ? (
-              <a href={`/app/chats/${intro.conversationId}`} className="app-intro-btn app-intro-btn-primary">
-                Open chat
-              </a>
-            ) : (
-              <span className="app-intro-status">You opted in · Waiting for them</span>
-            )
+            <span className="app-intro-status">You opted in · Waiting for them</span>
           ) : intro.myDecision === 'no' ? (
             <span className="app-intro-status">Passed</span>
           ) : (
