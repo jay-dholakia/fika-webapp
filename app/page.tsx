@@ -20,7 +20,7 @@ export default function Home() {
                   <span className="hero-title-accent">Real conversation.</span>
                 </h1>
                 <p className="hero-sub">
-                  Meet people around you, IRL—when and where it works.
+                  Weekly intros by text. You meet. You talk. You connect.
                 </p>
                 <a href="#cta" className="btn btn-primary">Get started</a>
               </div>
