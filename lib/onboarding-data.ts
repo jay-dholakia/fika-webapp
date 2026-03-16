@@ -345,6 +345,14 @@ export const INTAKE_STEPS: ProfileStep[] = [
     options: ['5 miles', '10 miles', '25 miles', '50 miles'],
   },
   {
+    id: 'q_favorite_coffee_shop',
+    question: "What's your favorite coffee shop in your city?",
+    body: "We use this to get a feel for good Fika spots in your area (think: plenty of tables, easy to get to, good coffee).",
+    type: 'text',
+    required: false,
+    placeholder: 'Name and neighborhood (optional)',
+  },
+  {
     id: 'confirm_intent',
     question: 'Fika is built for thoughtful, platonic connection.',
     body: "We're here to help people meet others nearby for real conversation. Any behavior that doesn't align may result in removal.",
