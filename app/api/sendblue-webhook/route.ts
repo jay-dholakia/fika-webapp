@@ -81,7 +81,11 @@ import {
 } from '@/lib/sms-signup'
 import { insertMessageLedger } from '@/lib/message-ledger'
 
-const CONCIERGE = (process.env.SENDBLUE_CONCIERGE_NUMBER || '').replace(/\D/g, '')
+const CONCIERGE_RAW = (process.env.SENDBLUE_CONCIERGE_NUMBER || '').replace(/\D/g, '')
+/** Normalize to 10 digits for US numbers (strip leading 1) so 13102102404 and 3102102404 match. */
+const CONCIERGE = CONCIERGE_RAW.length === 11 && CONCIERGE_RAW.startsWith('1')
+  ? CONCIERGE_RAW.slice(1)
+  : CONCIERGE_RAW
 
 function getAppBase(): string {
   const base = (process.env.APP_CANONICAL_URL ?? '').trim().replace(/\/$/, '')
@@ -95,7 +99,8 @@ function formatConciergeNumber(digits: string): string {
 }
 
 function isConciergeNumber(toNumber: string): boolean {
-  const digits = toNumber.replace(/\D/g, '')
+  let digits = toNumber.replace(/\D/g, '')
+  if (digits.length === 11 && digits.startsWith('1')) digits = digits.slice(1)
   return Boolean(CONCIERGE && (digits === CONCIERGE || digits.endsWith(CONCIERGE)))
 }
 
