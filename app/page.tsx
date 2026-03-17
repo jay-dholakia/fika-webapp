@@ -55,7 +55,7 @@ export default function Home() {
                 <div className="step-content">
                   <h3 className="step-title">Get set up</h3>
                   <p className="step-text">
-                    <strong>Text FIKA to join.</strong> Answer a few quick questions so we can match you with the right person.
+                    <strong>Text our number to join.</strong> Answer a few quick questions so we can introduce you to people nearby that are similar enough to connect, and different enough to keep it interesting.
                   </p>
                 </div>
               </li>
@@ -76,7 +76,7 @@ export default function Home() {
                 <div className="step-content">
                   <h3 className="step-title">We make the plan</h3>
                   <p className="step-text">
-                    <strong>Get your introduction</strong> — On Tuesday, you&apos;ll receive a match with a time and place already set based on your availability.
+                    <strong>Get your introduction</strong> — On Tuesday, you&apos;ll receive an intro with a time and place already set based on your shared availability.
                   </p>
                 </div>
               </li>
@@ -93,13 +93,6 @@ export default function Home() {
           </div>
         </section>
 
-        <section id="faq" data-animate className="section section-faq">
-          <div className="section-inner">
-            <h2 className="section-title">FAQ</h2>
-            <FaqAccordion />
-          </div>
-        </section>
-
         <section id="cta" data-animate className="section section-cta">
           <div className="section-inner cta-inner">
             <h2 className="cta-title">Ready for a real Fika?</h2>
@@ -109,13 +102,20 @@ export default function Home() {
                 href={`sms:${CONCIERGE_NUMBER}?body=${encodeURIComponent("Hi! Help set me up for Fika.")}`}
                 className="btn btn-primary btn-block"
               >
-                Text to get started
+                Text us
               </a>
             ) : (
               <p className="cta-sub" style={{ marginTop: '0.75rem' }}>
                 Text <strong>FIKA</strong> to the number we use in the app to get started.
               </p>
             )}
+          </div>
+        </section>
+
+        <section id="faq" data-animate className="section section-faq">
+          <div className="section-inner">
+            <h2 className="section-title">FAQ</h2>
+            <FaqAccordion />
           </div>
         </section>
         </main>
