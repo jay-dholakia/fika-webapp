@@ -72,6 +72,7 @@ export default function AdminMapClient() {
   /** Current edited ring in GeoJSON order [lng, lat][] so the polygon sticks after drag; cleared when changing market. */
   const [editedRing, setEditedRing] = useState<[number, number][] | null>(null)
   const editGroupRef = useRef<LeafletFeatureGroup | null>(null)
+  const [editGroupVersion, setEditGroupVersion] = useState(0)
   const initializedSlugRef = useRef<string | null>(null)
 
   function captureEditedShape() {
@@ -197,7 +198,7 @@ export default function AdminMapClient() {
     } catch {
       // ignore
     }
-  }, [editMarketSlug, editingPolygon])
+  }, [editMarketSlug, editingPolygon, editGroupVersion])
 
   if (loading) {
     return <div className="admin-loading">Loading map…</div>
@@ -232,6 +233,7 @@ export default function AdminMapClient() {
             setHasEdited(false)
             setSaveError(null)
             setEditedRing(null)
+            initializedSlugRef.current = null
           }}
           style={{ padding: '4px 8px', borderRadius: 4 }}
         >
@@ -315,7 +317,14 @@ export default function AdminMapClient() {
               )
             })}
           {editMarketSlug && editingPolygon && (
-            <FeatureGroup ref={editGroupRef}>
+            <FeatureGroup
+              ref={(fg) => {
+                if (fg !== editGroupRef.current) {
+                  editGroupRef.current = fg
+                  setEditGroupVersion((v) => v + 1)
+                }
+              }}
+            >
               <EditControl
                 position="topright"
                 draw={{
