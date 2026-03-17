@@ -5,11 +5,11 @@ import { useState } from 'react'
 const faqItems = [
   {
     q: 'How often do I get intros?',
-    a: 'Once a week. Your Fika concierge texts you to ask if you’re in for this week—reply Yes to your Fika concierge to be included or Skip to sit it out. When you’re in, you get one introduction to someone nearby for that week.',
+    a: 'Once a week. Text FIKA each week to opt in. When you’re in, you get one introduction to someone nearby for that week.',
   },
   {
     q: 'How does matching work?',
-    a: 'We only match you when you have overlapping availability. Your intro arrives from your Fika concierge by text with who they are, where they’re based, what they’re into, and a suggested time and place. You can confirm or adjust once if needed—then simply meet up. No separate app to manage, no endless messaging.',
+    a: 'We only match you when you have overlapping availability. Your intro arrives by text with who they are, where they’re based, what they’re into, and a suggested time and place. You can confirm or adjust once if needed—then simply meet up. No separate app to manage, no endless messaging.',
   },
   {
     q: 'What does it cost?',

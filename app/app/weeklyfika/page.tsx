@@ -343,11 +343,11 @@ const TARGET_USERS = TARGET_COUNT_PER_MARKET
         ) : (
           <>
             <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem', marginBottom: '1rem' }}>
-              Opt in via text to be included in this week&apos;s match run. Set your availability (Wed–Sat) on the <Link href="/app/availability">Your Availability</Link> page first; then text <strong>IN</strong> to your Fika concierge. Both lock on Monday at midday.
+              Text <strong>FIKA</strong> to opt in for the week. We&apos;ll send you a link to set when you&apos;re free (Wed–Sat). Opt-in and availability close Monday 11am PT.
             </p>
             {optInLocked && (
               <p className="onboarding-error" style={{ marginBottom: '0.75rem' }}>
-                Opt-in and availability are locked (Monday at midday). Intros go out on Tuesday morning.
+                Opt-in and availability are locked (Monday 11am PT). Intros go out on Tuesday morning.
               </p>
             )}
             {!optInLocked && (
@@ -359,7 +359,7 @@ const TARGET_USERS = TARGET_COUNT_PER_MARKET
                 ) : CONCIERGE_NUMBER ? (
                   <>
                     <a
-                      href={`sms:${CONCIERGE_NUMBER}?body=IN`}
+                      href={`sms:${CONCIERGE_NUMBER}?body=FIKA`}
                       className="btn btn-primary auth-submit"
                       style={{ display: 'inline-block', textAlign: 'center', marginBottom: '0.75rem' }}
                     >
@@ -371,7 +371,7 @@ const TARGET_USERS = TARGET_COUNT_PER_MARKET
                   </>
                 ) : (
                   <p style={{ fontSize: '0.95rem' }}>
-                    Text <strong>IN</strong> to your Fika concierge to opt in. <Link href="/app/availability">Set your availability for next week</Link> so we can match you.
+                    Text <strong>FIKA</strong> to opt in. <Link href="/app/availability">Set your availability for next week</Link> so we can match you.
                   </p>
                 )}
               </>

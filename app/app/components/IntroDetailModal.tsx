@@ -385,7 +385,7 @@ export function IntroDetailModal({
                 <p style={{ marginTop: '0.75rem', fontSize: '0.9rem' }}>
                   Running late or can&apos;t make it?{' '}
                   <a href={`sms:${CONCIERGE_NUMBER}`} className="app-intro-btn app-intro-btn-secondary" style={{ display: 'inline-block', marginTop: '0.25rem' }}>
-                    Text your Fika concierge
+                    Reply by text
                   </a>
                 </p>
               )}
@@ -406,14 +406,14 @@ export function IntroDetailModal({
                 )}
               </p>
               <p className="app-intro-sms-cta" style={{ marginBottom: '0.75rem', fontSize: '0.95rem', color: 'var(--color-textSecondary)' }}>
-                To confirm this time, suggest a different time, or say you can&apos;t make it, text your Fika concierge.
+                To confirm this time, suggest a different time, or say you can&apos;t make it, reply by text.
               </p>
               {CONCIERGE_NUMBER ? (
                 <a href={`sms:${CONCIERGE_NUMBER}`} className="app-intro-btn app-intro-btn-primary">
-                  Text your Fika concierge
+                  Reply by text
                 </a>
               ) : (
-                <span className="app-intro-status">Text your Fika concierge from your account or welcome message.</span>
+                <span className="app-intro-status">Reply by text from your account or welcome message.</span>
               )}
             </>
           ) : intro.myDecision === 'yes' ? (
@@ -423,7 +423,7 @@ export function IntroDetailModal({
           ) : (
             <>
               <p className="app-intro-sms-cta" style={{ marginBottom: '0.75rem', fontSize: '0.95rem', color: 'var(--color-textSecondary)' }}>
-                To accept or pass on this intro, text your Fika concierge.
+                To accept or pass on this intro, reply by text.
               </p>
               <div className="app-scheduling-actions" style={{ flexWrap: 'wrap', gap: '0.5rem' }}>
                 {CONCIERGE_NUMBER ? (
@@ -442,7 +442,7 @@ export function IntroDetailModal({
                     </a>
                   </>
                 ) : (
-                  <span className="app-intro-status">Text YES or PASS to your Fika concierge.</span>
+                  <span className="app-intro-status">Text YES or PASS to the number we use to text you.</span>
                 )}
               </div>
               <p style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: 'var(--color-textSecondary)' }}>

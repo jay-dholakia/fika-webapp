@@ -9,7 +9,7 @@ const portalFaqItems = [
   },
   {
     q: 'How do I get introductions?',
-    a: 'Each week your Fika concierge texts you to see if you’re in for a Fika. Set your availability for Wed–Sat on the Your Availability page, then reply Yes to your Fika concierge to be included in that week’s run (or SKIP to sit it out). Your intro is sent by text and appears in the app after the run.',
+    a: 'Text FIKA each week to opt in. We'll send you a link when you text FIKA. Set your availability for Wed–Sat on the Your Availability page. Your intro is sent by text and appears in the app after the run.',
   },
   {
     q: 'How many intros do I get per week?',
@@ -17,11 +17,11 @@ const portalFaqItems = [
   },
   {
     q: 'How often do matches run?',
-    a: 'Weekly. We check in on Sunday to ask if you’re in. Set your availability (Wed–Sat) and reply Yes by Monday; after that, opt-in and availability lock for that run. Intros go out on Tuesday, and you have until Tuesday evening to accept or pass. Your intro is sent by text and reflected in the app.',
+    a: 'Weekly. Text FIKA on Sunday to opt in and get your availability link. Set when you're free (Wed–Sat) by Monday 11am PT; after that, opt-in and availability lock. Intros go out on Tuesday, and you have until Tuesday evening to accept or pass. Your intro is sent by text and reflected in the app.',
   },
   {
     q: 'What happens when I get an intro?',
-    a: 'Your Fika concierge sends you who they are, where they’re based, what they’re into, and a suggested time based on when you’re both free. Reply to your Fika concierge to confirm that time, suggest a different time, or say you can’t make it. If either of you wants to change the time, you get one round to pick an alternate—then the other person confirms or can’t make it. Once you’re both confirmed, you’re set. No endless chat—just show up at the time you agreed on.',
+    a: 'We send you who they are, where they’re based, what they’re into, and a suggested time based on when you’re both free. Reply by text to confirm that time, suggest a different time, or say you can’t make it. If either of you wants to change the time, you get one round to pick an alternate—then the other person confirms or can’t make it. Once you’re both confirmed, you’re set. No endless chat—just show up at the time you agreed on.',
   },
   {
     q: 'How long do I have to respond?',
@@ -29,7 +29,7 @@ const portalFaqItems = [
   },
   {
     q: "I scheduled a Fika but I can't make it anymore—what should I do?",
-    a: 'If you know you can’t make it, let your Fika concierge know via text. We’ll let your intro know as well. You can always opt in again for a future week when your schedule works.',
+    a: 'If you know you can’t make it, let us know via text. We’ll let your intro know as well. You can always opt in again for a future week when your schedule works.',
   },
   {
     q: 'Is meeting people through Fika safe?',

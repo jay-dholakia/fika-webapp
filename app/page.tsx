@@ -2,7 +2,8 @@ import Header from './components/Header'
 import Footer from './components/Footer'
 import ScrollReveal from './components/ScrollReveal'
 import FaqAccordion from './components/FaqAccordion'
-import CtaWithLocation from './components/CtaWithLocation'
+
+const CONCIERGE_NUMBER = process.env.NEXT_PUBLIC_SENDBLUE_CONCIERGE_NUMBER?.trim() || null
 
 export default function Home() {
   return (
@@ -48,41 +49,43 @@ export default function Home() {
         <section id="how" data-animate className="section section-how">
           <div className="section-inner">
             <h2 className="section-title">How it works</h2>
-            <p className="section-lead">Four steps to your first Fika</p>
             <ol className="steps">
               <li className="step">
                 <span className="step-num">1</span>
                 <div className="step-content">
-                  <h3 className="step-title">Text your Fika concierge</h3>
+                  <h3 className="step-title">Get set up</h3>
                   <p className="step-text">
-                    Start by texting your concierge. They&apos;ll ask a few quick questions about you—your interests, where you&apos;re based, and the kind of conversations you enjoy.
+                    <strong>Text FIKA to join.</strong> Answer a few quick questions so we can match you with the right person.
                   </p>
                 </div>
               </li>
               <li className="step">
                 <span className="step-num">2</span>
                 <div className="step-content">
-                  <h3 className="step-title">Want a Fika this week?</h3>
+                  <h3 className="step-title">Join each week when you&apos;re ready</h3>
                   <p className="step-text">
-                    Each week your concierge texts to see if you&apos;re up for meeting someone new. Reply Yes or Skip. No pressure.
+                    <strong>Opt in on Sunday</strong> — Text FIKA to join that week&apos;s introductions.
+                  </p>
+                  <p className="step-text">
+                    <strong>Set your availability</strong> — Share when you&apos;re free between Wednesday and Saturday.
                   </p>
                 </div>
               </li>
               <li className="step">
                 <span className="step-num">3</span>
                 <div className="step-content">
-                  <h3 className="step-title">Get your intro</h3>
+                  <h3 className="step-title">We make the plan</h3>
                   <p className="step-text">
-                    If you&apos;re in, you&apos;ll get an intro to someone nearby with overlapping interests and availability.
+                    <strong>Get your introduction</strong> — On Tuesday, you&apos;ll receive a match with a time and place already set based on your availability.
                   </p>
                 </div>
               </li>
               <li className="step">
                 <span className="step-num">4</span>
                 <div className="step-content">
-                  <h3 className="step-title">Show up</h3>
+                  <h3 className="step-title">Meet up</h3>
                   <p className="step-text">
-                    Your concierge suggests a time and place to meet for coffee based on when you&apos;re available and where you live. Then, meet for Fika.
+                    Confirm and show up. No endless texting — just a real conversation with someone new.
                   </p>
                 </div>
               </li>
@@ -100,8 +103,19 @@ export default function Home() {
         <section id="cta" data-animate className="section section-cta">
           <div className="section-inner cta-inner">
             <h2 className="cta-title">Ready for a real Fika?</h2>
-            <p className="cta-sub">Join the waitlist and we&apos;ll let you know when Fika is ready for you.</p>
-            <CtaWithLocation />
+            <p className="cta-sub">Text us to get started. We&apos;ll walk you through a quick setup over SMS.</p>
+            {CONCIERGE_NUMBER ? (
+              <a
+                href={`sms:${CONCIERGE_NUMBER}?body=${encodeURIComponent("Yo! Help set me up for Fika.")}`}
+                className="btn btn-primary btn-block"
+              >
+                Text to get started
+              </a>
+            ) : (
+              <p className="cta-sub" style={{ marginTop: '0.75rem' }}>
+                Text <strong>FIKA</strong> to the number we use in the app to get started.
+              </p>
+            )}
           </div>
         </section>
         </main>
