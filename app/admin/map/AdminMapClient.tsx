@@ -5,10 +5,9 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import L from 'leaflet'
 import type { FeatureGroup as LeafletFeatureGroup } from 'leaflet'
 import { getSupabase } from '@/lib/supabase'
-import dynamic from 'next/dynamic'
 
 import 'leaflet-draw'
-import { useMap } from 'react-leaflet'
+import { CircleMarker, FeatureGroup, MapContainer, Polygon, Popup, TileLayer, useMap } from 'react-leaflet'
 
 function adminMapLog(...args: unknown[]) {
   try {
@@ -20,31 +19,6 @@ function adminMapLog(...args: unknown[]) {
     // ignore
   }
 }
-
-const MapContainer = dynamic(
-  () => import('react-leaflet').then((m) => m.MapContainer),
-  { ssr: false }
-)
-const TileLayer = dynamic(
-  () => import('react-leaflet').then((m) => m.TileLayer),
-  { ssr: false }
-)
-const Polygon = dynamic(
-  () => import('react-leaflet').then((m) => m.Polygon),
-  { ssr: false }
-)
-const FeatureGroup = dynamic(
-  () => import('react-leaflet').then((m) => m.FeatureGroup),
-  { ssr: false }
-)
-const CircleMarker = dynamic(
-  () => import('react-leaflet').then((m) => m.CircleMarker),
-  { ssr: false }
-)
-const Popup = dynamic(
-  () => import('react-leaflet').then((m) => m.Popup),
-  { ssr: false }
-)
 
 interface MapPoint {
   id: string
