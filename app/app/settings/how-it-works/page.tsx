@@ -45,7 +45,7 @@ const portalFaqItems = [
   },
   {
     q: 'My intro didn\'t show up to our Fika—now what?',
-    a: 'Please reach out to support@letsfika.co and we\'ll be happy to reissue you an intro.',
+    a: 'We hate when that happens. Text us and we’ll follow up with your intro, and make it clear that flaking isn’t okay. Repeat no-shows without a valid reason will lead to removal from intros!',
   },
 ]
 
