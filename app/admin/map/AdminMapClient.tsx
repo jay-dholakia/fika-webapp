@@ -7,7 +7,7 @@ import type { FeatureGroup as LeafletFeatureGroup } from 'leaflet'
 import { getSupabase } from '@/lib/supabase'
 
 import 'leaflet-draw'
-import { CircleMarker, FeatureGroup, MapContainer, Polygon, Popup, TileLayer, useMap } from 'react-leaflet'
+import { CircleMarker, MapContainer, Polygon, Popup, TileLayer, useMap } from 'react-leaflet'
 
 function adminMapLog(...args: unknown[]) {
   try {
@@ -116,6 +116,68 @@ function DrawToolbar(props: {
   return null
 }
 
+function EditLayerManager(props: {
+  enabled: boolean
+  marketSlug: string | null
+  initialRing: [number, number][] | null
+  featureGroupVersion: number
+  featureGroupRef: React.MutableRefObject<LeafletFeatureGroup | null>
+  onFeatureGroupReady: () => void
+  onCreated: (e: unknown) => void
+  onEdited: () => void
+  onDeleted: () => void
+}) {
+  const map = useMap()
+
+  useEffect(() => {
+    if (!props.enabled) {
+      if (props.featureGroupRef.current) {
+        adminMapLog('EditLayerManager: removing featureGroup')
+        map.removeLayer(props.featureGroupRef.current)
+        props.featureGroupRef.current = null
+        props.onFeatureGroupReady()
+      }
+      return
+    }
+
+    if (!props.featureGroupRef.current) {
+      adminMapLog('EditLayerManager: creating featureGroup')
+      const fg = L.featureGroup()
+      fg.addTo(map)
+      props.featureGroupRef.current = fg as unknown as LeafletFeatureGroup
+      props.onFeatureGroupReady()
+    }
+
+    const fg = props.featureGroupRef.current
+    if (fg && props.initialRing?.length) {
+      // Load the current polygon as a layer in the feature group.
+      ;(fg as unknown as { clearLayers?: () => void }).clearLayers?.()
+      const latlngs = props.initialRing.map(([lng, lat]) => [lat, lng]) as [number, number][]
+      const polyLayer = L.polygon(latlngs, {
+        color: '#2563eb',
+        fillColor: '#3b82f6',
+        fillOpacity: 0.2,
+        weight: 2,
+      })
+      ;(fg as unknown as { addLayer: (l: unknown) => void }).addLayer(polyLayer)
+      adminMapLog('EditLayerManager: loaded polygon layer', { market: props.marketSlug })
+    }
+    // Only re-run when the market changes; edits are handled by draw events.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [map, props.enabled, props.marketSlug])
+
+  return (
+    <DrawToolbar
+      enabled={props.enabled}
+      featureGroupVersion={props.featureGroupVersion}
+      featureGroupRef={props.featureGroupRef}
+      onCreated={props.onCreated}
+      onEdited={props.onEdited}
+      onDeleted={props.onDeleted}
+    />
+  )
+}
+
 function getFirstPolygonGeometry(geo: GeoJSON.GeoJSON): GeoJSON.Polygon | null {
   if (geo.type === 'Polygon') return geo
   if (geo.type === 'FeatureCollection' && geo.features?.length) {
@@ -139,23 +201,6 @@ export default function AdminMapClient() {
   const editGroupRef = useRef<LeafletFeatureGroup | null>(null)
   const [editGroupVersion, setEditGroupVersion] = useState(0)
   const initializedSlugRef = useRef<string | null>(null)
-
-  const featureGroupRefCb = useCallback((fg: LeafletFeatureGroup | null) => {
-    // IMPORTANT: keep this callback stable; otherwise React will call old ref with null
-    // and new ref with instance on every render, causing an infinite loop.
-    if (fg === null) {
-      if (editGroupRef.current !== null) {
-        editGroupRef.current = null
-        adminMapLog('FeatureGroup ref cleared')
-      }
-      return
-    }
-    if (fg !== editGroupRef.current) {
-      editGroupRef.current = fg
-      setEditGroupVersion((v) => v + 1)
-      adminMapLog('FeatureGroup ref set', { hasFg: true, editGroupVersionNext: true })
-    }
-  }, [])
 
   function captureEditedShape() {
     const layer = editGroupRef.current
@@ -249,43 +294,7 @@ export default function AdminMapClient() {
 
   const editingPolygon = editMarketSlug ? data?.polygons?.find((p) => p.slug === editMarketSlug) : null
 
-  function initEditLayer(group: LeafletFeatureGroup, ring: [number, number][]) {
-    ;(group as unknown as { clearLayers?: () => void }).clearLayers?.()
-    const latlngs = ring.map(([lng, lat]) => [lat, lng]) as [number, number][]
-    const polyLayer = L.polygon(latlngs, {
-      color: '#2563eb',
-      fillColor: '#3b82f6',
-      fillOpacity: 0.2,
-      weight: 2,
-    })
-    ;(group as unknown as { addLayer: (l: unknown) => void }).addLayer(polyLayer)
-    setEditedRing(ring)
-  }
-
-  // Populate the FeatureGroup with a Leaflet layer when entering edit mode for a market
-  // and when the FeatureGroup ref becomes available. Never clear it again once editing has started.
-  useEffect(() => {
-    const slug = editMarketSlug
-    const group = editGroupRef.current
-    if (!slug || !group || !editingPolygon) {
-      initializedSlugRef.current = null
-      return
-    }
-    if (hasEdited) return
-    if (initializedSlugRef.current === slug) return
-    initializedSlugRef.current = slug
-
-    try {
-      const ring = editingPolygon.coordinates?.[0] as [number, number][] | undefined
-      if (!ring?.length) {
-        setEditedRing(null)
-        return
-      }
-      initEditLayer(group, ring)
-    } catch {
-      // ignore
-    }
-  }, [editMarketSlug, editingPolygon, editGroupVersion, hasEdited])
+  // FeatureGroup + layer are managed imperatively inside the map via EditLayerManager.
 
   if (loading) {
     return <div className="admin-loading">Loading map…</div>
@@ -401,15 +410,13 @@ export default function AdminMapClient() {
                 </Polygon>
               )
             })}
-          {editMarketSlug && editingPolygon && (
-            <FeatureGroup
-              ref={featureGroupRefCb}
-            />
-          )}
-          <DrawToolbar
+          <EditLayerManager
             enabled={!!editMarketSlug && !!editingPolygon}
+            marketSlug={editMarketSlug}
+            initialRing={(editingPolygon?.coordinates?.[0] as [number, number][] | undefined) ?? null}
             featureGroupVersion={editGroupVersion}
             featureGroupRef={editGroupRef}
+            onFeatureGroupReady={() => setEditGroupVersion((v) => v + 1)}
             onCreated={(e) => {
               const group = editGroupRef.current
               const layer = (e as { layer?: unknown }).layer
