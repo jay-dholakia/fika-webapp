@@ -1,5 +1,6 @@
 'use client'
 
+import './leaflet-flat-patch'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { FeatureGroup as LeafletFeatureGroup } from 'leaflet'
 import { getSupabase } from '@/lib/supabase'
@@ -117,9 +118,11 @@ export default function AdminMapClient() {
   async function handleSaveBoundary() {
     const layer = editGroupRef.current
     if (!editMarketSlug || !layer?.toGeoJSON) return
-    const geo = layer.toGeoJSON()
-    const polygon = getFirstPolygonGeometry(geo)
-    if (!polygon) {
+    const polygon: GeoJSON.Polygon | null =
+      editedRing?.length
+        ? ({ type: 'Polygon', coordinates: [editedRing] } as GeoJSON.Polygon)
+        : getFirstPolygonGeometry(layer.toGeoJSON())
+    if (!polygon?.coordinates?.[0]?.length) {
       setSaveError('No polygon to save. Draw or edit a polygon first.')
       return
     }
