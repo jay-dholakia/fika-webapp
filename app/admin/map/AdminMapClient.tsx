@@ -70,6 +70,15 @@ function DrawToolbar(props: {
   onDeleted: () => void
 }) {
   const map = useMap()
+  const onCreatedRef = useRef(props.onCreated)
+  const onEditedRef = useRef(props.onEdited)
+  const onDeletedRef = useRef(props.onDeleted)
+
+  useEffect(() => {
+    onCreatedRef.current = props.onCreated
+    onEditedRef.current = props.onEdited
+    onDeletedRef.current = props.onDeleted
+  }, [props.onCreated, props.onEdited, props.onDeleted])
 
   useEffect(() => {
     adminMapLog('DrawToolbar effect', { enabled: props.enabled, featureGroupVersion: props.featureGroupVersion })
@@ -80,7 +89,16 @@ function DrawToolbar(props: {
       return
     }
 
-    const drawControl = new (L.Control as unknown as { Draw: new (opts: unknown) => L.Control }).Draw({
+    const DrawCtor = (L as unknown as { Control?: { Draw?: new (opts: unknown) => L.Control } }).Control?.Draw
+    if (typeof DrawCtor !== 'function') {
+      adminMapLog('DrawToolbar: L.Control.Draw missing', {
+        hasLeafletDraw: !!(L as unknown as { Draw?: unknown }).Draw,
+        controlKeys: Object.keys(L.Control as unknown as object),
+      })
+      return
+    }
+
+    const drawControl = new DrawCtor({
       draw: {
         polygon: true,
         rectangle: false,
@@ -103,19 +121,23 @@ function DrawToolbar(props: {
     const EDITED = Draw?.Event?.EDITED ?? 'draw:edited'
     const DELETED = Draw?.Event?.DELETED ?? 'draw:deleted'
 
-    map.on(CREATED, props.onCreated)
-    map.on(EDITED, props.onEdited)
-    map.on(DELETED, props.onDeleted)
+    const createdHandler = (e: unknown) => onCreatedRef.current(e)
+    const editedHandler = () => onEditedRef.current()
+    const deletedHandler = () => onDeletedRef.current()
+
+    map.on(CREATED, createdHandler)
+    map.on(EDITED, editedHandler)
+    map.on(DELETED, deletedHandler)
     adminMapLog('DrawToolbar: handlers attached', { CREATED, EDITED, DELETED })
 
     return () => {
-      map.off(CREATED, props.onCreated)
-      map.off(EDITED, props.onEdited)
-      map.off(DELETED, props.onDeleted)
+      map.off(CREATED, createdHandler)
+      map.off(EDITED, editedHandler)
+      map.off(DELETED, deletedHandler)
       map.removeControl(drawControl)
       adminMapLog('DrawToolbar: cleaned up')
     }
-  }, [map, props.enabled, props.featureGroupVersion, props.featureGroupRef, props.onCreated, props.onEdited, props.onDeleted])
+  }, [map, props.enabled, props.featureGroupVersion, props.featureGroupRef])
 
   return null
 }
