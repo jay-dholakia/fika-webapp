@@ -164,23 +164,10 @@ export default function AdminMapClient() {
     }
   }
 
-  if (loading) {
-    return <div className="admin-loading">Loading map…</div>
-  }
-  if (error) {
-    return (
-      <div className="admin-card admin-card-narrow">
-        <p className="admin-error" role="alert">{error}</p>
-      </div>
-    )
-  }
-  if (!data) return null
-
-  const editingPolygon = editMarketSlug ? data.polygons.find((p) => p.slug === editMarketSlug) : null
+  const editingPolygon = editMarketSlug ? data?.polygons?.find((p) => p.slug === editMarketSlug) : null
 
   // Populate the FeatureGroup with a Leaflet layer once when entering edit mode for a market.
-  // We do this imperatively so Leaflet.draw edits the same underlying layer, and React re-renders
-  // don't reset it back to the original rectangle.
+  // Hooks must run before any early returns, so this effect lives above the loading/error returns.
   useEffect(() => {
     const slug = editMarketSlug
     const group = editGroupRef.current
@@ -211,6 +198,18 @@ export default function AdminMapClient() {
       // ignore
     }
   }, [editMarketSlug, editingPolygon])
+
+  if (loading) {
+    return <div className="admin-loading">Loading map…</div>
+  }
+  if (error) {
+    return (
+      <div className="admin-card admin-card-narrow">
+        <p className="admin-error" role="alert">{error}</p>
+      </div>
+    )
+  }
+  if (!data) return null
 
   return (
     <div className="admin-card">
