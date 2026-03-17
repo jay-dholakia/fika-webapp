@@ -12,12 +12,8 @@ const faqItems = [
     a: 'Once a week. Text FIKA each week to opt in. When you’re in, you get one introduction to someone nearby for that week.',
   },
   {
-    q: 'How does matching work?',
-    a: 'We only match you when you have overlapping availability. Your intro arrives by text with who they are, where they’re based, what they’re into, and a suggested time and place. You can confirm or adjust once if needed—then simply meet up. No separate app to manage, no endless messaging.',
-  },
-  {
     q: 'Do I have to meet in person?',
-    a: 'Yes. Fika is built for real-life conversation. The whole point is face-to-face connection—when and where it works for you.',
+    a: 'Yes—Fika is designed for in‑person conversation (usually a café or similar public spot).',
   },
   {
     q: 'What if we don’t click?',
