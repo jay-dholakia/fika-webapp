@@ -65,6 +65,35 @@ function birthdateToDisplay(iso: string): string {
   return `${m}/${d}/${y}`
 }
 
+type BirthParts = { mm: string; dd: string; yyyy: string }
+
+function birthPartsEqual(a: BirthParts, b: BirthParts): boolean {
+  return a.mm === b.mm && a.dd === b.dd && a.yyyy === b.yyyy
+}
+
+function birthPartsFromRaw(raw: string): BirthParts {
+  const s = (raw ?? '').trim()
+  // ISO (YYYY-MM-DD)
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (iso) return { yyyy: iso[1], mm: iso[2], dd: iso[3] }
+
+  // Common display format (MM/DD/YYYY) or pasted digits
+  const digits = s.replace(/\D/g, '').slice(0, 8)
+  const mm = digits.slice(0, 2)
+  const dd = digits.slice(2, 4)
+  const yyyy = digits.slice(4, 8)
+  return { mm, dd, yyyy }
+}
+
+function birthPartsToRawDisplay(p: BirthParts): string {
+  const mm = p.mm
+  const dd = p.dd
+  const yyyy = p.yyyy
+  if (!mm && !dd && !yyyy) return ''
+  // Keep the familiar MM/DD/YYYY shape for autosave + existing parsing.
+  return `${mm}${mm ? '/' : ''}${dd}${dd ? '/' : ''}${yyyy}`.replace(/\/{2,}/g, '/')
+}
+
 /** Format raw input as MM/DD/YYYY with slashes inserted automatically (digits only, max 8). Shows trailing slash after each complete segment so the next keystroke goes after it. */
 function formatBirthdateInput(raw: string): string {
   const digits = raw.replace(/\D/g, '').slice(0, 8)
@@ -110,6 +139,7 @@ function AppOnboardingContent() {
   const { loading: statusLoading, isComplete, profile, intake } = useOnboardingStatus(sessionUserId ?? undefined)
 
   const [answers, setAnswers] = useState<AnswersState>({})
+  const [birthParts, setBirthParts] = useState<BirthParts>({ mm: '', dd: '', yyyy: '' })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [locationStatus, setLocationStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
@@ -192,6 +222,13 @@ function AppOnboardingContent() {
     setAnswers(getInitialAnswers(profile ?? null, intake ?? null))
     if (profile?.city) setLocationStatus('done')
   }, [statusLoading, isComplete, sessionUserId, profile, intake])
+
+  // Keep the Month/Day/Year inputs in sync with the underlying birthdate answer (supports token autosave reloads).
+  useEffect(() => {
+    const raw = typeof answers.birthdate === 'string' ? answers.birthdate : ''
+    const next = birthPartsFromRaw(raw)
+    setBirthParts((prev) => (birthPartsEqual(prev, next) ? prev : next))
+  }, [answers.birthdate])
 
   useEffect(() => {
     if (!sessionUserId) return
@@ -597,7 +634,74 @@ function AppOnboardingContent() {
             autoComplete={step.id === 'first_name' ? 'given-name' : 'off'}
           />
         )}
-        {step.type === 'date' && (
+        {step.type === 'date' && step.id === 'birthdate' && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1.4fr', gap: '0.75rem' }}>
+            <input
+              id="onboarding-birthdate-mm"
+              name="birthdate-mm"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              type="text"
+              className="auth-input"
+              placeholder="MM"
+              value={birthParts.mm}
+              onChange={(e) => {
+                const mm = e.target.value.replace(/\D/g, '').slice(0, 2)
+                setBirthParts((p) => {
+                  const next = { ...p, mm }
+                  setAnswers((a) => ({ ...a, birthdate: birthPartsToRawDisplay(next) }))
+                  return next
+                })
+              }}
+              disabled={saving}
+              autoComplete="bday-month"
+              aria-label="Birth month"
+            />
+            <input
+              id="onboarding-birthdate-dd"
+              name="birthdate-dd"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              type="text"
+              className="auth-input"
+              placeholder="DD"
+              value={birthParts.dd}
+              onChange={(e) => {
+                const dd = e.target.value.replace(/\D/g, '').slice(0, 2)
+                setBirthParts((p) => {
+                  const next = { ...p, dd }
+                  setAnswers((a) => ({ ...a, birthdate: birthPartsToRawDisplay(next) }))
+                  return next
+                })
+              }}
+              disabled={saving}
+              autoComplete="bday-day"
+              aria-label="Birth day"
+            />
+            <input
+              id="onboarding-birthdate-yyyy"
+              name="birthdate-yyyy"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              type="text"
+              className="auth-input"
+              placeholder="YYYY"
+              value={birthParts.yyyy}
+              onChange={(e) => {
+                const yyyy = e.target.value.replace(/\D/g, '').slice(0, 4)
+                setBirthParts((p) => {
+                  const next = { ...p, yyyy }
+                  setAnswers((a) => ({ ...a, birthdate: birthPartsToRawDisplay(next) }))
+                  return next
+                })
+              }}
+              disabled={saving}
+              autoComplete="bday-year"
+              aria-label="Birth year"
+            />
+          </div>
+        )}
+        {step.type === 'date' && step.id !== 'birthdate' && (
           <input
             id={`onboarding-${step.id}`}
             name={step.id}
