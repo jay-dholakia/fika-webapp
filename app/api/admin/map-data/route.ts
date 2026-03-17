@@ -31,7 +31,7 @@ export async function GET(request: Request) {
 
   const { data: profiles } = await supabase
     .from('profiles')
-    .select('id, first_name, city, market, lat, lng')
+    .select('id, first_name, city, market, lat, lng, created_at')
     .not('lat', 'is', null)
     .not('lng', 'is', null)
 
@@ -42,9 +42,15 @@ export async function GET(request: Request) {
     market: (p as { market?: string | null }).market ?? null,
     city: (p as { city?: string | null }).city ?? null,
     first_name: (p as { first_name?: string | null }).first_name ?? null,
+    created_at: (p as { created_at?: string | null }).created_at ?? null,
   }))
 
   const polygons = await getMarketPolygonsWithDb(supabase)
 
-  return NextResponse.json({ points, polygons })
+  const { data: markets } = await supabase
+    .from('markets')
+    .select('slug, label, active')
+    .order('slug')
+
+  return NextResponse.json({ points, polygons, markets: markets ?? [] })
 }

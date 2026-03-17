@@ -6,7 +6,6 @@ import { usePathname } from 'next/navigation'
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const isMarkets = pathname === '/admin' || pathname === '/admin/'
-  const isSignups = pathname?.startsWith('/admin/signups')
   const isMap = pathname?.startsWith('/admin/map')
 
   return (
@@ -21,12 +20,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               className={`admin-link ${isMarkets ? 'admin-link-active' : ''}`}
             >
               Markets
-            </Link>
-            <Link
-              href="/admin/signups"
-              className={`admin-link ${isSignups ? 'admin-link-active' : ''}`}
-            >
-              Sign-ups
             </Link>
             <Link
               href="/admin/map"

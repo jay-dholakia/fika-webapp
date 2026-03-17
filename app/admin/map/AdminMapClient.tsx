@@ -27,12 +27,98 @@ interface MapPoint {
   market: string | null
   city: string | null
   first_name: string | null
+  created_at: string | null
 }
 
 interface MapPolygon {
   slug: string
   label: string
   coordinates: number[][][]
+}
+
+interface MarketRow {
+  slug: string
+  label: string
+  active: boolean
+}
+
+function startOfDayIso(d: Date): string {
+  const x = new Date(d)
+  x.setHours(0, 0, 0, 0)
+  return x.toISOString().slice(0, 10)
+}
+
+function formatDayLabel(yyyyMmDd: string): string {
+  try {
+    const d = new Date(`${yyyyMmDd}T00:00:00Z`)
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  } catch {
+    return yyyyMmDd
+  }
+}
+
+function DailyGrowthChart(props: { points: MapPoint[]; title: string }) {
+  const byDay: Record<string, number> = {}
+  for (const p of props.points) {
+    const day = typeof p.created_at === 'string' && p.created_at ? p.created_at.slice(0, 10) : null
+    if (!day) continue
+    byDay[day] = (byDay[day] ?? 0) + 1
+  }
+  const days = Object.keys(byDay).sort()
+  const last30 = days.slice(-30)
+  const counts = last30.map((d) => byDay[d] ?? 0)
+  const max = Math.max(1, ...counts)
+  let cumulative = 0
+  const cum = counts.map((c) => { cumulative += c; return cumulative })
+  const cumMax = Math.max(1, ...cum)
+
+  return (
+    <div style={{ padding: '12px 12px 10px 12px', border: '1px solid var(--color-border, #e5e5e5)', borderRadius: 8 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, marginBottom: 8 }}>
+        <h2 style={{ margin: 0, fontSize: 14, fontWeight: 700 }}>{props.title}</h2>
+        <div style={{ fontSize: 12, color: 'var(--color-textSecondary, #666)' }}>
+          Last 30 days · total {props.points.length}
+        </div>
+      </div>
+      {last30.length === 0 ? (
+        <div style={{ fontSize: 12, color: 'var(--color-textSecondary, #666)' }}>No signups with created_at.</div>
+      ) : (
+        <svg viewBox="0 0 600 140" width="100%" height="140" role="img" aria-label="Daily signups and cumulative growth">
+          {/* axes baseline */}
+          <line x1="24" y1="120" x2="596" y2="120" stroke="#ddd" strokeWidth="1" />
+          {/* bars */}
+          {counts.map((c, i) => {
+            const x0 = 30 + i * (560 / counts.length)
+            const w = (560 / counts.length) - 2
+            const h = (c / max) * 90
+            const y = 120 - h
+            return <rect key={last30[i]} x={x0} y={y} width={Math.max(1, w)} height={h} fill="#ef4444" opacity="0.75" />
+          })}
+          {/* cumulative line */}
+          <polyline
+            fill="none"
+            stroke="#2563eb"
+            strokeWidth="2"
+            points={cum.map((c, i) => {
+              const x = 30 + i * (560 / counts.length) + ((560 / counts.length) - 2) / 2
+              const y = 120 - (c / cumMax) * 90
+              return `${x},${y}`
+            }).join(' ')}
+          />
+          {/* x labels (sparse) */}
+          {last30.map((d, i) => {
+            if (i % 7 !== 0 && i !== last30.length - 1) return null
+            const x = 30 + i * (560 / counts.length)
+            return (
+              <text key={`${d}-lbl`} x={x} y={135} fontSize="10" fill="#666">
+                {formatDayLabel(d)}
+              </text>
+            )
+          })}
+        </svg>
+      )}
+    </div>
+  )
 }
 
 function DrawToolbar(props: {
@@ -189,10 +275,11 @@ function getFirstPolygonGeometry(geo: GeoJSON.GeoJSON): GeoJSON.Polygon | null {
 }
 
 export default function AdminMapClient() {
-  const [data, setData] = useState<{ points: MapPoint[]; polygons: MapPolygon[] } | null>(null)
+  const [data, setData] = useState<{ points: MapPoint[]; polygons: MapPolygon[]; markets: MarketRow[] } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [editMarketSlug, setEditMarketSlug] = useState<string | null>(null)
+  const [filterMarket, setFilterMarket] = useState<string>('')
   const [hasEdited, setHasEdited] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -230,7 +317,7 @@ export default function AdminMapClient() {
     if (res.status === 403) throw new Error("Your account doesn't have admin access.")
     if (!res.ok) throw new Error('Failed to load map data')
     const json = await res.json()
-    return { points: json.points ?? [], polygons: json.polygons ?? [] }
+    return { points: json.points ?? [], polygons: json.polygons ?? [], markets: json.markets ?? [] }
   }, [])
 
   useEffect(() => {
@@ -308,16 +395,43 @@ export default function AdminMapClient() {
   }
   if (!data) return null
 
+  const pointsFiltered = filterMarket
+    ? data.points.filter((p) => p.market === filterMarket)
+    : data.points
+
   return (
     <div className="admin-card">
       <h1 className="admin-title">Sign-ups map</h1>
       <p className="admin-description" style={{ marginBottom: '1rem' }}>
         Exact lat/lng with zone boundaries. Only profiles with location set are shown.
       </p>
+      <div style={{ marginBottom: '0.75rem' }}>
+        <DailyGrowthChart
+          points={pointsFiltered}
+          title={filterMarket ? `Daily signups — ${data.markets.find((m) => m.slug === filterMarket)?.label ?? filterMarket}` : 'Daily signups — all markets'}
+        />
+      </div>
       <p className="admin-description" style={{ marginBottom: '0.75rem', fontSize: '0.9rem', color: 'var(--color-textSecondary, #666)' }}>
         To update a market’s zone: choose the market below, edit the polygon on the map (drag vertices or draw a new shape with the toolbar), then click <strong>Save boundary</strong>. The boundary is stored in the <code>markets</code> table and used for point-in-polygon resolution.
       </p>
-      <div style={{ marginBottom: '0.75rem', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.5rem' }}>
+      <div style={{ marginBottom: '0.75rem', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.75rem' }}>
+        <label htmlFor="admin-map-filter-market" style={{ fontWeight: 500 }}>
+          Filter market:
+        </label>
+        <select
+          id="admin-map-filter-market"
+          value={filterMarket}
+          onChange={(e) => setFilterMarket(e.target.value)}
+          style={{ padding: '4px 8px', borderRadius: 4 }}
+        >
+          <option value="">All markets</option>
+          {data.markets.map((m) => (
+            <option key={m.slug} value={m.slug}>
+              {m.label || m.slug}
+            </option>
+          ))}
+        </select>
+
         <label htmlFor="admin-map-edit-market" style={{ fontWeight: 500 }}>
           Edit boundary:
         </label>
@@ -444,7 +558,7 @@ export default function AdminMapClient() {
               setEditedRing(null)
             }}
           />
-          {data.points.map((p) => (
+          {pointsFiltered.map((p) => (
             <CircleMarker
               key={p.id}
               center={[p.lat, p.lng]}
