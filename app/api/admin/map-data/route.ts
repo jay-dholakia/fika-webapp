@@ -1,20 +1,18 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
-import { createServerSupabase } from '@/lib/supabase-server'
+import { createServerSupabase, getUserIdFromRequest } from '@/lib/supabase-server'
 import { isAdminByUserId } from '@/lib/admin-markets'
 import { getMarketPolygonsWithDb } from '@/lib/markets'
 
 export const dynamic = 'force-dynamic'
 
 /** GET /api/admin/map-data — profiles with lat/lng + market polygons for admin map. Admin only. */
-export async function GET() {
+export async function GET(request: Request) {
   const supabaseAuth = await createServerSupabase()
   if (!supabaseAuth) {
     return NextResponse.json({ error: 'Not configured' }, { status: 500 })
   }
-  let userId: string | null = null
-  const { data: { session } } = await supabaseAuth.auth.getSession()
-  if (session?.user?.id) userId = session.user.id
+  const userId = await getUserIdFromRequest(request, supabaseAuth)
   if (!userId) {
     return NextResponse.json({ error: 'Not signed in', code: 'NO_SESSION' }, { status: 401 })
   }

@@ -28,3 +28,23 @@ export async function createServerSupabase() {
     },
   })
 }
+
+/**
+ * Get current user ID in a Route Handler: from cookies (getSession) or from Authorization Bearer token.
+ * Use this so API routes work when the client sends the token in headers (e.g. session in localStorage only).
+ */
+export async function getUserIdFromRequest(
+  request: Request,
+  supabaseAuth: Awaited<ReturnType<typeof createServerSupabase>>
+): Promise<string | null> {
+  if (!supabaseAuth) return null
+  const { data: { session } } = await supabaseAuth.auth.getSession()
+  if (session?.user?.id) return session.user.id
+  const authHeader = request.headers.get('Authorization')
+  if (authHeader?.startsWith('Bearer ')) {
+    const token = authHeader.slice(7)
+    const { data: { user } } = await supabaseAuth.auth.getUser(token)
+    return user?.id ?? null
+  }
+  return null
+}
