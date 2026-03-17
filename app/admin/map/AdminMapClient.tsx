@@ -8,6 +8,7 @@ import { getSupabase } from '@/lib/supabase'
 import dynamic from 'next/dynamic'
 
 import 'leaflet-draw'
+import { useMap } from 'react-leaflet'
 
 const MapContainer = dynamic(
   () => import('react-leaflet').then((m) => m.MapContainer),
@@ -49,6 +50,57 @@ interface MapPolygon {
   coordinates: number[][][]
 }
 
+function DrawToolbar(props: {
+  enabled: boolean
+  featureGroupRef: React.MutableRefObject<LeafletFeatureGroup | null>
+  onCreated: (e: unknown) => void
+  onEdited: () => void
+  onDeleted: () => void
+}) {
+  const map = useMap()
+
+  useEffect(() => {
+    if (!props.enabled) return
+    const group = props.featureGroupRef.current
+    if (!group) return
+
+    const drawControl = new (L.Control as unknown as { Draw: new (opts: unknown) => L.Control }).Draw({
+      draw: {
+        polygon: true,
+        rectangle: false,
+        circle: false,
+        marker: false,
+        polyline: false,
+        circlemarker: false,
+      },
+      edit: {
+        featureGroup: group,
+        edit: true,
+        remove: true,
+      },
+    })
+    map.addControl(drawControl)
+
+    const Draw = (L as unknown as { Draw?: { Event?: Record<string, string> } }).Draw
+    const CREATED = Draw?.Event?.CREATED ?? 'draw:created'
+    const EDITED = Draw?.Event?.EDITED ?? 'draw:edited'
+    const DELETED = Draw?.Event?.DELETED ?? 'draw:deleted'
+
+    map.on(CREATED, props.onCreated)
+    map.on(EDITED, props.onEdited)
+    map.on(DELETED, props.onDeleted)
+
+    return () => {
+      map.off(CREATED, props.onCreated)
+      map.off(EDITED, props.onEdited)
+      map.off(DELETED, props.onDeleted)
+      map.removeControl(drawControl)
+    }
+  }, [map, props])
+
+  return null
+}
+
 function getFirstPolygonGeometry(geo: GeoJSON.GeoJSON): GeoJSON.Polygon | null {
   if (geo.type === 'Polygon') return geo
   if (geo.type === 'FeatureCollection' && geo.features?.length) {
@@ -69,8 +121,6 @@ export default function AdminMapClient() {
   const [saveError, setSaveError] = useState<string | null>(null)
   /** Current edited ring in GeoJSON order [lng, lat][] so the polygon sticks after drag; cleared when changing market. */
   const [editedRing, setEditedRing] = useState<[number, number][] | null>(null)
-  const mapRef = useRef<L.Map | null>(null)
-  const mapContainerRef = useRef<L.Map | null>(null)
   const editGroupRef = useRef<LeafletFeatureGroup | null>(null)
   const [editGroupVersion, setEditGroupVersion] = useState(0)
   const initializedSlugRef = useRef<string | null>(null)
@@ -205,66 +255,6 @@ export default function AdminMapClient() {
     }
   }, [editMarketSlug, editingPolygon, editGroupVersion, hasEdited])
 
-  // Attach Leaflet.draw controls directly (more reliable than react-leaflet-draw with React 18 + RL v4).
-  useEffect(() => {
-    mapRef.current = mapContainerRef.current
-    const map = mapRef.current
-    const group = editGroupRef.current
-    if (!map || !group || !editMarketSlug || !editingPolygon) return
-
-    // Create draw control bound to this FeatureGroup.
-    const drawControl = new (L.Control as unknown as { Draw: new (opts: unknown) => L.Control }).Draw({
-      draw: {
-        polygon: true,
-        rectangle: false,
-        circle: false,
-        marker: false,
-        polyline: false,
-        circlemarker: false,
-      },
-      edit: {
-        featureGroup: group,
-        edit: true,
-        remove: true,
-      },
-    })
-
-    map.addControl(drawControl)
-
-    const onCreated = (e: unknown) => {
-      const layer = (e as { layer?: unknown }).layer
-      if (!layer) return
-      ;(group as unknown as { clearLayers?: () => void }).clearLayers?.()
-      ;(group as unknown as { addLayer: (l: unknown) => void }).addLayer(layer)
-      setHasEdited(true)
-      setTimeout(captureEditedShape, 0)
-    }
-    const onEdited = () => {
-      setHasEdited(true)
-      setTimeout(captureEditedShape, 0)
-    }
-    const onDeleted = () => {
-      setHasEdited(true)
-      setEditedRing(null)
-    }
-
-    const Draw = (L as unknown as { Draw?: { Event?: Record<string, string> } }).Draw
-    const CREATED = Draw?.Event?.CREATED ?? 'draw:created'
-    const EDITED = Draw?.Event?.EDITED ?? 'draw:edited'
-    const DELETED = Draw?.Event?.DELETED ?? 'draw:deleted'
-
-    map.on(CREATED, onCreated)
-    map.on(EDITED, onEdited)
-    map.on(DELETED, onDeleted)
-
-    return () => {
-      map.off(CREATED, onCreated)
-      map.off(EDITED, onEdited)
-      map.off(DELETED, onDeleted)
-      map.removeControl(drawControl)
-    }
-  }, [editMarketSlug, editingPolygon, editGroupVersion])
-
   if (loading) {
     return <div className="admin-loading">Loading map…</div>
   }
@@ -342,7 +332,6 @@ export default function AdminMapClient() {
       )}
       <div style={{ height: 560, width: '100%', borderRadius: 8, overflow: 'hidden', border: '1px solid var(--color-border, #e5e5e5)' }}>
         <MapContainer
-          ref={mapContainerRef}
           center={[39, -98]}
           zoom={4}
           style={{ height: '100%', width: '100%' }}
@@ -390,6 +379,28 @@ export default function AdminMapClient() {
               }}
             />
           )}
+          <DrawToolbar
+            enabled={!!editMarketSlug && !!editingPolygon}
+            featureGroupRef={editGroupRef}
+            onCreated={(e) => {
+              const group = editGroupRef.current
+              const layer = (e as { layer?: unknown }).layer
+              if (group && layer) {
+                ;(group as unknown as { clearLayers?: () => void }).clearLayers?.()
+                ;(group as unknown as { addLayer: (l: unknown) => void }).addLayer(layer)
+              }
+              setHasEdited(true)
+              setTimeout(captureEditedShape, 0)
+            }}
+            onEdited={() => {
+              setHasEdited(true)
+              setTimeout(captureEditedShape, 0)
+            }}
+            onDeleted={() => {
+              setHasEdited(true)
+              setEditedRing(null)
+            }}
+          />
           {data.points.map((p) => (
             <CircleMarker
               key={p.id}
