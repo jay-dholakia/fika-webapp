@@ -167,8 +167,21 @@ export default function AdminMapClient() {
 
   const editingPolygon = editMarketSlug ? data?.polygons?.find((p) => p.slug === editMarketSlug) : null
 
-  // Populate the FeatureGroup with a Leaflet layer once when entering edit mode for a market.
-  // Hooks must run before any early returns, so this effect lives above the loading/error returns.
+  function initEditLayer(group: LeafletFeatureGroup, ring: [number, number][]) {
+    ;(group as unknown as { clearLayers?: () => void }).clearLayers?.()
+    const latlngs = ring.map(([lng, lat]) => [lat, lng]) as [number, number][]
+    const polyLayer = L.polygon(latlngs, {
+      color: '#2563eb',
+      fillColor: '#3b82f6',
+      fillOpacity: 0.2,
+      weight: 2,
+    })
+    ;(group as unknown as { addLayer: (l: unknown) => void }).addLayer(polyLayer)
+    setEditedRing(ring)
+  }
+
+  // Populate the FeatureGroup with a Leaflet layer when entering edit mode for a market
+  // and when the FeatureGroup ref becomes available. Never clear it again once editing has started.
   useEffect(() => {
     const slug = editMarketSlug
     const group = editGroupRef.current
@@ -176,29 +189,21 @@ export default function AdminMapClient() {
       initializedSlugRef.current = null
       return
     }
+    if (hasEdited) return
     if (initializedSlugRef.current === slug) return
     initializedSlugRef.current = slug
 
     try {
-      ;(group as unknown as { clearLayers?: () => void }).clearLayers?.()
       const ring = editingPolygon.coordinates?.[0] as [number, number][] | undefined
       if (!ring?.length) {
         setEditedRing(null)
         return
       }
-      const latlngs = ring.map(([lng, lat]) => [lat, lng]) as [number, number][]
-      const polyLayer = L.polygon(latlngs, {
-        color: '#2563eb',
-        fillColor: '#3b82f6',
-        fillOpacity: 0.2,
-        weight: 2,
-      })
-      ;(group as unknown as { addLayer: (l: unknown) => void }).addLayer(polyLayer)
-      setEditedRing(ring)
+      initEditLayer(group, ring)
     } catch {
       // ignore
     }
-  }, [editMarketSlug, editingPolygon, editGroupVersion])
+  }, [editMarketSlug, editingPolygon, editGroupVersion, hasEdited])
 
   if (loading) {
     return <div className="admin-loading">Loading map…</div>
