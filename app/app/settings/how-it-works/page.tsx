@@ -9,7 +9,7 @@ const portalFaqItems = [
   },
   {
     q: 'How do I get introductions?',
-    a: 'Text FIKA each week to opt in. We'll send you a link when you text FIKA. Set your availability for Wed–Sat on the Your Availability page. Your intro is sent by text and appears in the app after the run.',
+    a: "Text FIKA each week to opt in. We'll send you a link when you text FIKA. Set your availability for Wed–Sat on the Your Availability page. Your intro is sent by text and appears in the app after the run.",
   },
   {
     q: 'How many intros do I get per week?',
@@ -17,7 +17,7 @@ const portalFaqItems = [
   },
   {
     q: 'How often do matches run?',
-    a: 'Weekly. Text FIKA on Sunday to opt in and get your availability link. Set when you're free (Wed–Sat) by Monday 11am PT; after that, opt-in and availability lock. Intros go out on Tuesday, and you have until Tuesday evening to accept or pass. Your intro is sent by text and reflected in the app.',
+    a: "Weekly. Text FIKA on Sunday to opt in and get your availability link. Set when you're free (Wed–Sat) by Monday 11am PT; after that, opt-in and availability lock. Intros go out on Tuesday, and you have until Tuesday evening to accept or pass. Your intro is sent by text and reflected in the app.",
   },
   {
     q: 'What happens when I get an intro?',
