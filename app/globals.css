@@ -321,6 +321,24 @@ a {
   width: 100%;
   text-align: center;
 }
+
+/* Small loading spinner (used in buttons + auth callback) */
+.spinner {
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 255, 255, 0.45);
+  border-top-color: rgba(255, 255, 255, 1);
+  animation: spinner-rotate 0.8s linear infinite;
+  display: inline-block;
+}
+.spinner.spinner-dark {
+  border-color: rgba(100, 116, 139, 0.35);
+  border-top-color: rgba(100, 116, 139, 1);
+}
+@keyframes spinner-rotate {
+  to { transform: rotate(360deg); }
+}
 .hero-what-blob {
   position: absolute;
   left: 50%;

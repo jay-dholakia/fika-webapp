@@ -387,6 +387,11 @@ function AppOnboardingContent() {
   async function handleSignInWithGoogle(smsToken: string) {
     const supabase = getSupabase()
     if (!supabase) return
+    try {
+      window.scrollTo({ top: 0, left: 0, behavior: 'smooth' })
+    } catch {
+      // ignore
+    }
     const origin = typeof window !== 'undefined' ? window.location.origin : ''
     const redirectTo = `${origin}/auth/callback?next=/app/how-it-works&sms_token=${encodeURIComponent(smsToken)}`
     await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo } })
@@ -834,7 +839,14 @@ function AppOnboardingContent() {
             onClick={handleSubmit}
             disabled={saving}
           >
-            {saving ? 'Saving…' : 'Submit'}
+            {saving ? (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+                <span className="spinner" aria-hidden="true" />
+                Saving…
+              </span>
+            ) : (
+              'Submit'
+            )}
           </button>
         </section>
       </div>

@@ -106,7 +106,7 @@ export default function Home() {
             <p className="cta-sub">Text us to get started. We&apos;ll walk you through a quick setup over SMS.</p>
             {CONCIERGE_NUMBER ? (
               <a
-                href={`sms:${CONCIERGE_NUMBER}?body=${encodeURIComponent("Yo! Help set me up for Fika.")}`}
+                href={`sms:${CONCIERGE_NUMBER}?body=${encodeURIComponent("Hi! Help set me up for Fika.")}`}
                 className="btn btn-primary btn-block"
               >
                 Text to get started

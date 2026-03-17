@@ -215,7 +215,7 @@ export function messageInactiveMarketReply(placeLabel: string): string {
 }
 
 export function messageEntry(): string {
-  return `Welcome to Fika. 😊\n\nEach week I check in to see if you’re up for a Fika, send you one thoughtful intro nearby, and help you set it up if you both say yes. Want in this week? Reply Yes or Skip. If you're in, set your availability for Wed–Sat by Monday 12pm PT and we'll send your intro Tuesday 9am PT.`
+  return `Hey! Welcome to Fika. 😊\n\nEach week I check in to see if you’re up for a Fika, send you one thoughtful intro nearby, and help you set it up if you both say yes. Want in this week? Reply Yes or Skip. If you're in, set your availability for Wed–Sat by Monday 12pm PT and we'll send your intro Tuesday 9am PT.`
 }
 
 /** When they text after the opt-in window closed (Monday 11am PT). Window opens Sunday 12am PT, ends Monday 11am PT; they must text FIKA next Sunday. */

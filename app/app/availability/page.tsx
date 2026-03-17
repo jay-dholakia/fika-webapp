@@ -19,6 +19,8 @@ export default function AvailabilityPage() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [marketSlug, setMarketSlug] = useState<string | null>(null)
+  const [marketActive, setMarketActive] = useState<boolean | null>(null)
 
   const batchWeek = getCurrentBatchWeek()
   const locked = isAvailabilityLocked(batchWeek)
@@ -32,6 +34,30 @@ export default function AvailabilityPage() {
 
   useEffect(() => {
     if (!userId) return
+    const supabase = getSupabase()
+    if (!supabase) return
+    supabase
+      .from('profiles')
+      .select('market')
+      .eq('id', userId)
+      .maybeSingle()
+      .then(({ data }) => {
+        const slug = (data as { market?: string | null } | null)?.market ?? null
+        setMarketSlug(slug)
+        if (!slug) {
+          setMarketActive(false)
+          return
+        }
+        fetch(`/api/profile-count?market=${encodeURIComponent(slug)}`, { cache: 'no-store' })
+          .then((r) => r.json())
+          .then((j: { active?: boolean }) => setMarketActive(j?.active === true))
+          .catch(() => setMarketActive(false))
+      })
+  }, [userId])
+
+  useEffect(() => {
+    if (!userId) return
+    if (marketActive === false) return
     const supabase = getSupabase()
     if (!supabase) return
     supabase
@@ -105,6 +131,17 @@ export default function AvailabilityPage() {
     return (
       <div className="app-card">
         <p className="app-empty">Loading…</p>
+      </div>
+    )
+  }
+
+  if (marketActive === false) {
+    return (
+      <div className="app-card">
+        <h2 className="app-page-title">Your city isn’t active yet</h2>
+        <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem', marginTop: '0.5rem' }}>
+          Once it&apos;s active, this is where you&apos;ll set your weekly availability so we can introduce you to a Fika at a time that works for you.
+        </p>
       </div>
     )
   }
