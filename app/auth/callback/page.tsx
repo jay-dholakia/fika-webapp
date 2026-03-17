@@ -100,7 +100,7 @@ function AuthCallbackContent() {
   return (
     <div className="auth-page" style={{ padding: '2rem', textAlign: 'center' }}>
       <p style={{ color: 'var(--color-textSecondary)' }}>Signing you in…</p>
-      <div style={{ marginTop: 12 }}>
+      <div style={{ marginTop: 12, display: 'flex', justifyContent: 'center' }}>
         <span className="spinner spinner-dark" aria-hidden="true" />
       </div>
     </div>
@@ -112,7 +112,7 @@ export default function AuthCallbackPage() {
     <Suspense fallback={
       <div className="auth-page" style={{ padding: '2rem', textAlign: 'center' }}>
         <p style={{ color: 'var(--color-textSecondary)' }}>Signing you in…</p>
-        <div style={{ marginTop: 12 }}>
+        <div style={{ marginTop: 12, display: 'flex', justifyContent: 'center' }}>
           <span className="spinner spinner-dark" aria-hidden="true" />
         </div>
       </div>

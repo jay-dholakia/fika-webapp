@@ -170,7 +170,7 @@ function AppLayoutInner({
         </div>
         <nav className="app-sidebar-nav">
           <Link href="/app/how-it-works" className={pathname === '/app/how-it-works' ? 'app-sidebar-link active' : 'app-sidebar-link'} onClick={() => setMobileMenuOpen(false)}>
-            Welcome!
+            Welcome to Fika
           </Link>
           <Link href="/app/weeklyfika" className={pathname === '/app/weeklyfika' || pathname?.startsWith('/app/onboarding') ? 'app-sidebar-link active' : 'app-sidebar-link'} onClick={() => setMobileMenuOpen(false)}>
             Your Weekly Fika

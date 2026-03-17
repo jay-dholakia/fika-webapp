@@ -336,9 +336,6 @@ const TARGET_USERS = TARGET_COUNT_PER_MARKET
               </button>
               {shareCopied && <p className="app-waitlist-share-feedback">Link copied!</p>}
             </div>
-            <p style={{ marginTop: '0.5rem', marginBottom: 0 }}>
-              <button type="button" className="app-how-it-works-invite-link" style={{ background: 'none', border: 'none', padding: 0, font: 'inherit', color: 'var(--color-primary)', cursor: 'pointer', textDecoration: 'underline' }} onClick={() => copyShareToClipboard(SHARE_URL, SHARE_TEXT)}>Copy invite link</button>
-            </p>
           </>
         ) : (
           <>

@@ -103,7 +103,7 @@ export default function HowItWorksPage() {
             <div className="app-how-it-works-step-content">
               <span className="app-how-it-works-when">We hit {TARGET_USERS} people in {cityLabel}</span>
               <span className="app-how-it-works-what">
-                Once {TARGET_USERS} people have signed up in your area, we run our first intros. Opt-in opens on the Your Weekly Fika tab and you can set your availability.
+                Once {TARGET_USERS} people have signed up in your city, we&apos;ll be ready to run our first introductions! We&apos;ll let you know via email when we&apos;ve gotten there. In the meantime, please share with friends and family who you think would enjoy a Fika too.
               </span>
               {!communityUnlocked && (
                 <div className="app-how-it-works-250-block">
@@ -138,9 +138,6 @@ export default function HowItWorksPage() {
                     </button>
                     {shareCopied && <p className="app-waitlist-share-feedback">Link copied!</p>}
                   </div>
-                  <p style={{ marginTop: '0.5rem', marginBottom: 0 }}>
-                    <a href="#" role="button" className="app-how-it-works-invite-link" onClick={(e) => { e.preventDefault(); copyShareToClipboard(SHARE_URL, SHARE_TEXT); }}>Copy invite link</a>
-                  </p>
                 </div>
               )}
             </div>
