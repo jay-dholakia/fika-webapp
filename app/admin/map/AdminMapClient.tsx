@@ -7,7 +7,7 @@ import type { FeatureGroup as LeafletFeatureGroup } from 'leaflet'
 import { getSupabase } from '@/lib/supabase'
 
 import 'leaflet-draw'
-import { CircleMarker, MapContainer, Polygon, Popup, TileLayer, useMap } from 'react-leaflet'
+import { CircleMarker, MapContainer, Pane, Polygon, Popup, TileLayer, useMap } from 'react-leaflet'
 
 function adminMapLog(...args: unknown[]) {
   try {
@@ -378,6 +378,8 @@ export default function AdminMapClient() {
           style={{ height: '100%', width: '100%' }}
           scrollWheelZoom
         >
+          <Pane name="polygons" style={{ zIndex: 400 }} />
+          <Pane name="markers" style={{ zIndex: 650 }} />
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -390,6 +392,7 @@ export default function AdminMapClient() {
                 <Polygon
                   key={poly.slug}
                   positions={positions}
+                  pane="polygons"
                   pathOptions={{
                     color: '#2563eb',
                     fillColor: '#3b82f6',
@@ -446,6 +449,7 @@ export default function AdminMapClient() {
               key={p.id}
               center={[p.lat, p.lng]}
               radius={6}
+              pane="markers"
               pathOptions={{ color: '#dc2626', fillColor: '#ef4444', fillOpacity: 0.9, weight: 1 }}
             >
               <Popup>
