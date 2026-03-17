@@ -8,21 +8,14 @@ import { getCurrentBatchWeek, isPastOptInDeadline } from '@/lib/onboarding'
 import { getActiveMarketSlugs } from '@/lib/admin-markets'
 import { getMarketBySlug } from '@/lib/markets'
 
-// Open-ended text used for matching embed: work, movie/show, book, role model, role model why.
-const OPEN_ENDED_IDS: string[] = [
-  'q_work',
-  'q_movie_show_recommendation',
-  'q_book_recommendation',
-  'q_role_model',
-  'q_role_model_why',
-]
+// Open-ended text used for matching embed: work, movie/show, book, role model.
+const OPEN_ENDED_IDS: string[] = ['q_work', 'q_movie_show_recommendation', 'q_book_recommendation', 'q_role_model']
 
 const OPEN_ENDED_LABELS: Record<string, string> = {
   q_work: 'Work',
   q_movie_show_recommendation: 'Movie or show',
   q_book_recommendation: 'Book',
   q_role_model: 'Role model',
-  q_role_model_why: 'Why they resonate',
 }
 
 interface IntakeResponseItem {

@@ -255,13 +255,6 @@ export const INTAKE_STEPS: ProfileStep[] = [
     placeholder: 'Name or description',
   },
   {
-    id: 'q_role_model_why',
-    question: 'What about them resonates with you?',
-    type: 'text',
-    required: false,
-    placeholder: 'Optional',
-  },
-  {
     id: 'q_what_makes_great_fika',
     question: 'What would make a great Fika conversation for you?',
     body: 'Select all that apply.',
@@ -304,7 +297,6 @@ export const INTAKE_STEPS: ProfileStep[] = [
     options: [
       "Someone I'd instantly relate to",
       'Someone outside my usual bubble',
-      'Someone whose perspective challenges mine',
       "I'm open to anyone",
     ],
   },

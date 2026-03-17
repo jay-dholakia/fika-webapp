@@ -842,9 +842,7 @@ const OPTIONS_GREAT_FIKA = [
   'Big questions and how we see the world',
   "Hobbies and things we'd like to try next",
 ]
-const OPTIONS_OPENNESS = [
-  "Someone I'd instantly relate to", 'Someone outside my usual bubble', 'Someone whose perspective challenges mine', "I'm open to anyone",
-]
+const OPTIONS_OPENNESS = ["Someone I'd instantly relate to", 'Someone outside my usual bubble', "I'm open to anyone"]
 const OPTIONS_HOPING_FOR = [
   'Conversation with new people — not necessarily friendship', 'Meeting people nearby — open to friendship if it happens', 'Actively looking for new friends',
 ]
@@ -877,14 +875,8 @@ function multiSelectOverlapScore(userValues: string[], candidateValues: string[]
   return maxSelections > 0 ? overlap / maxSelections : 0
 }
 
-// Align with complete-intake embed text: work, movie/show, book, role model, role model why (no place)
-const OPEN_ENDED_IDS: string[] = [
-  'q_work',
-  'q_movie_show_recommendation',
-  'q_book_recommendation',
-  'q_role_model',
-  'q_role_model_why',
-]
+// Align with complete-intake embed text: work, movie/show, book, role model (no place)
+const OPEN_ENDED_IDS: string[] = ['q_work', 'q_movie_show_recommendation', 'q_book_recommendation', 'q_role_model']
 // Optional: minimum words in open-ended for full embed weight (currently not used; we use embed when both have vectors)
 const EMBEDDING_FULL_WORD_THRESHOLD = 50
 

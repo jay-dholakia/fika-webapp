@@ -17,7 +17,6 @@ export const SAFE_INTAKE_QUESTION_IDS = new Set([
   'q_place_recommendation',
   'q_avoid_topics',
   'q_role_model',
-  'q_role_model_why',
   'q_hoping_for',
   'q_what_makes_great_fika',
   'q_openness',
