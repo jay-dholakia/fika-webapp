@@ -140,6 +140,23 @@ export default function AdminMapClient() {
   const [editGroupVersion, setEditGroupVersion] = useState(0)
   const initializedSlugRef = useRef<string | null>(null)
 
+  const featureGroupRefCb = useCallback((fg: LeafletFeatureGroup | null) => {
+    // IMPORTANT: keep this callback stable; otherwise React will call old ref with null
+    // and new ref with instance on every render, causing an infinite loop.
+    if (fg === null) {
+      if (editGroupRef.current !== null) {
+        editGroupRef.current = null
+        adminMapLog('FeatureGroup ref cleared')
+      }
+      return
+    }
+    if (fg !== editGroupRef.current) {
+      editGroupRef.current = fg
+      setEditGroupVersion((v) => v + 1)
+      adminMapLog('FeatureGroup ref set', { hasFg: true, editGroupVersionNext: true })
+    }
+  }, [])
+
   function captureEditedShape() {
     const layer = editGroupRef.current
     if (!layer?.toGeoJSON) return
@@ -386,13 +403,7 @@ export default function AdminMapClient() {
             })}
           {editMarketSlug && editingPolygon && (
             <FeatureGroup
-              ref={(fg) => {
-                if (fg !== editGroupRef.current) {
-                  editGroupRef.current = fg
-                  setEditGroupVersion((v) => v + 1)
-                  adminMapLog('FeatureGroup ref set', { hasFg: !!fg, editGroupVersionNext: true })
-                }
-              }}
+              ref={featureGroupRefCb}
             />
           )}
           <DrawToolbar
