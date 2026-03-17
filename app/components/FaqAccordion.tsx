@@ -4,6 +4,10 @@ import { useState } from 'react'
 
 const faqItems = [
   {
+    q: 'How do you decide who to introduce me to?',
+    a: 'We use your intake (your current life stage, interests, what you’re hoping to get out of Fika, and where you’re based) plus your availability to find a great fit—and propose a real time you’re both free.',
+  },
+  {
     q: 'How often do I get intros?',
     a: 'Once a week. Text FIKA each week to opt in. When you’re in, you get one introduction to someone nearby for that week.',
   },
@@ -12,16 +16,16 @@ const faqItems = [
     a: 'We only match you when you have overlapping availability. Your intro arrives by text with who they are, where they’re based, what they’re into, and a suggested time and place. You can confirm or adjust once if needed—then simply meet up. No separate app to manage, no endless messaging.',
   },
   {
-    q: 'What does it cost?',
-    a: 'Fika is currently free to use.',
-  },
-  {
     q: 'Do I have to meet in person?',
     a: 'Yes. Fika is built for real-life conversation. The whole point is face-to-face connection—when and where it works for you.',
   },
   {
     q: 'What if we don’t click?',
     a: 'No pressure. It’s one conversation. After that, you can stay in touch or leave it at one great Fika. Your call.',
+  },
+  {
+    q: 'What does it cost?',
+    a: 'Fika is currently free to use.',
   },
 ]
 
