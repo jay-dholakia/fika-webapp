@@ -11,7 +11,7 @@ import { insertMessageLedger } from '@/lib/message-ledger'
 import { getOrCreateSmsState, messageEntryFirstTimeMessages, messageEntryFirstTimeMessagesInactiveMarket, SMS_STATES } from '@/lib/sms-agent'
 import { getTimezoneFromLatLng, getNextMondayPhrase } from '@/lib/sms-day-aware'
 import { getCurrentBatchWeek, isPastOptInDeadline } from '@/lib/onboarding'
-import { getMarketFromCity } from '@/lib/markets'
+import { getMarketFromCityOrLatLngWithDb } from '@/lib/markets'
 import { getActiveMarketSlugs } from '@/lib/admin-markets'
 import { getMarketBySlug } from '@/lib/markets'
 
@@ -58,7 +58,7 @@ export async function POST(request: Request) {
   const city = (payload.city as string) ?? null
   const lat = typeof payload.lat === 'number' ? payload.lat : null
   const lng = typeof payload.lng === 'number' ? payload.lng : null
-  const market = getMarketFromCity(city)?.slug ?? null
+  const market = (await getMarketFromCityOrLatLngWithDb(supabase, city, lat, lng))?.slug ?? null
   const responses = Array.isArray(payload.responses) ? payload.responses : []
   const avatarPath = typeof payload.avatar_path === 'string' ? payload.avatar_path : null
 

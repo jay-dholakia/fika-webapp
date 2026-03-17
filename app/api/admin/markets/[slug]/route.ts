@@ -9,7 +9,16 @@ import { getTimezoneFromLatLng, getNextMondayPhrase } from '@/lib/sms-day-aware'
 
 export const dynamic = 'force-dynamic'
 
-/** PATCH /api/admin/markets/[slug] — set market active on/off. Admin only (profiles.role = 'admin'). */
+/** GeoJSON Polygon: { type: 'Polygon', coordinates: [ [ [lng, lat], ... ] ] }. */
+function isGeoJsonPolygon(v: unknown): v is { type: 'Polygon'; coordinates: [number, number][][] } {
+  if (v == null || typeof v !== 'object') return false
+  const o = v as { type?: string; coordinates?: unknown }
+  if (o.type !== 'Polygon' || !Array.isArray(o.coordinates) || o.coordinates.length === 0) return false
+  const ring = o.coordinates[0]
+  return Array.isArray(ring) && ring.every((p) => Array.isArray(p) && p.length >= 2 && typeof p[0] === 'number' && typeof p[1] === 'number')
+}
+
+/** PATCH /api/admin/markets/[slug] — set market active and/or boundary. Admin only. */
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ slug: string }> }
@@ -50,22 +59,35 @@ export async function PATCH(
     return NextResponse.json({ error: 'slug required' }, { status: 400 })
   }
 
-  let body: { active?: boolean }
+  let body: { active?: boolean; boundary?: unknown }
   try {
     body = await request.json()
   } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
   }
+
   const active = body?.active
-  if (typeof active !== 'boolean') {
-    return NextResponse.json({ error: 'active (boolean) required' }, { status: 400 })
+  const boundary = body?.boundary
+  const hasActive = typeof active === 'boolean'
+  const hasBoundary = boundary !== undefined
+  if (!hasActive && !hasBoundary) {
+    return NextResponse.json({ error: 'Send active (boolean) and/or boundary (GeoJSON Polygon)' }, { status: 400 })
+  }
+  if (hasBoundary && !isGeoJsonPolygon(boundary)) {
+    return NextResponse.json({ error: 'boundary must be a GeoJSON Polygon: { type: "Polygon", coordinates: [ [ [lng, lat], ... ] ] }' }, { status: 400 })
   }
 
   const slugTrim = slug.trim()
 
+  const updatePayload: { active?: boolean; boundary?: unknown; updated_at: string } = {
+    updated_at: new Date().toISOString(),
+  }
+  if (hasActive) updatePayload.active = active
+  if (hasBoundary) updatePayload.boundary = boundary
+
   // Detect transition to active so we can send "Fika is live" to users in this market (once per user per market).
   let wasInactive = false
-  if (active) {
+  if (hasActive && active) {
     const { data: existing } = await supabase
       .from('markets')
       .select('active')
@@ -76,14 +98,14 @@ export async function PATCH(
 
   const { error } = await supabase
     .from('markets')
-    .update({ active, updated_at: new Date().toISOString() })
+    .update(updatePayload)
     .eq('slug', slugTrim)
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
   // When turning market active, send "Fika is live" to all users in this market (no recording).
-  if (active && wasInactive && process.env.SENDBLUE_API_KEY_ID) {
+  if (hasActive && active && wasInactive && process.env.SENDBLUE_API_KEY_ID) {
     const cityLabel = getMarketBySlug(slugTrim)?.label ?? slugTrim
     const { data: profiles } = await supabase
       .from('profiles')
@@ -102,5 +124,10 @@ export async function PATCH(
     }
   }
 
-  return NextResponse.json({ ok: true, slug: slugTrim, active })
+  return NextResponse.json({
+    ok: true,
+    slug: slugTrim,
+    ...(hasActive && { active }),
+    ...(hasBoundary && { boundary: true }),
+  })
 }

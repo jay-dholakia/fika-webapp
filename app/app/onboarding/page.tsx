@@ -12,7 +12,7 @@ import {
   type ProfileStep,
 } from '@/lib/onboarding-data'
 import { buildOnboardingSessionPayload, payloadToAnswers } from '@/lib/onboarding-session-payload'
-import { getMarketFromCity } from '@/lib/markets'
+import { getMarketFromCityOrLatLngWithDb } from '@/lib/markets'
 import type { IntakeResponseItem } from '@/lib/db-types'
 import type { ProfileRow } from '@/lib/db-types'
 import type { IntakeResponsesV5Row } from '@/lib/db-types'
@@ -265,7 +265,7 @@ function AppOnboardingContent() {
       city: loc?.city ?? null,
       lat: typeof loc?.lat === 'number' ? loc.lat : null,
       lng: typeof loc?.lng === 'number' ? loc.lng : null,
-      market: getMarketFromCity(loc?.city)?.slug ?? null,
+      market: (await getMarketFromCityOrLatLngWithDb(supabase, loc?.city, loc?.lat, loc?.lng))?.slug ?? null,
       intent_confirmed_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }
