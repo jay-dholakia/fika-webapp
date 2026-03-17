@@ -67,7 +67,17 @@ export default function AdminMapClient() {
   const [hasEdited, setHasEdited] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  /** Current edited ring in GeoJSON order [lng, lat][] so the polygon sticks after drag; cleared when changing market. */
+  const [editedRing, setEditedRing] = useState<[number, number][] | null>(null)
   const editGroupRef = useRef<LeafletFeatureGroup | null>(null)
+
+  function captureEditedShape() {
+    const layer = editGroupRef.current
+    if (!layer?.toGeoJSON) return
+    const geo = layer.toGeoJSON()
+    const poly = getFirstPolygonGeometry(geo)
+    if (poly?.coordinates?.[0]?.length) setEditedRing(poly.coordinates[0] as [number, number][])
+  }
 
   const loadData = useCallback(async () => {
     const supabase = getSupabase()
@@ -134,6 +144,7 @@ export default function AdminMapClient() {
       setData(next)
       setEditMarketSlug(null)
       setHasEdited(false)
+      setEditedRing(null)
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : 'Save failed')
     } finally {
@@ -175,6 +186,7 @@ export default function AdminMapClient() {
             setEditMarketSlug(e.target.value || null)
             setHasEdited(false)
             setSaveError(null)
+            setEditedRing(null)
           }}
           style={{ padding: '4px 8px', borderRadius: 4 }}
         >
@@ -201,6 +213,7 @@ export default function AdminMapClient() {
                 setEditMarketSlug(null)
                 setHasEdited(false)
                 setSaveError(null)
+                setEditedRing(null)
               }}
               className="admin-button"
               style={{ marginLeft: 4 }}
@@ -258,18 +271,23 @@ export default function AdminMapClient() {
             })}
           {editMarketSlug && editingPolygon && (
             <FeatureGroup ref={editGroupRef}>
-              {editingPolygon.coordinates[0]?.length > 0 && (
-                <Polygon
-                  key={editingPolygon.slug}
-                  positions={editingPolygon.coordinates[0].map(([lng, lat]) => [lat, lng])}
-                  pathOptions={{
-                    color: '#2563eb',
-                    fillColor: '#3b82f6',
-                    fillOpacity: 0.2,
-                    weight: 2,
-                  }}
-                />
-              )}
+              {(() => {
+                const ring = editedRing ?? editingPolygon.coordinates[0]
+                if (!ring?.length) return null
+                const positions: [number, number][] = ring.map(([lng, lat]) => [lat, lng])
+                return (
+                  <Polygon
+                    key={editingPolygon.slug}
+                    positions={positions}
+                    pathOptions={{
+                      color: '#2563eb',
+                      fillColor: '#3b82f6',
+                      fillOpacity: 0.2,
+                      weight: 2,
+                    }}
+                  />
+                )
+              })()}
               <EditControl
                 position="topright"
                 draw={{
@@ -281,9 +299,18 @@ export default function AdminMapClient() {
                   circlemarker: false,
                 }}
                 edit={{ edit: true, remove: true }}
-                onCreated={() => setHasEdited(true)}
-                onEdited={() => setHasEdited(true)}
-                onDeleted={() => setHasEdited(true)}
+                onCreated={() => {
+                  setHasEdited(true)
+                  setTimeout(captureEditedShape, 0)
+                }}
+                onEdited={() => {
+                  setHasEdited(true)
+                  setTimeout(captureEditedShape, 0)
+                }}
+                onDeleted={() => {
+                  setHasEdited(true)
+                  setEditedRing(null)
+                }}
               />
             </FeatureGroup>
           )}
