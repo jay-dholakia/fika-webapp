@@ -18,7 +18,7 @@ import type { ProfileRow } from '@/lib/db-types'
 import type { IntakeResponsesV5Row } from '@/lib/db-types'
 
 const SECTION_2_IDS = ['q_life_chapter', 'q_everyday_anchor', 'q_work', 'q_interests', 'q_curiosity', 'q_movie_show_recommendation', 'q_book_recommendation', 'q_role_model']
-const SECTION_3_IDS = ['q_topics', 'q_avoid_topics', 'q_openness', 'gender_preference', 'age_preference', 'q_hoping_for', 'q_what_makes_great_fika', 'q_radius']
+const SECTION_3_IDS = ['q_topics', 'q_avoid_topics', 'q_openness', 'gender_preference', 'age_preference', 'q_hoping_for', 'q_what_makes_great_fika', 'q_radius', 'q_favorite_coffee_shop']
 const SECTION_2_STEPS = INTAKE_STEPS.filter((s) => SECTION_2_IDS.includes(s.id))
 const SECTION_3_STEPS = INTAKE_STEPS.filter((s) => SECTION_3_IDS.includes(s.id))
 const CONFIRM_STEP = INTAKE_STEPS.find((s) => s.id === 'confirm_intent')!
