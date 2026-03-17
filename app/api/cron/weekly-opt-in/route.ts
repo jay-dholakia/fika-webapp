@@ -12,9 +12,9 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
   try {
-    const { sent, error } = await runWeeklyOptIn()
+    const { sent, skipped, error } = await runWeeklyOptIn()
     if (error) return NextResponse.json({ error }, { status: 500 })
-    return NextResponse.json({ ok: true, sent })
+    return NextResponse.json({ ok: true, sent, ...(skipped != null && { skipped }) })
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : 'Cron failed' },

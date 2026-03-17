@@ -512,9 +512,9 @@ async function findPotentialMatches(
 
     // Generate match reasons with both users' info (bidirectional)
     const reasons = await generateMatchReasonsV4(
-      userIntake,
-      candidateIntake,
-      userProfile.id,
+      userIntake, 
+      candidateIntake, 
+      userProfile.id, 
       candidate.id,
       userProfile.first_name || 'You',
       candidate.first_name || 'They'
@@ -641,15 +641,15 @@ function passesGeographyFilter(userProfile: UserProfile, candidateProfile: UserP
   ) {
     return true // no coords → don't filter out
   }
-  const distanceKm = calculateDistance(
-    userProfile.lat, userProfile.lng,
-    candidateProfile.lat, candidateProfile.lng
-  )
-  const totalMaxKm = (userProfile.radius_km ?? 40) + (candidateProfile.radius_km ?? 40)
-  if (distanceKm > totalMaxKm) {
-    console.log(`Geography filter: User ${userProfile.id.substring(0, 8)} and candidate ${candidateProfile.id.substring(0, 8)} are ${distanceKm.toFixed(0)} km apart (max ${totalMaxKm.toFixed(0)} km)`)
-    return false
-  }
+    const distanceKm = calculateDistance(
+      userProfile.lat, userProfile.lng,
+      candidateProfile.lat, candidateProfile.lng
+    )
+    const totalMaxKm = (userProfile.radius_km ?? 40) + (candidateProfile.radius_km ?? 40)
+    if (distanceKm > totalMaxKm) {
+      console.log(`Geography filter: User ${userProfile.id.substring(0, 8)} and candidate ${candidateProfile.id.substring(0, 8)} are ${distanceKm.toFixed(0)} km apart (max ${totalMaxKm.toFixed(0)} km)`)
+      return false
+    }
   return true
 }
 

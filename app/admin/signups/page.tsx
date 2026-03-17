@@ -239,7 +239,7 @@ export default function AdminSignupsPage() {
           {error && <p className="admin-error admin-error-inline" role="alert">{error}</p>}
 
           <p className="admin-back">
-            <Link href="/app">Back to app</Link>
+            <Link href="/app/weeklyfika">Back to app</Link>
           </p>
         </div>
       </main>

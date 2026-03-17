@@ -134,7 +134,7 @@ function AppOnboardingContent() {
     if (sessionUserId == null) return
     if (!statusLoading && isComplete) {
       authLog('onboarding:redirect', { to: '/app', reason: 'isComplete' })
-      router.replace('/app')
+      router.replace('/app/weeklyfika')
     }
   }, [sessionUserId, statusLoading, isComplete, router])
 
@@ -182,7 +182,7 @@ function AppOnboardingContent() {
 
   useEffect(() => {
     if (tokenMode && sessionUserId != null) {
-      router.replace('/app')
+      router.replace('/app/weeklyfika')
       return
     }
   }, [tokenMode, sessionUserId, router])
@@ -376,7 +376,7 @@ function AppOnboardingContent() {
         }
       }
       await callCompleteIntake()
-      router.replace('/app?justCompletedIntro=1')
+      router.replace('/app/weeklyfika?justCompletedIntro=1')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.')
     } finally {

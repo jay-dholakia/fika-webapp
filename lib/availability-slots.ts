@@ -8,7 +8,7 @@ import { getOptInDeadlineForBatchWeek } from './onboarding'
 
 const DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const
 
-/** Days we collect availability for: Wed–Sat (opt-in Sunday 12pm PT; lock Monday 12pm PT; intros Tuesday 9am PT). */
+/** Days we collect availability for: Wed–Sat (opt-in window Sunday 12am PT – Monday 11am PT; lock Monday 11am PT; intros Tuesday 9am PT). */
 export const AVAILABILITY_DAYS = ['wed', 'thu', 'fri', 'sat'] as const
 
 // 9am to 7pm in 30-min increments (9:00, 9:30, ... 18:30; 7pm is end of last slot)
@@ -173,12 +173,12 @@ export function getAvailabilityWeekWednesday(batchWeek: string): string {
   return d.toISOString().slice(0, 10)
 }
 
-/** Opt-in + availability lock = Monday 12pm PT (same as getOptInDeadlineForBatchWeek). */
+/** Opt-in + availability lock = Monday 11am PT (same as getOptInDeadlineForBatchWeek). */
 export function getAvailabilityLockDate(batchWeek: string): Date {
   return getOptInDeadlineForBatchWeek(batchWeek)
 }
 
-/** True when availability for that week can no longer be edited (Monday 12pm PT has passed). */
+/** True when availability for that week can no longer be edited (Monday 11am PT has passed). */
 export function isAvailabilityLocked(batchWeek: string): boolean {
   const lockAt = getAvailabilityLockDate(batchWeek)
   return new Date() >= lockAt

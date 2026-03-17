@@ -27,7 +27,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             >
               Sign-ups
             </Link>
-            <Link href="/app" className="admin-link">Back to app</Link>
+            <Link href="/app/weeklyfika" className="admin-link">Back to app</Link>
           </nav>
         </div>
       </header>

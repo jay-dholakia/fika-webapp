@@ -49,15 +49,15 @@ export function getCurrentBatchWeek(): string {
 }
 
 /**
- * Opt-in + availability lock = Monday 12pm PT.
- * Stored as Monday 19:00 UTC (12pm PDT). (In PST this is 20:00 UTC.)
+ * Opt-in + availability lock = Monday 11am PT.
+ * Window opens Sunday 12am PT; closes Monday 11am PT. Stored as Monday 18:00 UTC (11am PDT). (In PST, 11am = 19:00 UTC.)
  */
-const OPT_IN_DEADLINE_MONDAY_HOUR_UTC = 19
+const OPT_IN_DEADLINE_MONDAY_HOUR_UTC = 18
 const OPT_IN_DEADLINE_MONDAY_MINUTE_UTC = 0
 
 /**
  * Returns the opt-in deadline for a batch week (Monday YYYY-MM-DD).
- * Deadline = Monday 12pm PT. Before this we accept opt-in; after this, window closed.
+ * Deadline = Monday 11am PT. Before this we accept opt-in; after this, window closed.
  */
 export function getOptInDeadlineForBatchWeek(batchWeek: string): Date {
   const monday = new Date(batchWeek + 'T00:00:00Z')

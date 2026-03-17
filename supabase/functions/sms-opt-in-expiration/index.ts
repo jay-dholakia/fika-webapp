@@ -1,4 +1,4 @@
-// SMS cron: opt-in window expiration (Monday 12pm PT -> Monday 19:00 UTC).
+// SMS cron: opt-in window expiration (Monday 11am PT -> Monday 18:00 UTC).
 // Invoked by pg_cron. Requires SENDBLUE_API_KEY_ID, SENDBLUE_API_SECRET_KEY.
 
 declare const Deno: { env: { get(key: string): string | undefined } }
@@ -24,7 +24,7 @@ function getNextMondayPhrase(): string {
 }
 
 const MESSAGE = (_nextMondayPhrase: string) =>
-  `This week's opt-in window has closed. We'll text you next week to see if you want a Fika.`
+  `This week's opt-in window has closed (Sunday 12am PT – Monday 11am PT). Text FIKA next Sunday to opt in.`
 
 serve(async () => {
   try {
@@ -33,6 +33,10 @@ serve(async () => {
         headers: { 'Content-Type': 'application/json' },
       })
     }
+    // Opt-in expiration disabled; weekly opt-in is user-initiated (text FIKA)
+    return new Response(JSON.stringify({ ok: true, notified: 0 }), {
+      headers: { 'Content-Type': 'application/json' },
+    })
     const apiKeyId = Deno.env.get('SENDBLUE_API_KEY_ID')
     const apiSecret = Deno.env.get('SENDBLUE_API_SECRET_KEY')
     if (!apiKeyId || !apiSecret) {

@@ -9,7 +9,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const SENDBLUE_URL = 'https://api.sendblue.co/api/send-message'
 
-const MESSAGE = `Quick check — reply Yes or Skip and set availability (Wed–Sat) by Monday 12pm PT to get your intro Tuesday 9am PT.`
+const MESSAGE = `Quick check — reply Yes or Skip and set availability (Wed–Sat) by Monday 11am PT to get your intro Tuesday 9am PT.`
 
 function getCurrentBatchWeek(): string {
   const d = new Date()
@@ -28,6 +28,10 @@ serve(async () => {
         headers: { 'Content-Type': 'application/json' },
       })
     }
+    // Follow-up disabled; weekly opt-in is user-initiated (text FIKA)
+    return new Response(JSON.stringify({ ok: true, sent: 0 }), {
+      headers: { 'Content-Type': 'application/json' },
+    })
     const apiKeyId = Deno.env.get('SENDBLUE_API_KEY_ID')
     const apiSecret = Deno.env.get('SENDBLUE_API_SECRET_KEY')
     if (!apiKeyId || !apiSecret) {
@@ -53,16 +57,20 @@ serve(async () => {
       .eq('state', 'awaiting_opt_in')
     const awaiting = states ?? []
 
+    const capEnv = Deno.env.get('SMS_FOLLOW_UP_DAILY_CAP')
+    const dailyCap = capEnv ? Math.max(0, parseInt(capEnv, 10) || 200) : 200
+    const toContact = dailyCap > 0 ? awaiting.slice(0, dailyCap) : awaiting
+
     const { data: profiles } = await supabase
       .from('profiles')
       .select('id, phone')
-      .in('id', awaiting.map((s: { user_id: string }) => s.user_id))
+      .in('id', toContact.map((s: { user_id: string }) => s.user_id))
     const byId = new Map<string, string | null>(
       (profiles ?? []).map((p: { id: string; phone: string | null }) => [p.id, p.phone ?? null])
     )
 
     let sent = 0
-    for (const s of awaiting) {
+    for (const s of toContact) {
       if (optedSet.has(s.user_id)) continue
       const phone = byId.get(s.user_id)
       if (typeof phone !== 'string' || !phone.trim()) continue
@@ -80,7 +88,10 @@ serve(async () => {
       })
       if (res.ok) sent++
     }
-    return new Response(JSON.stringify({ ok: true, batch_week: batchWeek, sent }))
+    const skipped = dailyCap > 0 && awaiting.length > toContact.length ? awaiting.length - toContact.length : 0
+    return new Response(
+      JSON.stringify({ ok: true, batch_week: batchWeek, sent, ...(skipped > 0 && { skipped }) })
+    )
   } catch (e) {
     return new Response(JSON.stringify({ error: String(e) }), { status: 500 })
   }

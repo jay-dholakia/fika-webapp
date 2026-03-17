@@ -19,7 +19,7 @@ function getCurrentBatchWeek(): string {
   return monday.toISOString().slice(0, 10)
 }
 
-const MESSAGE = `Want a Fika intro this week? Reply Yes or Skip. If Yes, set your availability for Wed–Sat by Monday 12pm PT — we'll send your intro Tuesday 9am PT.`
+const MESSAGE = `Want a Fika intro this week? Reply Yes or Skip. If Yes, set your availability for Wed–Sat by Monday 11am PT — we'll send your intro Tuesday 9am PT.`
 
 serve(async () => {
   try {
@@ -28,6 +28,10 @@ serve(async () => {
         headers: { 'Content-Type': 'application/json' },
       })
     }
+    // Weekly opt-in is user-initiated (text FIKA); this cron no longer sends
+    return new Response(JSON.stringify({ ok: true, sent: 0 }), {
+      headers: { 'Content-Type': 'application/json' },
+    })
     const apiKeyId = Deno.env.get('SENDBLUE_API_KEY_ID')
     const apiSecret = Deno.env.get('SENDBLUE_API_SECRET_KEY')
     if (!apiKeyId || !apiSecret) {
@@ -56,6 +60,16 @@ serve(async () => {
       .eq('batch_week', batchWeek)
     const optedSet = new Set((optedInUserIds ?? []).map((r: { user_id: string }) => r.user_id))
 
+    const { data: alreadySent } = await supabase
+      .from('sms_conversation_states')
+      .select('user_id')
+      .eq('batch_week', batchWeek)
+      .is('match_id', null)
+    const alreadySentSet = new Set((alreadySent ?? []).map((r: { user_id: string }) => r.user_id))
+
+    const capEnv = Deno.env.get('SMS_WEEKLY_OPT_IN_DAILY_CAP')
+    const dailyCap = capEnv ? Math.max(0, parseInt(capEnv, 10) || 200) : 200
+
     const { data: profiles } = await supabase
       .from('profiles')
       .select('id, phone, market')
@@ -63,10 +77,11 @@ serve(async () => {
     const withPhone = (profiles ?? [])
       .filter((p: { phone: string | null; market?: string | null }) => p.phone?.trim())
       .filter((p: { market?: string | null }) => p.market != null && activeSlugs.has(p.market))
+      .filter((p: { id: string }) => !optedSet.has(p.id) && !alreadySentSet.has(p.id))
+    const toSend = dailyCap > 0 ? withPhone.slice(0, dailyCap) : withPhone
 
     let sent = 0
-    for (const p of withPhone) {
-      if (optedSet.has(p.id)) continue
+    for (const p of toSend) {
       const phone = (p.phone as string).trim()
       const res = await fetch(SENDBLUE_URL, {
         method: 'POST',
@@ -91,7 +106,10 @@ serve(async () => {
         })
       }
     }
-    return new Response(JSON.stringify({ ok: true, batch_week: batchWeek, sent }))
+    const skipped = dailyCap > 0 && withPhone.length > toSend.length ? withPhone.length - toSend.length : 0
+    return new Response(
+      JSON.stringify({ ok: true, batch_week: batchWeek, sent, ...(skipped > 0 && { skipped }) })
+    )
   } catch (e) {
     return new Response(JSON.stringify({ error: String(e) }), { status: 500 })
   }

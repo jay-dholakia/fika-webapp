@@ -18,8 +18,20 @@ function getSupabase(): SupabaseClient | null {
   return createClient(url, key)
 }
 
-/** Send weekly opt-in to users who have phone, are in an active market, and haven't opted in yet for this week. */
-export async function runWeeklyOptIn(): Promise<{ sent: number; error?: string }> {
+const DEFAULT_DAILY_CAP = 200
+
+/** Parse env SMS_WEEKLY_OPT_IN_DAILY_CAP (default 200). 0 = no cap. */
+function getWeeklyOptInDailyCap(): number {
+  const v = process.env.SMS_WEEKLY_OPT_IN_DAILY_CAP
+  if (v === undefined || v === '') return DEFAULT_DAILY_CAP
+  const n = parseInt(v, 10)
+  return Number.isNaN(n) || n < 0 ? DEFAULT_DAILY_CAP : n
+}
+
+/** Weekly opt-in is user-initiated: users text FIKA to get the link. This cron is kept but no longer sends (no push). */
+export async function runWeeklyOptIn(): Promise<{ sent: number; skipped?: number; error?: string }> {
+  return { sent: 0 }
+  /* eslint-disable-next-line no-unreachable */
   const supabase = getSupabase()
   if (!supabase) return { sent: 0, error: 'No Supabase' }
   if (!process.env.SENDBLUE_API_KEY_ID) return { sent: 0, error: 'Sendblue not configured' }
@@ -37,15 +49,26 @@ export async function runWeeklyOptIn(): Promise<{ sent: number; error?: string }
     .not('opted_in_at', 'is', null)
   const optedSet = new Set((optedInUserIds ?? []).map((r) => r.user_id))
 
+  const { data: alreadySentUserIds } = await supabase
+    .from('sms_conversation_states')
+    .select('user_id')
+    .eq('batch_week', batchWeek)
+    .is('match_id', null)
+  const alreadySentSet = new Set((alreadySentUserIds ?? []).map((r) => r.user_id))
+
   const { data: profiles } = await supabase
     .from('profiles')
     .select('id, phone')
     .not('phone', 'is', null)
     .in('market', activeSlugs)
-  const withPhone = (profiles ?? []).filter((p) => p.phone && !optedSet.has(p.id))
+  const withPhone = (profiles ?? []).filter(
+    (p) => p.phone && !optedSet.has(p.id) && !alreadySentSet.has(p.id)
+  )
+  const cap = getWeeklyOptInDailyCap()
+  const toSend = cap > 0 ? withPhone.slice(0, cap) : withPhone
   let sent = 0
   const msg = "Would you like a Fika introduction this week? Reply Yes or Skip."
-  for (const p of withPhone) {
+  for (const p of toSend) {
     const result = await sendMessage(p.phone!, msg, { fromNumber: 'concierge' })
     await insertMessageLedger(supabase, {
       user_id: p.id,
@@ -61,7 +84,8 @@ export async function runWeeklyOptIn(): Promise<{ sent: number; error?: string }
       sent++
     }
   }
-  return { sent }
+  const skipped = cap > 0 && withPhone.length > toSend.length ? withPhone.length - toSend.length : 0
+  return skipped ? { sent, skipped } : { sent }
 }
 
 /** For each match_candidate this batch_week where both have phone and we haven't sent SMS yet, send intro and set state to match_offered. */
