@@ -291,9 +291,7 @@ export default function AdminMapClient() {
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
-          {data.polygons
-            .filter((poly) => poly.slug !== editMarketSlug)
-            .map((poly) => {
+          {data.polygons.map((poly) => {
               const ring = poly.coordinates[0]
               if (!ring?.length) return null
               const positions: [number, number][] = ring.map(([lng, lat]) => [lat, lng])
@@ -327,6 +325,16 @@ export default function AdminMapClient() {
                 if (fg !== editGroupRef.current) {
                   editGroupRef.current = fg
                   setEditGroupVersion((v) => v + 1)
+                  // Initialize the editable layer immediately when the FeatureGroup is available.
+                  // This avoids the race where the selection hides the view polygon but the edit layer never mounts.
+                  if (fg && !hasEdited) {
+                    try {
+                      const ring = editingPolygon.coordinates?.[0] as [number, number][] | undefined
+                      if (ring?.length) initEditLayer(fg, ring)
+                    } catch {
+                      // ignore
+                    }
+                  }
                 }
               }}
             >
