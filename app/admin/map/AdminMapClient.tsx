@@ -161,6 +161,9 @@ export default function AdminMapClient() {
       <p className="admin-description" style={{ marginBottom: '1rem' }}>
         Exact lat/lng with zone boundaries. Only profiles with location set are shown.
       </p>
+      <p className="admin-description" style={{ marginBottom: '0.75rem', fontSize: '0.9rem', color: 'var(--color-textSecondary, #666)' }}>
+        To update a market’s zone: choose the market below, edit the polygon on the map (drag vertices or draw a new shape with the toolbar), then click <strong>Save boundary</strong>. The boundary is stored in the <code>markets</code> table and used for point-in-polygon resolution.
+      </p>
       <div style={{ marginBottom: '0.75rem', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.5rem' }}>
         <label htmlFor="admin-map-edit-market" style={{ fontWeight: 500 }}>
           Edit boundary:
@@ -187,7 +190,7 @@ export default function AdminMapClient() {
             <button
               type="button"
               onClick={handleSaveBoundary}
-              disabled={saving || !hasEdited}
+              disabled={saving}
               className="admin-button"
             >
               {saving ? 'Saving…' : 'Save boundary'}

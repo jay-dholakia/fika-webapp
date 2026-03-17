@@ -5,10 +5,9 @@ import type { SupabaseClient } from '@supabase/supabase-js'
  * Used for profile count and "building community in [city]" messaging.
  * Santa Monica, Culver City, Ladera Heights, etc. count as Los Angeles.
  *
- * Market is resolved in three ways (for efficiency and coverage):
+ * Market is resolved in two ways:
  * 1. If we have lat/lng and markets.boundary is set in DB, use point-in-polygon on that GeoJSON.
- * 2. Else if we have lat/lng, use MARKET_BOUNDS (point-in-box). Covers entire metro without listing every neighborhood.
- * 3. Otherwise we match profile city string against each market's cityPatterns (fallback for SMS signup or missing coords).
+ * 2. Otherwise we match profile city string against each market's cityPatterns (fallback when coords missing or boundary not yet set).
  */
 
 export const TARGET_COUNT_PER_MARKET = 250
@@ -20,26 +19,7 @@ export interface Market {
   cityPatterns: string[]
 }
 
-/** [minLat, maxLat, minLng, maxLng]. First matching box wins. Use when profile has lat/lng so we don't rely on city name. */
-const MARKET_BOUNDS: { slug: string; bbox: [number, number, number, number] }[] = [
-  { slug: 'la', bbox: [33.7, 34.45, -118.95, -117.75] }, // LA County (incl. Ladera Heights, Santa Monica, Long Beach, etc.)
-  { slug: 'orange-county', bbox: [33.4, 33.95, -118.25, -117.5] },
-  { slug: 'ie', bbox: [33.8, 34.3, -117.8, -116.9] }, // Inland Empire
-  { slug: 'san-diego', bbox: [32.5, 33.2, -117.3, -116.9] },
-  { slug: 'sf', bbox: [37.2, 38.0, -122.6, -121.5] }, // SF Bay
-  { slug: 'nyc', bbox: [40.5, 40.95, -74.3, -73.7] },
-  { slug: 'chicago', bbox: [41.6, 42.2, -88.0, -87.5] },
-  { slug: 'houston', bbox: [29.5, 30.2, -95.8, -95.0] },
-  { slug: 'phoenix', bbox: [33.2, 33.7, -112.2, -111.6] },
-  { slug: 'dallas', bbox: [32.6, 33.3, -97.2, -96.6] },
-  { slug: 'austin', bbox: [30.1, 30.6, -97.95, -97.5] },
-  { slug: 'seattle', bbox: [47.5, 47.75, -122.45, -122.2] },
-  { slug: 'denver', bbox: [39.6, 40.0, -105.2, -104.6] },
-  { slug: 'boston', bbox: [42.2, 42.45, -71.2, -70.95] },
-  { slug: 'atlanta', bbox: [33.6, 34.0, -84.5, -84.2] },
-  { slug: 'miami', bbox: [25.7, 26.2, -80.4, -80.1] },
-  { slug: 'las-vegas', bbox: [35.9, 36.4, -115.4, -114.9] },
-]
+// Boundaries live in the DB (public.markets.boundary). Intentionally not hard-coded here.
 
 export const MARKETS: Market[] = [
   {
@@ -971,15 +951,8 @@ function normalizeCity(city: string | null | undefined): string {
  * Return market when we have coordinates. Uses bounding boxes so any point in the metro (e.g. Ladera Heights) maps
  * without listing every neighborhood. First matching box wins.
  */
-export function getMarketFromLatLng(lat: number | null | undefined, lng: number | null | undefined): { slug: string; label: string } | null {
-  if (lat == null || lng == null || typeof lat !== 'number' || typeof lng !== 'number') return null
-  for (const { slug, bbox } of MARKET_BOUNDS) {
-    const [minLat, maxLat, minLng, maxLng] = bbox
-    if (lat >= minLat && lat <= maxLat && lng >= minLng && lng <= maxLng) {
-      const m = getMarketBySlug(slug)
-      return m ? { slug: m.slug, label: m.label } : null
-    }
-  }
+export function getMarketFromLatLng(_lat: number | null | undefined, _lng: number | null | undefined): { slug: string; label: string } | null {
+  // Boundaries are sourced from the DB. Use getMarketFromLatLngFromDb when you have Supabase available.
   return null
 }
 
@@ -1005,8 +978,6 @@ export function getMarketFromCityOrLatLng(
   lat?: number | null,
   lng?: number | null
 ): { slug: string; label: string } | null {
-  const fromCoords = getMarketFromLatLng(lat, lng)
-  if (fromCoords) return fromCoords
   return getMarketFromCity(city)
 }
 
@@ -1020,18 +991,8 @@ export function getMarketBySlug(slug: string | null | undefined): Market | null 
  * Coordinates: [ ring ] where ring is [ [lng, lat], ... ] closed (first point = last point).
  */
 export function getMarketPolygons(): { slug: string; label: string; coordinates: number[][][] }[] {
-  return MARKET_BOUNDS.map(({ slug, bbox }) => {
-    const [minLat, maxLat, minLng, maxLng] = bbox
-    const ring: [number, number][] = [
-      [minLng, minLat],
-      [maxLng, minLat],
-      [maxLng, maxLat],
-      [minLng, maxLat],
-      [minLng, minLat],
-    ]
-    const m = getMarketBySlug(slug)
-    return { slug, label: m?.label ?? slug, coordinates: [ring] }
-  })
+  // Boundaries are sourced from the DB. Use getMarketPolygonsWithDb for admin map.
+  return []
 }
 
 /** Ray-casting point-in-polygon. Ring is array of [lng, lat] (GeoJSON order). */
@@ -1100,31 +1061,26 @@ export async function getMarketFromCityOrLatLngWithDb(
   if (lat != null && lng != null && typeof lat === 'number' && typeof lng === 'number') {
     const fromDb = await getMarketFromLatLngFromDb(supabase, lat, lng)
     if (fromDb) return fromDb
-    const fromBbox = getMarketFromLatLng(lat, lng)
-    if (fromBbox) return fromBbox
   }
   return getMarketFromCity(city)
 }
 
 /**
- * Polygons for admin map: DB boundary when set, else code bbox. Merges markets table with code MARKET_BOUNDS.
+ * Polygons for admin map from DB boundaries. Markets without boundary are omitted.
  */
 export async function getMarketPolygonsWithDb(
   supabase: SupabaseClient
 ): Promise<{ slug: string; label: string; coordinates: number[][][] }[]> {
-  const codePolygons = getMarketPolygons()
-  const bySlug = new Map(codePolygons.map((p) => [p.slug, { slug: p.slug, label: p.label, coordinates: p.coordinates }]))
-  const { data: dbMarkets } = await supabase.from('markets').select('slug, label, boundary')
+  const { data: dbMarkets } = await supabase
+    .from('markets')
+    .select('slug, label, boundary')
+    .not('boundary', 'is', null)
+  const out: { slug: string; label: string; coordinates: number[][][] }[] = []
   for (const row of dbMarkets ?? []) {
     const slug = (row as { slug: string }).slug
     const label = (row as { label?: string }).label ?? slug
     const ring = parseBoundaryPolygon((row as { boundary?: unknown }).boundary)
-    if (ring) {
-      bySlug.set(slug, { slug, label, coordinates: [ring] })
-    } else {
-      const existing = bySlug.get(slug)
-      if (existing) existing.label = label
-    }
+    if (ring) out.push({ slug, label, coordinates: [ring] })
   }
-  return Array.from(bySlug.values())
+  return out
 }
