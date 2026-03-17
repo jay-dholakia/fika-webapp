@@ -10,6 +10,17 @@ import dynamic from 'next/dynamic'
 import 'leaflet-draw'
 import { useMap } from 'react-leaflet'
 
+function adminMapLog(...args: unknown[]) {
+  try {
+    if (typeof window === 'undefined') return
+    if (window.localStorage?.getItem('debugAdminMap') !== '1') return
+    // eslint-disable-next-line no-console
+    console.info('[admin-map]', ...args)
+  } catch {
+    // ignore
+  }
+}
+
 const MapContainer = dynamic(
   () => import('react-leaflet').then((m) => m.MapContainer),
   { ssr: false }
@@ -52,6 +63,7 @@ interface MapPolygon {
 
 function DrawToolbar(props: {
   enabled: boolean
+  featureGroupVersion: number
   featureGroupRef: React.MutableRefObject<LeafletFeatureGroup | null>
   onCreated: (e: unknown) => void
   onEdited: () => void
@@ -60,9 +72,13 @@ function DrawToolbar(props: {
   const map = useMap()
 
   useEffect(() => {
+    adminMapLog('DrawToolbar effect', { enabled: props.enabled, featureGroupVersion: props.featureGroupVersion })
     if (!props.enabled) return
     const group = props.featureGroupRef.current
-    if (!group) return
+    if (!group) {
+      adminMapLog('DrawToolbar: no featureGroup yet')
+      return
+    }
 
     const drawControl = new (L.Control as unknown as { Draw: new (opts: unknown) => L.Control }).Draw({
       draw: {
@@ -80,6 +96,7 @@ function DrawToolbar(props: {
       },
     })
     map.addControl(drawControl)
+    adminMapLog('DrawToolbar: control added')
 
     const Draw = (L as unknown as { Draw?: { Event?: Record<string, string> } }).Draw
     const CREATED = Draw?.Event?.CREATED ?? 'draw:created'
@@ -89,14 +106,16 @@ function DrawToolbar(props: {
     map.on(CREATED, props.onCreated)
     map.on(EDITED, props.onEdited)
     map.on(DELETED, props.onDeleted)
+    adminMapLog('DrawToolbar: handlers attached', { CREATED, EDITED, DELETED })
 
     return () => {
       map.off(CREATED, props.onCreated)
       map.off(EDITED, props.onEdited)
       map.off(DELETED, props.onDeleted)
       map.removeControl(drawControl)
+      adminMapLog('DrawToolbar: cleaned up')
     }
-  }, [map, props])
+  }, [map, props.enabled, props.featureGroupVersion, props.featureGroupRef, props.onCreated, props.onEdited, props.onDeleted])
 
   return null
 }
@@ -375,12 +394,14 @@ export default function AdminMapClient() {
                 if (fg !== editGroupRef.current) {
                   editGroupRef.current = fg
                   setEditGroupVersion((v) => v + 1)
+                  adminMapLog('FeatureGroup ref set', { hasFg: !!fg, editGroupVersionNext: true })
                 }
               }}
             />
           )}
           <DrawToolbar
             enabled={!!editMarketSlug && !!editingPolygon}
+            featureGroupVersion={editGroupVersion}
             featureGroupRef={editGroupRef}
             onCreated={(e) => {
               const group = editGroupRef.current
@@ -388,16 +409,21 @@ export default function AdminMapClient() {
               if (group && layer) {
                 ;(group as unknown as { clearLayers?: () => void }).clearLayers?.()
                 ;(group as unknown as { addLayer: (l: unknown) => void }).addLayer(layer)
+                adminMapLog('draw:created -> layer added', { market: editMarketSlug })
+              } else {
+                adminMapLog('draw:created -> missing group/layer', { hasGroup: !!group, hasLayer: !!layer })
               }
               setHasEdited(true)
               setTimeout(captureEditedShape, 0)
             }}
             onEdited={() => {
               setHasEdited(true)
+              adminMapLog('draw:edited', { market: editMarketSlug })
               setTimeout(captureEditedShape, 0)
             }}
             onDeleted={() => {
               setHasEdited(true)
+              adminMapLog('draw:deleted', { market: editMarketSlug })
               setEditedRing(null)
             }}
           />
