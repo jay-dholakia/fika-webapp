@@ -2,6 +2,7 @@
 
 import './leaflet-flat-patch'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import L from 'leaflet'
 import type { FeatureGroup as LeafletFeatureGroup } from 'leaflet'
 import { getSupabase } from '@/lib/supabase'
 import dynamic from 'next/dynamic'
@@ -71,11 +72,18 @@ export default function AdminMapClient() {
   /** Current edited ring in GeoJSON order [lng, lat][] so the polygon sticks after drag; cleared when changing market. */
   const [editedRing, setEditedRing] = useState<[number, number][] | null>(null)
   const editGroupRef = useRef<LeafletFeatureGroup | null>(null)
+  const initializedSlugRef = useRef<string | null>(null)
 
   function captureEditedShape() {
     const layer = editGroupRef.current
     if (!layer?.toGeoJSON) return
     const geo = layer.toGeoJSON()
+    if (geo.type === 'FeatureCollection' && Array.isArray(geo.features)) {
+      const polys = geo.features.filter((f) => f.geometry?.type === 'Polygon')
+      const last = polys[polys.length - 1]?.geometry as GeoJSON.Polygon | undefined
+      if (last?.coordinates?.[0]?.length) setEditedRing(last.coordinates[0] as [number, number][])
+      return
+    }
     const poly = getFirstPolygonGeometry(geo)
     if (poly?.coordinates?.[0]?.length) setEditedRing(poly.coordinates[0] as [number, number][])
   }
@@ -148,6 +156,7 @@ export default function AdminMapClient() {
       setEditMarketSlug(null)
       setHasEdited(false)
       setEditedRing(null)
+      initializedSlugRef.current = null
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : 'Save failed')
     } finally {
@@ -168,6 +177,40 @@ export default function AdminMapClient() {
   if (!data) return null
 
   const editingPolygon = editMarketSlug ? data.polygons.find((p) => p.slug === editMarketSlug) : null
+
+  // Populate the FeatureGroup with a Leaflet layer once when entering edit mode for a market.
+  // We do this imperatively so Leaflet.draw edits the same underlying layer, and React re-renders
+  // don't reset it back to the original rectangle.
+  useEffect(() => {
+    const slug = editMarketSlug
+    const group = editGroupRef.current
+    if (!slug || !group || !editingPolygon) {
+      initializedSlugRef.current = null
+      return
+    }
+    if (initializedSlugRef.current === slug) return
+    initializedSlugRef.current = slug
+
+    try {
+      ;(group as unknown as { clearLayers?: () => void }).clearLayers?.()
+      const ring = editingPolygon.coordinates?.[0] as [number, number][] | undefined
+      if (!ring?.length) {
+        setEditedRing(null)
+        return
+      }
+      const latlngs = ring.map(([lng, lat]) => [lat, lng]) as [number, number][]
+      const polyLayer = L.polygon(latlngs, {
+        color: '#2563eb',
+        fillColor: '#3b82f6',
+        fillOpacity: 0.2,
+        weight: 2,
+      })
+      ;(group as unknown as { addLayer: (l: unknown) => void }).addLayer(polyLayer)
+      setEditedRing(ring)
+    } catch {
+      // ignore
+    }
+  }, [editMarketSlug, editingPolygon])
 
   return (
     <div className="admin-card">
@@ -274,23 +317,6 @@ export default function AdminMapClient() {
             })}
           {editMarketSlug && editingPolygon && (
             <FeatureGroup ref={editGroupRef}>
-              {(() => {
-                const ring = editedRing ?? editingPolygon.coordinates[0]
-                if (!ring?.length) return null
-                const positions: [number, number][] = ring.map(([lng, lat]) => [lat, lng])
-                return (
-                  <Polygon
-                    key={editingPolygon.slug}
-                    positions={positions}
-                    pathOptions={{
-                      color: '#2563eb',
-                      fillColor: '#3b82f6',
-                      fillOpacity: 0.2,
-                      weight: 2,
-                    }}
-                  />
-                )
-              })()}
               <EditControl
                 position="topright"
                 draw={{
@@ -302,7 +328,18 @@ export default function AdminMapClient() {
                   circlemarker: false,
                 }}
                 edit={{ edit: true, remove: true }}
-                onCreated={() => {
+                onCreated={(e: unknown) => {
+                  // If they drew a new polygon, keep only that polygon for this market.
+                  try {
+                    const group = editGroupRef.current
+                    const layer = (e as { layer?: unknown }).layer
+                    if (group && layer) {
+                      ;(group as unknown as { clearLayers?: () => void }).clearLayers?.()
+                      ;(group as unknown as { addLayer: (l: unknown) => void }).addLayer(layer)
+                    }
+                  } catch {
+                    // ignore
+                  }
                   setHasEdited(true)
                   setTimeout(captureEditedShape, 0)
                 }}
