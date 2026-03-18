@@ -9,6 +9,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const SENDBLUE_URL = 'https://api.sendblue.co/api/send-message'
 
+const MS_24_H = 24 * 60 * 60 * 1000
+
 const DAY_OFFSET: Record<string, number> = { mon: 0, tue: 1, wed: 2, thu: 3, fri: 4, sat: 5, sun: 6 }
 
 /** Fika datetime (PT) from batch_week (Monday YYYY-MM-DD) + slotId (e.g. wed_14_30). Uses PST (-08:00). */
@@ -32,10 +34,24 @@ const MS_2_5_H = 2.5 * 60 * 60 * 1000
 const POST_FIKA_MESSAGE =
   "How did your Fika go? We'd love to hear — just reply with any feedback."
 
+async function hasInboundWithin24h(supabase: any, phone: string): Promise<boolean> {
+  const { data } = await supabase
+    .from('message_ledger')
+    .select('created_at')
+    .eq('direction', 'inbound')
+    .eq('peer_phone', phone)
+    .order('created_at', { ascending: false })
+    .limit(1)
+  const ts = (data?.[0]?.created_at as string | undefined) ?? null
+  if (!ts) return false
+  const last = new Date(ts).getTime()
+  return Number.isFinite(last) && Date.now() - last <= MS_24_H
+}
+
 serve(async () => {
   try {
-    if (Deno.env.get('SENDBLUE_REPLY_ONLY') === 'true') {
-      return new Response(JSON.stringify({ ok: true, reply_only: true }), {
+    if (Deno.env.get('SMS_OUTBOUND_DISABLED') === 'true') {
+      return new Response(JSON.stringify({ ok: true, outbound_disabled: true }), {
         headers: { 'Content-Type': 'application/json' },
       })
     }
@@ -68,6 +84,7 @@ serve(async () => {
     }
 
     let sent = 0
+    let skipped_no_recent_inbound = 0
     for (const item of toSend) {
       for (const userId of item.userIds) {
         const { data: profile } = await supabase
@@ -76,6 +93,12 @@ serve(async () => {
           .eq('id', userId)
           .single()
         if (!profile?.phone?.trim()) continue
+        const phone = (profile.phone as string).trim()
+        const okToSend = await hasInboundWithin24h(supabase, phone)
+        if (!okToSend) {
+          skipped_no_recent_inbound++
+          continue
+        }
         const res = await fetch(SENDBLUE_URL, {
           method: 'POST',
           headers: {
@@ -84,7 +107,7 @@ serve(async () => {
             'sb-api-secret-key': apiSecret,
           },
           body: JSON.stringify({
-            number: (profile.phone as string).trim(),
+            number: phone,
             content: POST_FIKA_MESSAGE,
           }),
         })
@@ -95,7 +118,7 @@ serve(async () => {
         .update({ post_fika_sent_at: new Date().toISOString() })
         .eq('id', item.id)
     }
-    return new Response(JSON.stringify({ ok: true, sent, matches_processed: toSend.length }))
+    return new Response(JSON.stringify({ ok: true, sent, matches_processed: toSend.length, skipped_no_recent_inbound }))
   } catch (e) {
     return new Response(JSON.stringify({ error: String(e) }), { status: 500 })
   }

@@ -9,6 +9,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const SENDBLUE_URL = 'https://api.sendblue.co/api/send-message'
 
+const MS_24_H = 24 * 60 * 60 * 1000
+
 function getCurrentBatchWeek(): string {
   const d = new Date()
   const day = d.getUTCDay()
@@ -27,10 +29,24 @@ function getNextMondayPhrase(): string {
   return 'next Monday'
 }
 
+async function hasInboundWithin24h(supabase: any, phone: string): Promise<boolean> {
+  const { data } = await supabase
+    .from('message_ledger')
+    .select('created_at')
+    .eq('direction', 'inbound')
+    .eq('peer_phone', phone)
+    .order('created_at', { ascending: false })
+    .limit(1)
+  const ts = (data?.[0]?.created_at as string | undefined) ?? null
+  if (!ts) return false
+  const last = new Date(ts).getTime()
+  return Number.isFinite(last) && Date.now() - last <= MS_24_H
+}
+
 serve(async () => {
   try {
-    if (Deno.env.get('SENDBLUE_REPLY_ONLY') === 'true') {
-      return new Response(JSON.stringify({ ok: true, reply_only: true }), {
+    if (Deno.env.get('SMS_OUTBOUND_DISABLED') === 'true') {
+      return new Response(JSON.stringify({ ok: true, outbound_disabled: true }), {
         headers: { 'Content-Type': 'application/json' },
       })
     }
@@ -106,10 +122,15 @@ serve(async () => {
     }
 
     let notified = 0
+    let skipped_no_recent_inbound = 0
 
     for (const uid of userIdsWaiting) {
       const phone = phoneBy.get(uid)
       if (!phone) continue
+      if (!(await hasInboundWithin24h(supabase, phone))) {
+        skipped_no_recent_inbound++
+        continue
+      }
       const res = await fetch(SENDBLUE_URL, {
         method: 'POST',
         headers: {
@@ -126,6 +147,10 @@ serve(async () => {
     for (const uid of new Set(userIdsNoResponse)) {
       const phone = phoneBy.get(uid)
       if (!phone) continue
+      if (!(await hasInboundWithin24h(supabase, phone))) {
+        skipped_no_recent_inbound++
+        continue
+      }
       const res = await fetch(SENDBLUE_URL, {
         method: 'POST',
         headers: {
@@ -143,7 +168,7 @@ serve(async () => {
       await supabase.from('sms_conversation_states').delete().eq('batch_week', batchWeek).eq('match_id', m.id)
     }
 
-    return new Response(JSON.stringify({ ok: true, batch_week: batchWeek, notified, expired: activeMatches.length }))
+    return new Response(JSON.stringify({ ok: true, batch_week: batchWeek, notified, expired: activeMatches.length, skipped_no_recent_inbound }))
   } catch (e) {
     return new Response(JSON.stringify({ error: String(e) }), { status: 500 })
   }

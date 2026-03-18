@@ -28,8 +28,8 @@ const MESSAGE = (_nextMondayPhrase: string) =>
 
 serve(async () => {
   try {
-    if (Deno.env.get('SENDBLUE_REPLY_ONLY') === 'true') {
-      return new Response(JSON.stringify({ ok: true, reply_only: true }), {
+    if (Deno.env.get('SMS_OUTBOUND_DISABLED') === 'true') {
+      return new Response(JSON.stringify({ ok: true, outbound_disabled: true }), {
         headers: { 'Content-Type': 'application/json' },
       })
     }

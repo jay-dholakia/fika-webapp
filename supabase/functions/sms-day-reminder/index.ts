@@ -10,6 +10,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const SENDBLUE_URL = 'https://api.sendblue.co/api/send-message'
 
+const MS_24_H = 24 * 60 * 60 * 1000
+
 const DAY_OFFSET: Record<string, number> = { mon: 0, tue: 1, wed: 2, thu: 3, fri: 4, sat: 5, sun: 6 }
 
 /** Today (YYYY-MM-DD) in America/Los_Angeles. */
@@ -42,10 +44,24 @@ function buildReminderMessage(time: string, venueName: string, neighborhood: str
   return text
 }
 
+async function hasInboundWithin24h(supabase: any, phone: string): Promise<boolean> {
+  const { data } = await supabase
+    .from('message_ledger')
+    .select('created_at')
+    .eq('direction', 'inbound')
+    .eq('peer_phone', phone)
+    .order('created_at', { ascending: false })
+    .limit(1)
+  const ts = (data?.[0]?.created_at as string | undefined) ?? null
+  if (!ts) return false
+  const last = new Date(ts).getTime()
+  return Number.isFinite(last) && Date.now() - last <= MS_24_H
+}
+
 serve(async () => {
   try {
-    if (Deno.env.get('SENDBLUE_REPLY_ONLY') === 'true') {
-      return new Response(JSON.stringify({ ok: true, reply_only: true }), {
+    if (Deno.env.get('SMS_OUTBOUND_DISABLED') === 'true') {
+      return new Response(JSON.stringify({ ok: true, outbound_disabled: true }), {
         headers: { 'Content-Type': 'application/json' },
       })
     }
@@ -70,6 +86,7 @@ serve(async () => {
     )
 
     let sent = 0
+    let skipped_no_recent_inbound = 0
     for (const match of todayMatches) {
       const { data: venue } = await supabase
         .from('venues')
@@ -90,6 +107,12 @@ serve(async () => {
           .eq('id', userId)
           .single()
         if (!profile?.phone?.trim()) continue
+        const phone = (profile.phone as string).trim()
+        const okToSend = await hasInboundWithin24h(supabase, phone)
+        if (!okToSend) {
+          skipped_no_recent_inbound++
+          continue
+        }
         const message = buildReminderMessage(timeStr, venueName, neighborhood, starter)
         const res = await fetch(SENDBLUE_URL, {
           method: 'POST',
@@ -99,14 +122,14 @@ serve(async () => {
             'sb-api-secret-key': apiSecret,
           },
           body: JSON.stringify({
-            number: (profile.phone as string).trim(),
+            number: phone,
             content: message,
           }),
         })
         if (res.ok) sent++
       }
     }
-    return new Response(JSON.stringify({ ok: true, date: todayPT, sent }))
+    return new Response(JSON.stringify({ ok: true, date: todayPT, sent, skipped_no_recent_inbound }))
   } catch (e) {
     return new Response(JSON.stringify({ error: String(e) }), { status: 500 })
   }

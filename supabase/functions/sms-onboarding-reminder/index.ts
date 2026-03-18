@@ -13,9 +13,25 @@ const SENDBLUE_URL = 'https://api.sendblue.co/api/send-message'
 
 const MAX_SEND_PER_RUN = 50
 
+const MS_24_H = 24 * 60 * 60 * 1000
+
 function getAppBase(): string {
   const fromEnv = (Deno.env.get('APP_CANONICAL_URL') ?? '').trim()
   return fromEnv || 'https://letsfika.vercel.app'
+}
+
+async function hasInboundWithin24h(supabase: any, phone: string): Promise<boolean> {
+  const { data } = await supabase
+    .from('message_ledger')
+    .select('created_at')
+    .eq('direction', 'inbound')
+    .eq('peer_phone', phone)
+    .order('created_at', { ascending: false })
+    .limit(1)
+  const ts = (data?.[0]?.created_at as string | undefined) ?? null
+  if (!ts) return false
+  const last = new Date(ts).getTime()
+  return Number.isFinite(last) && Date.now() - last <= MS_24_H
 }
 
 function buildReminderContent(link: string): string {
@@ -25,8 +41,8 @@ function buildReminderContent(link: string): string {
 
 serve(async () => {
   try {
-    if (Deno.env.get('SENDBLUE_REPLY_ONLY') === 'true') {
-      return new Response(JSON.stringify({ ok: true, reply_only: true }), {
+    if (Deno.env.get('SMS_OUTBOUND_DISABLED') === 'true') {
+      return new Response(JSON.stringify({ ok: true, outbound_disabled: true }), {
         headers: { 'Content-Type': 'application/json' },
       })
     }
@@ -64,9 +80,17 @@ serve(async () => {
     const appBase = getAppBase()
 
     let sent = 0
+    let skipped_no_recent_inbound = 0
     for (const s of sessions ?? []) {
       const phone = (s.phone as string | null | undefined)?.trim() ?? ''
       if (!phone) continue
+      const okToSend = await hasInboundWithin24h(supabase, phone)
+      if (!okToSend) {
+        skipped_no_recent_inbound++
+        // Let it be eligible again if they text in later.
+        await supabase.from('onboarding_sessions').update({ reminder_sent_at: null }).eq('id', s.id as string)
+        continue
+      }
       const link = `${appBase}/signup?token=${encodeURIComponent(s.token as string)}`
       const content = buildReminderContent(link)
 
@@ -93,7 +117,7 @@ serve(async () => {
       }
     }
 
-    return new Response(JSON.stringify({ ok: true, claimed: (sessions ?? []).length, sent }), {
+    return new Response(JSON.stringify({ ok: true, claimed: (sessions ?? []).length, sent, skipped_no_recent_inbound }), {
       headers: { 'Content-Type': 'application/json' },
     })
   } catch (e) {

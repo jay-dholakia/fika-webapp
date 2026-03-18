@@ -9,6 +9,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const SENDBLUE_URL = 'https://api.sendblue.co/api/send-message'
 
+const MS_24_H = 24 * 60 * 60 * 1000
+
 function getCurrentBatchWeek(): string {
   const d = new Date()
   const day = d.getUTCDay()
@@ -47,10 +49,24 @@ function buildMatchOfferMessage(params: {
   return text
 }
 
+async function hasInboundWithin24h(supabase: any, phone: string): Promise<boolean> {
+  const { data } = await supabase
+    .from('message_ledger')
+    .select('created_at')
+    .eq('direction', 'inbound')
+    .eq('peer_phone', phone)
+    .order('created_at', { ascending: false })
+    .limit(1)
+  const ts = (data?.[0]?.created_at as string | undefined) ?? null
+  if (!ts) return false
+  const last = new Date(ts).getTime()
+  return Number.isFinite(last) && Date.now() - last <= MS_24_H
+}
+
 serve(async () => {
   try {
-    if (Deno.env.get('SENDBLUE_REPLY_ONLY') === 'true') {
-      return new Response(JSON.stringify({ ok: true, reply_only: true }), {
+    if (Deno.env.get('SMS_OUTBOUND_DISABLED') === 'true') {
+      return new Response(JSON.stringify({ ok: true, outbound_disabled: true }), {
         headers: { 'Content-Type': 'application/json' },
       })
     }
@@ -79,6 +95,7 @@ serve(async () => {
     const offeredSet = new Set((alreadyOffered ?? []).map((r: { match_id: string }) => r.match_id))
 
     let sent = 0
+    let skipped_no_recent_inbound = 0
     for (const match of matches ?? []) {
       if (offeredSet.has(match.id)) continue
       const reasons = (match.reasons as Record<string, unknown>) ?? {}
@@ -99,6 +116,12 @@ serve(async () => {
           .eq('id', userId)
           .single()
         if (!myProfile?.phone?.trim()) continue
+        const phone = (myProfile.phone as string).trim()
+        const okToSend = await hasInboundWithin24h(supabase, phone)
+        if (!okToSend) {
+          skipped_no_recent_inbound++
+          continue
+        }
         const otherFirstName = otherProfile?.first_name?.trim() ?? 'Someone'
         const otherAge = ageFromBirthdate(otherProfile?.birthdate ?? null)
         const otherBio = (otherProfile?.bio_text as string)?.trim()
@@ -119,7 +142,7 @@ serve(async () => {
             'sb-api-secret-key': apiSecret,
           },
           body: JSON.stringify({
-            number: (myProfile.phone as string).trim(),
+            number: phone,
             content: message,
           }),
         })
@@ -140,7 +163,7 @@ serve(async () => {
       }
       offeredSet.add(match.id)
     }
-    return new Response(JSON.stringify({ ok: true, batch_week: batchWeek, sent }))
+    return new Response(JSON.stringify({ ok: true, batch_week: batchWeek, sent, skipped_no_recent_inbound }))
   } catch (e) {
     return new Response(JSON.stringify({ error: String(e) }), { status: 500 })
   }
