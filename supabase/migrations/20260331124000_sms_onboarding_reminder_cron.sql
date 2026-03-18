@@ -1,7 +1,13 @@
 -- Send reminder SMS for onboarding sessions that are inactive for 3+ hours.
 -- Runs every 30 minutes.
 
-select cron.unschedule('sms-onboarding-reminder');
+do $$
+begin
+  -- pg_cron throws if the job doesn't exist yet, so we ignore that case.
+  perform cron.unschedule('sms-onboarding-reminder');
+exception
+  when others then null;
+end $$;
 
 select cron.schedule(
   'sms-onboarding-reminder',
