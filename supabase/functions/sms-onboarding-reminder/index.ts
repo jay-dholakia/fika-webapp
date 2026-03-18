@@ -20,7 +20,7 @@ function getAppBase(): string {
 
 function buildReminderContent(link: string): string {
   // Link on its own line so it's easy to tap/copy in SMS clients.
-  return `Don't forget - finish onboarding so we can start intro'ing you to Fikas.\n${link}`
+  return `Don’t forget—finish onboarding so we can start intro’ing you to Fikas.\n${link}`
 }
 
 serve(async () => {
