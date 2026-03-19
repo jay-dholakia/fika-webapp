@@ -17,8 +17,10 @@ import type { IntakeResponseItem } from '@/lib/db-types'
 import type { ProfileRow } from '@/lib/db-types'
 import type { IntakeResponsesV5Row } from '@/lib/db-types'
 
-const SECTION_2_IDS = ['q_life_chapter', 'q_everyday_anchor', 'q_work', 'q_interests', 'q_curiosity', 'q_movie_show_recommendation', 'q_book_recommendation', 'q_role_model']
-const SECTION_3_IDS = ['q_topics', 'q_avoid_topics', 'q_openness', 'gender_preference', 'age_preference', 'q_hoping_for', 'q_what_makes_great_fika', 'q_radius', 'q_favorite_coffee_shop']
+const ABOUT_YOU_EXTRA_IDS = ['q_hoping_for']
+const SECTION_2_IDS = ['q_life_chapter', 'q_everyday_anchor', 'q_work', 'q_interests', 'q_curiosity']
+const SECTION_3_IDS = ['q_topics', 'q_avoid_topics', 'q_openness', 'gender_preference', 'age_preference', 'q_what_makes_great_fika', 'q_radius', 'q_favorite_coffee_shop']
+const ABOUT_YOU_EXTRA_STEPS = INTAKE_STEPS.filter((s) => ABOUT_YOU_EXTRA_IDS.includes(s.id))
 const SECTION_2_STEPS = INTAKE_STEPS.filter((s) => SECTION_2_IDS.includes(s.id))
 const SECTION_3_STEPS = INTAKE_STEPS.filter((s) => SECTION_3_IDS.includes(s.id))
 const CONFIRM_STEP = INTAKE_STEPS.find((s) => s.id === 'confirm_intent')!
@@ -147,6 +149,7 @@ function AppOnboardingContent() {
   const [zipLoading, setZipLoading] = useState(false)
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null)
+  const [lifeChapterQuery, setLifeChapterQuery] = useState('')
   const submitRef = useRef<HTMLButtonElement>(null)
   const lastMultiSelectRef = useRef<{ stepId: string; opt: string; t: number }>({ stepId: '', opt: '', t: 0 })
 
@@ -278,6 +281,11 @@ function AppOnboardingContent() {
         const arr = Array.isArray(raw) ? raw : []
         if (arr.length > s.maxSelections) return `Please choose at most ${s.maxSelections}.`
       }
+    }
+    for (const s of ABOUT_YOU_EXTRA_STEPS) {
+      const raw = answers[s.id]
+      if (s.required !== false && (raw === undefined || raw === '' || (Array.isArray(raw) && raw.length === 0)))
+        return `Please answer: ${s.question}`
     }
     const confirmRaw = answers.confirm_intent
     if (!avatarFile) return 'Please upload a profile photo.'
@@ -789,16 +797,20 @@ function AppOnboardingContent() {
         )}
         {step.type === 'multi_select' && step.options && (
           <div>
-            {step.options.map((opt) => {
+            {(() => {
               const arr = (Array.isArray(value) ? value : []) as string[]
-              const selected = arr.includes(opt)
-              const isPreferNotToSay = opt === 'Prefer not to say'
-              const isExclusiveOption =
-                (step.id === 'q_openness' && opt === "I'm open to anyone")
-              const atMax = step.maxSelections != null && arr.length >= step.maxSelections && !selected
               const exclusiveOptionText = step.id === 'q_openness' ? "I'm open to anyone" : null
+              const isSearchableLongList = step.id === 'q_life_chapter'
+              const normalizedQuery = lifeChapterQuery.trim().toLowerCase()
+              const visibleOptions = isSearchableLongList && normalizedQuery
+                ? step.options.filter((opt) => opt.toLowerCase().includes(normalizedQuery))
+                : step.options
 
-              const handleMultiSelect = () => {
+              const handleMultiSelect = (opt: string) => {
+                const selected = arr.includes(opt)
+                const isPreferNotToSay = opt === 'Prefer not to say'
+                const isExclusiveOption = step.id === 'q_openness' && opt === "I'm open to anyone"
+                const atMax = step.maxSelections != null && arr.length >= step.maxSelections && !selected
                 const now = Date.now()
                 if (
                   lastMultiSelectRef.current.stepId === step.id &&
@@ -827,26 +839,65 @@ function AppOnboardingContent() {
               }
 
               return (
-                <button
-                  key={opt}
-                  type="button"
-                  className={`onboarding-chip ${selected ? 'multi-selected' : ''}`}
-                  onPointerDown={(e) => {
-                    if (e.button === 0) {
-                      e.preventDefault()
-                      handleMultiSelect()
-                    }
-                  }}
-                  onClick={(e) => {
-                    e.preventDefault()
-                    handleMultiSelect()
-                  }}
-                  disabled={saving || (!isExclusiveOption && atMax)}
-                >
-                  {opt}
-                </button>
+                <>
+                  {isSearchableLongList && (
+                    <input
+                      type="text"
+                      className="auth-input"
+                      placeholder="Type to filter options"
+                      value={lifeChapterQuery}
+                      onChange={(e) => setLifeChapterQuery(e.target.value)}
+                      disabled={saving}
+                      autoComplete="off"
+                      style={{ marginBottom: '0.75rem' }}
+                    />
+                  )}
+                  {isSearchableLongList && arr.length > 0 && (
+                    <div style={{ marginBottom: '0.75rem' }}>
+                      {arr.map((opt) => (
+                        <button
+                          key={`selected-${opt}`}
+                          type="button"
+                          className="onboarding-chip multi-selected"
+                          onClick={(e) => {
+                            e.preventDefault()
+                            handleMultiSelect(opt)
+                          }}
+                          disabled={saving}
+                        >
+                          {opt} ×
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {visibleOptions.map((opt) => {
+                    const selected = arr.includes(opt)
+                    const isExclusiveOption = step.id === 'q_openness' && opt === "I'm open to anyone"
+                    const atMax = step.maxSelections != null && arr.length >= step.maxSelections && !selected
+                    return (
+                      <button
+                        key={opt}
+                        type="button"
+                        className={`onboarding-chip ${selected ? 'multi-selected' : ''}`}
+                        onPointerDown={(e) => {
+                          if (e.button === 0) {
+                            e.preventDefault()
+                            handleMultiSelect(opt)
+                          }
+                        }}
+                        onClick={(e) => {
+                          e.preventDefault()
+                          handleMultiSelect(opt)
+                        }}
+                        disabled={saving || (!isExclusiveOption && atMax)}
+                      >
+                        {opt}
+                      </button>
+                    )
+                  })}
+                </>
               )
-            })}
+            })()}
           </div>
         )}
       </div>
@@ -859,12 +910,13 @@ function AppOnboardingContent() {
         <section className="onboarding-section onboarding-section-card onboarding-welcome-card" aria-label="Welcome">
           <h2 className="onboarding-section-title">Welcome to Fika ☕</h2>
           <p className="onboarding-welcome-body">
-            We&apos;re excited you&apos;re here! Fika helps you meet people nearby for real conversations and connection. Answer a few questions below and we&apos;ll get you set up for your first Fika :)
+            Answer a few quick questions so we can get to know you. We&apos;ll use your responses to introduce you to people nearby for a Fika.
           </p>
         </section>
         <section className="onboarding-section onboarding-section-card">
           <h2 className="onboarding-section-title">About you</h2>
           {PROFILE_STEPS.map(renderField)}
+          {ABOUT_YOU_EXTRA_STEPS.map(renderField)}
         </section>
 
         <section className="onboarding-section onboarding-section-card">

@@ -9,7 +9,7 @@ const faqItems = [
   },
   {
     q: 'How often do I get intros?',
-    a: 'Once a week. Text FIKA each week to opt in. When you’re in, you get one introduction to someone nearby for that week.',
+    a: 'Once a week. Text us on Sundays if you want a Fika in the upcoming week. When you’re in, you’ll get an introduction to someone nearby for a Fika that week.',
   },
   {
     q: 'Do I have to meet in person?',

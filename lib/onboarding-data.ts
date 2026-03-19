@@ -103,7 +103,7 @@ export const PROFILE_STEPS: ProfileStep[] = [
 
 // INTAKE (Final): Block 1 Life context → Block 2 Interests → Block 3 Topics → Block 4 Perspective → Block 5 Matching.
 // Block 1: life chapter (stage) → everyday anchor (daily reality) only.
-// Block 2: interests → curiosity → book/movie/place recs (no free afternoon).
+// Block 2: interests → curiosity.
 export const INTAKE_STEPS: ProfileStep[] = [
   // Block 1 — Life context: stage → daily reality
   {
@@ -231,28 +231,6 @@ export const INTAKE_STEPS: ProfileStep[] = [
       'Take a course on how to build a business',
       'Take a class on personal finance',
     ],
-  },
-  {
-    id: 'q_movie_show_recommendation',
-    question: "What's a movie or show you'd recommend?",
-    type: 'text',
-    required: false,
-    placeholder: 'Movie or show',
-  },
-  {
-    id: 'q_book_recommendation',
-    question: "What's a book you'd recommend?",
-    body: "If you don't read, leave blank — we're not judging.",
-    type: 'text',
-    required: false,
-    placeholder: 'Book recommendation',
-  },
-  {
-    id: 'q_role_model',
-    question: 'Who is your role model?',
-    type: 'text',
-    required: false,
-    placeholder: 'Name or description',
   },
   {
     id: 'q_what_makes_great_fika',

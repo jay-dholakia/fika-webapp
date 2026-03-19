@@ -76,9 +76,9 @@ export default function Home() {
               <li className="step">
                 <span className="step-num">2</span>
                 <div className="step-content">
-                  <h3 className="step-title">Join each week when you&apos;re ready</h3>
+                  <h3 className="step-title">Let us know you want a Fika</h3>
                   <p className="step-text">
-                    Text us every Sunday if you want a Fika later that week. We&apos;ll follow up to ask your availability for a Fika and we&apos;ll start finding you an introduction.
+                    Text us on Sundays if you want a Fika introduction during the upcoming week. We&apos;ll follow up to ask your availability and we&apos;ll start finding you an introduction.
                   </p>
                 </div>
               </li>
@@ -87,7 +87,7 @@ export default function Home() {
                 <div className="step-content">
                   <h3 className="step-title">We make the plan</h3>
                   <p className="step-text">
-                    <strong>Get your introduction</strong> — On Tuesday, you&apos;ll receive an intro with a time and place already set based on your shared availability.
+                    <strong>Get your introduction</strong> — You&apos;ll receive your Fika intro in a few days with a time and place already set based on your shared availability and location.
                   </p>
                 </div>
               </li>

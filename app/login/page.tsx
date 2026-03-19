@@ -36,38 +36,34 @@ function LoginContent() {
         </div>
       </header>
 
-      <main className="auth-page auth-page-cta">
-        <section id="cta" className="section section-cta section-cta-full">
-          <div className="section-inner cta-inner auth-login-inner">
-            <div className="auth-login-main">
-              <h2 className="cta-title">Login to Fika</h2>
-              {noAccount && (
-                <p className="cta-message cta-message-error" role="alert" style={{ marginBottom: '1rem' }}>
-                  No account found. Text us to get started.
-                </p>
-              )}
-              <button
-                type="button"
-                className="btn btn-primary btn-block"
-                onClick={handleSignInWithGoogle}
-              >
-                Sign in with Google
-              </button>
-              {CONCIERGE_NUMBER ? (
-                <a
-                  href={`sms:${CONCIERGE_NUMBER}?body=${encodeURIComponent('Hi! Help set me up for Fika.')}`}
-                  className="btn btn-secondary btn-block"
-                  style={{ marginTop: '0.75rem' }}
-                >
-                  Sign up via text
-                </a>
-              ) : (
-                <p className="auth-switch auth-switch-cta" style={{ marginTop: '1.5rem' }}>
-                  Text us to get started.
-                </p>
-              )}
-            </div>
-          </div>
+      <main className="auth-page">
+        <section className="auth-card">
+          <h2 className="auth-title">Login to Fika</h2>
+          {noAccount && (
+            <p className="cta-message cta-message-error" role="alert" style={{ marginBottom: '1rem' }}>
+              No account found. Text us to get started.
+            </p>
+          )}
+          <button
+            type="button"
+            className="btn btn-primary btn-block"
+            onClick={handleSignInWithGoogle}
+          >
+            Sign in with Google
+          </button>
+          {CONCIERGE_NUMBER ? (
+            <a
+              href={`sms:${CONCIERGE_NUMBER}?body=${encodeURIComponent('Hi! Help set me up for Fika.')}`}
+              className="btn btn-secondary btn-block"
+              style={{ marginTop: '0.75rem' }}
+            >
+              Sign up via text
+            </a>
+          ) : (
+            <p className="auth-switch auth-switch-cta" style={{ marginTop: '1.5rem' }}>
+              Text us to get started.
+            </p>
+          )}
         </section>
       </main>
 
