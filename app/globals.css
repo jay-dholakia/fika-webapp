@@ -286,6 +286,33 @@ a {
   margin-bottom: 2rem;
   line-height: 1.65;
 }
+.hero-coffee-graphic {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: -0.25rem auto 0.25rem;
+  opacity: 0.95;
+  z-index: 1;
+}
+.hero-coffee-graphic svg {
+  width: min(320px, 72vw);
+  height: auto;
+  stroke: url(#coffeeStroke);
+  fill: none;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 8px 18px rgba(15, 23, 42, 0.08));
+}
+@media (min-width: 900px) {
+  .hero-coffee-graphic {
+    align-self: stretch;
+    margin: 0;
+  }
+  .hero-coffee-graphic svg {
+    width: min(280px, 26vw);
+  }
+}
 .btn {
   display: inline-block;
   padding: 0.9rem 1.75rem;

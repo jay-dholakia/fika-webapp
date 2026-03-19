@@ -4,8 +4,9 @@ import { Suspense } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import Footer from '../components/Footer'
-import CtaWithLocation from '../components/CtaWithLocation'
 import { getSupabase } from '@/lib/supabase'
+
+const CONCIERGE_NUMBER = process.env.NEXT_PUBLIC_SENDBLUE_CONCIERGE_NUMBER?.trim() || null
 
 function LoginContent() {
   const searchParams = useSearchParams()
@@ -39,13 +40,10 @@ function LoginContent() {
         <section id="cta" className="section section-cta section-cta-full">
           <div className="section-inner cta-inner auth-login-inner">
             <div className="auth-login-main">
-              <h2 className="cta-title">Sign in to Fika</h2>
-              <p className="cta-sub">
-                Use your Google account to continue. If you&apos;re new to Fika, you can join the waitlist instead.
-              </p>
+              <h2 className="cta-title">Login to Fika</h2>
               {noAccount && (
                 <p className="cta-message cta-message-error" role="alert" style={{ marginBottom: '1rem' }}>
-                  No account found. Join the waitlist and we&apos;ll let you know when Fika&apos;s ready for you.
+                  No account found. Text us to get started.
                 </p>
               )}
               <button
@@ -55,19 +53,19 @@ function LoginContent() {
               >
                 Sign in with Google
               </button>
-              <p className="auth-switch auth-switch-cta" style={{ marginTop: '1.5rem' }}>
-                <Link href="/">Back to home</Link>
-              </p>
-            </div>
-
-            <div className="auth-login-divider" aria-hidden="true" />
-
-            <div className="auth-login-side">
-              <h3 className="auth-login-side-title">New to Fika?</h3>
-              <p className="auth-login-side-sub">
-                Join the waitlist and we&apos;ll invite you when Fika is live in your city.
-              </p>
-              <CtaWithLocation />
+              {CONCIERGE_NUMBER ? (
+                <a
+                  href={`sms:${CONCIERGE_NUMBER}?body=${encodeURIComponent('Hi! Help set me up for Fika.')}`}
+                  className="btn btn-secondary btn-block"
+                  style={{ marginTop: '0.75rem' }}
+                >
+                  Sign up via text
+                </a>
+              ) : (
+                <p className="auth-switch auth-switch-cta" style={{ marginTop: '1.5rem' }}>
+                  Text us to get started.
+                </p>
+              )}
             </div>
           </div>
         </section>

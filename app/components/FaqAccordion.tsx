@@ -20,6 +20,10 @@ const faqItems = [
     a: 'No pressure. It’s one conversation. After that, you can stay in touch or leave it at one great Fika. Your call.',
   },
   {
+    q: 'What do you do with my email and number?',
+    a: 'We do not sell or share your email or phone number with anyone. We only use them to communicate with you about Fika. Your Fika intros also never get access to your information.',
+  },
+  {
     q: 'What does it cost?',
     a: 'Fika is currently free to use.',
   },

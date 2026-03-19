@@ -23,9 +23,28 @@ export default function Home() {
                 <p className="hero-sub">
                   Weekly intros by text. You meet. You talk. You connect.
                 </p>
-                <a href="#cta" className="btn btn-primary">Get started</a>
               </div>
             </section>
+
+            <div className="hero-coffee-graphic" aria-hidden="true">
+              <svg viewBox="0 0 320 160" role="presentation">
+                <defs>
+                  <linearGradient id="coffeeStroke" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#5B9BD5" />
+                    <stop offset="100%" stopColor="#FF9F66" />
+                  </linearGradient>
+                </defs>
+                <circle cx="84" cy="44" r="13" />
+                <path d="M58 96c0-18 10-30 26-30s26 12 26 30" />
+                <circle cx="236" cy="44" r="13" />
+                <path d="M210 96c0-18 10-30 26-30s26 12 26 30" />
+                <line x1="96" y1="108" x2="224" y2="108" />
+                <rect x="142" y="98" width="36" height="20" rx="8" />
+                <path d="M178 102h8a6 6 0 0 1 0 12h-8" />
+                <path d="M152 92c0-8 8-8 8-16" />
+                <path d="M164 92c0-8 8-8 8-16" />
+              </svg>
+            </div>
 
             <section id="what" data-animate className="section section-what">
               <div className="section-inner">
@@ -41,6 +60,9 @@ export default function Home() {
             </p>
             <p className="section-body section-body-follow">
               No app. No endless chats.
+            </p>
+            <p className="section-body section-body-follow">
+              <a href="#cta" className="btn btn-primary">Sign up</a>
             </p>
           </div>
         </section>
@@ -93,6 +115,13 @@ export default function Home() {
           </div>
         </section>
 
+        <section id="faq" data-animate className="section section-faq">
+          <div className="section-inner">
+            <h2 className="section-title">FAQ</h2>
+            <FaqAccordion />
+          </div>
+        </section>
+
         <section id="cta" data-animate className="section section-cta">
           <div className="section-inner cta-inner">
             <h2 className="cta-title">Ready for a real Fika?</h2>
@@ -109,13 +138,6 @@ export default function Home() {
                 Text <strong>FIKA</strong> to the number we use in the app to get started.
               </p>
             )}
-          </div>
-        </section>
-
-        <section id="faq" data-animate className="section section-faq">
-          <div className="section-inner">
-            <h2 className="section-title">FAQ</h2>
-            <FaqAccordion />
           </div>
         </section>
         </main>
