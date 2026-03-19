@@ -2,6 +2,7 @@ import Header from './components/Header'
 import Footer from './components/Footer'
 import ScrollReveal from './components/ScrollReveal'
 import FaqAccordion from './components/FaqAccordion'
+import Image from 'next/image'
 
 const CONCIERGE_NUMBER = process.env.NEXT_PUBLIC_SENDBLUE_CONCIERGE_NUMBER?.trim() || null
 
@@ -27,23 +28,14 @@ export default function Home() {
             </section>
 
             <div className="hero-coffee-graphic" aria-hidden="true">
-              <svg viewBox="0 0 320 160" role="presentation">
-                <defs>
-                  <linearGradient id="coffeeStroke" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#5B9BD5" />
-                    <stop offset="100%" stopColor="#FF9F66" />
-                  </linearGradient>
-                </defs>
-                <circle cx="84" cy="44" r="13" />
-                <path d="M58 96c0-18 10-30 26-30s26 12 26 30" />
-                <circle cx="236" cy="44" r="13" />
-                <path d="M210 96c0-18 10-30 26-30s26 12 26 30" />
-                <line x1="96" y1="108" x2="224" y2="108" />
-                <rect x="142" y="98" width="36" height="20" rx="8" />
-                <path d="M178 102h8a6 6 0 0 1 0 12h-8" />
-                <path d="M152 92c0-8 8-8 8-16" />
-                <path d="M164 92c0-8 8-8 8-16" />
-              </svg>
+              <Image
+                src="/images/coffee-two-cups.png"
+                alt="Two coffee cups on a table"
+                width={1024}
+                height={682}
+                className="hero-coffee-graphic-image"
+                priority
+              />
             </div>
 
             <section id="what" data-animate className="section section-what">
@@ -86,10 +78,7 @@ export default function Home() {
                 <div className="step-content">
                   <h3 className="step-title">Join each week when you&apos;re ready</h3>
                   <p className="step-text">
-                    <strong>Opt in on Sunday</strong> — Text FIKA to join that week&apos;s introductions.
-                  </p>
-                  <p className="step-text">
-                    <strong>Set your availability</strong> — Share when you&apos;re free between Wednesday and Saturday.
+                    Text us every Sunday if you want a Fika later that week. We&apos;ll follow up to ask your availability for a Fika and we&apos;ll start finding you an introduction.
                   </p>
                 </div>
               </li>

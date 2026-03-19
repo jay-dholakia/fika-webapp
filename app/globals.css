@@ -294,14 +294,10 @@ a {
   opacity: 0.95;
   z-index: 1;
 }
-.hero-coffee-graphic svg {
+.hero-coffee-graphic .hero-coffee-graphic-image {
   width: min(320px, 72vw);
   height: auto;
-  stroke: url(#coffeeStroke);
-  fill: none;
-  stroke-width: 3;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+  border-radius: 16px;
   filter: drop-shadow(0 8px 18px rgba(15, 23, 42, 0.08));
 }
 @media (min-width: 900px) {
@@ -309,7 +305,7 @@ a {
     align-self: stretch;
     margin: 0;
   }
-  .hero-coffee-graphic svg {
+  .hero-coffee-graphic .hero-coffee-graphic-image {
     width: min(280px, 26vw);
   }
 }
