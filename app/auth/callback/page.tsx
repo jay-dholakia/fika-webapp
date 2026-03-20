@@ -42,7 +42,18 @@ function AuthCallbackContent() {
           },
           body: JSON.stringify({ token: smsToken }),
         })
-        if (!res.ok) console.error('merge-sms-signup failed', res.status)
+        if (!res.ok) {
+          console.error('merge-sms-signup failed', res.status)
+          router.replace(nextPath)
+          return
+        }
+        // SMS onboarding: open Messages to the concierge thread (no pre-filled body).
+        // Profile links and follow-ups arrive there.
+        const concierge = process.env.NEXT_PUBLIC_SENDBLUE_CONCIERGE_NUMBER?.trim()
+        if (concierge) {
+          window.location.href = `sms:${concierge}`
+          return
+        }
         router.replace(nextPath)
         return
       }
