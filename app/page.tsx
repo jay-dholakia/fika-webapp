@@ -54,7 +54,12 @@ export default function Home() {
               No app. No endless chats.
             </p>
             <p className="section-body section-body-follow">
-              <a href="#cta" className="btn btn-primary">Sign up</a>
+              <a
+                href={CONCIERGE_NUMBER ? `sms:${CONCIERGE_NUMBER}?body=${encodeURIComponent("Hi! Help set me up for Fika.")}` : '#cta'}
+                className="btn btn-primary"
+              >
+                Sign up
+              </a>
             </p>
           </div>
         </section>
