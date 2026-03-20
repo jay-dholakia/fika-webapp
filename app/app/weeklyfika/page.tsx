@@ -296,7 +296,7 @@ const TARGET_USERS = TARGET_COUNT_PER_MARKET
     <>
       <div className="app-card">
         <h2>Your weekly Fika</h2>
-        {profileCount === null ? (
+        {profileCount === null || (marketSlug != null && marketActive === null) ? (
           <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem', marginBottom: 0 }}>
             Loading your weekly status…
           </p>

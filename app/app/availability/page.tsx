@@ -135,6 +135,15 @@ export default function AvailabilityPage() {
     )
   }
 
+  // marketActive is set asynchronously; avoid rendering the grid until we know true/false.
+  if (marketActive === null) {
+    return (
+      <div className="app-card">
+        <p className="app-empty">Loading…</p>
+      </div>
+    )
+  }
+
   if (marketActive === false) {
     return (
       <div className="app-card">

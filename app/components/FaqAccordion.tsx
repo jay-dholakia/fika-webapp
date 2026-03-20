@@ -8,8 +8,8 @@ const faqItems = [
     a: 'We use your intake (your current life stage, interests, what you’re hoping to get out of Fika, and where you’re based) plus your availability to find a great fit—and propose a real time you’re both free.',
   },
   {
-    q: 'How often do I get intros?',
-    a: 'Once a week. Text us on Sundays if you want a Fika in the upcoming week. When you’re in, you’ll get an introduction to someone nearby for a Fika that week.',
+    q: "How often do intro's run?",
+    a: "Weekly. Your intro's are delivered every Tuesday.",
   },
   {
     q: 'Do I have to meet in person?',

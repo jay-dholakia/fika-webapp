@@ -15,27 +15,29 @@ export default function Home() {
         <main>
           <div className="hero-what-wrapper">
             <div className="hero-what-blob" aria-hidden />
-            <section className="hero">
-              <div className="hero-inner">
-                <h1 className="hero-title">
-                  Real people.<br />
-                  <span className="hero-title-accent">Real conversation.</span>
-                </h1>
-                <p className="hero-sub">
-                  Weekly intros by text. You meet. You talk. You connect.
-                </p>
-              </div>
-            </section>
+            <div className="hero-stack">
+              <section className="hero">
+                <div className="hero-inner">
+                  <h1 className="hero-title">
+                    Real people.<br />
+                    <span className="hero-title-accent">Real conversation.</span>
+                  </h1>
+                  <p className="hero-sub">
+                    Weekly intros by text. You meet. You talk. You connect.
+                  </p>
+                </div>
+              </section>
 
-            <div className="hero-coffee-graphic" aria-hidden="true">
-              <Image
-                src="/images/coffee-two-cups.png"
-                alt="Two coffee cups on a table"
-                width={1024}
-                height={682}
-                className="hero-coffee-graphic-image"
-                priority
-              />
+              <div className="hero-coffee-graphic" aria-hidden="true">
+                <Image
+                  src="/images/coffee-two-cups.png"
+                  alt="Two coffee cups on a table"
+                  width={1024}
+                  height={682}
+                  className="hero-coffee-graphic-image"
+                  priority
+                />
+              </div>
             </div>
 
             <section id="what" data-animate className="section section-what">
@@ -81,9 +83,9 @@ export default function Home() {
               <li className="step">
                 <span className="step-num">2</span>
                 <div className="step-content">
-                  <h3 className="step-title">Let us know you want a Fika</h3>
+                  <h3 className="step-title">Sunday</h3>
                   <p className="step-text">
-                    Text us on Sundays if you want a Fika introduction during the upcoming week. We&apos;ll follow up to ask your availability and we&apos;ll start finding you an introduction.
+                    Text FIKA to receive an introduction during the upcoming week. We&apos;ll send a link to tell us when you&apos;re free for Fika between Wednesday and Saturday.
                   </p>
                 </div>
               </li>
@@ -92,7 +94,7 @@ export default function Home() {
                 <div className="step-content">
                   <h3 className="step-title">We make the plan</h3>
                   <p className="step-text">
-                    <strong>Get your introduction</strong> — You&apos;ll receive your Fika intro in a few days with a time and place already set based on your shared availability and location.
+                    <strong>Get your introduction</strong> — You&apos;ll receive your Fika intro in a few days with a time and place (usually a local coffee shop) already set based on your shared availability and location.
                   </p>
                 </div>
               </li>

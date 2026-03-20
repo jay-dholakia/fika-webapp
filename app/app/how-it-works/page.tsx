@@ -57,7 +57,7 @@ export default function HowItWorksPage() {
       <div className="app-card app-welcome-card">
         <h1 className="app-welcome-card-title">Welcome to Fika!</h1>
         <p className="app-welcome-card-text">
-          We&apos;re building real connection—one thoughtful intro per week, in person. No swiping, no endless chats. Just a simple rhythm: set when you&apos;re free, get matched, confirm your time, and show up.
+          We&apos;re building real connection—one conversation at a time.
         </p>
       </div>
 
