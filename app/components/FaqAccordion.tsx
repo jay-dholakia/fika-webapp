@@ -5,7 +5,7 @@ import { useState } from 'react'
 const faqItems = [
   {
     q: 'How do you decide who to introduce me to?',
-    a: 'We use your intake (your current life stage, interests, what you’re hoping to get out of Fika, and where you’re based) plus your availability to find a great fit—and propose a real time you’re both free.',
+    a: 'We use your profile, preferences, and overlapping availability to pick a strong fit and suggest a real time you are both free. Intros are sent by SMS.',
   },
   {
     q: "How often do intro's run?",
