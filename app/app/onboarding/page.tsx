@@ -24,6 +24,8 @@ const ABOUT_YOU_EXTRA_STEPS = INTAKE_STEPS.filter((s) => ABOUT_YOU_EXTRA_IDS.inc
 const SECTION_2_STEPS = INTAKE_STEPS.filter((s) => SECTION_2_IDS.includes(s.id))
 const SECTION_3_STEPS = INTAKE_STEPS.filter((s) => SECTION_3_IDS.includes(s.id))
 const CONFIRM_STEP = INTAKE_STEPS.find((s) => s.id === 'confirm_intent')!
+const LOCATION_STEP = PROFILE_STEPS.find((s) => s.id === 'location')!
+const PROFILE_STEPS_BEFORE_LOCATION = PROFILE_STEPS.filter((s) => s.id !== 'location')
 
 type AnswersState = Record<string, string | string[] | number | { city: string; lat: number; lng: number }>
 
@@ -149,7 +151,7 @@ function AppOnboardingContent() {
   const [zipLoading, setZipLoading] = useState(false)
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null)
-  const [lifeChapterQuery, setLifeChapterQuery] = useState('')
+  const [languageQuery, setLanguageQuery] = useState('')
   const submitRef = useRef<HTMLButtonElement>(null)
   const lastMultiSelectRef = useRef<{ stepId: string; opt: string; t: number }>({ stepId: '', opt: '', t: 0 })
 
@@ -443,82 +445,6 @@ function AppOnboardingContent() {
     await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo } })
   }
 
-  async function reverseGeocodeWithGoogle(lat: number, lng: number): Promise<{ city: string; state: string } | null> {
-    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
-    if (!apiKey) return null
-    try {
-      const res = await fetch(
-        `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${apiKey}`
-      )
-      const data = (await res.json()) as {
-        results?: Array<{
-          address_components?: Array<{ long_name: string; short_name: string; types: string[] }>
-        }>
-      }
-      const comps = data.results?.[0]?.address_components
-      if (!comps) return null
-      let cityVal = ''
-      let stateVal = ''
-      for (const c of comps) {
-        if (c.types?.includes('locality')) cityVal = c.long_name ?? ''
-        if (c.types?.includes('administrative_area_level_1')) stateVal = c.short_name ?? ''
-      }
-      return { city: cityVal, state: stateVal }
-    } catch {
-      return null
-    }
-  }
-
-  function handleLocation() {
-    setLocationStatus('loading')
-    setError(null)
-    if (!navigator.geolocation) {
-      setError('Geolocation is not supported.')
-      setLocationStatus('error')
-      return
-    }
-    const options: PositionOptions = {
-      enableHighAccuracy: false,
-      timeout: 15000,
-      maximumAge: 60000,
-    }
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const lat = pos.coords.latitude
-        const lng = pos.coords.longitude
-        try {
-          const googleResult = await reverseGeocodeWithGoogle(lat, lng)
-          if (googleResult) {
-            const cityStr = googleResult.state
-              ? `${googleResult.city}, ${googleResult.state}`
-              : googleResult.city || 'Unknown'
-            setAnswers((a) => ({ ...a, location: { city: cityStr, lat, lng } }))
-            setLocationStatus('done')
-            return
-          }
-          const res = await fetch(`/api/geocode?lat=${lat}&lng=${lng}`)
-          const data = (await res.json()) as { city?: string; error?: string }
-          if (!res.ok || data.error) throw new Error(data.error ?? 'Geocode failed')
-          const cityStr = data.city ?? 'Unknown'
-          setAnswers((a) => ({ ...a, location: { city: cityStr, lat, lng } }))
-          setLocationStatus('done')
-        } catch {
-          setAnswers((a) => ({ ...a, location: { city: 'Unknown', lat, lng } }))
-          setLocationStatus('done')
-        }
-      },
-      (err) => {
-        const message =
-          err.code === 1
-            ? 'Location access was denied. Please allow location in your browser or device settings and try again.'
-            : "We couldn't get your location. Try again in a moment, or move to a spot with better signal."
-        setError(message)
-        setLocationStatus('error')
-      },
-      options
-    )
-  }
-
   async function handleZipSubmit(e: React.FormEvent) {
     e.preventDefault()
     const zip = zipCode.trim().replace(/\s+/g, '')
@@ -748,52 +674,35 @@ function AppOnboardingContent() {
         )}
         {step.type === 'location_permission' && (
           <div className="onboarding-location-wrap">
-            {locationStatus === 'loading' || zipLoading ? (
-              <div className="onboarding-location-set">
+            {value && typeof value === 'object' && 'city' in (value as object) ? (
+              <div className="onboarding-location-set" style={{ marginBottom: '0.75rem' }}>
                 <span className="onboarding-location-set-icon" aria-hidden>
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" />
                   </svg>
                 </span>
-                <span className="onboarding-location-set-city">{zipLoading ? 'Looking up zip code…' : 'Getting location…'}</span>
+                <span className="onboarding-location-set-city">{(value as { city: string }).city}</span>
               </div>
-            ) : (
-              <>
-                <div className="onboarding-location-set">
-                  <span className="onboarding-location-set-icon" aria-hidden>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" />
-                    </svg>
-                  </span>
-                  <span className="onboarding-location-set-city">
-                    {value && typeof value === 'object' && 'city' in (value as object) ? (value as { city: string }).city : 'Your Location'}
-                  </span>
-                  <button type="button" className="onboarding-location-change" onClick={handleLocation} disabled={saving}>
-                    {value && typeof value === 'object' && 'city' in (value as object) ? 'Change' : 'Use my location'}
-                  </button>
-                </div>
-                <p className="onboarding-location-or">or</p>
-                <form className="onboarding-location-zip" onSubmit={handleZipSubmit}>
-                  <label htmlFor="onboarding-location-zip-input" className="onboarding-location-zip-label">Enter your zip code</label>
-                  <div className="onboarding-location-zip-row">
-                    <input
-                      id="onboarding-location-zip-input"
-                      type="text"
-                      inputMode="numeric"
-                      autoComplete="postal-code"
-                      placeholder="e.g. 90210"
-                      className="auth-input onboarding-location-zip-input"
-                      value={zipCode}
-                      onChange={(e) => setZipCode(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                      disabled={saving || zipLoading}
-                    />
-                    <button type="submit" className="btn onboarding-location-zip-btn" disabled={saving || zipLoading || !zipCode.trim()}>
-                      Use Zip Code
-                    </button>
-                  </div>
-                </form>
-              </>
-            )}
+            ) : null}
+            <form className="onboarding-location-zip" onSubmit={handleZipSubmit}>
+              <label htmlFor="onboarding-location-zip-input" className="onboarding-location-zip-label">Enter your zip code</label>
+              <div className="onboarding-location-zip-row">
+                <input
+                  id="onboarding-location-zip-input"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="postal-code"
+                  placeholder="e.g. 90210"
+                  className="auth-input onboarding-location-zip-input"
+                  value={zipCode}
+                  onChange={(e) => setZipCode(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                  disabled={saving || zipLoading}
+                />
+                <button type="submit" className="btn onboarding-location-zip-btn" disabled={saving || zipLoading || !zipCode.trim()}>
+                  {zipLoading ? 'Looking up…' : 'Use Zip Code'}
+                </button>
+              </div>
+            </form>
           </div>
         )}
         {step.type === 'multi_select' && step.options && (
@@ -801,10 +710,10 @@ function AppOnboardingContent() {
             {(() => {
               const arr = (Array.isArray(value) ? value : []) as string[]
               const exclusiveOptionText = step.id === 'q_openness' ? "I'm open to anyone" : null
-              const isSearchableLongList = step.id === 'q_life_chapter'
-              const normalizedQuery = lifeChapterQuery.trim().toLowerCase()
-              const visibleOptions = isSearchableLongList && normalizedQuery
-                ? step.options.filter((opt) => opt.toLowerCase().includes(normalizedQuery))
+              const isSearchableTypeahead = step.id === 'languages'
+              const normalizedQuery = languageQuery.trim().toLowerCase()
+              const visibleOptions = isSearchableTypeahead
+                ? (normalizedQuery ? step.options.filter((opt) => opt.toLowerCase().includes(normalizedQuery)) : [])
                 : step.options
 
               const handleMultiSelect = (opt: string) => {
@@ -841,19 +750,19 @@ function AppOnboardingContent() {
 
               return (
                 <>
-                  {isSearchableLongList && (
+                  {isSearchableTypeahead && (
                     <input
                       type="text"
                       className="auth-input"
-                      placeholder="Type to filter options"
-                      value={lifeChapterQuery}
-                      onChange={(e) => setLifeChapterQuery(e.target.value)}
+                      placeholder="Type a language"
+                      value={languageQuery}
+                      onChange={(e) => setLanguageQuery(e.target.value)}
                       disabled={saving}
                       autoComplete="off"
                       style={{ marginBottom: '0.75rem' }}
                     />
                   )}
-                  {isSearchableLongList && arr.length > 0 && (
+                  {isSearchableTypeahead && arr.length > 0 && (
                     <div style={{ marginBottom: '0.75rem' }}>
                       {arr.map((opt) => (
                         <button
@@ -916,8 +825,9 @@ function AppOnboardingContent() {
         </section>
         <section className="onboarding-section onboarding-section-card">
           <h2 className="onboarding-section-title">About you</h2>
-          {PROFILE_STEPS.map(renderField)}
+          {PROFILE_STEPS_BEFORE_LOCATION.map(renderField)}
           {ABOUT_YOU_EXTRA_STEPS.map(renderField)}
+          {renderField(LOCATION_STEP)}
         </section>
 
         <section className="onboarding-section onboarding-section-card">

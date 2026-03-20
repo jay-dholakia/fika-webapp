@@ -95,7 +95,7 @@ export const PROFILE_STEPS: ProfileStep[] = [
   {
     id: 'location',
     question: 'Where are you located?',
-    body: "We'll use this to match you with people nearby. Your exact location stays private.",
+    body: 'Your location stays private.',
     type: 'location_permission',
     required: true,
   },
@@ -160,7 +160,7 @@ export const INTAKE_STEPS: ProfileStep[] = [
   {
     id: 'q_work',
     question: 'What do you do for work?',
-    body: 'A short phrase is perfect (e.g. “Graphic designer”, “Nurse”, “Software engineer”, “Barista”). If you’re between roles, feel free to share what you’ve been doing most recently.',
+    body: 'A short phrase is perfect (e.g. "Graphic Designer", "Barista", "Taking a break to raise kids", "Currently unemployed").',
     type: 'text',
     required: false,
     placeholder: 'Short description (optional)',
@@ -252,7 +252,6 @@ export const INTAKE_STEPS: ProfileStep[] = [
   {
     id: 'q_avoid_topics',
     question: "Anything you'd rather steer clear of?",
-    body: "Select any topics you'd prefer to skip — we won't suggest these as conversation starters.",
     type: 'multi_select',
     required: false,
     options: [
@@ -281,7 +280,7 @@ export const INTAKE_STEPS: ProfileStep[] = [
   {
     id: 'gender_preference',
     question: "Do you have a gender preference for who you'd like to meet?",
-    body: 'Just a friendly FYI — Fika is solely intended for platonic conversations.',
+    body: 'Fika is intended for platonic conversations.',
     type: 'chips_single',
     required: true,
     options: ['No preference', 'Same gender', 'Different gender'],
@@ -289,7 +288,6 @@ export const INTAKE_STEPS: ProfileStep[] = [
   {
     id: 'age_preference',
     question: "Do you have an age preference for who you'd like to meet?",
-    body: "Either way works! While meeting people in a similar life stage gives you both something to relate to, meeting people in different phases of life can bring fresh perspectives.",
     type: 'chips_single',
     required: true,
     options: ['Open to any age/life stage', 'Prefer around my age'],
@@ -297,7 +295,6 @@ export const INTAKE_STEPS: ProfileStep[] = [
   {
     id: 'q_hoping_for',
     question: 'What are you hoping for from Fika?',
-    body: 'No wrong answer — we use this to match you with people who want similar things.',
     type: 'chips_single',
     required: true,
     options: [
@@ -309,7 +306,6 @@ export const INTAKE_STEPS: ProfileStep[] = [
   {
     id: 'q_radius',
     question: 'How far are you willing to travel for a Fika?',
-    body: "We'll suggest meetup spots for your Fika within this distance.",
     type: 'chips_single',
     required: true,
     options: ['5 miles', '10 miles', '25 miles', '50 miles'],
