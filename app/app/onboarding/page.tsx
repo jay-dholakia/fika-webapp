@@ -793,11 +793,13 @@ function AppOnboardingContent() {
                           if (e.button === 0) {
                             e.preventDefault()
                             handleMultiSelect(opt)
+                            if (isSearchableTypeahead && !selected) setLanguageQuery('')
                           }
                         }}
                         onClick={(e) => {
                           e.preventDefault()
                           handleMultiSelect(opt)
+                          if (isSearchableTypeahead && !selected) setLanguageQuery('')
                         }}
                         disabled={saving || (!isExclusiveOption && atMax)}
                       >
