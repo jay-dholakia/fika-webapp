@@ -380,9 +380,21 @@ export async function POST(request: Request) {
   const pairs: Array<{
     userAId: string
     userAName: string
+    userAAge: number | null
+    userAGender: string | null
+    userACity: string | null
     userBId: string
     userBName: string
+    userBAge: number | null
+    userBGender: string | null
+    userBCity: string | null
     score: number
+    distanceKm: number | null
+    sharedLanguages: string[]
+    hopingA: string | null
+    hopingB: string | null
+    overlapGreatFika: string[]
+    overlapInterests: string[]
     sectionScores: Record<string, number>
   }> = []
 
@@ -396,12 +408,40 @@ export async function POST(request: Request) {
         continue
       }
       const score = scorePair(a, b)
+      const distanceKm =
+        a.profile.lat != null && a.profile.lng != null && b.profile.lat != null && b.profile.lng != null
+          ? calculateDistance(a.profile.lat, a.profile.lng, b.profile.lat, b.profile.lng)
+          : null
+      const aLang = Array.isArray(a.profile.languages) ? a.profile.languages : []
+      const bLang = Array.isArray(b.profile.languages) ? b.profile.languages : []
+      const langSet = new Set(aLang.map((x) => x.trim().toLowerCase()))
+      const sharedLanguages = bLang.filter((x) => langSet.has(x.trim().toLowerCase()))
+      const hopingA = getMulti(a.intake, 'q_hoping_for')[0] ?? null
+      const hopingB = getMulti(b.intake, 'q_hoping_for')[0] ?? null
+      const overlapGreatFika = getMulti(a.intake, 'q_what_makes_great_fika').filter((x) =>
+        getMulti(b.intake, 'q_what_makes_great_fika').includes(x)
+      )
+      const overlapInterests = getMulti(a.intake, 'q_interests').filter((x) =>
+        getMulti(b.intake, 'q_interests').includes(x)
+      )
       pairs.push({
         userAId: a.profile.id,
         userAName: a.profile.first_name?.trim() || 'Unknown',
+        userAAge: a.age,
+        userAGender: a.profile.gender ?? null,
+        userACity: a.profile.city ?? null,
         userBId: b.profile.id,
         userBName: b.profile.first_name?.trim() || 'Unknown',
+        userBAge: b.age,
+        userBGender: b.profile.gender ?? null,
+        userBCity: b.profile.city ?? null,
         score: score.score,
+        distanceKm,
+        sharedLanguages,
+        hopingA,
+        hopingB,
+        overlapGreatFika,
+        overlapInterests,
         sectionScores: score.sectionScores,
       })
     }

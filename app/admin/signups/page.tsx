@@ -47,9 +47,21 @@ type SimSummary = {
 type SimPair = {
   userAId: string
   userAName: string
+  userAAge: number | null
+  userAGender: string | null
+  userACity: string | null
   userBId: string
   userBName: string
+  userBAge: number | null
+  userBGender: string | null
+  userBCity: string | null
   score: number
+  distanceKm: number | null
+  sharedLanguages: string[]
+  hopingA: string | null
+  hopingB: string | null
+  overlapGreatFika: string[]
+  overlapInterests: string[]
   sectionScores: Record<string, number>
 }
 
@@ -77,6 +89,7 @@ export default function AdminSignupsPage() {
   const [simError, setSimError] = useState<string | null>(null)
   const [simSummary, setSimSummary] = useState<SimSummary | null>(null)
   const [simPairs, setSimPairs] = useState<SimPair[]>([])
+  const [simPairModal, setSimPairModal] = useState<SimPair | null>(null)
   const [simOptedInOnly, setSimOptedInOnly] = useState(false)
   const [triggeringSms, setTriggeringSms] = useState(false)
   const [triggerSmsResult, setTriggerSmsResult] = useState<string | null>(null)
@@ -338,7 +351,19 @@ export default function AdminSignupsPage() {
                         .map(([k, v]) => `${k.replace(/_/g, ' ')} ${v.toFixed(2)}`)
                         .join(' · ')
                       return (
-                        <tr key={`${p.userAId}-${p.userBId}`}>
+                        <tr
+                          key={`${p.userAId}-${p.userBId}`}
+                          className="admin-table-row-clickable"
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => setSimPairModal(p)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault()
+                              setSimPairModal(p)
+                            }
+                          }}
+                        >
                           <td>{idx + 1}</td>
                           <td>{p.userAName} ↔ {p.userBName}</td>
                           <td className="admin-table-num">{p.score.toFixed(3)}</td>
@@ -466,6 +491,59 @@ export default function AdminSignupsPage() {
                   )}
                 </>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {simPairModal && (
+        <div
+          className="admin-modal-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="admin-sim-modal-title"
+          onClick={(e) => e.target === e.currentTarget && setSimPairModal(null)}
+        >
+          <div className="admin-modal">
+            <div className="admin-modal-header">
+              <h2 id="admin-sim-modal-title">Match simulation details</h2>
+              <button type="button" className="admin-modal-close" onClick={() => setSimPairModal(null)} aria-label="Close">
+                ×
+              </button>
+            </div>
+            <div className="admin-modal-body">
+              <p className="admin-modal-meta">
+                <strong>{simPairModal.userAName}</strong> ({simPairModal.userAGender ?? '—'}, {simPairModal.userAAge ?? '—'}) · {simPairModal.userACity ?? '—'}
+              </p>
+              <p className="admin-modal-meta">
+                <strong>{simPairModal.userBName}</strong> ({simPairModal.userBGender ?? '—'}, {simPairModal.userBAge ?? '—'}) · {simPairModal.userBCity ?? '—'}
+              </p>
+              <p className="admin-modal-meta">
+                Score: <strong>{simPairModal.score.toFixed(3)}</strong>
+                {simPairModal.distanceKm != null ? ` · Distance: ${simPairModal.distanceKm.toFixed(1)} km` : ' · Distance: —'}
+              </p>
+
+              <div className="admin-modal-section">
+                <h3 className="admin-modal-section-title">Top section factors</h3>
+                <dl className="admin-modal-dl">
+                  {Object.entries(simPairModal.sectionScores ?? {})
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([k, v]) => (
+                      <span key={k}>
+                        <dt>{k.replace(/_/g, ' ')}</dt>
+                        <dd>{v.toFixed(3)}</dd>
+                      </span>
+                    ))}
+                </dl>
+              </div>
+
+              <div className="admin-modal-section">
+                <h3 className="admin-modal-section-title">Context</h3>
+                <p className="admin-modal-meta">Shared languages: {simPairModal.sharedLanguages?.length ? simPairModal.sharedLanguages.join(', ') : '—'}</p>
+                <p className="admin-modal-meta">Hoping for: {simPairModal.hopingA ?? '—'} ↔ {simPairModal.hopingB ?? '—'}</p>
+                <p className="admin-modal-meta">Shared interests: {simPairModal.overlapInterests?.length ? simPairModal.overlapInterests.slice(0, 8).join(', ') : '—'}</p>
+                <p className="admin-modal-meta">Great Fika overlap: {simPairModal.overlapGreatFika?.length ? simPairModal.overlapGreatFika.slice(0, 6).join(', ') : '—'}</p>
+              </div>
             </div>
           </div>
         </div>
