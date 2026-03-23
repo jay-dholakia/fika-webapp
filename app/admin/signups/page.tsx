@@ -296,7 +296,7 @@ export default function AdminSignupsPage() {
             <div className="admin-dashboard">
               <h2 className="admin-dashboard-title">By location</h2>
               <div className="admin-dashboard-grid">
-                {dashboard.map((d) => (
+                {dashboard.filter((d) => d.count > 0).map((d) => (
                   <button
                     key={d.slug}
                     type="button"

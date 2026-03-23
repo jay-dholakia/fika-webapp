@@ -8,6 +8,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const isMarkets = pathname === '/admin' || pathname === '/admin/'
   const isMap = pathname?.startsWith('/admin/map')
   const isSignups = pathname?.startsWith('/admin/signups')
+  const isSmsControl = pathname?.startsWith('/admin/sms-control')
 
   return (
     <div className="admin-layout">
@@ -20,19 +21,25 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               href="/admin"
               className={`admin-link ${isMarkets ? 'admin-link-active' : ''}`}
             >
-              Markets
+              Cities
             </Link>
             <Link
               href="/admin/map"
               className={`admin-link ${isMap ? 'admin-link-active' : ''}`}
             >
-              Map
+              Geo map
             </Link>
             <Link
               href="/admin/signups"
               className={`admin-link ${isSignups ? 'admin-link-active' : ''}`}
             >
-              Sign-ups
+              People
+            </Link>
+            <Link
+              href="/admin/sms-control"
+              className={`admin-link ${isSmsControl ? 'admin-link-active' : ''}`}
+            >
+              SMS control
             </Link>
             <Link href="/app/weeklyfika" className="admin-link">Back to app</Link>
           </nav>

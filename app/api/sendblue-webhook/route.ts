@@ -247,7 +247,7 @@ export async function POST(request: Request) {
   // ----- STOP / opt-out and opt-back-in -----
   const { data: profileForSms } = await supabase
     .from('profiles')
-    .select('sms_opted_out_at')
+    .select('sms_opted_out_at, sms_mode, sms_human_until')
     .eq('id', userId)
     .maybeSingle()
   if (isStopKeyword(content)) {
@@ -262,6 +262,19 @@ export async function POST(request: Request) {
     await supabase.from('profiles').update({ sms_opted_out_at: null }).eq('id', userId)
     await sendConciergeAndLog(fromNumber, messageSmsOptBackIn(), 'opt_back_in', { userId })
     return NextResponse.json({ ok: true })
+  }
+
+  // Human handoff mode: suppress automation replies while an admin is manually texting this user.
+  const smsMode = (profileForSms as { sms_mode?: string | null } | null)?.sms_mode ?? 'auto'
+  const smsHumanUntil = (profileForSms as { sms_human_until?: string | null } | null)?.sms_human_until ?? null
+  const humanActive =
+    smsMode === 'human' &&
+    (
+      smsHumanUntil == null ||
+      (Number.isFinite(new Date(smsHumanUntil).getTime()) && new Date(smsHumanUntil).getTime() > Date.now())
+    )
+  if (humanActive) {
+    return NextResponse.json({ ok: true, suppressed: 'human_mode' })
   }
 
   // ----- Relay just closed and follow-up not sent yet: send closure + feedback prompt -----
