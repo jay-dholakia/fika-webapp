@@ -20,6 +20,17 @@ export const SMS_STATES = {
   CONFIRMED: 'confirmed',
 } as const
 
+const READY_FOR_INTRO_VARIANTS = [
+  "You're all set; we'll text you when we find a strong Fika intro.",
+  "You're all set. As soon as we find a strong Fika intro, we'll reach out by text.",
+  "Thanks for checking in - we'll message you when a strong Fika intro is ready.",
+]
+
+function pickReadyForIntroMessage(): string {
+  const idx = Math.floor(Math.random() * READY_FOR_INTRO_VARIANTS.length)
+  return READY_FOR_INTRO_VARIANTS[idx] ?? READY_FOR_INTRO_VARIANTS[0]
+}
+
 /** Slot id prefix (wed, thu, ...) to SMS day label */
 const SLOT_DAY_TO_LABEL: Record<string, string> = {
   wed: 'WED',
@@ -215,7 +226,7 @@ export function messageInactiveMarketReply(placeLabel: string): string {
 }
 
 export function messageEntry(): string {
-  return `Hey! Welcome to Fika. 😊\n\nYou're all set. Once we find a strong intro for you, we'll text you directly and walk you through next steps.`
+  return `Hey! Welcome to Fika. 😊\n\n${pickReadyForIntroMessage()}`
 }
 
 /** When they text after the opt-in window closed (Monday 11am PT). Window opens Sunday 12am PT, ends Monday 11am PT; they must text FIKA next Sunday. */
@@ -223,7 +234,7 @@ export function messageEntryAfterDeadline(
   _nextMondayPhrase: string = 'next Monday',
   options?: { firstName?: string | null; isGreeting?: boolean }
 ): string {
-  const base = `You're all set. We'll reach out as soon as we find a strong intro for you.`
+  const base = pickReadyForIntroMessage()
   if (options?.isGreeting && options?.firstName != null) {
     const name = String(options.firstName).trim()
     if (name && name !== ' ') {
@@ -235,7 +246,7 @@ export function messageEntryAfterDeadline(
 
 /** Short reminder when they text HI/FIKA again — avoid re-sending the full intro. */
 export function messageEntryReminder(): string {
-  return `You're all set. We'll text you when we've found a strong intro.`
+  return pickReadyForIntroMessage()
 }
 
 /** User-initiated opt-in: commitment line when they text FIKA. */
@@ -250,7 +261,7 @@ export function messageFikaUserInitiatedLinkBody(_availabilityUrl: string): stri
 
 /** When they message with no state (haven't texted FIKA this week). */
 export function messageTextFikaToGetLink(): string {
-  return `You're all set. We'll text you when we've found a strong intro.`
+  return pickReadyForIntroMessage()
 }
 
 /** Sunday evening: reminder to set availability (only if not submitted). Text only; send availability link as separate message. */
@@ -274,11 +285,11 @@ export function messageOnboardingRequired(_onboardingUrl: string): string {
 }
 
 export function messageWeeklyOptIn(): string {
-  return `You're all set. We'll text you when we've found a strong intro.`
+  return pickReadyForIntroMessage()
 }
 
 export function messageWeeklyOptInFollowUp(): string {
-  return `Quick update — we’ll reach out as soon as we’ve found a strong intro for you.`
+  return `Quick update: ${pickReadyForIntroMessage()}`
 }
 
 export function messageMatchOffer(params: {
@@ -346,7 +357,7 @@ export function messageDayOfReminder(time: string, venueName: string, neighborho
 }
 
 export function messageOptInConfirmation(): string {
-  return `You're all set. We'll text you when your intro is ready.`
+  return pickReadyForIntroMessage()
 }
 
 /** When user replies YES (legacy): send availability link. Text only; send availabilityUrl as a separate message after this. */
@@ -553,11 +564,11 @@ export function messageCancelAck(): string {
 // ---------- Human fallbacks when message doesn't match a keyword ----------
 
 export function fallbackAwaitingOptIn(): string {
-  return `You're all set. We'll text you when we've found a strong intro.`
+  return pickReadyForIntroMessage()
 }
 
 export function fallbackOptedIn(): string {
-  return `You're all set. We'll text you when your intro is ready.`
+  return pickReadyForIntroMessage()
 }
 
 export function fallbackMatchOffered(): string {
