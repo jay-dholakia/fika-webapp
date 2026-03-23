@@ -37,6 +37,21 @@ type IntakeDetail = {
   availabilityTimes: string[] | null
   completedAt: string | null
 }
+type SimSummary = {
+  usersConsidered: number
+  pairsScored: number
+  filteredOut: number
+  optedInOnly: boolean
+  market: string | null
+}
+type SimPair = {
+  userAId: string
+  userAName: string
+  userBId: string
+  userBName: string
+  score: number
+  sectionScores: Record<string, number>
+}
 
 function formatDate(iso: string | null): string {
   if (!iso) return '—'
@@ -58,6 +73,13 @@ export default function AdminSignupsPage() {
   const [modalProfile, setModalProfile] = useState<ProfileDetail | null>(null)
   const [modalIntake, setModalIntake] = useState<IntakeDetail | null>(null)
   const [modalLoading, setModalLoading] = useState(false)
+  const [simLoading, setSimLoading] = useState(false)
+  const [simError, setSimError] = useState<string | null>(null)
+  const [simSummary, setSimSummary] = useState<SimSummary | null>(null)
+  const [simPairs, setSimPairs] = useState<SimPair[]>([])
+  const [simOptedInOnly, setSimOptedInOnly] = useState(false)
+  const [triggeringSms, setTriggeringSms] = useState(false)
+  const [triggerSmsResult, setTriggerSmsResult] = useState<string | null>(null)
 
   const fetchSignups = useCallback(async (market?: string) => {
     const supabase = getSupabase()
@@ -138,6 +160,62 @@ export default function AdminSignupsPage() {
     setModalIntake(null)
   }
 
+  async function runSimulation() {
+    setSimLoading(true)
+    setSimError(null)
+    setTriggerSmsResult(null)
+    const supabase = getSupabase()
+    const { data: { session } } = await supabase?.auth.getSession() ?? { data: { session: null } }
+    const headers: HeadersInit = { 'Content-Type': 'application/json' }
+    if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`
+    try {
+      const res = await fetch('/api/admin/match-sim', {
+        method: 'POST',
+        credentials: 'include',
+        headers,
+        body: JSON.stringify({
+          action: 'simulate',
+          market: filterMarket || null,
+          optedInOnly: simOptedInOnly,
+          topN: 100,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data?.error ?? 'Simulation failed')
+      setSimSummary((data?.summary ?? null) as SimSummary | null)
+      setSimPairs(Array.isArray(data?.pairs) ? data.pairs as SimPair[] : [])
+    } catch (e) {
+      setSimError(e instanceof Error ? e.message : 'Simulation failed')
+    } finally {
+      setSimLoading(false)
+    }
+  }
+
+  async function triggerSmsDelivery() {
+    setTriggeringSms(true)
+    setSimError(null)
+    setTriggerSmsResult(null)
+    const supabase = getSupabase()
+    const { data: { session } } = await supabase?.auth.getSession() ?? { data: { session: null } }
+    const headers: HeadersInit = { 'Content-Type': 'application/json' }
+    if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`
+    try {
+      const res = await fetch('/api/admin/match-sim', {
+        method: 'POST',
+        credentials: 'include',
+        headers,
+        body: JSON.stringify({ action: 'trigger_sms' }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || data?.ok === false) throw new Error(data?.error ?? data?.response ?? 'Failed to trigger SMS delivery')
+      setTriggerSmsResult(`Triggered sms-match-delivery (status ${data?.status ?? 200}).`)
+    } catch (e) {
+      setSimError(e instanceof Error ? e.message : 'Failed to trigger SMS delivery')
+    } finally {
+      setTriggeringSms(false)
+    }
+  }
+
   if (loading) {
     return (
       <main className="admin-main">
@@ -199,6 +277,81 @@ export default function AdminSignupsPage() {
             </div>
           )}
 
+          <div className="admin-dashboard" style={{ marginTop: '1rem', marginBottom: '1.25rem' }}>
+            <h2 className="admin-dashboard-title">Match simulation (no availability, no SMS)</h2>
+            <p className="admin-description" style={{ marginBottom: '0.75rem' }}>
+              Simulates replenish-match quality factors using current onboarding/profile data, but ignores availability overlap and does not create matches.
+            </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+              <label className="admin-toggle" style={{ marginRight: '0.25rem' }}>
+                <input
+                  type="checkbox"
+                  checked={simOptedInOnly}
+                  onChange={(e) => setSimOptedInOnly(e.target.checked)}
+                  disabled={simLoading || triggeringSms}
+                />
+                <span className="admin-toggle-label">Only users opted in this week</span>
+              </label>
+              <button
+                type="button"
+                className="admin-btn admin-btn-primary"
+                onClick={runSimulation}
+                disabled={simLoading || triggeringSms}
+                style={{ marginBottom: 0 }}
+              >
+                {simLoading ? 'Simulating…' : 'Simulate match quality'}
+              </button>
+              <button
+                type="button"
+                className="admin-btn"
+                onClick={triggerSmsDelivery}
+                disabled={triggeringSms || simLoading}
+                style={{ border: '1px solid var(--color-border)', background: 'var(--color-surface)', marginBottom: 0 }}
+              >
+                {triggeringSms ? 'Triggering…' : 'Trigger match-delivery SMS'}
+              </button>
+            </div>
+            {simSummary && (
+              <p className="admin-dashboard-filter" style={{ marginTop: '0.75rem' }}>
+                Users considered: {simSummary.usersConsidered} · Pairs scored: {simSummary.pairsScored} · Filtered out: {simSummary.filteredOut}
+              </p>
+            )}
+            {triggerSmsResult && (
+              <p style={{ color: 'var(--color-success)', fontSize: '0.9rem', marginTop: '0.5rem' }}>{triggerSmsResult}</p>
+            )}
+            {simPairs.length > 0 && (
+              <div className="admin-table-wrap" style={{ marginTop: '0.75rem' }}>
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>Pair</th>
+                      <th className="admin-table-num">Score</th>
+                      <th>Top factors</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {simPairs.slice(0, 50).map((p, idx) => {
+                      const topFactors = Object.entries(p.sectionScores ?? {})
+                        .sort((a, b) => b[1] - a[1])
+                        .slice(0, 3)
+                        .map(([k, v]) => `${k.replace(/_/g, ' ')} ${v.toFixed(2)}`)
+                        .join(' · ')
+                      return (
+                        <tr key={`${p.userAId}-${p.userBId}`}>
+                          <td>{idx + 1}</td>
+                          <td>{p.userAName} ↔ {p.userBName}</td>
+                          <td className="admin-table-num">{p.score.toFixed(3)}</td>
+                          <td>{topFactors}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
           {signups.length === 0 ? (
             <p className="admin-empty">No sign-ups yet.</p>
           ) : (
@@ -236,7 +389,7 @@ export default function AdminSignupsPage() {
             </div>
           )}
 
-          {error && <p className="admin-error admin-error-inline" role="alert">{error}</p>}
+          {(error || simError) && <p className="admin-error admin-error-inline" role="alert">{error ?? simError}</p>}
 
           <p className="admin-back">
             <Link href="/app/weeklyfika">Back to app</Link>

@@ -28,6 +28,8 @@ interface MapPoint {
   city: string | null
   first_name: string | null
   created_at: string | null
+  gender: string | null
+  age: number | null
 }
 
 interface MapPolygon {
@@ -403,7 +405,7 @@ export default function AdminMapClient() {
     <div className="admin-card">
       <h1 className="admin-title">Sign-ups map</h1>
       <p className="admin-description" style={{ marginBottom: '1rem' }}>
-        Exact lat/lng with zone boundaries. Only profiles with location set are shown.
+        User dots with zone boundaries. Only profiles with location set are shown.
       </p>
       <div style={{ marginBottom: '0.75rem' }}>
         <DailyGrowthChart
@@ -572,8 +574,8 @@ export default function AdminMapClient() {
                   <p style={{ margin: '4px 0 0 0', fontSize: 12, color: '#666' }}>
                     {p.city || '—'} · {p.market || 'no market'}
                   </p>
-                  <p style={{ margin: '4px 0 0 0', fontSize: 11, fontFamily: 'monospace' }}>
-                    {p.lat.toFixed(6)}, {p.lng.toFixed(6)}
+                  <p style={{ margin: '4px 0 0 0', fontSize: 12, color: '#666' }}>
+                    {p.gender || '—'} · {p.age != null ? `${p.age}` : '—'}
                   </p>
                 </div>
               </Popup>

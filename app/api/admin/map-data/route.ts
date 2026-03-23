@@ -31,9 +31,20 @@ export async function GET(request: Request) {
 
   const { data: profiles } = await supabase
     .from('profiles')
-    .select('id, first_name, city, market, lat, lng, created_at')
+    .select('id, first_name, city, market, lat, lng, created_at, gender, birthdate')
     .not('lat', 'is', null)
     .not('lng', 'is', null)
+
+  function ageFromBirthdate(birthdate: string | null | undefined): number | null {
+    if (!birthdate || typeof birthdate !== 'string') return null
+    const date = new Date(birthdate.trim())
+    if (Number.isNaN(date.getTime())) return null
+    const today = new Date()
+    let age = today.getFullYear() - date.getFullYear()
+    const monthDiff = today.getMonth() - date.getMonth()
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < date.getDate())) age--
+    return age >= 0 ? age : null
+  }
 
   const points = (profiles ?? []).map((p) => ({
     id: p.id,
@@ -43,6 +54,8 @@ export async function GET(request: Request) {
     city: (p as { city?: string | null }).city ?? null,
     first_name: (p as { first_name?: string | null }).first_name ?? null,
     created_at: (p as { created_at?: string | null }).created_at ?? null,
+    gender: (p as { gender?: string | null }).gender ?? null,
+    age: ageFromBirthdate((p as { birthdate?: string | null }).birthdate ?? null),
   }))
 
   const polygons = await getMarketPolygonsWithDb(supabase)
