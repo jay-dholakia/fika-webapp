@@ -6,8 +6,7 @@ import Link from 'next/link'
 import { getSupabase } from '@/lib/supabase'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { authLog } from '@/lib/auth-log'
-import { getCurrentBatchWeek, getMissingIntakeStepIds, getOrderedMissingIntakeSteps } from '@/lib/onboarding'
-import { isAvailabilityLocked } from '@/lib/availability-slots'
+import { getMissingIntakeStepIds, getOrderedMissingIntakeSteps } from '@/lib/onboarding'
 import { getAvailabilitySlotLabel } from '@/lib/availability-slots'
 import { TARGET_COUNT_PER_MARKET, getMarketFromCity } from '@/lib/markets'
 import { useOnboardingStatus } from '@/lib/use-onboarding'
@@ -20,7 +19,6 @@ function AppHomeContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [userId, setUserId] = useState<string | null>(null)
-  const [optedIn, setOptedIn] = useState<boolean | null>(null)
   const [intros, setIntros] = useState<IntroMatch[]>([])
   const [introsLoading, setIntrosLoading] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -44,15 +42,9 @@ function AppHomeContent() {
   const marketSlug = profile?.market ?? (profile?.city ? getMarketFromCity(profile.city)?.slug ?? null : null)
 
 const TARGET_USERS = TARGET_COUNT_PER_MARKET
-  const batchWeek = getCurrentBatchWeek()
   const communityNotReady = profileCount !== null && profileCount < TARGET_USERS
   const marketNotActive = marketSlug != null && marketActive === false
   const isInactiveMarket = communityNotReady || marketNotActive
-  const optInLocked =
-    profileCount === null ||
-    communityNotReady ||
-    marketNotActive ||
-    (profileCount >= TARGET_USERS && isAvailabilityLocked(batchWeek))
   const CONCIERGE_NUMBER = process.env.NEXT_PUBLIC_SENDBLUE_CONCIERGE_NUMBER?.trim() || null
   const SHARE_URL = 'https://letsfika.vercel.app'
   const SHARE_TEXT = marketLabel
@@ -143,27 +135,7 @@ const TARGET_USERS = TARGET_COUNT_PER_MARKET
   }, [])
 
   useEffect(() => {
-    if (!userId) {
-      setLoading(false)
-      return
-    }
-    const supabase = getSupabase()
-    if (!supabase) {
-      setLoading(false)
-      return
-    }
-
-    const batchWeek = getCurrentBatchWeek()
-    supabase
-      .from('weekly_match_opt_ins')
-      .select('user_id')
-      .eq('user_id', userId)
-      .eq('batch_week', batchWeek)
-      .maybeSingle()
-      .then(({ data }) => {
-        setOptedIn(!!data)
-        setLoading(false)
-      })
+    setLoading(false)
   }, [userId])
 
   // Load this week's match (one intro per week)
@@ -340,39 +312,20 @@ const TARGET_USERS = TARGET_COUNT_PER_MARKET
         ) : (
           <>
             <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem', marginBottom: '1rem' }}>
-              Text <strong>FIKA</strong> to opt in for the week. We&apos;ll send you a link to set when you&apos;re free (Wed–Sat). Opt-in and availability close Monday 11am PT.
+              You&apos;re all set. We&apos;ll text you when we find a strong intro, then ask for your next-week availability to lock in your Fika.
             </p>
-            {optInLocked && (
-              <p className="onboarding-error" style={{ marginBottom: '0.75rem' }}>
-                Opt-in and availability are locked (Monday 11am PT). Intros go out on Tuesday morning.
-              </p>
+            {CONCIERGE_NUMBER && (
+              <a
+                href={`sms:${CONCIERGE_NUMBER}`}
+                className="btn btn-primary auth-submit"
+                style={{ display: 'inline-block', textAlign: 'center', marginBottom: '0.75rem' }}
+              >
+                Text us
+              </a>
             )}
-            {!optInLocked && (
-              <>
-                {optedIn ? (
-                  <p style={{ marginBottom: '0.75rem' }}>
-                    You&apos;re opted in this week. <Link href="/app/availability">Edit your availability</Link> for next week if needed.
-                  </p>
-                ) : CONCIERGE_NUMBER ? (
-                  <>
-                    <a
-                      href={`sms:${CONCIERGE_NUMBER}?body=FIKA`}
-                      className="btn btn-primary auth-submit"
-                      style={{ display: 'inline-block', textAlign: 'center', marginBottom: '0.75rem' }}
-                    >
-                      Opt in via text
-                    </a>
-                    <p style={{ fontSize: '0.95rem' }}>
-                      <Link href="/app/availability">Set your availability for next week</Link> so we can match you when you opt in.
-                    </p>
-                  </>
-                ) : (
-                  <p style={{ fontSize: '0.95rem' }}>
-                    Text <strong>FIKA</strong> to opt in. <Link href="/app/availability">Set your availability for next week</Link> so we can match you.
-                  </p>
-                )}
-              </>
-            )}
+            <p style={{ fontSize: '0.95rem' }}>
+              Keep your profile current so we can reach out when the right intro is ready.
+            </p>
             {error && <p className="onboarding-error" style={{ marginTop: '0.75rem' }}>{error}</p>}
           </>
         )}
@@ -381,7 +334,7 @@ const TARGET_USERS = TARGET_COUNT_PER_MARKET
       {showJustCompletedThankYou && (
         <div className="app-card">
           <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem', margin: 0 }}>
-            Thank you for completing the intro questions! We&apos;ll be in touch when we&apos;re ready for you to opt in to the next round.
+            Thank you for completing the intro questions! We&apos;ll be in touch when we find a strong intro for you.
           </p>
         </div>
       )}

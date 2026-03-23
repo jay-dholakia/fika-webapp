@@ -41,6 +41,13 @@ type CompareRow = {
   b: string
 }
 
+type SelectedPairInput = {
+  userAId: string
+  userBId: string
+  score?: number
+  reasons?: Record<string, unknown>
+}
+
 const OPTIONS_LIFE_CHAPTER = [
   "I'm in college or university", "I'm in graduate school", 'I recently graduated', "I'm early in my career", "I'm growing in my career", "I'm established in my career", "I'm building something (startup, project, business)", "I'm working independently or freelancing", "I'm transitioning into a new career", 'I recently moved to this city', 'I recently got married or entered a long-term partnership', "I'm exploring a new direction", "I'm taking time to figure out what's next", "I'm taking a break or sabbatical", "I'm starting a family", "I'm raising kids", "I'm caring for family members", "I'm semi-retired", "I'm retired",
 ]
@@ -294,12 +301,18 @@ function scorePair(a: SimCandidate, b: SimCandidate): { score: number; sectionSc
 }
 
 function getBatchWeekMonday(now: Date): string {
-  const day = now.getDay()
-  const daysToMonday = day === 0 ? 6 : day - 1
   const monday = new Date(now)
-  monday.setDate(now.getDate() - daysToMonday)
-  monday.setHours(0, 0, 0, 0)
+  const day = monday.getUTCDay()
+  const diffToMonday = (day + 6) % 7
+  monday.setUTCDate(monday.getUTCDate() - diffToMonday)
+  monday.setUTCHours(0, 0, 0, 0)
   return monday.toISOString().split('T')[0]
+}
+
+function getExpiresAtWednesdayMidnightUtc(batchWeek: string): string {
+  const d = new Date(`${batchWeek}T00:00:00.000Z`)
+  d.setUTCDate(d.getUTCDate() + 2)
+  return d.toISOString()
 }
 
 async function getAdminUserId(request: Request): Promise<string | null> {
@@ -332,6 +345,64 @@ export async function POST(request: Request) {
   const action = typeof body.action === 'string' ? body.action : 'simulate'
 
   if (action === 'trigger_sms') {
+    const selectedPairsRaw = Array.isArray(body.selectedPairs) ? body.selectedPairs as unknown[] : []
+    const selectedPairs: SelectedPairInput[] = selectedPairsRaw
+      .filter((p): p is SelectedPairInput => {
+        const v = p as SelectedPairInput
+        return typeof v?.userAId === 'string' && v.userAId && typeof v?.userBId === 'string' && v.userBId
+      })
+
+    const batchWeek = getBatchWeekMonday(new Date())
+    let targetMatchIds: string[] | null = null
+
+    if (selectedPairs.length > 0) {
+      const expiresAt = getExpiresAtWednesdayMidnightUtc(batchWeek)
+      const createdIds: string[] = []
+      for (const pair of selectedPairs) {
+        const userA = pair.userAId < pair.userBId ? pair.userAId : pair.userBId
+        const userB = pair.userAId < pair.userBId ? pair.userBId : pair.userAId
+        const score = typeof pair.score === 'number' && Number.isFinite(pair.score) ? pair.score : 0
+        const reasons = (pair.reasons && typeof pair.reasons === 'object') ? pair.reasons : {}
+
+        const { data: inserted, error: insertErr } = await supabase
+          .from('match_candidates')
+          .insert({
+            user_a: userA,
+            user_b: userB,
+            score,
+            reasons,
+            status: 'active',
+            batch_week: batchWeek,
+            expires_at: expiresAt,
+          })
+          .select('id')
+          .single()
+
+        if (insertErr) {
+          if (insertErr.code !== '23505') {
+            return NextResponse.json({ error: insertErr.message }, { status: 500 })
+          }
+          const { data: updated, error: updateErr } = await supabase
+            .from('match_candidates')
+            .update({
+              score,
+              reasons,
+              expires_at: expiresAt,
+            })
+            .eq('user_a', userA)
+            .eq('user_b', userB)
+            .eq('batch_week', batchWeek)
+            .select('id')
+            .single()
+          if (updateErr) return NextResponse.json({ error: updateErr.message }, { status: 500 })
+          if (updated?.id) createdIds.push(updated.id as string)
+        } else if (inserted?.id) {
+          createdIds.push(inserted.id as string)
+        }
+      }
+      targetMatchIds = createdIds
+    }
+
     const fnUrl = `${url}/functions/v1/sms-match-delivery`
     const res = await fetch(fnUrl, {
       method: 'POST',
@@ -339,13 +410,18 @@ export async function POST(request: Request) {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${key}`,
       },
-      body: '{}',
+      body: JSON.stringify(
+        targetMatchIds && targetMatchIds.length > 0
+          ? { match_ids: targetMatchIds }
+          : {}
+      ),
     })
     const raw = await res.text()
     return NextResponse.json({
       ok: res.ok,
       status: res.status,
       response: raw,
+      targeted_matches: targetMatchIds?.length ?? 0,
     }, { status: res.ok ? 200 : 500 })
   }
 

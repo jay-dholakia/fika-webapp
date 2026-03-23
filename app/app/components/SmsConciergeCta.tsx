@@ -1,7 +1,7 @@
 'use client'
 
 /**
- * CTA for reply-only SMS: user must text FIKA or HI to the Concierge number to start.
+ * CTA for reply-only SMS: user can text Concierge anytime.
  * Show after phone is collected (onboarding or settings).
  */
 
@@ -11,14 +11,13 @@ export function SmsConciergeCta() {
   if (!CONCIERGE_NUMBER) {
     return (
       <p className="sms-concierge-cta sms-concierge-cta--no-number">
-        Text <strong>FIKA</strong> or <strong>HI</strong> to get your first intro and opt in for the week. (Check your account or welcome email for the number.)
+        Text us anytime to chat with the concierge about your next Fika. (Check your account or welcome email for the number.)
       </p>
     )
   }
   return (
     <p className="sms-concierge-cta">
-      Text <strong>FIKA</strong> or <strong>HI</strong> to{' '}
-      <a href={`sms:${CONCIERGE_NUMBER}`}>{CONCIERGE_NUMBER}</a> to get your first intro and opt in for the week.
+      Text us at <a href={`sms:${CONCIERGE_NUMBER}`}>{CONCIERGE_NUMBER}</a> anytime.
     </p>
   )
 }

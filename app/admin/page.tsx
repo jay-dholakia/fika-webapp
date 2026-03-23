@@ -111,7 +111,7 @@ export default function AdminMarketsPage() {
         <p className="admin-description">
           Markets are added automatically when users sign up or set their location (onboarding or settings).
           Each row is a city group (e.g. LA, SF, NYC). Turn a market <strong>Active</strong> to send Monday
-          opt-in texts and run weekly intros there.
+          intros there when you trigger delivery from admin.
         </p>
 
         {markets.length === 0 ? (

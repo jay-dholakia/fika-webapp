@@ -63,7 +63,7 @@ async function hasInboundWithin24h(supabase: any, phone: string): Promise<boolea
   return Number.isFinite(last) && Date.now() - last <= MS_24_H
 }
 
-serve(async () => {
+serve(async (req: Request) => {
   try {
     if (Deno.env.get('SMS_OUTBOUND_DISABLED') === 'true') {
       return new Response(JSON.stringify({ ok: true, outbound_disabled: true }), {
@@ -80,12 +80,20 @@ serve(async () => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
     const batchWeek = getCurrentBatchWeek()
+    const body = await req.json().catch(() => ({}))
+    const requestedIds = Array.isArray(body?.match_ids)
+      ? (body.match_ids as unknown[]).filter((x) => typeof x === 'string' && x.trim().length > 0) as string[]
+      : []
 
-    const { data: matches } = await supabase
+    let matchesQuery = supabase
       .from('match_candidates')
       .select('id, user_a, user_b, reasons, status')
       .eq('batch_week', batchWeek)
       .eq('status', 'active')
+    if (requestedIds.length > 0) {
+      matchesQuery = matchesQuery.in('id', requestedIds)
+    }
+    const { data: matches } = await matchesQuery
 
     const { data: alreadyOffered } = await supabase
       .from('sms_conversation_states')
@@ -96,7 +104,12 @@ serve(async () => {
 
     let sent = 0
     let skipped_no_recent_inbound = 0
+    let skipped_not_in_requested = 0
     for (const match of matches ?? []) {
+      if (requestedIds.length > 0 && !requestedIds.includes(match.id)) {
+        skipped_not_in_requested++
+        continue
+      }
       if (offeredSet.has(match.id)) continue
       const reasons = (match.reasons as Record<string, unknown>) ?? {}
       const sharedInterests = (reasons.shared_interests as string[]) ?? []
@@ -163,7 +176,16 @@ serve(async () => {
       }
       offeredSet.add(match.id)
     }
-    return new Response(JSON.stringify({ ok: true, batch_week: batchWeek, sent, skipped_no_recent_inbound }))
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        batch_week: batchWeek,
+        sent,
+        requested: requestedIds.length,
+        skipped_no_recent_inbound,
+        skipped_not_in_requested,
+      })
+    )
   } catch (e) {
     return new Response(JSON.stringify({ error: String(e) }), { status: 500 })
   }

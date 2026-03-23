@@ -148,41 +148,41 @@ export default function HowItWorksPage() {
       <section className="app-how-it-works-section" aria-labelledby="weekly-cadence-heading">
         <h2 id="weekly-cadence-heading" className="app-how-it-works-section-title">The weekly rhythm</h2>
         <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.9375rem', marginBottom: '1rem' }}>
-          One introduction each week. Simple and intentional.
+          We only text when there is a strong fit. Simple and intentional.
         </p>
         <ol className="app-how-it-works-timeline" aria-label="Weekly cadence">
           <li className="app-how-it-works-step">
             <span className="app-how-it-works-step-marker" aria-hidden><span className="app-how-it-works-num">1</span></span>
             <div className="app-how-it-works-step-content">
-              <span className="app-how-it-works-when">Sunday</span>
-              <span className="app-how-it-works-what">Text FIKA to opt in for the week. We&apos;ll send a link to tell us when you&apos;re free between Wednesday and Saturday.</span>
+              <span className="app-how-it-works-when">We find a strong fit</span>
+              <span className="app-how-it-works-what">After you complete intake, we look for a high-quality intro based on compatibility and location.</span>
             </div>
           </li>
           <li className="app-how-it-works-step">
             <span className="app-how-it-works-step-marker" aria-hidden><span className="app-how-it-works-num">2</span></span>
             <div className="app-how-it-works-step-content">
-              <span className="app-how-it-works-when">Monday morning — availability closes</span>
-              <span className="app-how-it-works-what">Once you set your availability, we&apos;ll start working on your Fika introduction.</span>
+              <span className="app-how-it-works-when">We text you</span>
+              <span className="app-how-it-works-what">When we find a strong intro, we reach out directly by SMS and ask for your upcoming-week availability.</span>
             </div>
           </li>
           <li className="app-how-it-works-step">
             <span className="app-how-it-works-step-marker" aria-hidden><span className="app-how-it-works-num">3</span></span>
             <div className="app-how-it-works-step-content">
-              <span className="app-how-it-works-when">Tuesday morning</span>
-              <span className="app-how-it-works-what">You&apos;ll receive your Fika introduction, along with a time and place already set based on when you&apos;re both available and where you live.</span>
+              <span className="app-how-it-works-when">We make the plan</span>
+              <span className="app-how-it-works-what">Once both people are in, we propose a real time and place based on overlapping availability.</span>
             </div>
           </li>
           <li className="app-how-it-works-step">
             <span className="app-how-it-works-step-marker" aria-hidden><span className="app-how-it-works-num">4</span></span>
             <div className="app-how-it-works-step-content">
-              <span className="app-how-it-works-when">Tuesday evening — confirmation window closes</span>
-              <span className="app-how-it-works-what">Both people confirm the plan. If either person passes, no worries — you can opt in again next week.</span>
+              <span className="app-how-it-works-when">Confirm</span>
+              <span className="app-how-it-works-what">Both people confirm by text. If timing does not work, we look for the next strong intro.</span>
             </div>
           </li>
           <li className="app-how-it-works-step">
             <span className="app-how-it-works-step-marker" aria-hidden><span className="app-how-it-works-num">5</span></span>
             <div className="app-how-it-works-step-content">
-              <span className="app-how-it-works-when">Wednesday–Saturday</span>
+              <span className="app-how-it-works-when">Meet up</span>
               <span className="app-how-it-works-what">Meet up for your Fika. No endless texting — just a real, face-to-face conversation over coffee.</span>
             </div>
           </li>

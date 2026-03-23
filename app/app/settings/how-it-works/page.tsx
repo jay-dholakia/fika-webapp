@@ -9,7 +9,7 @@ const portalFaqItems = [
   },
   {
     q: 'How do I get introductions?',
-    a: "Text FIKA each week to opt in. We send a link to set your Wed-Sat availability, then your intro is sent by text and appears in the app.",
+    a: 'Complete your intake once. We text you when we find a strong intro, then ask for your upcoming-week availability.',
   },
   {
     q: 'How many intros do I get per week?',
@@ -17,7 +17,7 @@ const portalFaqItems = [
   },
   {
     q: "How often do intro's run?",
-    a: 'Weekly. Text FIKA on Sunday, set your Wed-Sat availability by Monday 11am PT, and intros go out Tuesday. You have until Tuesday evening to accept or pass.',
+    a: 'Rolling. We reach out when we find a strong intro for you, not on a fixed opt-in schedule.',
   },
   {
     q: 'What happens when I get an intro?',
@@ -25,11 +25,11 @@ const portalFaqItems = [
   },
   {
     q: 'How long do I have to respond?',
-    a: 'Until Tuesday evening. If neither person confirms by then, the intro expires and you can opt in again next week.',
+    a: 'We include the response window in each message. If it expires, we keep looking and reach out when we find the next strong fit.',
   },
   {
     q: "I scheduled a Fika but I can't make it anymore—what should I do?",
-    a: 'Text us as soon as you know. We will notify your intro, and you can opt in again when your schedule works.',
+    a: 'Text us as soon as you know. We will notify your intro and help with next steps.',
   },
   {
     q: 'Is meeting people through Fika safe?',

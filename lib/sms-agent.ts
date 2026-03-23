@@ -170,7 +170,7 @@ export async function pickVenueForMatch(
 }
 
 // ---------- Message templates ----------
-// Cadence: Opt-in window Sunday 12am PT – Monday 11am PT (user texts FIKA); Monday 11am PT lock; Tuesday 9am PT intros; Tuesday 9pm PT confirm; Wed–Sat meet.
+// Match-first cadence: once intake is complete, we reach out only when a strong intro is available.
 
 /** One-line hint so users save the concierge number and don't miss intros. */
 export function messageSaveAsContactHint(): string {
@@ -215,7 +215,7 @@ export function messageInactiveMarketReply(placeLabel: string): string {
 }
 
 export function messageEntry(): string {
-  return `Hey! Welcome to Fika. 😊\n\nEach week I check in to see if you’re up for a Fika, send you one thoughtful intro nearby, and help you set it up if you both say yes. Want in this week? Reply Yes or Skip. If you're in, set your availability for Wed–Sat by Monday 12pm PT and we'll send your intro Tuesday 9am PT.`
+  return `Hey! Welcome to Fika. 😊\n\nYou're all set. Once we find a strong intro for you, we'll text you directly and walk you through next steps.`
 }
 
 /** When they text after the opt-in window closed (Monday 11am PT). Window opens Sunday 12am PT, ends Monday 11am PT; they must text FIKA next Sunday. */
@@ -223,7 +223,7 @@ export function messageEntryAfterDeadline(
   _nextMondayPhrase: string = 'next Monday',
   options?: { firstName?: string | null; isGreeting?: boolean }
 ): string {
-  const base = `This week's opt-in window has closed (it opens Sunday 12am PT and ends Monday 11am PT). Text FIKA next Sunday to opt in for next week.`
+  const base = `You're all set. We'll reach out as soon as we find a strong intro for you.`
   if (options?.isGreeting && options?.firstName != null) {
     const name = String(options.firstName).trim()
     if (name && name !== ' ') {
@@ -235,22 +235,22 @@ export function messageEntryAfterDeadline(
 
 /** Short reminder when they text HI/FIKA again — avoid re-sending the full intro. */
 export function messageEntryReminder(): string {
-  return `Want an intro this week? Just reply Yes or Skip — and if you're in, set your availability for Wed–Sat by Monday 12pm PT.`
+  return `You're all set. We'll text you when we've found a strong intro.`
 }
 
 /** User-initiated opt-in: commitment line when they text FIKA. */
 export function messageFikaUserInitiatedCommitment(): string {
-  return `You're in for this week's Fika.`
+  return `You're all set.`
 }
 
 /** User-initiated opt-in: body before availability link (link sent as separate message). */
 export function messageFikaUserInitiatedLinkBody(_availabilityUrl: string): string {
-  return `Set your availability between Wednesday and Saturday using the link I'll send next.\n\nYou can update it until Monday at 11 AM PT.`
+  return `You'll hear from us when we have a strong intro for you.\n\nWe'll ask for your next-week availability at that point.`
 }
 
 /** When they message with no state (haven't texted FIKA this week). */
 export function messageTextFikaToGetLink(): string {
-  return `Text FIKA to join this week's introductions.`
+  return `You're all set. We'll text you when we've found a strong intro.`
 }
 
 /** Sunday evening: reminder to set availability (only if not submitted). Text only; send availability link as separate message. */
@@ -274,11 +274,11 @@ export function messageOnboardingRequired(_onboardingUrl: string): string {
 }
 
 export function messageWeeklyOptIn(): string {
-  return `Want a Fika intro this week? Reply Yes or Skip. If you're in, set your availability for Wed–Sat by Monday 12pm PT and we'll send your intro Tuesday 9am PT.`
+  return `You're all set. We'll text you when we've found a strong intro.`
 }
 
 export function messageWeeklyOptInFollowUp(): string {
-  return `Quick ping — reply Yes or Skip and set your availability by Monday 12pm PT to get your intro.`
+  return `Quick update — we’ll reach out as soon as we’ve found a strong intro for you.`
 }
 
 export function messageMatchOffer(params: {
@@ -346,16 +346,16 @@ export function messageDayOfReminder(time: string, venueName: string, neighborho
 }
 
 export function messageOptInConfirmation(): string {
-  return `You're in! We'll send your intro Tuesday 9am PT.`
+  return `You're all set. We'll text you when your intro is ready.`
 }
 
 /** When user replies YES (legacy): send availability link. Text only; send availabilityUrl as a separate message after this. */
 export function messageOptInSetAvailability(_availabilityUrl: string): string {
-  return `You're all set for this week's Fika.\n\nSet your availability between Wednesday and Saturday using the link I'll send next. You can update it until Monday at 11 AM PT.`
+  return `We found a strong intro for you.\n\nSet your availability for next week using the link I'll send next.`
 }
 
 export function messageSkipped(): string {
-  return `No worries — text FIKA next Sunday to join that week's introductions.`
+  return `No worries. We’ll reach out again when we find another strong intro.`
 }
 
 export function messagePassConfirmation(): string {
@@ -369,22 +369,22 @@ export function messageYesWaitingForOther(): string {
 
 /** Notify the person who said YES when the other passed or intro didn't get confirmed. */
 export function messageMatchPassed(): string {
-  return `This week's Fika didn't get confirmed.\n\nYou can opt in again next Sunday.`
+  return `This intro didn’t get confirmed.\n\nWe’ll reach out again when we find another strong fit.`
 }
 
 /** Sent when opt-in window closes (Monday 11am PT) to users who didn't opt in. */
 export function messageOptInWindowClosed(_nextMondayPhrase: string = 'next Monday'): string {
-  return `This week's opt-in window has closed (Sunday 12am PT – Monday 11am PT). Text FIKA next Sunday to opt in.`
+  return `We’ll reach out directly when we find a strong intro for you.`
 }
 
 /** Notify the user who said YES when the other didn't respond by Tuesday 9pm PT (intro expired). */
 export function messageMatchExpiredOtherNoResponse(): string {
-  return `This week's Fika didn't get confirmed.\n\nYou can opt in again next Sunday.`
+  return `This intro didn’t get confirmed.\n\nWe’ll reach out again when we find another strong fit.`
 }
 
 /** Notify the user who didn't respond to the intro by Tuesday 9pm PT (intro expired). */
 export function messageMatchExpiredYouNoResponse(_nextMondayPhrase: string = 'next Monday'): string {
-  return `This week's Fika didn't get confirmed.\n\nYou can opt in again next Sunday.`
+  return `This intro didn’t get confirmed.\n\nWe’ll reach out again when we find another strong fit.`
 }
 
 /** When someone declines the proposed time/venue (after both said YES to intro). */
@@ -532,7 +532,7 @@ export function messageSmsOptOut(_webappUrl: string, _conciergeNumber: string): 
 
 /** When they text back after opting out. */
 export function messageSmsOptBackIn(): string {
-  return `You're back in.\n\nText FIKA on Sunday to join the next round of introductions.`
+  return `You're back in.\n\nWe’ll text you when we find a strong intro for you.`
 }
 
 /** Confirmed Fika upcoming: reminder. Text only; send webappUrl as a separate message after this. */
@@ -553,11 +553,11 @@ export function messageCancelAck(): string {
 // ---------- Human fallbacks when message doesn't match a keyword ----------
 
 export function fallbackAwaitingOptIn(): string {
-  return `Text FIKA anytime Sunday to join that week's introductions.`
+  return `You're all set. We'll text you when we've found a strong intro.`
 }
 
 export function fallbackOptedIn(): string {
-  return `Set your availability using the link we sent, or reply LINK to receive it again.`
+  return `You're all set. We'll text you when your intro is ready.`
 }
 
 export function fallbackMatchOffered(): string {

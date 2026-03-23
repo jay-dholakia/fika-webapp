@@ -9,7 +9,7 @@ const faqItems = [
   },
   {
     q: "How often do intro's run?",
-    a: "Weekly. Your intro's are delivered every Tuesday.",
+    a: "Rolling. We text you when we find a strong intro.",
   },
   {
     q: 'Do I have to meet in person?',

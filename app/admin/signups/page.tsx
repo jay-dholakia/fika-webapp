@@ -92,6 +92,7 @@ export default function AdminSignupsPage() {
   const [simPairs, setSimPairs] = useState<SimPair[]>([])
   const [simPairModal, setSimPairModal] = useState<SimPair | null>(null)
   const [simOptedInOnly, setSimOptedInOnly] = useState(false)
+  const [selectedSimPairs, setSelectedSimPairs] = useState<Record<string, boolean>>({})
   const [triggeringSms, setTriggeringSms] = useState(false)
   const [triggerSmsResult, setTriggerSmsResult] = useState<string | null>(null)
 
@@ -198,6 +199,7 @@ export default function AdminSignupsPage() {
       if (!res.ok) throw new Error(data?.error ?? 'Simulation failed')
       setSimSummary((data?.summary ?? null) as SimSummary | null)
       setSimPairs(Array.isArray(data?.pairs) ? data.pairs as SimPair[] : [])
+      setSelectedSimPairs({})
     } catch (e) {
       setSimError(e instanceof Error ? e.message : 'Simulation failed')
     } finally {
@@ -213,21 +215,48 @@ export default function AdminSignupsPage() {
     const { data: { session } } = await supabase?.auth.getSession() ?? { data: { session: null } }
     const headers: HeadersInit = { 'Content-Type': 'application/json' }
     if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`
+    const selected = simPairs.filter((p) => selectedSimPairs[`${p.userAId}:${p.userBId}`])
+    if (selected.length === 0) {
+      setSimError('Select at least one simulated pair before triggering SMS.')
+      setTriggeringSms(false)
+      return
+    }
     try {
       const res = await fetch('/api/admin/match-sim', {
         method: 'POST',
         credentials: 'include',
         headers,
-        body: JSON.stringify({ action: 'trigger_sms' }),
+        body: JSON.stringify({
+          action: 'trigger_sms',
+          selectedPairs: selected.map((p) => ({
+            userAId: p.userAId,
+            userBId: p.userBId,
+            score: p.score,
+            reasons: {
+              sectionScores: p.sectionScores,
+              shared_interests: p.overlapInterests.slice(0, 3),
+              conversation_hooks: p.overlapGreatFika.slice(0, 2),
+            },
+          })),
+        }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok || data?.ok === false) throw new Error(data?.error ?? data?.response ?? 'Failed to trigger SMS delivery')
-      setTriggerSmsResult(`Triggered sms-match-delivery (status ${data?.status ?? 200}).`)
+      setTriggerSmsResult(`Triggered match-delivery SMS for ${selected.length} selected pair(s).`)
     } catch (e) {
       setSimError(e instanceof Error ? e.message : 'Failed to trigger SMS delivery')
     } finally {
       setTriggeringSms(false)
     }
+  }
+
+  const visiblePairs = simPairs.slice(0, 50)
+  const selectedVisibleCount = visiblePairs.filter((p) => selectedSimPairs[`${p.userAId}:${p.userBId}`]).length
+  const allVisibleSelected = visiblePairs.length > 0 && selectedVisibleCount === visiblePairs.length
+
+  function toggleSimPair(pair: SimPair, checked: boolean) {
+    const key = `${pair.userAId}:${pair.userBId}`
+    setSelectedSimPairs((prev) => ({ ...prev, [key]: checked }))
   }
 
   if (loading) {
@@ -322,9 +351,12 @@ export default function AdminSignupsPage() {
                 disabled={triggeringSms || simLoading}
                 style={{ border: '1px solid var(--color-border)', background: 'var(--color-surface)', marginBottom: 0 }}
               >
-                {triggeringSms ? 'Triggering…' : 'Trigger match-delivery SMS'}
+                {triggeringSms ? 'Triggering…' : 'Trigger SMS for selected matches'}
               </button>
             </div>
+            <p className="admin-dashboard-filter" style={{ marginTop: '0.5rem' }}>
+              Select specific simulated pairs below, then trigger SMS only for those pairs.
+            </p>
             {simSummary && (
               <p className="admin-dashboard-filter" style={{ marginTop: '0.75rem' }}>
                 Users considered: {simSummary.usersConsidered} · Pairs scored: {simSummary.pairsScored} · Filtered out: {simSummary.filteredOut}
@@ -338,6 +370,22 @@ export default function AdminSignupsPage() {
                 <table className="admin-table">
                   <thead>
                     <tr>
+                      <th style={{ width: '2.5rem' }}>
+                        <input
+                          type="checkbox"
+                          checked={allVisibleSelected}
+                          onChange={(e) => {
+                            const checked = e.target.checked
+                            const updates: Record<string, boolean> = {}
+                            for (const pair of visiblePairs) {
+                              updates[`${pair.userAId}:${pair.userBId}`] = checked
+                            }
+                            setSelectedSimPairs((prev) => ({ ...prev, ...updates }))
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          aria-label="Select all visible simulated pairs"
+                        />
+                      </th>
                       <th>#</th>
                       <th>Pair</th>
                       <th className="admin-table-num">Score</th>
@@ -345,7 +393,8 @@ export default function AdminSignupsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {simPairs.slice(0, 50).map((p, idx) => {
+                    {visiblePairs.map((p, idx) => {
+                      const pairKey = `${p.userAId}:${p.userBId}`
                       const topFactors = Object.entries(p.sectionScores ?? {})
                         .sort((a, b) => b[1] - a[1])
                         .slice(0, 3)
@@ -365,6 +414,15 @@ export default function AdminSignupsPage() {
                             }
                           }}
                         >
+                          <td onClick={(e) => e.stopPropagation()}>
+                            <input
+                              type="checkbox"
+                              checked={selectedSimPairs[pairKey] === true}
+                              onChange={(e) => toggleSimPair(p, e.target.checked)}
+                              onClick={(e) => e.stopPropagation()}
+                              aria-label={`Select ${p.userAName} and ${p.userBName}`}
+                            />
+                          </td>
                           <td>{idx + 1}</td>
                           <td>{p.userAName} ↔ {p.userBName}</td>
                           <td className="admin-table-num">{p.score.toFixed(3)}</td>

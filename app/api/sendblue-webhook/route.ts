@@ -404,7 +404,7 @@ export async function POST(request: Request) {
     .is('match_id', null)
     .maybeSingle()
 
-  // First contact (no state yet): only send weekly opt-in if onboarding/intake is complete
+  // First contact (no state yet): confirm setup and wait until a strong intro is ready.
   if (!stateRow) {
     const { data: profile } = await supabase
       .from('profiles')
@@ -436,45 +436,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true })
     }
 
-    const keyword = content.toUpperCase().replace(/\s+/g, ' ').trim()
-
-    if (keyword !== 'FIKA') {
-      await sendConciergeAndLog(fromNumber, messageTextFikaToGetLink(), 'first_contact_text_fika_prompt', { userId, batchWeek })
-      return NextResponse.json({ ok: true })
-    }
-      const { error: insertError } = await supabase.from('sms_conversation_states').insert({
-        user_id: userId,
-        batch_week: batchWeek,
-        match_id: null,
-        state: SMS_STATES.AWAITING_OPT_IN,
-        payload: {},
-        last_sendblue_message_handle: messageHandle || null,
-        updated_at: new Date().toISOString(),
-      })
-      if (insertError) {
-        if (insertError.code === '23505') {
-          await supabase.from('sms_conversation_states').update({
-            updated_at: new Date().toISOString(),
-          }).eq('user_id', userId).eq('batch_week', batchWeek).is('match_id', null)
-          return NextResponse.json({ ok: true })
-        }
-        console.error('[sendblue-webhook] first_contact insert state', insertError.message)
-        return NextResponse.json({ ok: true })
-      }
-      console.log('[sendblue-webhook] first_contact user-initiated FIKA to', fromLast4)
-      const availabilityUrl = `${getAppBase()}/app/availability`
-      await sendConciergeAndLog(fromNumber, messageFikaUserInitiatedCommitment(), 'first_contact_fika_commitment', { userId, batchWeek })
-      await new Promise((r) => setTimeout(r, 1000))
-      await sendConciergeAndLog(fromNumber, messageFikaUserInitiatedLinkBody(availabilityUrl), 'first_contact_fika_link_body', { userId, batchWeek })
-      await new Promise((r) => setTimeout(r, 1000))
-      const linkResult = await sendConciergeAndLog(fromNumber, availabilityUrl, 'first_contact_fika_link_url', { userId, batchWeek })
-      if (linkResult.message_handle) {
-        await supabase.from('sms_conversation_states').update({
-          last_sendblue_message_handle: linkResult.message_handle,
-          updated_at: new Date().toISOString(),
-        }).eq('user_id', userId).eq('batch_week', batchWeek).is('match_id', null)
-      }
-      return NextResponse.json({ ok: true })
+    await sendConciergeAndLog(fromNumber, messageEntry(), 'first_contact_ready_for_intro', { userId, batchWeek })
+    return NextResponse.json({ ok: true })
   }
 
   const state = stateRow.state
@@ -486,77 +449,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true })
   }
 
-  // ----- Awaiting opt-in: IN / SKIP (and FIKA / HI to re-send the prompt); post-deadline = no opt-in -----
+  // ----- Legacy global states: keep user informed in the new match-first flow -----
   if (state === SMS_STATES.AWAITING_OPT_IN) {
-    const activeSlugsForOptIn = await getActiveMarketSlugs(supabase)
-    const { data: profileForMarket } = await supabase
-      .from('profiles')
-      .select('market, city')
-      .eq('id', userId)
-      .maybeSingle()
-    const userMarket = (profileForMarket as { market?: string | null })?.market ?? null
-    if (userMarket != null && activeSlugsForOptIn.length > 0 && !activeSlugsForOptIn.includes(userMarket)) {
-      const placeLabel = getMarketBySlug(userMarket)?.label ?? (profileForMarket as { city?: string | null })?.city ?? userMarket
-      await sendConciergeAndLog(fromNumber, messageInactiveMarketReply(placeLabel), 'inactive_market_reply', { userId })
-      return NextResponse.json({ ok: true })
-    }
-    if (isPastOptInDeadline(batchWeek)) {
-      const { data: profile } = await supabase.from('profiles').select('lat, lng, first_name').eq('id', userId).maybeSingle()
-      const nextMondayPhrase = getNextMondayPhrase(getTimezoneFromLatLng(profile?.lat ?? null, profile?.lng ?? null))
-      const isGreeting = isGreetingKeyword(content)
-      await sendConciergeAndLog(fromNumber, messageEntryAfterDeadline(nextMondayPhrase, { firstName: profile?.first_name ?? null, isGreeting }), 'entry_after_deadline', { userId, batchWeek })
-      return NextResponse.json({ ok: true })
-    }
-    if (isOptInKeyword(content) || keyword === 'IN' || keyword === 'YES') {
-      await supabase.from('weekly_match_opt_ins').upsert(
-        { user_id: userId, batch_week: batchWeek, opted_in_at: new Date().toISOString() },
-        { onConflict: 'user_id,batch_week' }
-      )
-      await supabase.rpc('upsert_global_sms_conversation_state', {
-        p_user_id: userId,
-        p_batch_week: batchWeek,
-        p_state: SMS_STATES.OPTED_IN,
-        p_payload: {},
-        p_last_sendblue_message_handle: messageHandle,
-      })
-      const DEFAULT_APP_BASE = 'https://letsfika.vercel.app'
-      const appBase = (process.env.APP_CANONICAL_URL ?? '').trim()
-        ? process.env.APP_CANONICAL_URL!.trim().replace(/\/$/, '')
-        : DEFAULT_APP_BASE
-      const availabilityUrl = `${appBase}/app/availability`
-      await sendConciergeAndLog(fromNumber, messageOptInSetAvailability(availabilityUrl), 'opt_in_set_availability', { userId, batchWeek })
-      await new Promise((r) => setTimeout(r, 1000))
-      await sendConciergeAndLog(fromNumber, availabilityUrl, 'opt_in_set_availability_url', { userId, batchWeek })
-    } else if (isSkipKeyword(content) || keyword === 'SKIP') {
-      await supabase.rpc('upsert_global_sms_conversation_state', {
-        p_user_id: userId,
-        p_batch_week: batchWeek,
-        p_state: SMS_STATES.AWAITING_OPT_IN,
-        p_payload: { skipped: true },
-        p_last_sendblue_message_handle: messageHandle,
-      })
-      await sendConciergeAndLog(fromNumber, messageSkipped(), 'skipped', { userId, batchWeek })
-    } else if (keyword === 'FIKA') {
-      const availabilityUrl = `${getAppBase()}/app/availability`
-      await sendConciergeAndLog(fromNumber, messageFikaUserInitiatedCommitment(), 'entry_reminder_fika_commitment', { userId, batchWeek })
-      await new Promise((r) => setTimeout(r, 1000))
-      await sendConciergeAndLog(fromNumber, messageFikaUserInitiatedLinkBody(availabilityUrl), 'entry_reminder_fika_link_body', { userId, batchWeek })
-      await new Promise((r) => setTimeout(r, 1000))
-      const linkResult = await sendConciergeAndLog(fromNumber, availabilityUrl, 'entry_reminder_fika_link_url', { userId, batchWeek })
-      if (linkResult.message_handle) {
-        await supabase.rpc('upsert_global_sms_conversation_state', {
-          p_user_id: userId,
-          p_batch_week: batchWeek,
-          p_state: SMS_STATES.AWAITING_OPT_IN,
-          p_payload: payload,
-          p_last_sendblue_message_handle: linkResult.message_handle,
-        })
-      }
-    } else if (keyword === 'HI') {
-      await sendConciergeAndLog(fromNumber, messageEntryReminder(), 'entry_reminder', { userId, batchWeek })
-    } else {
-      await sendConciergeAndLog(fromNumber, getFallbackForState(SMS_STATES.AWAITING_OPT_IN), 'fallback_awaiting_opt_in', { userId, batchWeek })
-    }
+    await sendConciergeAndLog(fromNumber, messageEntryReminder(), 'legacy_awaiting_opt_in_match_first', { userId, batchWeek })
     return NextResponse.json({ ok: true })
   }
 
@@ -582,12 +477,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true })
   }
 
-  // ----- Opted in: re-send availability link on request -----
-  if (state === SMS_STATES.OPTED_IN && isResendLinkKeyword(content)) {
-    const availabilityUrl = `${getAppBase()}/app/availability`
-    await sendConciergeAndLog(fromNumber, messageOptInSetAvailability(availabilityUrl), 'opt_in_resend_link', { userId, batchWeek })
-    await new Promise((r) => setTimeout(r, 1000))
-    await sendConciergeAndLog(fromNumber, availabilityUrl, 'opt_in_resend_link_url', { userId, batchWeek })
+  if (state === SMS_STATES.OPTED_IN) {
+    await sendConciergeAndLog(fromNumber, messageEntryReminder(), 'legacy_opted_in_match_first', { userId, batchWeek })
     return NextResponse.json({ ok: true })
   }
 
