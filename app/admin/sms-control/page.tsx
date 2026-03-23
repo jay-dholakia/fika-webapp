@@ -26,6 +26,7 @@ export default function AdminSmsControlPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [savingId, setSavingId] = useState<string | null>(null)
+  const [bulkSaving, setBulkSaving] = useState(false)
   const [query, setQuery] = useState('')
 
   useEffect(() => {
@@ -50,7 +51,7 @@ export default function AdminSmsControlPage() {
     return () => { cancelled = true }
   }, [])
 
-  async function setMode(userId: string, mode: 'auto' | 'human', hours?: number) {
+  async function setMode(userId: string, mode: 'auto' | 'human') {
     setSavingId(userId)
     setError(null)
     const supabase = getSupabase()
@@ -62,7 +63,7 @@ export default function AdminSmsControlPage() {
         method: 'PATCH',
         credentials: 'include',
         headers,
-        body: JSON.stringify({ mode, ...(hours ? { hours } : {}) }),
+        body: JSON.stringify({ mode }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data?.error ?? 'Failed to update mode')
@@ -82,6 +83,34 @@ export default function AdminSmsControlPage() {
     const hay = `${u.firstName ?? ''} ${u.phone ?? ''} ${u.city ?? ''} ${u.market ?? ''}`.toLowerCase()
     return hay.includes(query.trim().toLowerCase())
   })
+  const allFilteredHuman = filtered.length > 0 && filtered.every((u) => u.smsMode === 'human')
+
+  async function setBulkMode(mode: 'auto' | 'human') {
+    setBulkSaving(true)
+    setError(null)
+    const targets = filtered.map((u) => u.id)
+    try {
+      await Promise.all(targets.map(async (userId) => {
+        const supabase = getSupabase()
+        const { data: { session } } = await supabase?.auth.getSession() ?? { data: { session: null } }
+        const headers: HeadersInit = { 'Content-Type': 'application/json' }
+        if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`
+        const res = await fetch(`/api/admin/sms-control/${encodeURIComponent(userId)}`, {
+          method: 'PATCH',
+          credentials: 'include',
+          headers,
+          body: JSON.stringify({ mode }),
+        })
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error(data?.error ?? `Failed for ${userId}`)
+      }))
+      setUsers((prev) => prev.map((u) => (targets.includes(u.id) ? { ...u, smsMode: mode, smsHumanUntil: null } : u)))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Bulk update failed')
+    } finally {
+      setBulkSaving(false)
+    }
+  }
 
   return (
     <main className="admin-main">
@@ -109,9 +138,22 @@ export default function AdminSmsControlPage() {
                   <th>User</th>
                   <th>Phone</th>
                   <th>Location</th>
-                  <th>Mode</th>
+                  <th>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span>Mode</span>
+                      <button
+                        type="button"
+                        className={`admin-switch ${allFilteredHuman ? 'admin-switch-on' : 'admin-switch-off'}`}
+                        onClick={() => setBulkMode(allFilteredHuman ? 'auto' : 'human')}
+                        disabled={bulkSaving || filtered.length === 0}
+                        aria-label={allFilteredHuman ? 'Set all visible users to auto' : 'Set all visible users to human'}
+                      >
+                        <span className="admin-switch-knob" />
+                        <span className="admin-switch-label">{allFilteredHuman ? 'Human' : 'Auto'}</span>
+                      </button>
+                    </div>
+                  </th>
                   <th>Human until</th>
-                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -120,26 +162,24 @@ export default function AdminSmsControlPage() {
                     <td>{u.firstName ?? '—'}</td>
                     <td>{u.phone ?? '—'}</td>
                     <td>{u.city ?? u.market ?? '—'}</td>
-                    <td>{u.smsMode}</td>
-                    <td>{formatTime(u.smsHumanUntil)}</td>
                     <td>
-                      <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-                        <button className="admin-btn" type="button" disabled={savingId === u.id} onClick={() => setMode(u.id, 'auto')} style={{ border: '1px solid var(--color-border)', background: 'var(--color-surface)' }}>
-                          Auto
-                        </button>
-                        <button className="admin-btn" type="button" disabled={savingId === u.id} onClick={() => setMode(u.id, 'human', 24)} style={{ border: '1px solid var(--color-border)', background: 'var(--color-surface)' }}>
-                          Human 24h
-                        </button>
-                        <button className="admin-btn" type="button" disabled={savingId === u.id} onClick={() => setMode(u.id, 'human', 72)} style={{ border: '1px solid var(--color-border)', background: 'var(--color-surface)' }}>
-                          Human 72h
-                        </button>
-                      </div>
+                      <button
+                        type="button"
+                        className={`admin-switch ${u.smsMode === 'human' ? 'admin-switch-on' : 'admin-switch-off'}`}
+                        onClick={() => setMode(u.id, u.smsMode === 'human' ? 'auto' : 'human')}
+                        disabled={savingId === u.id || bulkSaving}
+                        aria-label={`${u.firstName ?? 'User'} SMS mode ${u.smsMode === 'human' ? 'human' : 'auto'}`}
+                      >
+                        <span className="admin-switch-knob" />
+                        <span className="admin-switch-label">{u.smsMode === 'human' ? 'Human' : 'Auto'}</span>
+                      </button>
                     </td>
+                    <td>{formatTime(u.smsHumanUntil)}</td>
                   </tr>
                 ))}
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="admin-empty">No users found.</td>
+                    <td colSpan={5} className="admin-empty">No users found.</td>
                   </tr>
                 )}
               </tbody>
