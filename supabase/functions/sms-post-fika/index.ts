@@ -32,7 +32,7 @@ const MS_1_5_H = 1.5 * 60 * 60 * 1000
 const MS_2_5_H = 2.5 * 60 * 60 * 1000
 
 const POST_FIKA_MESSAGE =
-  "How did your Fika go? We'd love to hear — just reply with any feedback."
+  "Your Fika coordination thread is now closed.\nHow did it go? Reply with quick feedback so we can improve your future Fikas."
 
 async function hasInboundWithin24h(supabase: any, phone: string): Promise<boolean> {
   const { data } = await supabase

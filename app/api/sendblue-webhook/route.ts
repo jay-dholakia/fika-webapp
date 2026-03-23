@@ -38,14 +38,12 @@ import {
   messageReProposalToDecliner,
   messageReProposalToOther,
   messageProposalToConfirm,
-  detectRelayIntent,
   messageRelayConfirmToSender,
   messageRelayToOther,
-  messageRelayHint,
   messageRelayCouldNotDeliver,
-  isFikaToday,
-  isFikaTimeInPast,
-  messageFikaInPast,
+  isInRelayWindow,
+  isRelayClosed,
+  messageRelayClosedFeedbackPrompt,
   messageThanksForFeedback,
   messageThanksForFeedbackAgain,
   messageSmsOptOut,
@@ -266,7 +264,30 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true })
   }
 
-  // ----- Post-Fika feedback: if we already sent "How did your Fika go?" and they're replying, store it -----
+  // ----- Relay just closed and follow-up not sent yet: send closure + feedback prompt -----
+  const { data: recentlyClosedMatches } = await supabase
+    .from('match_candidates')
+    .select('id, user_a, user_b, batch_week, confirmed_slot_id, post_fika_sent_at')
+    .or(`user_a.eq.${userId},user_b.eq.${userId}`)
+    .eq('scheduling_status', 'confirmed')
+    .is('post_fika_sent_at', null)
+    .not('batch_week', 'is', null)
+    .not('confirmed_slot_id', 'is', null)
+    .order('updated_at', { ascending: false })
+  const recentlyClosed = (recentlyClosedMatches ?? []).find(
+    (m: { batch_week: string; confirmed_slot_id: string }) =>
+      m.batch_week && m.confirmed_slot_id && isRelayClosed(m.batch_week, m.confirmed_slot_id)
+  )
+  if (recentlyClosed) {
+    await sendConciergeAndLog(fromNumber, messageRelayClosedFeedbackPrompt(), 'relay_closed_feedback_prompt', { userId, matchId: recentlyClosed.id })
+    await supabase
+      .from('match_candidates')
+      .update({ post_fika_sent_at: new Date().toISOString() })
+      .eq('id', recentlyClosed.id)
+    return NextResponse.json({ ok: true })
+  }
+
+  // ----- Post-Fika feedback: if we already sent follow-up and they're replying, store it -----
   const { data: feedbackMatches } = await supabase
     .from('match_candidates')
     .select('id, user_a, user_b, batch_week, confirmed_slot_id, post_fika_sent_at')
@@ -278,7 +299,7 @@ export async function POST(request: Request) {
     .order('post_fika_sent_at', { ascending: false })
   const feedbackMatch = (feedbackMatches ?? []).find(
     (m: { batch_week: string; confirmed_slot_id: string }) =>
-      m.batch_week && m.confirmed_slot_id && isFikaTimeInPast(m.batch_week, m.confirmed_slot_id)
+      m.batch_week && m.confirmed_slot_id && isRelayClosed(m.batch_week, m.confirmed_slot_id)
   )
   if (feedbackMatch) {
     const { data: existingFeedback } = await supabase
@@ -299,24 +320,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true })
   }
 
-  // ----- Day-of relay: if user has a confirmed Fika today, handle HERE / ON MY WAY / RUNNING LATE / CAN'T MAKE IT -----
-  const { data: todayMatches } = await supabase
+  // ----- Free-text relay window: 3h before through 2h after confirmed Fika -----
+  const { data: relayMatches } = await supabase
     .from('match_candidates')
     .select('id, user_a, user_b, batch_week, confirmed_slot_id')
     .or(`user_a.eq.${userId},user_b.eq.${userId}`)
     .eq('scheduling_status', 'confirmed')
     .not('confirmed_slot_id', 'is', null)
     .not('batch_week', 'is', null)
-  const todayMatch = (todayMatches ?? []).find(
+  const relayMatch = (relayMatches ?? []).find(
     (m: { batch_week: string; confirmed_slot_id: string }) =>
-      m.batch_week && m.confirmed_slot_id && isFikaToday(m.batch_week, m.confirmed_slot_id)
+      m.batch_week && m.confirmed_slot_id && isInRelayWindow(m.batch_week, m.confirmed_slot_id)
   )
-  if (todayMatch) {
-    if (isFikaTimeInPast(todayMatch.batch_week, todayMatch.confirmed_slot_id)) {
-      await sendConciergeAndLog(fromNumber, messageFikaInPast(), 'relay_fika_in_past', { userId })
-      return NextResponse.json({ ok: true })
-    }
-    const otherId = todayMatch.user_a === userId ? todayMatch.user_b : todayMatch.user_a
+  if (relayMatch) {
+    const otherId = relayMatch.user_a === userId ? relayMatch.user_b : relayMatch.user_a
     const { data: otherProfile } = await supabase
       .from('profiles')
       .select('first_name, phone')
@@ -327,19 +344,14 @@ export async function POST(request: Request) {
       .select('first_name')
       .eq('id', userId)
       .maybeSingle()
-    const intent = detectRelayIntent(content)
-    const otherFirstName = otherProfile?.first_name?.trim() ?? 'Your match'
-    const senderFirstName = senderProfile?.first_name?.trim() ?? 'Your match'
-    if (intent) {
-      const otherPhone = otherProfile?.phone?.trim()
-      if (otherPhone) {
-        await sendConciergeAndLog(otherPhone, messageRelayToOther(senderFirstName, intent), 'relay_to_other', { userId: otherId, matchId: todayMatch.id })
-        await sendConciergeAndLog(fromNumber, messageRelayConfirmToSender(otherFirstName, intent), 'relay_confirm_sender', { userId })
-      } else {
-        await sendConciergeAndLog(fromNumber, messageRelayCouldNotDeliver(), 'relay_could_not_deliver', { userId })
-      }
+    const otherFirstName = otherProfile?.first_name?.trim() ?? 'your intro'
+    const senderFirstName = senderProfile?.first_name?.trim() ?? 'Your intro'
+    const otherPhone = otherProfile?.phone?.trim()
+    if (otherPhone) {
+      await sendConciergeAndLog(otherPhone, messageRelayToOther(senderFirstName, content), 'relay_to_other', { userId: otherId, matchId: relayMatch.id })
+      await sendConciergeAndLog(fromNumber, messageRelayConfirmToSender(otherFirstName), 'relay_confirm_sender', { userId, matchId: relayMatch.id })
     } else {
-      await sendConciergeAndLog(fromNumber, messageRelayHint(), 'relay_hint', { userId })
+      await sendConciergeAndLog(fromNumber, messageRelayCouldNotDeliver(), 'relay_could_not_deliver', { userId, matchId: relayMatch.id })
     }
     return NextResponse.json({ ok: true })
   }

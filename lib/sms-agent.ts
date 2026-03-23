@@ -428,67 +428,28 @@ export function messageProposalToConfirm(params: {
 
 // ---------- Day-of relay (here / on my way / running late / can't make it) ----------
 
-export type RelayIntent = 'here' | 'on_my_way' | 'running_late' | 'cant_make_it' | null
-
-const RELAY_HERE = /\b(here|i'?m here|just got here|arrived)\b/i
-const RELAY_ON_MY_WAY = /\b(on my way|heading over|leaving now|omw|on the way)\b/i
-const RELAY_RUNNING_LATE = /\b(running late|gonna be late|be there in|running behind|late)\b/i
-const RELAY_CANT_MAKE_IT = /\b(can'?t make it|something came up|not gonna make it|won'?t make it)\b/i
-
-/** Detect day-of relay intent from message text. */
-export function detectRelayIntent(text: string): RelayIntent {
-  const t = text.trim().toLowerCase()
-  if (RELAY_CANT_MAKE_IT.test(t)) return 'cant_make_it'
-  if (RELAY_HERE.test(t)) return 'here'
-  if (RELAY_ON_MY_WAY.test(t)) return 'on_my_way'
-  if (RELAY_RUNNING_LATE.test(t)) return 'running_late'
-  return null
+/** Reply to sender after relaying their text to the other person. */
+export function messageRelayConfirmToSender(otherFirstName: string): string {
+  const name = otherFirstName || 'your intro'
+  return `Sent to ${name}.`
 }
 
-/** Reply to sender after they send a relay update. */
-export function messageRelayConfirmToSender(otherFirstName: string, intent: RelayIntent): string {
-  const name = otherFirstName || 'your match'
-  switch (intent) {
-    case 'here':
-      return `Got it — I'll let ${name} know you're there.`
-    case 'on_my_way':
-      return `I'll let ${name} know you're on your way.`
-    case 'running_late':
-      return `I'll let ${name} know you're running a bit behind.`
-    case 'cant_make_it':
-      return `I'll let ${name} know. We'll help reschedule or match again.`
-    default:
-      return `Got it — I'll pass the update along.`
-  }
-}
-
-/** Message to the other person when their match sends a relay update. */
-export function messageRelayToOther(senderFirstName: string, intent: RelayIntent): string {
-  const name = senderFirstName || 'Your match'
-  switch (intent) {
-    case 'here':
-      return `${name} is here.`
-    case 'on_my_way':
-      return `${name} is on their way.`
-    case 'running_late':
-      return `${name} is running a bit behind — no rush.`
-    case 'cant_make_it':
-      return `${name} can't make it today — something came up. We'll help reschedule or match again.`
-    default:
-      return `${name} sent an update.`
-  }
+/** Relay free-text content to the other person in the intro pair. */
+export function messageRelayToOther(senderFirstName: string, text: string): string {
+  const name = senderFirstName || 'Your intro'
+  return `${name}: ${text}`
 }
 
 
 /** Day-of reminder (e.g. 3 hours before). otherFirstName = match's first name. */
 export function messageThreeHourReminder(time: string, venueName: string, neighborhood: string, otherFirstName?: string | null): string {
-  const name = otherFirstName?.trim() || 'your match'
-  return `Reminder: your Fika with ${name} is today.\n\n${time} — ${venueName} (${neighborhood})\n\nRunning late or arriving now?\n\nReply HERE, ON MY WAY, RUNNING LATE, or CAN'T MAKE IT and we'll pass it along.`
+  const name = otherFirstName?.trim() || 'your intro'
+  return `Your Fika is in about 3 hours: ${time} at ${venueName} (${neighborhood}).\nText here to coordinate directly with ${name}. Relay closes 2 hours after your scheduled time.`
 }
 
-/** Hint when they have a Fika today but message didn't match a relay intent. */
-export function messageRelayHint(): string {
-  return `Reply HERE, ON MY WAY, RUNNING LATE, or CAN'T MAKE IT and we'll pass it along.`
+/** Relay-closed + follow-up prompt copy. */
+export function messageRelayClosedFeedbackPrompt(): string {
+  return `Your Fika coordination thread is now closed.\nHow did it go? Reply with quick feedback so we can improve your future Fikas.`
 }
 
 /** Fika date (YYYY-MM-DD) from batch_week (Monday) + slotId (e.g. wed_14_30). */
@@ -528,22 +489,25 @@ export function getFikaTimeMs(batchWeek: string, slotId: string): number | null 
   return isNaN(d.getTime()) ? null : d.getTime()
 }
 
-/** True if the Fika start time is in the past (no relay). Uses 60min grace so "running late" after start still relays. */
-const RELAY_GRACE_MS = 60 * 60 * 1000
-
-export function isFikaTimeInPast(batchWeek: string, slotId: string): boolean {
+/** True if now is inside relay window: 3h before start through 2h after start. */
+export function isInRelayWindow(batchWeek: string, slotId: string): boolean {
   const ms = getFikaTimeMs(batchWeek, slotId)
-  return ms != null && ms + RELAY_GRACE_MS < Date.now()
+  if (ms == null) return false
+  const now = Date.now()
+  const opensAt = ms - 3 * 60 * 60 * 1000
+  const closesAt = ms + 2 * 60 * 60 * 1000
+  return now >= opensAt && now <= closesAt
 }
 
-/** When they text Concierge after Fika time: acknowledge, no relay, set expectation for feedback. */
-export function messageFikaInPast(): string {
-  return `Your Fika was earlier today — we can't pass along updates now. We'll reach out in a few hours to see how it went and get your feedback.`
+/** True if relay window has already closed for this Fika. */
+export function isRelayClosed(batchWeek: string, slotId: string): boolean {
+  const ms = getFikaTimeMs(batchWeek, slotId)
+  return ms != null && Date.now() > ms + 2 * 60 * 60 * 1000
 }
 
 /** Post-Fika: ask how it went and for feedback (sent ~2 hours after Fika). */
 export function messagePostFikaFeedback(): string {
-  return `How did your Fika go?\n\nWe'd love to hear — just reply with any feedback.`
+  return `Your Fika coordination thread is now closed.\nHow did it go? Reply with quick feedback so we can improve your future Fikas.`
 }
 
 /** Reply after we store their post-Fika feedback (first time). */
