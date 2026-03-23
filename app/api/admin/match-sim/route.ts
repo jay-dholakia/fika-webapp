@@ -349,7 +349,12 @@ export async function POST(request: Request) {
     const selectedPairs: SelectedPairInput[] = selectedPairsRaw
       .filter((p): p is SelectedPairInput => {
         const v = p as SelectedPairInput
-        return typeof v?.userAId === 'string' && v.userAId && typeof v?.userBId === 'string' && v.userBId
+        return (
+          typeof v?.userAId === 'string' &&
+          v.userAId.trim().length > 0 &&
+          typeof v?.userBId === 'string' &&
+          v.userBId.trim().length > 0
+        )
       })
 
     const batchWeek = getBatchWeekMonday(new Date())
