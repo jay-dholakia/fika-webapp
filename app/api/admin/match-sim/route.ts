@@ -35,6 +35,12 @@ type SimCandidate = {
   radiusKm: number
 }
 
+type CompareRow = {
+  label: string
+  a: string
+  b: string
+}
+
 const OPTIONS_LIFE_CHAPTER = [
   "I'm in college or university", "I'm in graduate school", 'I recently graduated', "I'm early in my career", "I'm growing in my career", "I'm established in my career", "I'm building something (startup, project, business)", "I'm working independently or freelancing", "I'm transitioning into a new career", 'I recently moved to this city', 'I recently got married or entered a long-term partnership', "I'm exploring a new direction", "I'm taking time to figure out what's next", "I'm taking a break or sabbatical", "I'm starting a family", "I'm raising kids", "I'm caring for family members", "I'm semi-retired", "I'm retired",
 ]
@@ -100,6 +106,34 @@ function getMulti(intake: IntakeRow, questionId: string): string[] {
   if (Array.isArray(v)) return v.map((x) => String(x))
   if (typeof v === 'string' && v.trim()) return [v]
   return []
+}
+
+function asDisplay(value: unknown): string {
+  if (value == null) return '—'
+  if (Array.isArray(value)) {
+    const items = value
+      .map((x) => String(x).trim())
+      .filter(Boolean)
+    return items.length ? items.join(', ') : '—'
+  }
+  const text = String(value).trim()
+  return text || '—'
+}
+
+function buildComparisonRows(a: SimCandidate, b: SimCandidate): CompareRow[] {
+  return [
+    { label: 'Work', a: asDisplay(getResponseValue(a.intake, 'q_work')), b: asDisplay(getResponseValue(b.intake, 'q_work')) },
+    { label: 'Life chapter', a: asDisplay(getResponseValue(a.intake, 'q_life_chapter')), b: asDisplay(getResponseValue(b.intake, 'q_life_chapter')) },
+    { label: 'Day-to-day anchor', a: asDisplay(getResponseValue(a.intake, 'q_everyday_anchor')), b: asDisplay(getResponseValue(b.intake, 'q_everyday_anchor')) },
+    { label: 'Interests', a: asDisplay(getResponseValue(a.intake, 'q_interests')), b: asDisplay(getResponseValue(b.intake, 'q_interests')) },
+    { label: 'Curiosity', a: asDisplay(getResponseValue(a.intake, 'q_curiosity')), b: asDisplay(getResponseValue(b.intake, 'q_curiosity')) },
+    { label: 'Great Fika looks like', a: asDisplay(getResponseValue(a.intake, 'q_what_makes_great_fika')), b: asDisplay(getResponseValue(b.intake, 'q_what_makes_great_fika')) },
+    { label: 'Hoping for', a: asDisplay(getResponseValue(a.intake, 'q_hoping_for')), b: asDisplay(getResponseValue(b.intake, 'q_hoping_for')) },
+    { label: 'Avoid topics', a: asDisplay(getResponseValue(a.intake, 'q_avoid_topics')), b: asDisplay(getResponseValue(b.intake, 'q_avoid_topics')) },
+    { label: 'Languages', a: asDisplay(a.profile.languages), b: asDisplay(b.profile.languages) },
+    { label: 'Gender preference', a: asDisplay(a.profile.gender_preference), b: asDisplay(b.profile.gender_preference) },
+    { label: 'Age preference', a: asDisplay(a.profile.age_preference), b: asDisplay(b.profile.age_preference) },
+  ]
 }
 
 function ensureEmbedVector(vec: unknown): number[] | null {
@@ -395,6 +429,7 @@ export async function POST(request: Request) {
     hopingB: string | null
     overlapGreatFika: string[]
     overlapInterests: string[]
+    compareRows: CompareRow[]
     sectionScores: Record<string, number>
   }> = []
 
@@ -424,6 +459,7 @@ export async function POST(request: Request) {
       const overlapInterests = getMulti(a.intake, 'q_interests').filter((x) =>
         getMulti(b.intake, 'q_interests').includes(x)
       )
+      const compareRows = buildComparisonRows(a, b)
       pairs.push({
         userAId: a.profile.id,
         userAName: a.profile.first_name?.trim() || 'Unknown',
@@ -442,6 +478,7 @@ export async function POST(request: Request) {
         hopingB,
         overlapGreatFika,
         overlapInterests,
+        compareRows,
         sectionScores: score.sectionScores,
       })
     }

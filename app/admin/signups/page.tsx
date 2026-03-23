@@ -62,6 +62,7 @@ type SimPair = {
   hopingB: string | null
   overlapGreatFika: string[]
   overlapInterests: string[]
+  compareRows: Array<{ label: string; a: string; b: string }>
   sectionScores: Record<string, number>
 }
 
@@ -543,6 +544,34 @@ export default function AdminSignupsPage() {
                 <p className="admin-modal-meta">Hoping for: {simPairModal.hopingA ?? '—'} ↔ {simPairModal.hopingB ?? '—'}</p>
                 <p className="admin-modal-meta">Shared interests: {simPairModal.overlapInterests?.length ? simPairModal.overlapInterests.slice(0, 8).join(', ') : '—'}</p>
                 <p className="admin-modal-meta">Great Fika overlap: {simPairModal.overlapGreatFika?.length ? simPairModal.overlapGreatFika.slice(0, 6).join(', ') : '—'}</p>
+              </div>
+
+              <div className="admin-modal-section">
+                <h3 className="admin-modal-section-title">Side-by-side responses</h3>
+                {simPairModal.compareRows?.length ? (
+                  <div className="admin-compare-grid-wrap">
+                    <table className="admin-compare-grid">
+                      <thead>
+                        <tr>
+                          <th>Question</th>
+                          <th>{simPairModal.userAName}</th>
+                          <th>{simPairModal.userBName}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {simPairModal.compareRows.map((row) => (
+                          <tr key={row.label}>
+                            <td>{row.label}</td>
+                            <td>{row.a || '—'}</td>
+                            <td>{row.b || '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="admin-empty">No comparison data</p>
+                )}
               </div>
             </div>
           </div>

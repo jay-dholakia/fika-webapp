@@ -3935,3 +3935,30 @@ a {
 .admin-modal-dl span {
   display: contents;
 }
+.admin-compare-grid-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+}
+.admin-compare-grid {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+.admin-compare-grid th,
+.admin-compare-grid td {
+  padding: 0.65rem 0.75rem;
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: top;
+  text-align: left;
+}
+.admin-compare-grid th {
+  background: var(--color-bg-soft);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-textSecondary);
+}
+.admin-compare-grid tbody tr:last-child td {
+  border-bottom: none;
+}
