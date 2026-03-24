@@ -73,8 +73,6 @@ export function NewQuestionsFlow({ orderedSteps, intake, userId, onComplete }: N
   const [answers, setAnswers] = useState<AnswersState>(() => initialAnswers)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [homeCountryQuery, setHomeCountryQuery] = useState('')
-
   const stepsForFlow = useMemo(() => {
     const country = typeof answers.q_home_country === 'string' ? answers.q_home_country.trim() : ''
     return orderedSteps.filter(
@@ -155,8 +153,7 @@ export function NewQuestionsFlow({ orderedSteps, intake, userId, onComplete }: N
     ((step.type === 'chips_single' && step.options && step.options.length <= 4) ||
       (step.type === 'multi_select' && step.options && step.options.length <= 6) ||
       step.type === 'text' ||
-      step.type === 'select' ||
-      step.type === 'searchable_select')
+      step.type === 'select')
 
   return (
     <div className="app-card app-new-questions-flow">
@@ -208,78 +205,20 @@ export function NewQuestionsFlow({ orderedSteps, intake, userId, onComplete }: N
         />
       )}
 
-      {step?.type === 'searchable_select' && step.options && (
-        <div>
-          {typeof value === 'string' && value ? (
-            <div style={{ marginBottom: '0.75rem' }}>
-              <button
-                type="button"
-                className="onboarding-chip selected"
-                onClick={() => {
-                  setAnswers((a) => {
-                    const next = { ...a, [step.id]: '' }
-                    if (step.id === 'q_home_country') next.q_home_state = ''
-                    return next
-                  })
-                  setHomeCountryQuery('')
-                }}
-                disabled={saving}
-              >
-                {value} ×
-              </button>
-            </div>
-          ) : null}
-          <input
-            type="text"
-            className="auth-input"
-            placeholder="Type to search"
-            value={step.id === 'q_home_country' ? homeCountryQuery : ''}
-            onChange={(e) => {
-              if (step.id === 'q_home_country') setHomeCountryQuery(e.target.value)
-            }}
-            disabled={saving}
-            autoComplete="off"
-          />
-          {!homeCountryQuery.trim() && step.id === 'q_home_country' ? (
-            <p className="onboarding-body" style={{ marginTop: '0.5rem', fontSize: '0.9rem' }}>
-              Start typing to find your country.
-            </p>
-          ) : null}
-          <div style={{ marginTop: '0.75rem', display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-            {homeCountryQuery.trim()
-              ? step.options
-                  .filter((opt) => opt.toLowerCase().includes(homeCountryQuery.trim().toLowerCase()))
-                  .slice(0, 80)
-                  .map((opt) => (
-                    <button
-                      key={opt}
-                      type="button"
-                      className={`onboarding-chip ${value === opt ? 'selected' : ''}`}
-                      onClick={() => {
-                        setAnswers((a) => {
-                          const next = { ...a, [step.id]: opt }
-                          if (step.id === 'q_home_country' && opt !== HOME_COUNTRY_UNITED_STATES) {
-                            next.q_home_state = ''
-                          }
-                          return next
-                        })
-                        setHomeCountryQuery('')
-                      }}
-                      disabled={saving}
-                    >
-                      {opt}
-                    </button>
-                  ))
-              : null}
-          </div>
-        </div>
-      )}
-
       {step?.type === 'select' && step.options && (
         <select
           className="auth-input"
           value={typeof value === 'string' ? value : ''}
-          onChange={(e) => setAnswers((a) => ({ ...a, [step.id]: e.target.value }))}
+          onChange={(e) => {
+            const v = e.target.value
+            setAnswers((a) => {
+              const next = { ...a, [step.id]: v }
+              if (step.id === 'q_home_country' && v !== HOME_COUNTRY_UNITED_STATES) {
+                next.q_home_state = ''
+              }
+              return next
+            })
+          }}
           disabled={saving}
           aria-label={step.question}
         >

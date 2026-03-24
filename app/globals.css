@@ -1897,6 +1897,36 @@ a {
   min-width: 8rem;
   max-width: 100%;
 }
+.onboarding-location-gps-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.85rem;
+  height: 2.85rem;
+  padding: 0;
+  border-radius: 0.65rem;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-soft);
+  color: var(--color-text);
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.onboarding-location-gps-btn:hover:not(:disabled) {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  background: rgba(91, 155, 213, 0.08);
+}
+.onboarding-location-gps-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.onboarding-location-gps-spinner {
+  width: 18px;
+  height: 18px;
+  border-color: rgba(0, 0, 0, 0.12);
+  border-top-color: var(--color-primary);
+}
 .onboarding-location-zip-btn {
   flex-shrink: 0;
   padding: 0.6rem 1rem;
@@ -1905,7 +1935,16 @@ a {
   color: var(--color-text);
   border: 1px solid var(--color-border);
 }
-.onboarding-location-zip-btn:hover:not(:disabled) {
+.onboarding-location-zip-btn--active {
+  background: var(--color-primary);
+  color: #fff;
+  border: none;
+}
+.onboarding-location-zip-btn--active:hover:not(:disabled) {
+  background: var(--color-primary);
+  opacity: 0.92;
+}
+.onboarding-location-zip-btn:hover:not(:disabled):not(.onboarding-location-zip-btn--active) {
   background: var(--color-border);
 }
 .onboarding-error {

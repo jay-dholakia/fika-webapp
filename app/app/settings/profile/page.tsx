@@ -40,7 +40,13 @@ const PERSONA_EMBED_CONFIGURED = Boolean(
     process.env.NEXT_PUBLIC_PERSONA_ENVIRONMENT_ID?.trim()
 )
 
-const BACKGROUND_INTAKE_IDS = new Set(['q_home_country', 'q_home_state', 'q_hometown', 'q_ethnicity'])
+const BACKGROUND_INTAKE_IDS = new Set([
+  'q_home_country',
+  'q_home_state',
+  'q_hometown',
+  'q_ethnicity',
+  'q_relationship_status',
+])
 
 export default function SettingsProfilePage() {
   const [userId, setUserId] = useState<string | null>(null)
@@ -50,8 +56,6 @@ export default function SettingsProfilePage() {
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
   const [locationStatus, setLocationStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
-  const [homeCountryQuery, setHomeCountryQuery] = useState('')
-
   useEffect(() => {
     getSupabase()?.auth.getSession().then(({ data: { session } }) => {
       setUserId(session?.user?.id ?? null)
@@ -81,7 +85,10 @@ export default function SettingsProfilePage() {
       gender_preference: typeof answers.gender_preference === 'string' ? answers.gender_preference || null : null,
       age_preference: typeof answers.age_preference === 'string' ? answers.age_preference || null : null,
       pronouns: typeof answers.pronouns === 'string' ? answers.pronouns || null : null,
-      relationship_status: typeof answers.relationship_status === 'string' ? answers.relationship_status || null : null,
+      relationship_status:
+        typeof answers.q_relationship_status === 'string' && answers.q_relationship_status.trim() && answers.q_relationship_status !== 'N/A'
+          ? answers.q_relationship_status.trim()
+          : null,
       languages: Array.isArray(answers.languages) ? answers.languages : null,
     }
     const loc = answers.location
@@ -268,77 +275,6 @@ export default function SettingsProfilePage() {
       return null
     }
 
-    if (step.type === 'searchable_select' && step.options) {
-      const strVal = typeof value === 'string' ? value : ''
-      return (
-        <div>
-          {strVal ? (
-            <div style={{ marginBottom: '0.75rem' }}>
-              <button
-                type="button"
-                className="onboarding-chip selected"
-                onClick={() => {
-                  setAnswers((a) => {
-                    const next: AnswersState = { ...a, [step.id]: '' }
-                    if (step.id === 'q_home_country') next.q_home_state = ''
-                    return next
-                  })
-                  setHomeCountryQuery('')
-                }}
-                disabled={saving}
-              >
-                {strVal} ×
-              </button>
-            </div>
-          ) : null}
-          <input
-            type="text"
-            className="auth-input"
-            placeholder="Type to search"
-            value={step.id === 'q_home_country' ? homeCountryQuery : ''}
-            onChange={(e) => {
-              if (step.id === 'q_home_country') setHomeCountryQuery(e.target.value)
-            }}
-            disabled={saving}
-            autoComplete="off"
-            aria-label="Filter options"
-          />
-          {step.id === 'q_home_country' && !homeCountryQuery.trim() ? (
-            <p className="onboarding-body" style={{ marginTop: '0.5rem', fontSize: '0.9rem' }}>
-              Start typing to find your country.
-            </p>
-          ) : null}
-          <div style={{ marginTop: '0.75rem', display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-            {(step.id === 'q_home_country' ? homeCountryQuery.trim() : '')
-              ? step.options
-                  .filter((opt) => opt.toLowerCase().includes(homeCountryQuery.trim().toLowerCase()))
-                  .slice(0, 80)
-                  .map((opt) => (
-                    <button
-                      key={opt}
-                      type="button"
-                      className={`onboarding-chip ${strVal === opt ? 'selected' : ''}`}
-                      onClick={() => {
-                        setAnswers((a) => {
-                          const next: AnswersState = { ...a, [step.id]: opt }
-                          if (step.id === 'q_home_country' && opt !== HOME_COUNTRY_UNITED_STATES) {
-                            next.q_home_state = ''
-                          }
-                          return next
-                        })
-                        setHomeCountryQuery('')
-                      }}
-                      disabled={saving}
-                    >
-                      {opt}
-                    </button>
-                  ))
-              : null}
-          </div>
-        </div>
-      )
-    }
-
     if (step.type === 'select' && step.options) {
       return (
         <select
@@ -346,7 +282,16 @@ export default function SettingsProfilePage() {
           name={step.id}
           className="auth-input"
           value={(typeof value === 'string' ? value : '') ?? ''}
-          onChange={(e) => set(e.target.value)}
+          onChange={(e) => {
+            const v = e.target.value
+            setAnswers((a) => {
+              const next: AnswersState = { ...a, [step.id]: v }
+              if (step.id === 'q_home_country' && v !== HOME_COUNTRY_UNITED_STATES) {
+                next.q_home_state = ''
+              }
+              return next
+            })
+          }}
           disabled={saving}
           aria-label={step.question}
         >

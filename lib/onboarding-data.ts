@@ -1,8 +1,9 @@
 // LA Beta onboarding: Profile + Intake (Final). No maxes on multi_select.
-// Types: text | date | chips_single | location_permission | multi_select | searchable_select | select
+// Types: text | date | chips_single | location_permission | multi_select | select
 
-import { COUNTRY_NAMES } from '@/lib/countries-list'
+import { COUNTRY_NAMES_FOR_SELECT } from '@/lib/countries-list'
 import { ETHNICITY_OPTIONS } from '@/lib/ethnicity-options'
+import { RELATIONSHIP_STATUS_OPTIONS } from '@/lib/relationship-status-options'
 import { US_STATE_NAMES } from '@/lib/us-states-list'
 
 export type StepType =
@@ -11,7 +12,6 @@ export type StepType =
   | 'chips_single'
   | 'location_permission'
   | 'multi_select'
-  | 'searchable_select'
   | 'select'
 
 export type ProfileStep = {
@@ -116,9 +116,9 @@ export const INTAKE_STEPS: ProfileStep[] = [
     id: 'q_home_country',
     question: 'Home country',
     body: "Optional. Where you're from — not necessarily where you live now.",
-    type: 'searchable_select',
+    type: 'select',
     required: false,
-    options: COUNTRY_NAMES,
+    options: COUNTRY_NAMES_FOR_SELECT,
   },
   {
     id: 'q_home_state',
@@ -143,6 +143,14 @@ export const INTAKE_STEPS: ProfileStep[] = [
     type: 'select',
     required: false,
     options: ETHNICITY_OPTIONS,
+  },
+  {
+    id: 'q_relationship_status',
+    question: "What's your relationship status?",
+    body: 'Optional.',
+    type: 'select',
+    required: false,
+    options: RELATIONSHIP_STATUS_OPTIONS,
   },
   // Block 1 — Life context: stage → daily reality
   {

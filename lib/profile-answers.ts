@@ -37,6 +37,14 @@ export function getAnswersFromProfileAndIntake(
     const r = responses.find((x: IntakeResponseItem) => x.question_id === s.id)
     if (r != null) answers[s.id] = normalizeIntakeAnswerForDisplay(r.answer as string | string[] | number, s.type) as string | string[] | number
   }
+  const qRel = answers.q_relationship_status
+  const qRelEmpty =
+    qRel === undefined ||
+    qRel === '' ||
+    (typeof qRel === 'string' && (qRel === 'N/A' || !qRel.trim()))
+  if (qRelEmpty && profile?.relationship_status?.trim()) {
+    answers.q_relationship_status = profile.relationship_status
+  }
   answers.gender_preference = profile?.gender_preference ?? ''
   answers.age_preference = profile?.age_preference ?? ''
   answers.phone = profile?.phone ?? ''

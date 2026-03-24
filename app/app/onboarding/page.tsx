@@ -19,7 +19,7 @@ import type { ProfileRow } from '@/lib/db-types'
 import type { IntakeResponsesV5Row } from '@/lib/db-types'
 
 const ABOUT_YOU_EXTRA_IDS = ['q_hoping_for']
-const BACKGROUND_STEP_IDS = ['q_home_country', 'q_home_state', 'q_hometown', 'q_ethnicity'] as const
+const BACKGROUND_STEP_IDS = ['q_home_country', 'q_home_state', 'q_hometown', 'q_ethnicity', 'q_relationship_status'] as const
 const SECTION_2_IDS = [
   ...BACKGROUND_STEP_IDS,
   'q_life_chapter',
@@ -64,6 +64,12 @@ function getInitialAnswers(
   }
   answers.gender_preference = profile?.gender_preference ?? ''
   answers.age_preference = profile?.age_preference ?? ''
+  const relQ = answers.q_relationship_status
+  const relEmpty =
+    relQ === undefined || relQ === '' || (typeof relQ === 'string' && (relQ === 'N/A' || !relQ.trim()))
+  if (relEmpty && profile?.relationship_status?.trim()) {
+    answers.q_relationship_status = profile.relationship_status
+  }
   return answers
 }
 
@@ -160,10 +166,10 @@ function AppOnboardingContent() {
   const [locationStatus, setLocationStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
   const [zipCode, setZipCode] = useState('')
   const [zipLoading, setZipLoading] = useState(false)
+  const [geoLoading, setGeoLoading] = useState(false)
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null)
   const [languageQuery, setLanguageQuery] = useState('')
-  const [homeCountryQuery, setHomeCountryQuery] = useState('')
   const submitRef = useRef<HTMLButtonElement>(null)
   const lastMultiSelectRef = useRef<{ stepId: string; opt: string; t: number }>({ stepId: '', opt: '', t: 0 })
 
@@ -327,6 +333,10 @@ function AppOnboardingContent() {
       market: (await getMarketFromCityOrLatLngWithDb(supabase, loc?.city, loc?.lat, loc?.lng))?.slug ?? null,
       intent_confirmed_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
+      relationship_status:
+        typeof answers.q_relationship_status === 'string' && answers.q_relationship_status.trim() && answers.q_relationship_status !== 'N/A'
+          ? answers.q_relationship_status.trim()
+          : null,
     }
     const { error: e } = await supabase.from('profiles').upsert(updates, { onConflict: 'id' })
     if (e) throw new Error(e.message)
@@ -486,6 +496,55 @@ function AppOnboardingContent() {
     }
   }
 
+  function handleUseCurrentLocation() {
+    setError(null)
+    if (!navigator.geolocation) {
+      setError('Geolocation is not supported.')
+      return
+    }
+    setGeoLoading(true)
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = pos.coords.latitude
+        const lng = pos.coords.longitude
+        void (async () => {
+          try {
+            const res = await fetch(
+              `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`
+            )
+            const data = await res.json()
+            const city =
+              data.address?.city ||
+              data.address?.town ||
+              data.address?.village ||
+              data.address?.county ||
+              'Unknown'
+            const region = data.address?.state || data.address?.region
+            const cityStr = region ? `${city}, ${region}` : city
+            setAnswers((a) => ({ ...a, location: { city: cityStr, lat, lng } }))
+            setLocationStatus('done')
+            setZipCode('')
+          } catch {
+            setAnswers((a) => ({ ...a, location: { city: 'Unknown', lat, lng } }))
+            setLocationStatus('done')
+            setZipCode('')
+          } finally {
+            setGeoLoading(false)
+          }
+        })()
+      },
+      (err) => {
+        setGeoLoading(false)
+        const message =
+          err.code === 1
+            ? 'Location access was denied. Please allow location in your browser or device settings and try again.'
+            : 'We couldn’t get your location. Try again in a moment, or move to a spot with better signal.'
+        setError(message)
+      },
+      { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }
+    )
+  }
+
   if (!sessionChecked) {
     authLog('onboarding:render', { show: 'Loading', sessionChecked: false })
     return (
@@ -574,80 +633,22 @@ function AppOnboardingContent() {
             )}
           </div>
         )}
-        {step.type === 'searchable_select' && step.options && (
-          <div>
-            {typeof value === 'string' && value ? (
-              <div style={{ marginBottom: '0.75rem' }}>
-                <button
-                  type="button"
-                  className="onboarding-chip selected"
-                  onClick={() => {
-                    setAnswers((a) => {
-                      const next: AnswersState = { ...a, [step.id]: '' }
-                      if (step.id === 'q_home_country') next.q_home_state = ''
-                      return next
-                    })
-                    setHomeCountryQuery('')
-                  }}
-                  disabled={saving}
-                >
-                  {value} ×
-                </button>
-              </div>
-            ) : null}
-            <input
-              type="text"
-              className="auth-input"
-              placeholder="Type to search"
-              value={step.id === 'q_home_country' ? homeCountryQuery : ''}
-              onChange={(e) => {
-                if (step.id === 'q_home_country') setHomeCountryQuery(e.target.value)
-              }}
-              disabled={saving}
-              autoComplete="off"
-              aria-label="Filter options"
-            />
-            {step.id === 'q_home_country' && !homeCountryQuery.trim() ? (
-              <p className="onboarding-body" style={{ marginTop: '0.5rem', fontSize: '0.9rem' }}>
-                Start typing to find your country.
-              </p>
-            ) : null}
-            <div style={{ marginTop: '0.75rem', display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-              {(step.id === 'q_home_country' ? homeCountryQuery.trim() : '')
-                ? step.options
-                    .filter((opt) => opt.toLowerCase().includes((homeCountryQuery.trim() as string).toLowerCase()))
-                    .slice(0, 80)
-                    .map((opt) => (
-                      <button
-                        key={opt}
-                        type="button"
-                        className={`onboarding-chip ${value === opt ? 'selected' : ''}`}
-                        onClick={() => {
-                          setAnswers((a) => {
-                            const next: AnswersState = { ...a, [step.id]: opt }
-                            if (step.id === 'q_home_country' && opt !== HOME_COUNTRY_UNITED_STATES) {
-                              next.q_home_state = ''
-                            }
-                            return next
-                          })
-                          setHomeCountryQuery('')
-                        }}
-                        disabled={saving}
-                      >
-                        {opt}
-                      </button>
-                    ))
-                : null}
-            </div>
-          </div>
-        )}
         {step.type === 'select' && step.options && (
           <select
             id={`onboarding-${step.id}`}
             name={step.id}
             className="auth-input"
             value={(value as string) ?? ''}
-            onChange={(e) => setAnswers((a) => ({ ...a, [step.id]: e.target.value }))}
+            onChange={(e) => {
+              const v = e.target.value
+              setAnswers((a) => {
+                const next: AnswersState = { ...a, [step.id]: v }
+                if (step.id === 'q_home_country' && v !== HOME_COUNTRY_UNITED_STATES) {
+                  next.q_home_state = ''
+                }
+                return next
+              })
+            }}
             disabled={saving}
             aria-label={step.question}
           >
@@ -799,10 +800,33 @@ function AppOnboardingContent() {
                   className="auth-input onboarding-location-zip-input"
                   value={zipCode}
                   onChange={(e) => setZipCode(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                  disabled={saving || zipLoading}
+                  disabled={saving || zipLoading || geoLoading}
                 />
-                <button type="submit" className="btn onboarding-location-zip-btn" disabled={saving || zipLoading || !zipCode.trim()}>
-                  {zipLoading ? 'Looking up…' : 'Use Zip Code'}
+                <button
+                  type="button"
+                  className="onboarding-location-gps-btn"
+                  onClick={handleUseCurrentLocation}
+                  disabled={saving || zipLoading || geoLoading}
+                  aria-label="Use current location"
+                  title="Use current location"
+                >
+                  {geoLoading ? (
+                    <span className="spinner onboarding-location-gps-spinner" aria-hidden />
+                  ) : (
+                    <span className="onboarding-location-gps-btn-icon" aria-hidden>
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                        <circle cx="12" cy="10" r="3" />
+                      </svg>
+                    </span>
+                  )}
+                </button>
+                <button
+                  type="submit"
+                  className={`btn onboarding-location-zip-btn ${zipCode.trim() ? 'onboarding-location-zip-btn--active' : ''}`}
+                  disabled={saving || zipLoading || geoLoading || !zipCode.trim()}
+                >
+                  {zipLoading ? 'Looking up…' : 'Use Zip'}
                 </button>
               </div>
             </form>

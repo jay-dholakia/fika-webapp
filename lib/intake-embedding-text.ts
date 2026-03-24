@@ -18,6 +18,7 @@ export const INTAKE_EMBEDDING_EXCLUDED_IDS = new Set<string>([
   'q_home_state',
   'q_hometown',
   'q_ethnicity',
+  'q_relationship_status',
 ])
 
 function responseById(responses: IntakeResponseItem[]): Map<string, IntakeResponseItem> {

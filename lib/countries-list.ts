@@ -22,3 +22,12 @@ export const COUNTRY_NAMES = buildCountryNames()
 
 /** Match onboarding answer for U.S. (Intl label for US). */
 export const HOME_COUNTRY_UNITED_STATES = 'United States'
+
+/** For `<select>`: United States first, then all other regions A–Z. */
+export function buildCountryNamesForSelect(): string[] {
+  const all = buildCountryNames()
+  const rest = all.filter((c) => c !== HOME_COUNTRY_UNITED_STATES)
+  return [HOME_COUNTRY_UNITED_STATES, ...rest]
+}
+
+export const COUNTRY_NAMES_FOR_SELECT = buildCountryNamesForSelect()
