@@ -168,19 +168,26 @@ function preferenceAllows(pref: string, userGender: string, candidateGender: str
   return true
 }
 
-function passesFilters(a: SimCandidate, b: SimCandidate): { ok: boolean; reason?: string } {
+function passesFilters(
+  a: SimCandidate,
+  b: SimCandidate,
+  opts?: { relaxedFilters?: boolean }
+): { ok: boolean; reason?: string } {
+  const relaxedFilters = opts?.relaxedFilters === true
   if (a.profile.lat != null && a.profile.lng != null && b.profile.lat != null && b.profile.lng != null) {
     const distanceKm = calculateDistance(a.profile.lat, a.profile.lng, b.profile.lat, b.profile.lng)
     const maxKm = a.radiusKm + b.radiusKm
     if (distanceKm > maxKm) return { ok: false, reason: 'geography' }
   }
 
-  const la = Array.isArray(a.profile.languages) ? a.profile.languages : []
-  const lb = Array.isArray(b.profile.languages) ? b.profile.languages : []
-  if (la.length > 0 && lb.length > 0) {
-    const setA = new Set(la.map((x) => x.trim().toLowerCase()))
-    const overlap = lb.some((x) => setA.has(x.trim().toLowerCase()))
-    if (!overlap) return { ok: false, reason: 'languages' }
+  if (!relaxedFilters) {
+    const la = Array.isArray(a.profile.languages) ? a.profile.languages : []
+    const lb = Array.isArray(b.profile.languages) ? b.profile.languages : []
+    if (la.length > 0 && lb.length > 0) {
+      const setA = new Set(la.map((x) => x.trim().toLowerCase()))
+      const overlap = lb.some((x) => setA.has(x.trim().toLowerCase()))
+      if (!overlap) return { ok: false, reason: 'languages' }
+    }
   }
 
   if (
@@ -195,19 +202,21 @@ function passesFilters(a: SimCandidate, b: SimCandidate): { ok: boolean; reason?
     if (!preferenceAllows(bPref, bGender, aGender)) return { ok: false, reason: 'gender_pref' }
   }
 
-  const preferAround = 'Prefer around my age'
-  const aAround = a.profile.age_preference?.trim() === preferAround
-  const bAround = b.profile.age_preference?.trim() === preferAround
-  if ((aAround || bAround) && a.age != null && b.age != null && Math.abs(a.age - b.age) > 3) {
-    return { ok: false, reason: 'age_pref' }
-  }
+  if (!relaxedFilters) {
+    const preferAround = 'Prefer around my age'
+    const aAround = a.profile.age_preference?.trim() === preferAround
+    const bAround = b.profile.age_preference?.trim() === preferAround
+    if ((aAround || bAround) && a.age != null && b.age != null && Math.abs(a.age - b.age) > 3) {
+      return { ok: false, reason: 'age_pref' }
+    }
 
-  const convOnly = 'Conversation with new people — not necessarily friendship'
-  const activeFriends = 'Actively looking for new friends'
-  const aHop = getMulti(a.intake, 'q_hoping_for')[0] ?? null
-  const bHop = getMulti(b.intake, 'q_hoping_for')[0] ?? null
-  if ((aHop === convOnly && bHop === activeFriends) || (aHop === activeFriends && bHop === convOnly)) {
-    return { ok: false, reason: 'hoping_for' }
+    const convOnly = 'Conversation with new people — not necessarily friendship'
+    const activeFriends = 'Actively looking for new friends'
+    const aHop = getMulti(a.intake, 'q_hoping_for')[0] ?? null
+    const bHop = getMulti(b.intake, 'q_hoping_for')[0] ?? null
+    if ((aHop === convOnly && bHop === activeFriends) || (aHop === activeFriends && bHop === convOnly)) {
+      return { ok: false, reason: 'hoping_for' }
+    }
   }
 
   return { ok: true }
@@ -357,6 +366,7 @@ export async function POST(request: Request) {
 
   const market = typeof body.market === 'string' && body.market.trim() ? body.market.trim() : null
   const optedInOnly = body.optedInOnly === true
+  const relaxedFilters = body.relaxedFilters === true
   const maxUsers = Math.min(300, Math.max(20, typeof body.maxUsers === 'number' ? Math.floor(body.maxUsers) : 120))
   const topN = Math.min(300, Math.max(10, typeof body.topN === 'number' ? Math.floor(body.topN) : 100))
 
@@ -399,6 +409,7 @@ export async function POST(request: Request) {
         pairsScored: 0,
         filteredOut: 0,
         optedInOnly,
+        relaxedFilters,
         market,
         scoring: 'embedding_cosine',
       },
@@ -445,6 +456,7 @@ export async function POST(request: Request) {
         pairsScored: 0,
         filteredOut: 0,
         optedInOnly,
+        relaxedFilters,
         market,
         scoring: 'embedding_cosine',
       },
@@ -479,7 +491,7 @@ export async function POST(request: Request) {
     for (let j = i + 1; j < candidates.length; j++) {
       const a = candidates[i]
       const b = candidates[j]
-      const pass = passesFilters(a, b)
+      const pass = passesFilters(a, b, { relaxedFilters })
       if (!pass.ok) {
         filteredOut++
         continue
@@ -538,6 +550,7 @@ export async function POST(request: Request) {
       pairsScored: pairs.length,
       filteredOut,
       optedInOnly,
+      relaxedFilters,
       market,
       scoring: 'embedding_cosine',
     },

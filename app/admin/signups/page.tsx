@@ -45,6 +45,7 @@ type SimSummary = {
   pairsScored: number
   filteredOut: number
   optedInOnly: boolean
+  relaxedFilters?: boolean
   market: string | null
   scoring?: string
 }
@@ -96,6 +97,9 @@ export default function AdminSignupsPage() {
   const [simPairs, setSimPairs] = useState<SimPair[]>([])
   const [simPairModal, setSimPairModal] = useState<SimPair | null>(null)
   const [simOptedInOnly, setSimOptedInOnly] = useState(false)
+  const [simRelaxedFilters, setSimRelaxedFilters] = useState(true)
+  const [simMaxUsers, setSimMaxUsers] = useState(260)
+  const [simTopN, setSimTopN] = useState(220)
   const [selectedSimPairs, setSelectedSimPairs] = useState<Record<string, boolean>>({})
   const [triggeringSms, setTriggeringSms] = useState(false)
   const [triggerSmsResult, setTriggerSmsResult] = useState<string | null>(null)
@@ -196,7 +200,9 @@ export default function AdminSignupsPage() {
           action: 'simulate',
           market: filterMarket || null,
           optedInOnly: simOptedInOnly,
-          topN: 100,
+          relaxedFilters: simRelaxedFilters,
+          maxUsers: simMaxUsers,
+          topN: simTopN,
         }),
       })
       const data = await res.json().catch(() => ({}))
@@ -254,7 +260,7 @@ export default function AdminSignupsPage() {
     }
   }
 
-  const visiblePairs = simPairs.slice(0, 50)
+  const visiblePairs = simPairs.slice(0, 150)
   const selectedVisibleCount = visiblePairs.filter((p) => selectedSimPairs[`${p.userAId}:${p.userBId}`]).length
   const allVisibleSelected = visiblePairs.length > 0 && selectedVisibleCount === visiblePairs.length
 
@@ -339,6 +345,39 @@ export default function AdminSignupsPage() {
                 />
                 <span className="admin-toggle-label">Only users opted in this week</span>
               </label>
+              <label className="admin-toggle" style={{ marginRight: '0.25rem' }}>
+                <input
+                  type="checkbox"
+                  checked={simRelaxedFilters}
+                  onChange={(e) => setSimRelaxedFilters(e.target.checked)}
+                  disabled={simLoading || triggeringSms}
+                />
+                <span className="admin-toggle-label">Relax filters (keep distance + gender prefs)</span>
+              </label>
+              <label className="admin-toggle" style={{ marginRight: '0.25rem' }}>
+                <span className="admin-toggle-label">Max users</span>
+                <input
+                  type="number"
+                  min={20}
+                  max={300}
+                  value={simMaxUsers}
+                  onChange={(e) => setSimMaxUsers(Math.max(20, Math.min(300, Number(e.target.value) || 20)))}
+                  disabled={simLoading || triggeringSms}
+                  style={{ width: 80, marginLeft: 6 }}
+                />
+              </label>
+              <label className="admin-toggle" style={{ marginRight: '0.25rem' }}>
+                <span className="admin-toggle-label">Top pairs</span>
+                <input
+                  type="number"
+                  min={10}
+                  max={300}
+                  value={simTopN}
+                  onChange={(e) => setSimTopN(Math.max(10, Math.min(300, Number(e.target.value) || 10)))}
+                  disabled={simLoading || triggeringSms}
+                  style={{ width: 80, marginLeft: 6 }}
+                />
+              </label>
               <button
                 type="button"
                 className="admin-btn admin-btn-primary"
@@ -371,6 +410,7 @@ export default function AdminSignupsPage() {
                   ? `${simSummary.usersSkippedNoEmbedding} intake but no embedding · `
                   : ''}
                 {simSummary.usersConsidered} with embedding · Pairs: {simSummary.pairsScored} · Filtered out: {simSummary.filteredOut}
+                {simSummary.relaxedFilters ? ' · relaxed filters' : ' · strict filters'}
                 {simSummary.scoring ? ` · ${simSummary.scoring.replace(/_/g, ' ')}` : ''}
               </p>
             )}
