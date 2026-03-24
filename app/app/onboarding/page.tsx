@@ -169,7 +169,7 @@ function AppOnboardingContent() {
     if (sessionUserId == null) return
     if (!statusLoading && isComplete) {
       authLog('onboarding:redirect', { to: '/app', reason: 'isComplete' })
-      router.replace('/app/weeklyfika')
+      router.replace('/app/yourfika')
     }
   }, [sessionUserId, statusLoading, isComplete, router])
 
@@ -181,7 +181,7 @@ function AppOnboardingContent() {
       .then((res) => {
         if (cancelled) return
         if (!res.ok) {
-          if (res.status === 404) setTokenError('Invalid or expired link. Please text FIKA to get a new link.')
+          if (res.status === 404) setTokenError('Invalid or expired link. Text us at the concierge number for a new link.')
           else setTokenError('Something went wrong. Please try again.')
           setSessionLoadedForToken(true)
           return
@@ -217,7 +217,7 @@ function AppOnboardingContent() {
 
   useEffect(() => {
     if (tokenMode && sessionUserId != null) {
-      router.replace('/app/weeklyfika')
+      router.replace('/app/yourfika')
       return
     }
   }, [tokenMode, sessionUserId, router])
@@ -423,7 +423,7 @@ function AppOnboardingContent() {
         }
       }
       await callCompleteIntake()
-      router.replace('/app/weeklyfika?justCompletedIntro=1')
+      router.replace('/app/yourfika?justCompletedIntro=1')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.')
     } finally {

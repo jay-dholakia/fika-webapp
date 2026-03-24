@@ -41,7 +41,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             >
               SMS control
             </Link>
-            <Link href="/app/weeklyfika" className="admin-link">Back to app</Link>
+            <Link href="/app/yourfika" className="admin-link">Back to app</Link>
           </nav>
         </div>
       </header>

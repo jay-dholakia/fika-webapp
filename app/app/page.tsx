@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 
 /**
  * /app redirects to /app/how-it-works (welcome / How it works).
- * Your Weekly Fika dashboard lives at /app/weeklyfika.
+ * Your Fika dashboard lives at /app/yourfika.
  */
 export default function AppIndexPage() {
   const router = useRouter()

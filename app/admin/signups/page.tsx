@@ -38,11 +38,14 @@ type IntakeDetail = {
   completedAt: string | null
 }
 type SimSummary = {
+  totalProfiles?: number
   usersConsidered: number
+  usersSkippedNoEmbedding?: number
   pairsScored: number
   filteredOut: number
   optedInOnly: boolean
   market: string | null
+  scoring?: string
 }
 type SimPair = {
   userAId: string
@@ -242,7 +245,7 @@ export default function AdminSignupsPage() {
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok || data?.ok === false) throw new Error(data?.error ?? data?.response ?? 'Failed to trigger SMS delivery')
-      setTriggerSmsResult(`Triggered match-delivery SMS for ${selected.length} selected pair(s).`)
+      setTriggerSmsResult(`Intro SMS sent for ${selected.length} selected pair(s).`)
     } catch (e) {
       setSimError(e instanceof Error ? e.message : 'Failed to trigger SMS delivery')
     } finally {
@@ -321,9 +324,9 @@ export default function AdminSignupsPage() {
           )}
 
           <div className="admin-dashboard" style={{ marginTop: '1rem', marginBottom: '1.25rem' }}>
-            <h2 className="admin-dashboard-title">Match simulation (no availability, no SMS)</h2>
+            <h2 className="admin-dashboard-title">Match preview (no availability, no SMS)</h2>
             <p className="admin-description" style={{ marginBottom: '0.75rem' }}>
-              Simulates replenish-match quality factors using current onboarding/profile data, but ignores availability overlap and does not create matches.
+              Ranks pairs by <strong>intake embedding cosine similarity</strong> (users without an embedding are excluded). Hard filters still apply (distance, languages, preferences). Ignores availability overlap; sending an intro SMS creates the live match.
             </p>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
               <label className="admin-toggle" style={{ marginRight: '0.25rem' }}>
@@ -342,7 +345,7 @@ export default function AdminSignupsPage() {
                 disabled={simLoading || triggeringSms}
                 style={{ marginBottom: 0 }}
               >
-                {simLoading ? 'Simulating…' : 'Simulate match quality'}
+                {simLoading ? 'Scoring…' : 'Preview match quality'}
               </button>
               <button
                 type="button"
@@ -351,15 +354,20 @@ export default function AdminSignupsPage() {
                 disabled={triggeringSms || simLoading}
                 style={{ border: '1px solid var(--color-border)', background: 'var(--color-surface)', marginBottom: 0 }}
               >
-                {triggeringSms ? 'Triggering…' : 'Trigger SMS for selected matches'}
+                {triggeringSms ? 'Sending…' : 'Send intro SMS for selected pairs'}
               </button>
             </div>
             <p className="admin-dashboard-filter" style={{ marginTop: '0.5rem' }}>
-              Select specific simulated pairs below, then trigger SMS only for those pairs.
+              Select pairs below, then send the intro SMS only for those selections.
             </p>
             {simSummary && (
               <p className="admin-dashboard-filter" style={{ marginTop: '0.75rem' }}>
-                Users considered: {simSummary.usersConsidered} · Pairs scored: {simSummary.pairsScored} · Filtered out: {simSummary.filteredOut}
+                {simSummary.totalProfiles != null && `${simSummary.totalProfiles} profiles loaded · `}
+                {simSummary.usersSkippedNoEmbedding != null && simSummary.usersSkippedNoEmbedding > 0
+                  ? `${simSummary.usersSkippedNoEmbedding} skipped (no embedding) · `
+                  : ''}
+                {simSummary.usersConsidered} with embedding · Pairs: {simSummary.pairsScored} · Filtered out: {simSummary.filteredOut}
+                {simSummary.scoring ? ` · ${simSummary.scoring.replace(/_/g, ' ')}` : ''}
               </p>
             )}
             {triggerSmsResult && (
@@ -389,7 +397,7 @@ export default function AdminSignupsPage() {
                       <th>#</th>
                       <th>Pair</th>
                       <th className="admin-table-num">Score</th>
-                      <th>Top factors</th>
+                      <th>Cosine</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -476,7 +484,7 @@ export default function AdminSignupsPage() {
           {(error || simError) && <p className="admin-error admin-error-inline" role="alert">{error ?? simError}</p>}
 
           <p className="admin-back">
-            <Link href="/app/weeklyfika">Back to app</Link>
+            <Link href="/app/yourfika">Back to app</Link>
           </p>
         </div>
       </main>
@@ -583,7 +591,7 @@ export default function AdminSignupsPage() {
               </p>
 
               <div className="admin-modal-section">
-                <h3 className="admin-modal-section-title">Top section factors</h3>
+                <h3 className="admin-modal-section-title">Embedding similarity</h3>
                 <dl className="admin-modal-dl">
                   {Object.entries(simPairModal.sectionScores ?? {})
                     .sort((a, b) => b[1] - a[1])

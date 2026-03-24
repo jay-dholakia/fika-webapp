@@ -137,7 +137,7 @@ function AppLayoutInner({
   return (
     <div className="app-shell">
       <header className="app-mobile-header" aria-label="Mobile menu">
-        <Link href="/app/weeklyfika" className="app-sidebar-logo" onClick={() => setMobileMenuOpen(false)}>
+        <Link href="/app/yourfika" className="app-sidebar-logo" onClick={() => setMobileMenuOpen(false)}>
           fika
         </Link>
         <button
@@ -164,7 +164,7 @@ function AppLayoutInner({
         aria-label="App navigation"
       >
         <div className="app-sidebar-header app-sidebar-header-desktop">
-          <Link href="/app/weeklyfika" className="app-sidebar-logo" onClick={() => setMobileMenuOpen(false)}>
+          <Link href="/app/yourfika" className="app-sidebar-logo" onClick={() => setMobileMenuOpen(false)}>
             fika
           </Link>
         </div>
@@ -172,8 +172,8 @@ function AppLayoutInner({
           <Link href="/app/how-it-works" className={pathname === '/app/how-it-works' ? 'app-sidebar-link active' : 'app-sidebar-link'} onClick={() => setMobileMenuOpen(false)}>
             Welcome to Fika
           </Link>
-          <Link href="/app/weeklyfika" className={pathname === '/app/weeklyfika' || pathname?.startsWith('/app/onboarding') ? 'app-sidebar-link active' : 'app-sidebar-link'} onClick={() => setMobileMenuOpen(false)}>
-            Your Weekly Fika
+          <Link href="/app/yourfika" className={pathname === '/app/yourfika' || pathname?.startsWith('/app/onboarding') ? 'app-sidebar-link active' : 'app-sidebar-link'} onClick={() => setMobileMenuOpen(false)}>
+            Your Fika
           </Link>
           <Link href="/app/availability" className={pathname === '/app/availability' ? 'app-sidebar-link active' : 'app-sidebar-link'} onClick={() => setMobileMenuOpen(false)}>
             Your Availability

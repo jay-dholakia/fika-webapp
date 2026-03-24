@@ -48,7 +48,7 @@ export default function ResetPasswordPage() {
         return
       }
       setMessage({ type: 'success', text: 'Password updated. Redirecting…' })
-      setTimeout(() => router.replace('/app/weeklyfika'), 1500)
+      setTimeout(() => router.replace('/app/yourfika'), 1500)
     } catch {
       setMessage({ type: 'error', text: 'Something went wrong. Please try again.' })
     } finally {

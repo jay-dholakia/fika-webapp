@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, Suspense } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { getSupabase } from '@/lib/supabase'
@@ -34,7 +34,7 @@ function AppHomeContent() {
   useEffect(() => {
     if (searchParams.get('justCompletedIntro') === '1') {
       setShowJustCompletedThankYou(true)
-      router.replace('/app/weeklyfika')
+      router.replace('/app/yourfika')
     }
   }, [searchParams, router])
 
@@ -48,8 +48,8 @@ const TARGET_USERS = TARGET_COUNT_PER_MARKET
   const CONCIERGE_NUMBER = process.env.NEXT_PUBLIC_SENDBLUE_CONCIERGE_NUMBER?.trim() || null
   const SHARE_URL = 'https://letsfika.vercel.app'
   const SHARE_TEXT = marketLabel
-    ? `Help me unlock Fika in ${marketLabel} — create an account and get first access to your weekly intro when we hit ${TARGET_USERS} people.`
-    : `Help me unlock Fika in our city — create an account and get first access to your weekly intro when we hit ${TARGET_USERS} people.`
+    ? `Help me unlock Fika in ${marketLabel} — create an account and get first access when we hit ${TARGET_USERS} people.`
+    : `Help me unlock Fika in our city — create an account and get first access when we hit ${TARGET_USERS} people.`
   const showQuestionnaireCard = !onboardingLoading && !onboardingComplete
   const missingIntakeSteps = onboardingComplete && intake ? getMissingIntakeStepIds(intake) : []
   const showNewQuestionsCard = !onboardingLoading && onboardingComplete && missingIntakeSteps.length > 0 && !fillingMissingMode
@@ -169,10 +169,16 @@ const TARGET_USERS = TARGET_COUNT_PER_MARKET
           supabase.from('profiles').select('id, first_name, city, birthdate').in('id', otherIds),
           supabase.from('opt_ins').select('match_id, decision').eq('user_id', userId).in('match_id', matchIds),
           supabase.from('intake_responses_v5').select('user_id, responses').in('user_id', otherIds),
-        ]).then(([profilesSettled, optInsSettled, intakeSettled]) => {
+          supabase
+            .from('sms_conversation_states')
+            .select('match_id, state')
+            .eq('user_id', userId)
+            .in('match_id', matchIds),
+        ]).then(([profilesSettled, optInsSettled, intakeSettled, statesSettled]) => {
           const profilesRes = profilesSettled.status === 'fulfilled' ? profilesSettled.value : { data: null, error: { message: 'Profiles request failed' } }
           const optInsRes = optInsSettled.status === 'fulfilled' ? optInsSettled.value : { data: null, error: null }
           const intakeRes = intakeSettled.status === 'fulfilled' ? intakeSettled.value : { data: null, error: null }
+          const statesRes = statesSettled.status === 'fulfilled' ? statesSettled.value : { data: null, error: null }
           // Build list even when profiles fail (e.g. RLS) so we don't hide matches – use empty profile data
           const profiles = (profilesRes?.data ?? []) as { id: string; first_name: string | null; city: string | null; birthdate: string | null }[]
           const byId = profiles.reduce<Record<string, { first_name: string; city: string | null; birthdate: string | null }>>((acc, p) => {
@@ -181,6 +187,10 @@ const TARGET_USERS = TARGET_COUNT_PER_MARKET
           }, {})
           const myOptIns = ((optInsRes?.data ?? []) as { match_id: string; decision: string }[]).reduce<Record<string, 'yes' | 'no'>>((acc, o) => {
             acc[o.match_id] = o.decision === 'yes' ? 'yes' : 'no'
+            return acc
+          }, {})
+          const myStates = ((statesRes?.data ?? []) as { match_id: string; state: string }[]).reduce<Record<string, string>>((acc, s) => {
+            if (s.match_id) acc[s.match_id] = s.state
             return acc
           }, {})
           const intakeByUserId: Record<string, { topicsPreview: string | null; fikaPreference: string | null }> = {}
@@ -220,6 +230,7 @@ const TARGET_USERS = TARGET_COUNT_PER_MARKET
               score: m.score ?? null,
               reasons: (m.reasons as IntroMatch['reasons']) ?? null,
               myDecision: myOptIns[m.id],
+              matchState: myStates[m.id] ?? null,
               conversationTypesPreview: intake?.topicsPreview ?? null,
               fikaPreferencePreview: intake?.fikaPreference ?? null,
               schedulingStatus: m.scheduling_status ?? null,
@@ -267,10 +278,10 @@ const TARGET_USERS = TARGET_COUNT_PER_MARKET
   return (
     <>
       <div className="app-card">
-        <h2>Your weekly Fika</h2>
+        <h2>Your Fika</h2>
         {profileCount === null || (marketSlug != null && marketActive === null) ? (
           <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem', marginBottom: 0 }}>
-            Loading your weekly status…
+            Loading your status…
           </p>
         ) : isInactiveMarket ? (
           <>
@@ -312,7 +323,7 @@ const TARGET_USERS = TARGET_COUNT_PER_MARKET
         ) : (
           <>
             <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem', marginBottom: '1rem' }}>
-              You&apos;re all set. We&apos;ll text you when we find a strong intro, then ask for your next-week availability to lock in your Fika.
+              You&apos;re all set. We&apos;ll reach out when we find a good Fika intro for you, then ask for your availability when we&apos;re scheduling your intro.
             </p>
             {CONCIERGE_NUMBER && (
               <a
@@ -324,17 +335,98 @@ const TARGET_USERS = TARGET_COUNT_PER_MARKET
               </a>
             )}
             <p style={{ fontSize: '0.95rem' }}>
-              Keep your profile current so we can reach out when the right intro is ready.
+              Keep your profile current so we can reach out when we find a good Fika intro for you.
             </p>
             {error && <p className="onboarding-error" style={{ marginTop: '0.75rem' }}>{error}</p>}
           </>
         )}
+
+        <div style={{ marginTop: '1.75rem', paddingTop: '1.25rem', borderTop: '1px solid var(--color-border, rgba(0,0,0,0.08))' }}>
+          <h3 className="app-subsection-title" style={{ fontSize: '1.1rem', margin: '0 0 0.75rem', fontWeight: 600 }}>
+            Your intro
+          </h3>
+          {introsLoading ? (
+            <p className="app-empty" style={{ padding: '0.5rem 0' }}>Loading…</p>
+          ) : intros.length === 0 ? (
+            <p className="app-empty" style={{ padding: '0.5rem 0', margin: 0 }}>
+              When we find a good Fika intro for you, it&apos;ll show up here.
+            </p>
+          ) : (
+            <div className="app-intro-list" aria-label="Your intro">
+              {intros.map((intro) => (
+                <div key={intro.id} className="app-intro-card">
+                  <button
+                    type="button"
+                    className="app-intro-card-trigger"
+                    onClick={() => setModalIntro(intro)}
+                  >
+                    <div className="app-intro-card-body">
+                      <strong className="app-intro-name">{intro.otherFirstName}</strong>
+                      {intro.otherCity && <span className="app-intro-meta"> · {intro.otherCity}</span>}
+                      {intro.otherAge != null && <span className="app-intro-meta"> · {intro.otherAge} years old</span>}
+                      {(intro.reasons?.conversationHooks?.length || intro.reasons?.conversation_hooks?.length || intro.fikaPreferencePreview) ? (
+                        <p className="app-intro-preview">
+                          {(() => {
+                            const hooks = intro.reasons?.conversationHooks?.length ? intro.reasons.conversationHooks : intro.reasons?.conversation_hooks ?? []
+                            const firstHook = hooks[0]
+                            return firstHook ? (
+                              <span className="app-intro-preview-line">{firstHook}</span>
+                            ) : null
+                          })()}
+                          {((intro.reasons?.conversationHooks?.length || intro.reasons?.conversation_hooks?.length) && intro.fikaPreferencePreview) ? (
+                            <span className="app-intro-preview-sep"> · </span>
+                          ) : null}
+                          {intro.fikaPreferencePreview ? (
+                            <span className="app-intro-preview-line">
+                              <strong className="app-intro-preview-label">Fika:</strong> {intro.fikaPreferencePreview}
+                            </span>
+                          ) : null}
+                        </p>
+                      ) : null}
+                      {intro.myDecision === 'yes' && intro.schedulingStatus === 'confirmed' && (intro.confirmedSlotId || intro.confirmedVenueName) ? (
+                        <p className="app-intro-card-confirmed" style={{ marginTop: '0.5rem', fontSize: '0.9rem', fontWeight: 500, color: 'var(--color-textSecondary)' }}>
+                          Confirmed Fika · {intro.confirmedSlotId ? getAvailabilitySlotLabel(intro.confirmedSlotId) : 'Time TBD'}
+                          {intro.confirmedVenueName ? ` · ${intro.confirmedVenueName}${intro.confirmedVenueNeighborhood ? ` (${intro.confirmedVenueNeighborhood})` : ''}` : ''}
+                        </p>
+                      ) : null}
+                    </div>
+                    {intro.matchState === 'awaiting_availability' ? (
+                      <span className="app-intro-card-status">Set availability</span>
+                    ) : intro.myDecision === 'yes' ? (
+                      <span className="app-intro-card-status">In progress</span>
+                    ) : intro.myDecision === 'no' ? (
+                      <span className="app-intro-card-status">Passed</span>
+                    ) : (
+                      <span className="app-intro-card-cta">View details →</span>
+                    )}
+                  </button>
+                  {intro.matchState === 'awaiting_availability' && (
+                    <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <Link href="/app/availability" className="btn btn-primary" style={{ display: 'inline-block' }}>
+                        Set availability
+                      </Link>
+                      {CONCIERGE_NUMBER && (
+                        <a
+                          href={`sms:${CONCIERGE_NUMBER}?&body=PASS`}
+                          className="btn btn-secondary"
+                          style={{ display: 'inline-block' }}
+                        >
+                          Pass in SMS
+                        </a>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {showJustCompletedThankYou && (
         <div className="app-card">
           <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem', margin: 0 }}>
-            Thank you for completing the intro questions! We&apos;ll be in touch when we find a strong intro for you.
+            Thank you for completing the intro questions! We&apos;ll reach out when we find a good Fika intro for you.
           </p>
         </div>
       )}
@@ -380,67 +472,6 @@ const TARGET_USERS = TARGET_COUNT_PER_MARKET
         />
       )}
 
-      <div className="app-card">
-        <h2>This Week&apos;s Fika</h2>
-        {introsLoading ? (
-          <p className="app-empty" style={{ padding: '1rem 0' }}>Loading…</p>
-        ) : intros.length === 0 ? (
-          <p className="app-empty" style={{ padding: '1rem 0' }}>
-            This week&apos;s Fika will appear here after the next weekly run.
-          </p>
-        ) : (
-          <div className="app-intro-list" aria-label="This week's Fika">
-            {intros.map((intro) => (
-              <div key={intro.id} className="app-intro-card">
-                <button
-                  type="button"
-                  className="app-intro-card-trigger"
-                  onClick={() => setModalIntro(intro)}
-                >
-                  <div className="app-intro-card-body">
-                    <strong className="app-intro-name">{intro.otherFirstName}</strong>
-                    {intro.otherCity && <span className="app-intro-meta"> · {intro.otherCity}</span>}
-                    {intro.otherAge != null && <span className="app-intro-meta"> · {intro.otherAge} years old</span>}
-                    {(intro.reasons?.conversationHooks?.length || intro.reasons?.conversation_hooks?.length || intro.fikaPreferencePreview) ? (
-                      <p className="app-intro-preview">
-                        {(() => {
-                          const hooks = intro.reasons?.conversationHooks?.length ? intro.reasons.conversationHooks : intro.reasons?.conversation_hooks ?? []
-                          const firstHook = hooks[0]
-                          return firstHook ? (
-                            <span className="app-intro-preview-line">{firstHook}</span>
-                          ) : null
-                        })()}
-                        {((intro.reasons?.conversationHooks?.length || intro.reasons?.conversation_hooks?.length) && intro.fikaPreferencePreview) ? (
-                          <span className="app-intro-preview-sep"> · </span>
-                        ) : null}
-                        {intro.fikaPreferencePreview ? (
-                          <span className="app-intro-preview-line">
-                            <strong className="app-intro-preview-label">Fika:</strong> {intro.fikaPreferencePreview}
-                          </span>
-                        ) : null}
-                      </p>
-                    ) : null}
-                    {intro.myDecision === 'yes' && intro.schedulingStatus === 'confirmed' && (intro.confirmedSlotId || intro.confirmedVenueName) ? (
-                      <p className="app-intro-card-confirmed" style={{ marginTop: '0.5rem', fontSize: '0.9rem', fontWeight: 500, color: 'var(--color-textSecondary)' }}>
-                        Confirmed Fika · {intro.confirmedSlotId ? getAvailabilitySlotLabel(intro.confirmedSlotId) : 'Time TBD'}
-                        {intro.confirmedVenueName ? ` · ${intro.confirmedVenueName}${intro.confirmedVenueNeighborhood ? ` (${intro.confirmedVenueNeighborhood})` : ''}` : ''}
-                      </p>
-                    ) : null}
-                  </div>
-                  {intro.myDecision === 'yes' ? (
-                    <span className="app-intro-card-status">Confirmed</span>
-                  ) : intro.myDecision === 'no' ? (
-                    <span className="app-intro-card-status">Passed</span>
-                  ) : (
-                    <span className="app-intro-card-cta">View details →</span>
-                  )}
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
       {modalIntro != null && (
         <IntroDetailModal
           intro={modalIntro}
@@ -454,7 +485,7 @@ const TARGET_USERS = TARGET_COUNT_PER_MARKET
   )
 }
 
-export default function WeeklyFikaPage() {
+export default function YourFikaPage() {
   return (
     <Suspense fallback={<div style={{ padding: '2rem', textAlign: 'center' }}>Loading…</div>}>
       <AppHomeContent />

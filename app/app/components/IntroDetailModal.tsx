@@ -34,6 +34,8 @@ export type IntroMatch = {
   fikaPreferencePreview?: string | null
   /** Scheduling: proposed_default | counter_proposed | final_proposed | confirmed | expired */
   schedulingStatus?: string | null
+  /** SMS state for this user + match (e.g. match_offered, awaiting_availability) */
+  matchState?: string | null
   defaultSlotId?: string | null
   overlappingSlotIds?: string[] | null
   counterSlotId?: string | null

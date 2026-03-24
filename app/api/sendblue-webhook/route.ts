@@ -14,16 +14,12 @@ import {
   getDaysFromSlotIds,
   slotIdToDayAndWindow,
   slotIdToDisplayTime,
-  messageOptInSetAvailability,
-  messageSkipped,
   messageEntry,
-  messageEntryAfterDeadline,
   messageOnboardingRequired,
   messageEntryReminder,
   messageFikaUserInitiatedCommitment,
   messageFikaUserInitiatedLinkBody,
   messageTextFikaToGetLink,
-  messageMatchOffer,
   messageConversationContext,
   messageSchedulingDay,
   messageSchedulingWindow,
@@ -53,14 +49,13 @@ import {
   messageCancelAck,
   getFallbackForState,
   fallbackGeneric,
-  isOptInKeyword,
-  isSkipKeyword,
   isMatchYesKeyword,
   isMatchPassKeyword,
   isProposalDeclineKeyword,
   isConfirmKeyword,
   isResendLinkKeyword,
   isHelpKeyword,
+  isAvailabilityReadyKeyword,
   isStopKeyword,
   isRescheduleKeyword,
   isCancelKeyword,
@@ -68,13 +63,15 @@ import {
   getFikaTimeMs,
   pickVenueForMatch,
   messageInactiveMarketReply,
+  messageAvailabilityLockAllSet,
+  messageTeaserPreview,
+  messageAwaitingAvailabilityReady,
 } from '@/lib/sms-agent'
 import { getActiveMarketSlugs } from '@/lib/admin-markets'
 import { getMarketBySlug } from '@/lib/markets'
-import { getTimezoneFromLatLng, getNextMondayPhrase } from '@/lib/sms-day-aware'
 import { sendConcierge, isSendblueConfigured } from '@/lib/sendblue'
 import { getIntakeRadiusKm } from '@/lib/intake-radius'
-import { getCurrentBatchWeek, isOnboardingComplete, isPastOptInDeadline } from '@/lib/onboarding'
+import { getCurrentBatchWeek, isOnboardingComplete } from '@/lib/onboarding'
 import type { ProfileRow, IntakeResponsesV5Row } from '@/lib/db-types'
 import {
   messageSmsSignupLinkSent,
@@ -264,7 +261,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true })
   }
 
-  // Human handoff mode: suppress automation replies while an admin is manually texting this user.
+  // Human handoff mode: suppress automated concierge replies while the line is in human mode.
   const smsMode = (profileForSms as { sms_mode?: string | null } | null)?.sms_mode ?? 'auto'
   const smsHumanUntil = (profileForSms as { sms_human_until?: string | null } | null)?.sms_human_until ?? null
   const humanActive =
@@ -275,6 +272,53 @@ export async function POST(request: Request) {
     )
   if (humanActive) {
     return NextResponse.json({ ok: true, suppressed: 'human_mode' })
+  }
+
+  // ----- Availability saved in app: user texts READY to confirm (see /api/availability + weekly_availability columns) -----
+  if (isAvailabilityReadyKeyword(content)) {
+    const batchWeekReady = getCurrentBatchWeek()
+    const { data: avReadyRow } = await supabase
+      .from('weekly_availability')
+      .select('pending_sms_ready_confirmation, availability_slots, sms_ready_confirmed_at')
+      .eq('user_id', userId)
+      .eq('batch_week', batchWeekReady)
+      .maybeSingle()
+    const readySlots = Array.isArray(avReadyRow?.availability_slots) ? avReadyRow.availability_slots : []
+
+    if (avReadyRow?.pending_sms_ready_confirmation && readySlots.length > 0) {
+      await supabase
+        .from('weekly_availability')
+        .update({
+          pending_sms_ready_confirmation: false,
+          sms_ready_confirmed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('user_id', userId)
+        .eq('batch_week', batchWeekReady)
+      await sendConciergeAndLog(fromNumber, messageAvailabilityLockAllSet(), 'availability_ready_confirmed', {
+        userId,
+        batchWeek: batchWeekReady,
+      })
+      return NextResponse.json({ ok: true })
+    }
+
+    if (avReadyRow?.sms_ready_confirmed_at && readySlots.length > 0) {
+      await sendConciergeAndLog(
+        fromNumber,
+        "You're all set — we already confirmed your availability for this week.",
+        'availability_ready_already_confirmed',
+        { userId, batchWeek: batchWeekReady }
+      )
+      return NextResponse.json({ ok: true })
+    }
+
+    await sendConciergeAndLog(
+      fromNumber,
+      'Save your availability in the Fika app first, then text READY to confirm.',
+      'availability_ready_no_pending',
+      { userId, batchWeek: batchWeekReady }
+    )
+    return NextResponse.json({ ok: true })
   }
 
   // ----- Relay just closed and follow-up not sent yet: send closure + feedback prompt -----
@@ -417,7 +461,7 @@ export async function POST(request: Request) {
     .is('match_id', null)
     .maybeSingle()
 
-  // First contact (no state yet): confirm setup and wait until a strong intro is ready.
+  // First contact (no state yet): confirm setup; we reach out when we find a good Fika intro for them.
   if (!stateRow) {
     const { data: profile } = await supabase
       .from('profiles')
@@ -462,16 +506,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true })
   }
 
-  // ----- Legacy global states: keep user informed in the new match-first flow -----
-  if (state === SMS_STATES.AWAITING_OPT_IN) {
-    await sendConciergeAndLog(fromNumber, messageEntryReminder(), 'legacy_awaiting_opt_in_match_first', { userId, batchWeek })
-    return NextResponse.json({ ok: true })
-  }
-
-  // Match-offered / YES / PASS: handled when we have a match_id in state (per-match state row)
-  // For simplicity, check for match_offered state with match_id
+  // Per-match state (intro YES/PASS) takes priority over global state
   const { data: matchStateRow } = await supabase
-          .from('sms_conversation_states')
+    .from('sms_conversation_states')
     .select('*')
     .eq('user_id', userId)
     .eq('batch_week', batchWeek)
@@ -484,16 +521,13 @@ export async function POST(request: Request) {
   const matchId = matchStateRow?.match_id
   const matchPayload = (matchStateRow?.payload as Record<string, unknown>) ?? {}
 
-  // ----- HELP: state-aware fallback -----
   if (isHelpKeyword(content)) {
     await sendConciergeAndLog(fromNumber, getFallbackForState(matchState ?? state), 'help_fallback', { userId, batchWeek, matchId: matchId ?? undefined })
     return NextResponse.json({ ok: true })
   }
 
-  if (state === SMS_STATES.OPTED_IN) {
-    await sendConciergeAndLog(fromNumber, messageEntryReminder(), 'legacy_opted_in_match_first', { userId, batchWeek })
-    return NextResponse.json({ ok: true })
-  }
+  const protocolV2Enabled = process.env.SMS_PROTOCOL_V2_ENABLED === 'true'
+  const appBase = getAppBase()
 
   if (matchState === SMS_STATES.MATCH_OFFERED && matchId) {
     if (isMatchYesKeyword(content) || keyword === 'YES') {
@@ -543,12 +577,117 @@ export async function POST(request: Request) {
           { onConflict: 'user_id,batch_week,match_id' }
         )
       } else {
+        if (protocolV2Enabled) {
+          const { data: pair } = await supabase
+            .from('match_candidates')
+            .select('user_a, user_b')
+            .eq('id', matchId)
+            .maybeSingle()
+          const otherId = pair ? (pair.user_a === userId ? pair.user_b : pair.user_a) : null
+          const { data: currentProfile } = await supabase
+            .from('profiles')
+            .select('first_name')
+            .eq('id', userId)
+            .maybeSingle()
+          const { data: otherProfile } = otherId
+            ? await supabase
+                .from('profiles')
+                .select('phone, first_name, bio_text')
+                .eq('id', otherId)
+                .maybeSingle()
+            : { data: null as { phone?: string | null; first_name?: string | null; bio_text?: string | null } | null }
+          const currentName = currentProfile?.first_name?.trim() ?? 'Someone'
+          const otherName = otherProfile?.first_name?.trim() ?? 'Someone'
+          const otherBio = (otherProfile?.bio_text as string | undefined)?.trim()
+            ? String(otherProfile.bio_text).slice(0, 120)
+            : 'Looking forward to a good conversation.'
+
+          // Current user teaser + link
+          await sendConciergeAndLog(
+            fromNumber,
+            messageTeaserPreview({ otherFirstName: otherName, otherBio }),
+            'v2_teaser_preview',
+            { userId, batchWeek, matchId }
+          )
+          await new Promise((r) => setTimeout(r, 1000))
+          await sendConciergeAndLog(fromNumber, `${appBase}/app/yourfika`, 'v2_teaser_yourfika_url', {
+            userId,
+            batchWeek,
+            matchId,
+          })
+          await new Promise((r) => setTimeout(r, 1000))
+          await sendConciergeAndLog(fromNumber, messageAwaitingAvailabilityReady(), 'v2_awaiting_availability', {
+            userId,
+            batchWeek,
+            matchId,
+          })
+
+          // Other user teaser + link (only if we have phone)
+          if (otherProfile?.phone) {
+            const { data: myBioProfile } = await supabase
+              .from('profiles')
+              .select('bio_text')
+              .eq('id', userId)
+              .maybeSingle()
+            const myBio = (myBioProfile?.bio_text as string | undefined)?.trim()
+              ? String(myBioProfile.bio_text).slice(0, 120)
+              : 'Looking forward to a good conversation.'
+            await sendConciergeAndLog(
+              otherProfile.phone,
+              messageTeaserPreview({ otherFirstName: currentName, otherBio: myBio }),
+              'v2_teaser_preview_other',
+              { userId: otherId ?? undefined, batchWeek, matchId }
+            )
+            await new Promise((r) => setTimeout(r, 1000))
+            await sendConciergeAndLog(
+              otherProfile.phone,
+              `${appBase}/app/yourfika`,
+              'v2_teaser_yourfika_url_other',
+              { userId: otherId ?? undefined, batchWeek, matchId }
+            )
+            await new Promise((r) => setTimeout(r, 1000))
+            await sendConciergeAndLog(
+              otherProfile.phone,
+              messageAwaitingAvailabilityReady(),
+              'v2_awaiting_availability_other',
+              { userId: otherId ?? undefined, batchWeek, matchId }
+            )
+          }
+
+          await supabase.from('sms_conversation_states').upsert(
+            {
+              user_id: userId,
+              batch_week: batchWeek,
+              match_id: matchId,
+              state: SMS_STATES.AWAITING_AVAILABILITY,
+              payload: { ...matchPayload, protocol_version: 'v2' },
+              last_sendblue_message_handle: messageHandle,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: 'user_id,batch_week,match_id' }
+          )
+          if (otherId) {
+            await supabase.from('sms_conversation_states').upsert(
+              {
+                user_id: otherId,
+                batch_week: batchWeek,
+                match_id: matchId,
+                state: SMS_STATES.AWAITING_AVAILABILITY,
+                payload: { ...matchPayload, protocol_version: 'v2' },
+                updated_at: new Date().toISOString(),
+              },
+              { onConflict: 'user_id,batch_week,match_id' }
+            )
+          }
+          return NextResponse.json({ ok: true })
+        }
+
         const firstYesUserId = yesUsers[0].user_id
         const overlapping = (match.overlapping_slot_ids as string[]) ?? []
         const wedSat = overlapping.filter((id: string) => /^(wed|thu|fri|sat)_/.test(id))
         const slotId = (match.default_slot_id as string) ?? wedSat[0]
         if (!slotId) {
-          await sendConciergeAndLog(fromNumber, "We couldn't find a time that works for both. We'll try again next week.", 'no_overlap', { userId, batchWeek, matchId })
+          await sendConciergeAndLog(fromNumber, "We couldn't find a time that works for both. We'll reach out when we find another good Fika intro for you.", 'no_overlap', { userId, batchWeek, matchId })
           return NextResponse.json({ ok: true })
         }
         const { data: userA } = await supabase.from('profiles').select('city, lat, lng').eq('id', match.user_a).single()
@@ -634,6 +773,16 @@ export async function POST(request: Request) {
     } else {
       await sendConciergeAndLog(fromNumber, getFallbackForState(SMS_STATES.MATCH_OFFERED), 'fallback_match_offered', { userId, batchWeek, matchId })
     }
+    return NextResponse.json({ ok: true })
+  }
+
+  if (state === SMS_STATES.AWAITING_OPT_IN) {
+    await sendConciergeAndLog(fromNumber, messageEntryReminder(), 'legacy_awaiting_opt_in_match_first', { userId, batchWeek })
+    return NextResponse.json({ ok: true })
+  }
+
+  if (state === SMS_STATES.OPTED_IN) {
+    await sendConciergeAndLog(fromNumber, messageEntryReminder(), 'legacy_opted_in_match_first', { userId, batchWeek })
     return NextResponse.json({ ok: true })
   }
 
@@ -800,6 +949,67 @@ export async function POST(request: Request) {
       state: SMS_STATES.CONFIRMED,
       updated_at: new Date().toISOString(),
     }).eq('id', matchStateRow!.id)
+    return NextResponse.json({ ok: true })
+  }
+
+  if (matchState === SMS_STATES.AWAITING_AVAILABILITY && matchId) {
+    if (isMatchPassKeyword(content) || keyword === 'PASS') {
+      await supabase.from('opt_ins').upsert(
+        { match_id: matchId, user_id: userId, decision: 'no' },
+        { onConflict: 'match_id,user_id' }
+      )
+      await sendConciergeAndLog(fromNumber, messagePassConfirmation(), 'v2_pass_after_teaser', {
+        userId,
+        batchWeek,
+        matchId,
+      })
+      const { data: matchRow } = await supabase
+        .from('match_candidates')
+        .select('user_a, user_b')
+        .eq('id', matchId)
+        .maybeSingle()
+      const otherId = matchRow ? (matchRow.user_a === userId ? matchRow.user_b : matchRow.user_a) : null
+      if (otherId) {
+        const { data: otherOpt } = await supabase
+          .from('opt_ins')
+          .select('decision')
+          .eq('match_id', matchId)
+          .eq('user_id', otherId)
+          .maybeSingle()
+        if (otherOpt?.decision === 'yes') {
+          const { data: otherProf } = await supabase
+            .from('profiles')
+            .select('phone')
+            .eq('id', otherId)
+            .maybeSingle()
+          if (otherProf?.phone) {
+            await sendConciergeAndLog(otherProf.phone, messageMatchPassed(), 'v2_match_passed_to_other', {
+              userId: otherId,
+              batchWeek,
+              matchId,
+            })
+          }
+        }
+        await supabase
+          .from('sms_conversation_states')
+          .delete()
+          .eq('user_id', otherId)
+          .eq('batch_week', batchWeek)
+          .eq('match_id', matchId)
+      }
+      await supabase.from('match_candidates').update({
+        scheduling_status: 'expired',
+        updated_at: new Date().toISOString(),
+      }).eq('id', matchId)
+      await supabase.from('sms_conversation_states').delete().eq('id', matchStateRow!.id)
+      return NextResponse.json({ ok: true })
+    }
+    await sendConciergeAndLog(
+      fromNumber,
+      messageAwaitingAvailabilityReady(),
+      'v2_awaiting_availability_nudge',
+      { userId, batchWeek, matchId }
+    )
     return NextResponse.json({ ok: true })
   }
 

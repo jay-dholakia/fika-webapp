@@ -4,6 +4,7 @@ import { createServerSupabase } from '@/lib/supabase-server'
 import { isAdminByUserId } from '@/lib/admin-markets'
 import { getIntakeRadiusKm } from '@/lib/intake-radius'
 
+/** Admin simulation: ranks pairs by intake embed_vector cosine similarity (+ hard filters). `trigger_sms` → `match_candidates` + `sms-match-delivery`. */
 export const dynamic = 'force-dynamic'
 
 type ProfileRow = {
@@ -47,35 +48,6 @@ type SelectedPairInput = {
   score?: number
   reasons?: Record<string, unknown>
 }
-
-const OPTIONS_LIFE_CHAPTER = [
-  "I'm in college or university", "I'm in graduate school", 'I recently graduated', "I'm early in my career", "I'm growing in my career", "I'm established in my career", "I'm building something (startup, project, business)", "I'm working independently or freelancing", "I'm transitioning into a new career", 'I recently moved to this city', 'I recently got married or entered a long-term partnership', "I'm exploring a new direction", "I'm taking time to figure out what's next", "I'm taking a break or sabbatical", "I'm starting a family", "I'm raising kids", "I'm caring for family members", "I'm semi-retired", "I'm retired",
-]
-const OPTIONS_EVERYDAY_ANCHOR = [
-  'Work', 'Side hustles', 'Job search', 'School', 'Family life', 'Parenting', 'Family caregiving', 'Romantic relationship', 'Close friendships', 'Fitness routine', 'Creative projects', 'Community or volunteering', 'Faith or spiritual practice', 'Travel', 'Something else',
-]
-const OPTIONS_INTERESTS = [
-  'Reading', 'Music', 'Film & TV', 'Podcasts', 'Cooking', 'Travel', 'Fitness', 'Dance', 'Basketball', 'Football', 'Soccer', 'Baseball', 'Running', 'Hiking', 'Outdoors', 'Yoga / Pilates', 'Weightlifting', 'Cycling', 'Swimming', 'Tennis', 'Pickleball', 'Photography', 'Art & design', 'Writing', 'Gaming', 'Entrepreneurship & startups', 'Investing & finance', 'History', 'Science', 'Philosophy', 'Politics & current events',
-]
-const OPTIONS_CURIOSITY = [
-  'Take a pottery class', 'Learn how to paint', 'Learn an instrument', 'Take a dance class', 'Take a cooking class', 'Start learning a new language', 'Join a storytelling workshop', 'Take a photography course', 'Start a fitness program', 'Join a local sports league', 'Take a coding course', 'Take an AI course', 'Take a philosophy class', 'Take an improv class', 'Take a human behavior course', 'Join a public speaking group', 'Take a course on how to build a business', 'Take a class on personal finance',
-]
-const OPTIONS_GREAT_FIKA = [
-  'Swapping stories from our lives (chapters, how we got here)',
-  "Stuff we're into lately (books, shows, podcasts, games)",
-  "Recent travel and places you've visited",
-  "What we're working on (work or projects)",
-  'Giving/getting advice for professional & personal growth',
-  'Life in our city (neighborhoods, restaurants, hangout spots)',
-  'Big questions and how we see the world',
-  "Hobbies and things we'd like to try next",
-]
-const OPTIONS_OPENNESS = ["Someone I'd instantly relate to", 'Someone outside my usual bubble', "I'm open to anyone"]
-const OPTIONS_HOPING_FOR = [
-  'Conversation with new people — not necessarily friendship',
-  'Meeting people nearby — open to friendship if it happens',
-  'Actively looking for new friends',
-]
 
 function ageFromBirthdate(birthdate: string | null | undefined): number | null {
   if (!birthdate || typeof birthdate !== 'string') return null
@@ -171,25 +143,6 @@ function cosineSimilarity(a: number[], b: number[]): number {
   return Math.max(0, dot / (Math.sqrt(na) * Math.sqrt(nb)))
 }
 
-function multiHot(selected: string[], options: string[]): number[] {
-  const set = new Set(selected.map((s) => s.trim()))
-  return options.map((o) => (set.has(o) ? 1 : 0))
-}
-
-function normalizeL2(vec: number[]): number[] {
-  const sum = vec.reduce((acc, x) => acc + x * x, 0)
-  const norm = Math.sqrt(sum)
-  if (norm === 0) return vec
-  return vec.map((x) => x / norm)
-}
-
-function sectionCosine(a: number[], b: number[]): number {
-  if (a.length !== b.length) return 0
-  let dot = 0
-  for (let i = 0; i < a.length; i++) dot += a[i] * b[i]
-  return Math.max(0, dot)
-}
-
 function sameGender(a: string, b: string): boolean {
   if (a === b) return true
   if ((a === 'female' || a === 'woman' || a === 'women') && (b === 'female' || b === 'woman' || b === 'women')) return true
@@ -250,54 +203,16 @@ function passesFilters(a: SimCandidate, b: SimCandidate): { ok: boolean; reason?
   return { ok: true }
 }
 
-function scorePair(a: SimCandidate, b: SimCandidate): { score: number; sectionScores: Record<string, number> } {
-  const sectionScores: Record<string, number> = {}
-
+/** Cosine similarity between intake embedding vectors (same space as complete-intake). */
+function embeddingPairScore(a: SimCandidate, b: SimCandidate): { score: number; sectionScores: Record<string, number> } {
   const aVec = ensureEmbedVector(a.intake.embed_vector)
   const bVec = ensureEmbedVector(b.intake.embed_vector)
-  sectionScores.open_text_embedding = (aVec && bVec) ? cosineSimilarity(aVec, bVec) : 0
-
-  const aLife = normalizeL2(multiHot(getMulti(a.intake, 'q_life_chapter'), OPTIONS_LIFE_CHAPTER))
-  const bLife = normalizeL2(multiHot(getMulti(b.intake, 'q_life_chapter'), OPTIONS_LIFE_CHAPTER))
-  sectionScores.life_chapter = sectionCosine(aLife, bLife)
-
-  const aAnchor = normalizeL2(multiHot(getMulti(a.intake, 'q_everyday_anchor'), OPTIONS_EVERYDAY_ANCHOR))
-  const bAnchor = normalizeL2(multiHot(getMulti(b.intake, 'q_everyday_anchor'), OPTIONS_EVERYDAY_ANCHOR))
-  sectionScores.day_to_day_anchors = sectionCosine(aAnchor, bAnchor)
-
-  const aInt = normalizeL2(multiHot(getMulti(a.intake, 'q_interests'), OPTIONS_INTERESTS))
-  const bInt = normalizeL2(multiHot(getMulti(b.intake, 'q_interests'), OPTIONS_INTERESTS))
-  sectionScores.interests = sectionCosine(aInt, bInt)
-
-  const aCur = normalizeL2(multiHot(getMulti(a.intake, 'q_curiosity'), OPTIONS_CURIOSITY))
-  const bCur = normalizeL2(multiHot(getMulti(b.intake, 'q_curiosity'), OPTIONS_CURIOSITY))
-  sectionScores.pick_up_next = sectionCosine(aCur, bCur)
-
-  const aFika = normalizeL2(multiHot(getMulti(a.intake, 'q_what_makes_great_fika'), OPTIONS_GREAT_FIKA))
-  const bFika = normalizeL2(multiHot(getMulti(b.intake, 'q_what_makes_great_fika'), OPTIONS_GREAT_FIKA))
-  sectionScores.great_fika_conversation = sectionCosine(aFika, bFika)
-
-  const aOpen = normalizeL2(multiHot(getMulti(a.intake, 'q_openness'), OPTIONS_OPENNESS))
-  const bOpen = normalizeL2(multiHot(getMulti(b.intake, 'q_openness'), OPTIONS_OPENNESS))
-  sectionScores.openness = sectionCosine(aOpen, bOpen)
-
-  const aHop = normalizeL2(multiHot(getMulti(a.intake, 'q_hoping_for'), OPTIONS_HOPING_FOR))
-  const bHop = normalizeL2(multiHot(getMulti(b.intake, 'q_hoping_for'), OPTIONS_HOPING_FOR))
-  sectionScores.fika_intent = sectionCosine(aHop, bHop)
-
-  const weights: Record<string, number> = {
-    life_chapter: 0.22,
-    day_to_day_anchors: 0.12,
-    interests: 0.18,
-    pick_up_next: 0.14,
-    great_fika_conversation: 0.14,
-    openness: 0.06,
-    fika_intent: 0.06,
-    open_text_embedding: 0.08,
+  if (!aVec || !bVec) {
+    return { score: 0, sectionScores: {} }
   }
-  let total = 0
-  for (const [k, w] of Object.entries(weights)) total += (sectionScores[k] ?? 0) * w
-  return { score: Math.max(0, Math.min(1, total)), sectionScores }
+  const sim = cosineSimilarity(aVec, bVec)
+  const score = Math.max(0, Math.min(1, sim))
+  return { score, sectionScores: { embedding_cosine: score } }
 }
 
 function getBatchWeekMonday(now: Date): string {
@@ -466,7 +381,16 @@ export async function POST(request: Request) {
   const ids = userProfiles.map((p) => p.id)
   if (ids.length < 2) {
     return NextResponse.json({
-      summary: { usersConsidered: ids.length, pairsScored: 0, filteredOut: 0, optedInOnly, market },
+      summary: {
+        totalProfiles: ids.length,
+        usersConsidered: 0,
+        usersSkippedNoEmbedding: 0,
+        pairsScored: 0,
+        filteredOut: 0,
+        optedInOnly,
+        market,
+        scoring: 'embedding_cosine',
+      },
       pairs: [],
     })
   }
@@ -479,15 +403,36 @@ export async function POST(request: Request) {
   const intakeById = new Map<string, IntakeRow>()
   for (const r of (intakeRows ?? []) as IntakeRow[]) intakeById.set(r.user_id, r)
 
+  let usersSkippedNoEmbedding = 0
   const candidates: SimCandidate[] = []
   for (const p of userProfiles) {
     const intake = intakeById.get(p.id)
     if (!intake) continue
+    if (!ensureEmbedVector(intake.embed_vector)) {
+      usersSkippedNoEmbedding++
+      continue
+    }
     candidates.push({
       profile: p,
       intake,
       age: ageFromBirthdate(p.birthdate),
       radiusKm: getIntakeRadiusKm(intake),
+    })
+  }
+
+  if (candidates.length < 2) {
+    return NextResponse.json({
+      summary: {
+        totalProfiles: userProfiles.length,
+        usersConsidered: candidates.length,
+        usersSkippedNoEmbedding,
+        pairsScored: 0,
+        filteredOut: 0,
+        optedInOnly,
+        market,
+        scoring: 'embedding_cosine',
+      },
+      pairs: [],
     })
   }
 
@@ -523,7 +468,7 @@ export async function POST(request: Request) {
         filteredOut++
         continue
       }
-      const score = scorePair(a, b)
+      const score = embeddingPairScore(a, b)
       const distanceKm =
         a.profile.lat != null && a.profile.lng != null && b.profile.lat != null && b.profile.lng != null
           ? calculateDistance(a.profile.lat, a.profile.lng, b.profile.lat, b.profile.lng)
@@ -570,11 +515,14 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     summary: {
+      totalProfiles: userProfiles.length,
       usersConsidered: candidates.length,
+      usersSkippedNoEmbedding,
       pairsScored: pairs.length,
       filteredOut,
       optedInOnly,
       market,
+      scoring: 'embedding_cosine',
     },
     pairs: top,
   })

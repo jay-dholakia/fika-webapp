@@ -11,13 +11,13 @@ export function SmsConciergeCta() {
   if (!CONCIERGE_NUMBER) {
     return (
       <p className="sms-concierge-cta sms-concierge-cta--no-number">
-        Text us anytime to chat with the concierge about your next Fika. (Check your account or welcome email for the number.)
+        We&apos;ll reach out when we find a good Fika intro for you. Text us anytime to chat with the concierge. (Check your account or welcome email for the number.)
       </p>
     )
   }
   return (
     <p className="sms-concierge-cta">
-      Text us at <a href={`sms:${CONCIERGE_NUMBER}`}>{CONCIERGE_NUMBER}</a> anytime.
+      We&apos;ll reach out when we find a good Fika intro for you. Text us at <a href={`sms:${CONCIERGE_NUMBER}`}>{CONCIERGE_NUMBER}</a> anytime.
     </p>
   )
 }

@@ -133,7 +133,7 @@ export async function POST(request: Request) {
     })
     .eq('id', session.id)
 
-  // After first-time merge: send entry SMS sequence (3 messages). Create state before sending so a quick YES reply progresses.
+  // After first-time merge: send entry SMS sequence (3 messages). Creates global SMS state for the batch week.
   if (session.phone && process.env.SENDBLUE_API_KEY_ID) {
     try {
       const batchWeek = getCurrentBatchWeek()

@@ -18,9 +18,11 @@ export default function AvailabilityPage() {
   const [slots, setSlots] = useState<Set<string>>(new Set())
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [readyHint, setReadyHint] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [marketSlug, setMarketSlug] = useState<string | null>(null)
   const [marketActive, setMarketActive] = useState<boolean | null>(null)
+  const conciergeNumber = process.env.NEXT_PUBLIC_SENDBLUE_CONCIERGE_NUMBER?.trim() || null
 
   const batchWeek = getCurrentBatchWeek()
   const locked = isAvailabilityLocked(batchWeek)
@@ -120,6 +122,8 @@ export default function AvailabilityPage() {
         return
       }
       setSaved(true)
+      const sr = (data as { sms_ready?: { message?: string | null } }).sms_ready
+      setReadyHint(typeof sr?.message === 'string' ? sr.message : null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
     } finally {
@@ -149,7 +153,7 @@ export default function AvailabilityPage() {
       <div className="app-card">
         <h2 className="app-page-title">Your city isn’t active yet</h2>
         <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem', marginTop: '0.5rem' }}>
-          Once it&apos;s active, this is where you&apos;ll set your weekly availability so we can introduce you to a Fika at a time that works for you.
+          Once it&apos;s active, this is where you&apos;ll set your availability so we can find a Fika time that works for you and your match.
         </p>
       </div>
     )
@@ -159,7 +163,7 @@ export default function AvailabilityPage() {
     <div className="app-card">
       <h2 className="app-page-title">Your Availability</h2>
       <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem', marginBottom: '1rem' }}>
-        When are you free for a Fika next week? We use this to find a time that works for both you and your match.
+        When are you free for a Fika? We use this to find a time that works for both you and your match.
       </p>
       <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.9rem', marginBottom: '1rem' }}>
         {formatNextWeekRange(batchWeek)} — tap the slots you&apos;re available.
@@ -167,7 +171,7 @@ export default function AvailabilityPage() {
 
       {locked && (
         <p className="onboarding-error" style={{ marginBottom: '1rem' }}>
-          Availability for this week is locked. Set your availability by Monday at midday for the next run.
+          Availability for this period is locked. You&apos;ll be able to update when the next window opens—we&apos;ll remind you by text if needed.
         </p>
       )}
 
@@ -213,9 +217,27 @@ export default function AvailabilityPage() {
       </form>
 
       {saved && (
-        <p style={{ marginTop: '0.75rem', color: 'var(--color-success)', fontSize: '0.95rem' }}>
-          Your availability is saved. We&apos;ll text you when we have a match.
-        </p>
+        <div style={{ marginTop: '0.75rem', fontSize: '0.95rem' }}>
+          <p style={{ color: 'var(--color-success)' }}>Your availability is saved.</p>
+          {readyHint ? (
+            <>
+              <p style={{ color: 'var(--color-textSecondary)', marginTop: '0.5rem' }}>{readyHint}</p>
+              {conciergeNumber && (
+                <a
+                  href={`sms:${conciergeNumber}?&body=READY`}
+                  className="btn btn-primary"
+                  style={{ display: 'inline-block', marginTop: '0.5rem' }}
+                >
+                  Confirm in SMS
+                </a>
+              )}
+            </>
+          ) : (
+            <p style={{ color: 'var(--color-textSecondary)', marginTop: '0.5rem' }}>
+              We&apos;ll text you when we have a match.
+            </p>
+          )}
+        </div>
       )}
       {error && <p className="onboarding-error" style={{ marginTop: '0.75rem' }}>{error}</p>}
     </div>

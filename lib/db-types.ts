@@ -14,6 +14,8 @@ export type ProfileRow = {
   lat: number | null
   lng: number | null
   market: string | null // City market slug for progress/opt-in (la, sf, nyc)
+  /** weekly_pool = legacy DB value; inbound weekly FIKA path removed (admin-only). match_first = generic first contact */
+  sms_intro_mode?: 'weekly_pool' | 'match_first' | null
   phone: string | null // E.164 for SMS (Sendblue)
   sms_opted_out_at?: string | null // ISO; when set, we don't send SMS until they text back
   languages?: string[] | null
@@ -57,6 +59,10 @@ export type WeeklyAvailabilityRow = {
   user_id: string
   batch_week: string // Monday date YYYY-MM-DD
   availability_slots?: string[] | null
+  /** True after app save with slots; cleared when user texts READY */
+  pending_sms_ready_confirmation?: boolean
+  /** Set when inbound READY confirmed for this week */
+  sms_ready_confirmed_at?: string | null
   updated_at?: string
 }
 

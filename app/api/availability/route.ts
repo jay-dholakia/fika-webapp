@@ -1,8 +1,8 @@
 /**
- * POST /api/availability — save weekly availability for the authenticated user and send confirmation SMS.
+ * POST /api/availability — save weekly availability for the authenticated user.
  * Body: { batch_week?: string (YYYY-MM-DD Monday), availability_slots: string[] }
- * If batch_week omitted, uses current batch week. After saving, sends Concierge SMS:
- * "Your availability is set. We'll shoot you a text later this week with your match."
+ * Sets pending_sms_ready_confirmation when slots saved; user texts READY to concierge to confirm (webhook).
+ * Optional short SMS nudge to text READY (no final confirmation until READY).
  */
 
 import { NextResponse } from 'next/server'
@@ -10,8 +10,8 @@ import { createClient } from '@supabase/supabase-js'
 import { getCurrentBatchWeek } from '@/lib/onboarding'
 import { sendConcierge } from '@/lib/sendblue'
 
-const MESSAGE_AVAILABILITY_SET =
-  "Your availability is set. We'll shoot you a text later this week with your match."
+const SMS_AFTER_SAVE =
+  'Saved. Text READY to the concierge number to confirm your availability.'
 
 export async function POST(request: Request) {
   const authHeader = request.headers.get('Authorization')
@@ -44,13 +44,17 @@ export async function POST(request: Request) {
     ? body.batch_week
     : getCurrentBatchWeek()
   const availability_slots = Array.isArray(body?.availability_slots) ? body.availability_slots : []
+  const hasSlots = availability_slots.length > 0
+  const now = new Date().toISOString()
 
   const { error: upsertError } = await supabase.from('weekly_availability').upsert(
     {
       user_id: user.id,
       batch_week,
-      availability_slots: availability_slots.length > 0 ? availability_slots : null,
-      updated_at: new Date().toISOString(),
+      availability_slots: hasSlots ? availability_slots : null,
+      updated_at: now,
+      pending_sms_ready_confirmation: hasSlots,
+      sms_ready_confirmed_at: null,
     },
     { onConflict: 'user_id,batch_week' }
   )
@@ -65,9 +69,15 @@ export async function POST(request: Request) {
     .maybeSingle()
 
   const phone = (profile?.phone as string)?.trim()
-  if (phone) {
-    await sendConcierge(phone, MESSAGE_AVAILABILITY_SET)
+  if (phone && hasSlots) {
+    await sendConcierge(phone, SMS_AFTER_SAVE)
   }
 
-  return NextResponse.json({ ok: true, batch_week })
+  return NextResponse.json({
+    ok: true,
+    batch_week,
+    sms_ready: hasSlots
+      ? { pending: true, keyword: 'READY', message: 'Text READY to the concierge number to confirm your availability.' }
+      : { pending: false, keyword: null, message: null },
+  })
 }

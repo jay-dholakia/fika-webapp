@@ -5,19 +5,19 @@ import { useState } from 'react'
 const portalFaqItems = [
   {
     q: 'How are intros chosen?',
-    a: 'We use your profile, preferences, and overlapping availability to pick a strong fit and suggest a real time you are both free. Intros are sent by SMS.',
+    a: 'We use your profile, preferences, and overlapping availability to find a good Fika intro and suggest a real time you are both free. Intros are sent by SMS.',
   },
   {
     q: 'How do I get introductions?',
-    a: 'Complete your intake once. We text you when we find a strong intro, then ask for your upcoming-week availability.',
+    a: 'Complete your intake once. We’ll reach out when we find a good Fika intro for you, then ask for your availability when we’re scheduling your intro.',
   },
   {
-    q: 'How many intros do I get per week?',
-    a: 'One. We match you with a single person each week so you can focus on making that Fika happen.',
+    q: 'How many intros do I get?',
+    a: 'We focus on one intro at a time so you can give it a real shot. When we find a good match for you, we’ll text you.',
   },
   {
-    q: "How often do intro's run?",
-    a: 'Rolling. We reach out when we find a strong intro for you, not on a fixed opt-in schedule.',
+    q: 'When do intros happen?',
+    a: 'We reach out when we find a good Fika intro for you — not on a fixed day or schedule.',
   },
   {
     q: 'What happens when I get an intro?',
@@ -25,7 +25,7 @@ const portalFaqItems = [
   },
   {
     q: 'How long do I have to respond?',
-    a: 'We include the response window in each message. If it expires, we keep looking and reach out when we find the next strong fit.',
+    a: 'We include the response window in each message. If it expires, we keep looking and reach out when we find the next good Fika intro for you.',
   },
   {
     q: "I scheduled a Fika but I can't make it anymore—what should I do?",

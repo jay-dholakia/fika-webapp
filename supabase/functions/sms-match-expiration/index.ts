@@ -21,9 +21,9 @@ function getCurrentBatchWeek(): string {
   return monday.toISOString().slice(0, 10)
 }
 
-const MSG_OTHER_NO_RESPONSE = `They didn't respond to the Fika invite this week. We'll match you again next week.`
+const MSG_OTHER_NO_RESPONSE = `They didn't respond to the Fika intro in time. We'll keep looking — we'll reach out when we find another good Fika intro for you.`
 const MSG_YOU_NO_RESPONSE = (_nextMondayPhrase: string) =>
-  `You didn't respond to this week's Fika invite — the intro has expired. Text FIKA next Sunday to opt in.`
+  `This intro offer expired — we didn't hear back in time. We'll reach out when we find another good Fika intro for you.`
 
 function getNextMondayPhrase(): string {
   return 'next Monday'

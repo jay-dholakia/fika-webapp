@@ -7,35 +7,8 @@ import { getTimezoneFromLatLng, getNextMondayPhrase } from '@/lib/sms-day-aware'
 import { getCurrentBatchWeek, isPastOptInDeadline } from '@/lib/onboarding'
 import { getActiveMarketSlugs } from '@/lib/admin-markets'
 import { getMarketBySlug } from '@/lib/markets'
-
-// Open-ended text used for matching embed: work, movie/show, book, role model.
-const OPEN_ENDED_IDS: string[] = ['q_work', 'q_movie_show_recommendation', 'q_book_recommendation', 'q_role_model']
-
-const OPEN_ENDED_LABELS: Record<string, string> = {
-  q_work: 'Work',
-  q_movie_show_recommendation: 'Movie or show',
-  q_book_recommendation: 'Book',
-  q_role_model: 'Role model',
-}
-
-interface IntakeResponseItem {
-  question_id: string
-  answer: string | number | string[]
-}
-
-function buildOpenEndedText(responses: IntakeResponseItem[]): string {
-  const parts: string[] = []
-  for (const id of OPEN_ENDED_IDS) {
-    const r = responses.find((x) => x.question_id === id)
-    const val = r?.answer
-    if (typeof val !== 'string') continue
-    const trimmed = val.trim()
-    if (!trimmed || trimmed === 'N/A') continue
-    const label = OPEN_ENDED_LABELS[id] ?? id
-    parts.push(`${label}: ${trimmed}`)
-  }
-  return parts.join('\n\n') || 'No open-ended answers.'
-}
+import { buildIntakeEmbeddingText } from '@/lib/intake-embedding-text'
+import type { IntakeResponseItem } from '@/lib/db-types'
 
 async function getEmbedding(text: string, apiKey: string): Promise<number[]> {
   const res = await fetch('https://api.openai.com/v1/embeddings', {
@@ -100,11 +73,11 @@ export async function POST(request: Request) {
   }
 
   const responses = row.responses as IntakeResponseItem[]
-  const text = buildOpenEndedText(responses)
+  const text = buildIntakeEmbeddingText(responses)
 
   const completedAt = new Date().toISOString()
 
-  if (text && text !== 'No open-ended answers.') {
+  if (text.trim()) {
     let embedding: number[]
     try {
       embedding = await getEmbedding(text, openaiKey.trim())
@@ -138,7 +111,7 @@ export async function POST(request: Request) {
     }
   }
 
-  // After first-time intake completion: send entry SMS sequence (3 messages) so they know they're in and can reply YES or SKIP
+  // After first-time intake completion: send entry SMS sequence (3 messages) — match-first readiness copy
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (serviceKey && process.env.SENDBLUE_API_KEY_ID) {
     try {

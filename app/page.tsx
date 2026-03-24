@@ -23,7 +23,7 @@ export default function Home() {
                     <span className="hero-title-accent">Real conversation.</span>
                   </h1>
                   <p className="hero-sub">
-                    Weekly intros by text. You meet. You talk. You connect.
+                    Real intros by text when we find a good fit. You meet. You talk. You connect.
                   </p>
                 </div>
               </section>
@@ -83,9 +83,9 @@ export default function Home() {
               <li className="step">
                 <span className="step-num">2</span>
                 <div className="step-content">
-                  <h3 className="step-title">We reach out when we find a fit</h3>
+                  <h3 className="step-title">We reach out when we find a good intro</h3>
                   <p className="step-text">
-                    Once your intake is complete, we monitor for strong intros. When we find one, we text you directly and ask for your upcoming-week availability.
+                    Once your intake is complete, we look for a good Fika intro for you. When we find one, we&apos;ll reach out by text and ask for your availability to schedule.
                   </p>
                 </div>
               </li>

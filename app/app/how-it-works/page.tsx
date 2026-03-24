@@ -39,8 +39,8 @@ export default function HowItWorksPage() {
   const communityUnlocked = profileCount !== null && profileCount >= TARGET_USERS
   const cityLabel = marketLabel ?? 'your city'
   const SHARE_TEXT = marketLabel
-    ? `Help me unlock Fika in ${marketLabel} — create an account and get first access to your weekly intro when we hit ${TARGET_USERS} people.`
-    : `Help me unlock Fika in our city — create an account and get first access to your weekly intro when we hit ${TARGET_USERS} people.`
+    ? `Help me unlock Fika in ${marketLabel} — create an account and get first access when we hit ${TARGET_USERS} people.`
+    : `Help me unlock Fika in our city — create an account and get first access when we hit ${TARGET_USERS} people.`
 
   function copyShareToClipboard(url: string, text: string) {
     const combined = `${text}\n\n${url}`
@@ -64,7 +64,7 @@ export default function HowItWorksPage() {
       <div className="app-card app-how-it-works-page">
         <h2 className="app-how-it-works-title">How it works</h2>
         <p style={{ color: 'var(--color-textSecondary)', fontSize: '1rem', marginBottom: '1.5rem' }}>
-          From signup to your weekly Fika—here&apos;s the full timeline and cadence.
+          From signup to your Fika—here&apos;s how it works end to end.
         </p>
 
       <section className="app-how-it-works-section" aria-labelledby="getting-started-heading">
@@ -145,24 +145,24 @@ export default function HowItWorksPage() {
         </ol>
       </section>
 
-      <section className="app-how-it-works-section" aria-labelledby="weekly-cadence-heading">
-        <h2 id="weekly-cadence-heading" className="app-how-it-works-section-title">The weekly rhythm</h2>
+      <section className="app-how-it-works-section" aria-labelledby="intro-flow-heading">
+        <h2 id="intro-flow-heading" className="app-how-it-works-section-title">How intros work</h2>
         <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.9375rem', marginBottom: '1rem' }}>
-          We only text when there is a strong fit. Simple and intentional.
+          We only text you when we have a good Fika intro for you—simple and intentional.
         </p>
-        <ol className="app-how-it-works-timeline" aria-label="Weekly cadence">
+        <ol className="app-how-it-works-timeline" aria-label="How intros work">
           <li className="app-how-it-works-step">
             <span className="app-how-it-works-step-marker" aria-hidden><span className="app-how-it-works-num">1</span></span>
             <div className="app-how-it-works-step-content">
-              <span className="app-how-it-works-when">We find a strong fit</span>
-              <span className="app-how-it-works-what">After you complete intake, we look for a high-quality intro based on compatibility and location.</span>
+              <span className="app-how-it-works-when">We find a good intro</span>
+              <span className="app-how-it-works-what">After you complete intake, we look for a good Fika intro for you based on compatibility and location.</span>
             </div>
           </li>
           <li className="app-how-it-works-step">
             <span className="app-how-it-works-step-marker" aria-hidden><span className="app-how-it-works-num">2</span></span>
             <div className="app-how-it-works-step-content">
               <span className="app-how-it-works-when">We text you</span>
-              <span className="app-how-it-works-what">When we find a strong intro, we reach out directly by SMS and ask for your upcoming-week availability.</span>
+              <span className="app-how-it-works-what">When we find a good Fika intro for you, we reach out by SMS and ask for your availability to schedule.</span>
             </div>
           </li>
           <li className="app-how-it-works-step">
@@ -176,7 +176,7 @@ export default function HowItWorksPage() {
             <span className="app-how-it-works-step-marker" aria-hidden><span className="app-how-it-works-num">4</span></span>
             <div className="app-how-it-works-step-content">
               <span className="app-how-it-works-when">Confirm</span>
-              <span className="app-how-it-works-what">Both people confirm by text. If timing does not work, we look for the next strong intro.</span>
+              <span className="app-how-it-works-what">Both people confirm by text. If timing does not work, we look for the next good Fika intro for you.</span>
             </div>
           </li>
           <li className="app-how-it-works-step">

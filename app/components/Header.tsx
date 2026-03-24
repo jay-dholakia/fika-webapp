@@ -57,7 +57,7 @@ export default function Header() {
           ))}
           {user ? (
             <>
-              <Link href="/app/weeklyfika" onClick={closeMenu}>Account</Link>
+              <Link href="/app/yourfika" onClick={closeMenu}>Account</Link>
               <button type="button" className="nav-link-button" onClick={() => { handleSignOut(); closeMenu(); }}>
                 Log out
               </button>
@@ -101,7 +101,7 @@ export default function Header() {
           ))}
           {user ? (
             <>
-              <Link href="/app/weeklyfika" onClick={closeMenu}>Account</Link>
+              <Link href="/app/yourfika" onClick={closeMenu}>Account</Link>
               <button type="button" className="nav-link-button" onClick={() => { handleSignOut(); closeMenu(); }}>
                 Log out
               </button>

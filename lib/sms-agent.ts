@@ -1,6 +1,6 @@
 /**
  * SMS agent: state machine, message templates, venue picker, slot↔day/window mapping.
- * Used by webhook and Edge Functions (cron).
+ * Used by webhook and Edge Functions. Copy: we reach out by SMS when we find a good Fika intro — no fixed weekly blast.
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -12,6 +12,7 @@ export const SMS_STATES = {
   OPTED_IN: 'opted_in',
   MATCH_OFFERED: 'match_offered',
   YES_WAITING: 'yes_waiting',
+  AWAITING_AVAILABILITY: 'awaiting_availability',
   AWAITING_SECOND_CONFIRM: 'awaiting_second_confirm',
   AWAITING_FIRST_CONFIRM: 'awaiting_first_confirm',
   ACCEPTED_SCHEDULING_DAY: 'accepted_scheduling_day',
@@ -21,9 +22,9 @@ export const SMS_STATES = {
 } as const
 
 const READY_FOR_INTRO_VARIANTS = [
-  "You're all set; we'll text you when we find a strong Fika intro.",
-  "You're all set. As soon as we find a strong Fika intro, we'll reach out by text.",
-  "Thanks for checking in - we'll message you when a strong Fika intro is ready.",
+  "You're all set — we'll reach out when we find a good Fika intro for you.",
+  "You're all set. As soon as we have a good Fika intro for you, we'll text you.",
+  "Thanks for checking in. We'll message you when we find a good Fika intro for you.",
 ]
 
 function pickReadyForIntroMessage(): string {
@@ -181,24 +182,24 @@ export async function pickVenueForMatch(
 }
 
 // ---------- Message templates ----------
-// Match-first cadence: once intake is complete, we reach out only when a strong intro is available.
+// After intake, we text when we have a good Fika intro; scheduling uses overlapping availability.
 
 /** One-line hint so users save the concierge number and don't miss intros. */
 export function messageSaveAsContactHint(): string {
   return 'Save this number as Fika ☕ so you never miss an intro.'
 }
 
-/** First-time "you're all set" sequence after signup (active market). Returns 4 messages (URL standalone).
- * isAfterDeadline = this week's Fika window already closed. */
-export function messageEntryFirstTimeMessages(isAfterDeadline: boolean, _nextMondayPhrase: string = 'next Monday', appBase: string = 'https://letsfika.vercel.app'): string[] {
+/** First-time sequence after signup (active market). `isAfterDeadline` kept for API compatibility. */
+export function messageEntryFirstTimeMessages(
+  _isAfterDeadline: boolean,
+  _nextMondayPhrase: string = 'next Monday',
+  appBase: string = 'https://letsfika.vercel.app'
+): string[] {
   const base = appBase.trim().replace(/\/$/, '') || 'https://letsfika.vercel.app'
-  const msg1 = `You're in.\n\nOnce a week you can opt into a Fika — a thoughtful introduction to someone nearby.`
-  const msg2AfterDeadline = `This week's opt-in window has already closed (opens Sunday 12am PT, ends Monday 11am PT).\n\nText FIKA next Sunday to opt in.`
-  const msg2OnTime = `Opt-in window opens Sunday 12am PT and ends Monday 11am PT — text FIKA in that window to join.`
-  const msg2 = isAfterDeadline ? msg2AfterDeadline : msg2OnTime
-  const msg3 = `To edit your profile or learn more, use the link I'll send next.`
-  const msg4Link = `${base}/app`
-  return [msg1, msg2, msg3, msg4Link]
+  const msg1 = `You're in.\n\nComplete your intake — we'll reach out by text when we find a good Fika intro for you.`
+  const msg2 = `To edit your profile or learn more, use the link I'll send next.`
+  const msg3Link = `${base}/app`
+  return [msg1, msg2, msg3Link]
 }
 
 /** First-time entry when user's market is inactive. Returns 3 messages (URL standalone). */
@@ -214,12 +215,12 @@ export function messageEntryFirstTimeMessagesInactiveMarket(
   return [msg1, msg2, msg3Link]
 }
 
-/** One-time when a market is turned active: inform user they can text FIKA to opt in. */
+/** One-time when a market is turned active. */
 export function messageMarketGoLive(cityLabel: string, _nextMondayPhrase: string = 'next Monday'): string {
-  return `Fika is live in ${cityLabel}! Text FIKA during the weekly opt-in window (Sunday 12am PT – Monday 11am PT) to get that week's intro.`
+  return `Fika is live in ${cityLabel}! Complete your profile — we'll reach out by text when we find a good Fika intro for you.`
 }
 
-/** Reply when user in an inactive market texts in. Opt-in window / text FIKA is only for active markets. */
+/** Reply when user in an inactive market texts in. */
 export function messageInactiveMarketReply(placeLabel: string): string {
   const city = placeLabel?.trim() || 'your city'
   return `We're still building the Fika community in ${city}. Keep an eye on your portal for updates when we launch.`
@@ -229,7 +230,7 @@ export function messageEntry(): string {
   return `Hey! Welcome to Fika. 😊\n\n${pickReadyForIntroMessage()}`
 }
 
-/** When they text after the opt-in window closed (Monday 11am PT). Window opens Sunday 12am PT, ends Monday 11am PT; they must text FIKA next Sunday. */
+/** Greeting variant after signup. */
 export function messageEntryAfterDeadline(
   _nextMondayPhrase: string = 'next Monday',
   options?: { firstName?: string | null; isGreeting?: boolean }
@@ -249,43 +250,73 @@ export function messageEntryReminder(): string {
   return pickReadyForIntroMessage()
 }
 
-/** User-initiated opt-in: commitment line when they text FIKA. */
+/** Short commitment line (e.g. user-initiated SMS). */
 export function messageFikaUserInitiatedCommitment(): string {
   return `You're all set.`
 }
 
-/** User-initiated opt-in: body before availability link (link sent as separate message). */
+/** Body before availability link (link sent as separate message). */
 export function messageFikaUserInitiatedLinkBody(_availabilityUrl: string): string {
-  return `You'll hear from us when we have a strong intro for you.\n\nWe'll ask for your next-week availability at that point.`
+  return `We'll reach out when we find a good Fika intro for you.\n\nWe'll ask for your availability when we're scheduling your intro.`
 }
 
-/** When they message with no state (haven't texted FIKA this week). */
+/** Generic concierge reply when user texts in. */
 export function messageTextFikaToGetLink(): string {
   return pickReadyForIntroMessage()
 }
 
-/** Sunday evening: reminder to set availability (only if not submitted). Text only; send availability link as separate message. */
+/** Reminder to set availability when a match is in progress. Text only; send availability link as separate message. */
 export function messageAvailabilityReminder(_availabilityUrl: string): string {
-  return `Quick reminder to set your availability for this week's Fika.\n\nPlease submit it by 11 AM PT tomorrow.`
+  return `Quick reminder to set your availability in the app so we can schedule your Fika.\n\nUse the link I'll send next.`
 }
 
-/** Monday 11 AM PT: availability submitted — all set. */
+/** Availability received — scheduling next. */
 export function messageAvailabilityLockAllSet(): string {
-  return `You're all set for this week's Fika.\n\nWe'll send your introduction tomorrow morning.`
+  return `You're all set — we have your availability.\n\nWe'll follow up by text with intro details when your match is ready.`
 }
 
-/** Monday 11 AM PT: availability not submitted in time. */
+/** Availability not submitted in time for this intro round. */
 export function messageAvailabilityLockNotSubmitted(): string {
-  return `Looks like availability wasn't submitted in time for this week.\n\nYou can opt in again next Sunday.`
+  return `We didn't get your availability in time for this round.\n\nNo worries — we'll reach out when we find another good Fika intro for you.`
 }
 
 /** When user is known but hasn't completed onboarding/intake. Text only; send onboardingUrl as a separate message after this. */
 export function messageOnboardingRequired(_onboardingUrl: string): string {
-  return `Hey, we've got you in the system — just need a few more details before we can match you.\n\nFinish up using the link I'll send next.\n\nReply back once you're done and we'll send you the weekly intro.`
+  return `Hey, we've got you in the system — just need a few more details before we can match you.\n\nFinish up using the link I'll send next.\n\nOnce intake is complete, we'll reach out when we find a good Fika intro for you.`
 }
 
 export function messageWeeklyOptIn(): string {
   return pickReadyForIntroMessage()
+}
+
+/** Legacy name: weekly blast disabled; kept for any stale imports. */
+export function messageWeeklyPoolCronNudge(): string {
+  return `${pickReadyForIntroMessage()}\n\nReply HELP for options.`
+}
+
+/** Legacy name: weekly blast disabled. */
+export function messageWeeklyPoolFirstContactHint(): string {
+  return `${pickReadyForIntroMessage()}\n\nReply HELP for options.`
+}
+
+/** Legacy name: weekly blast disabled. */
+export function messageWeeklyPoolAwaitingOptInNudge(): string {
+  return `${pickReadyForIntroMessage()}\n\nReply HELP for options.`
+}
+
+/** Legacy name: weekly blast disabled. */
+export function messageWeeklyPoolYoureInAvailability(): string {
+  return `You're in.\n\nSet your availability using the link I'll send next when we're scheduling your intro.`
+}
+
+/** Legacy: between rounds / window closed — neutral copy. */
+export function messageWeeklyPoolOptInWindowClosed(_nextSundayPhrase: string): string {
+  return `We're not opening new availability for this period.\n\n${pickReadyForIntroMessage()}`
+}
+
+/** Legacy name: weekly blast disabled. */
+export function messageWeeklyPoolSkip(): string {
+  return `No worries — we'll reach out when we find a good Fika intro for you.`
 }
 
 export function messageWeeklyOptInFollowUp(): string {
@@ -295,18 +326,44 @@ export function messageWeeklyOptInFollowUp(): string {
 export function messageMatchOffer(params: {
   otherFirstName: string
   otherAge: number | null
+  otherCity?: string | null
   otherBio: string
   sharedInterests: string[]
   conversationThread: string
 }): string {
-  const { otherFirstName, otherAge, otherBio, sharedInterests, conversationThread } = params
-  const ageLine = otherAge != null ? `${otherFirstName}, ${otherAge}` : otherFirstName
-  let text = `Found someone you might really vibe with.\n\n${ageLine}\n${otherBio}\n\n`
+  const { otherFirstName, otherAge, otherCity, otherBio, sharedInterests, conversationThread } = params
+  const cityPart = otherCity?.trim() ? ` · ${otherCity.trim()}` : ''
+  const agePart = otherAge != null ? `, ${otherAge}` : ''
+  const whoLine = `${otherFirstName}${agePart}${cityPart}`
+
+  let text =
+    `We have a Fika intro lined up for you — it's for this one person, ${otherFirstName}, not a general pool.\n\n`
+  text += `${whoLine}\n${otherBio}\n\n`
   if (sharedInterests.length > 0) {
-    text += `You've both got:\n${sharedInterests.map((s) => `• ${s}`).join('\n')}\n\n`
+    text += `You both share:\n${sharedInterests.map((s) => `• ${s}`).join('\n')}\n\n`
   }
-  text += `Something to talk about:\n${conversationThread}\n\nWant the intro? Reply YES or PASS`
+  text += `Something to talk about:\n${conversationThread}\n\n`
+  text += `Reply YES if you want to meet ${otherFirstName}, or PASS to skip this match (just this person).`
   return text
+}
+
+/** Phase 1 (new protocol): simple simultaneous offer, no profile details yet. */
+export function messageStrongIntroOffer(): string {
+  return `We found a strong Fika intro for you — want us to set it up?\n\nReply YES or PASS.`
+}
+
+/** Phase 2 teaser after both users say YES. */
+export function messageTeaserPreview(params: {
+  otherFirstName: string
+  otherBio: string
+}): string {
+  const { otherFirstName, otherBio } = params
+  return `Nice — quick preview:\n\nYou'd be meeting ${otherFirstName}.\n${otherBio}`
+}
+
+/** Prompt while waiting for availability after both users said YES. */
+export function messageAwaitingAvailabilityReady(): string {
+  return `You're almost set.\n\nOpen your Fika link, save your availability, then text READY here.`
 }
 
 /** Tuesday intro with full plan (one proposed time + venue). Reply YES by 9 PM tonight. */
@@ -362,15 +419,15 @@ export function messageOptInConfirmation(): string {
 
 /** When user replies YES (legacy): send availability link. Text only; send availabilityUrl as a separate message after this. */
 export function messageOptInSetAvailability(_availabilityUrl: string): string {
-  return `We found a strong intro for you.\n\nSet your availability for next week using the link I'll send next.`
+  return `We found a good Fika intro for you.\n\nSet your availability using the link I'll send next so we can schedule your Fika.`
 }
 
 export function messageSkipped(): string {
-  return `No worries. We’ll reach out again when we find another strong intro.`
+  return `No worries. We’ll reach out again when we find another good Fika intro for you.`
 }
 
 export function messagePassConfirmation(): string {
-  return `Got it — we'll find someone else for you next time.`
+  return `Got it — we'll keep looking for another good Fika intro for you.`
 }
 
 /** First person said YES — waiting for the other to confirm. */
@@ -380,37 +437,37 @@ export function messageYesWaitingForOther(): string {
 
 /** Notify the person who said YES when the other passed or intro didn't get confirmed. */
 export function messageMatchPassed(): string {
-  return `This intro didn’t get confirmed.\n\nWe’ll reach out again when we find another strong fit.`
+  return `This intro didn’t get confirmed.\n\nWe’ll reach out again when we find another good Fika intro for you.`
 }
 
-/** Sent when opt-in window closes (Monday 11am PT) to users who didn't opt in. */
+/** Legacy name: window closed — neutral copy. */
 export function messageOptInWindowClosed(_nextMondayPhrase: string = 'next Monday'): string {
-  return `We’ll reach out directly when we find a strong intro for you.`
+  return `We’ll reach out when we find a good Fika intro for you.`
 }
 
-/** Notify the user who said YES when the other didn't respond by Tuesday 9pm PT (intro expired). */
+/** Notify the user who said YES when the other didn't respond before the intro expired. */
 export function messageMatchExpiredOtherNoResponse(): string {
-  return `This intro didn’t get confirmed.\n\nWe’ll reach out again when we find another strong fit.`
+  return `This intro didn’t get confirmed.\n\nWe’ll reach out again when we find another good Fika intro for you.`
 }
 
-/** Notify the user who didn't respond to the intro by Tuesday 9pm PT (intro expired). */
+/** Notify the user who didn't respond before the intro expired. */
 export function messageMatchExpiredYouNoResponse(_nextMondayPhrase: string = 'next Monday'): string {
-  return `This intro didn’t get confirmed.\n\nWe’ll reach out again when we find another strong fit.`
+  return `This intro didn’t get confirmed.\n\nWe’ll reach out again when we find another good Fika intro for you.`
 }
 
 /** When someone declines the proposed time/venue (after both said YES to intro). */
 export function messageProposalDeclined(): string {
-  return `No problem — we'll match you again next week.`
+  return `No problem — we'll reach out when we find another good Fika intro for you.`
 }
 
 /** When we've offered 2 times and still no match (max retries reached). */
 export function messageProposalMaxRetries(): string {
-  return `We couldn't find a time that works for both — we'll match you again next week.`
+  return `We couldn't find a time that works for both — we'll reach out when we find another good Fika intro for you.`
 }
 
 /** Notify the other person when their match declines the proposed time. */
 export function messageProposalDeclinedToOther(): string {
-  return `They couldn't do this time — we'll send you another match next week.`
+  return `They couldn't do this time — we'll reach out when we have another intro for you.`
 }
 
 /** Re-propose a new time to the person who declined (attempt 2). */
@@ -543,7 +600,7 @@ export function messageSmsOptOut(_webappUrl: string, _conciergeNumber: string): 
 
 /** When they text back after opting out. */
 export function messageSmsOptBackIn(): string {
-  return `You're back in.\n\nWe’ll text you when we find a strong intro for you.`
+  return `You're back in.\n\nWe’ll reach out when we find a good Fika intro for you.`
 }
 
 /** Confirmed Fika upcoming: reminder. Text only; send webappUrl as a separate message after this. */
@@ -595,6 +652,10 @@ export function fallbackAwaitingConfirm(): string {
   return `Reply YES to confirm this time and venue — almost there!`
 }
 
+export function fallbackAwaitingAvailability(): string {
+  return `Open your Fika link, save your availability, then text READY here.`
+}
+
 export function fallbackConfirmed(): string {
   return `You're all set. Reply anytime if you need help.`
 }
@@ -613,6 +674,12 @@ function normalizeKeyword(content: string): string {
 export function isOptInKeyword(content: string): boolean {
   const k = normalizeKeyword(content)
   return ['in', 'yes', 'yep', 'sure', 'ok', 'okay', "i'm in", 'count me in'].includes(k)
+}
+
+/** Weekly pool: user texts FIKA to opt in for this batch week. */
+export function isFikaWeeklyOptInKeyword(content: string): boolean {
+  const k = normalizeKeyword(content).replace(/[!.]/g, '')
+  return k === 'fika' || k === 'fika ☕' || k.startsWith('fika ')
 }
 
 /** Skip opt-in. */
@@ -664,6 +731,12 @@ export function isHelpKeyword(content: string): boolean {
   return ['help', 'help me', '?', 'what'].includes(k) || k.startsWith('help')
 }
 
+/** After saving availability in the app, user texts READY to confirm (webhook clears pending). */
+export function isAvailabilityReadyKeyword(content: string): boolean {
+  const k = normalizeKeyword(content).replace(/[!?.]+$/g, '').trim()
+  return k === 'ready'
+}
+
 /** STOP / opt out. */
 export function isStopKeyword(content: string): boolean {
   const k = normalizeKeyword(content)
@@ -713,6 +786,8 @@ export function getFallbackForState(state: string): string {
     case SMS_STATES.AWAITING_SECOND_CONFIRM:
     case SMS_STATES.AWAITING_FIRST_CONFIRM:
       return fallbackAwaitingConfirm()
+    case SMS_STATES.AWAITING_AVAILABILITY:
+      return fallbackAwaitingAvailability()
     case SMS_STATES.CONFIRMED:
       return fallbackConfirmed()
     default:

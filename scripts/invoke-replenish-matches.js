@@ -3,6 +3,8 @@
  * Run from repo root with: node scripts/invoke-replenish-matches.js
  * Requires .env.local with NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.
  * (The function may require service role in production; anon key is tried first.)
+ *
+ * The Edge Function currently returns { skipped: true } (admin-only; automated replenish disabled).
  */
 
 const fs = require('fs')

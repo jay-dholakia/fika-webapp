@@ -1,5 +1,5 @@
-// SMS cron: send match offer (intro) to users who have a new match_candidate.
-// Invoked by pg_cron after replenish-matches. Requires SENDBLUE_API_KEY_ID, SENDBLUE_API_SECRET_KEY.
+// Send match offer (intro) to users who have a new match_candidate.
+// Can be invoked by admin/event-driven flows or scheduled jobs. Requires SENDBLUE_API_KEY_ID, SENDBLUE_API_SECRET_KEY.
 
 declare const Deno: { env: { get(key: string): string | undefined } }
 // @ts-ignore Deno
@@ -8,8 +8,11 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const SENDBLUE_URL = 'https://api.sendblue.co/api/send-message'
+const SIMPLE_OFFER_MESSAGE =
+  "We found a strong Fika intro for you — want us to set it up?\n\nReply YES or PASS."
 
 const MS_24_H = 24 * 60 * 60 * 1000
+const MAX_SENDS_OUTSIDE_24H = 200
 
 function getCurrentBatchWeek(): string {
   const d = new Date()
@@ -35,17 +38,24 @@ function ageFromBirthdate(birthdate: string | null): number | null {
 function buildMatchOfferMessage(params: {
   otherFirstName: string
   otherAge: number | null
+  otherCity: string | null
   otherBio: string
   sharedInterests: string[]
   conversationThread: string
 }): string {
-  const { otherFirstName, otherAge, otherBio, sharedInterests, conversationThread } = params
-  const ageLine = otherAge != null ? `${otherFirstName}, ${otherAge}` : otherFirstName
-  let text = `I found someone you might enjoy meeting.\n\n${ageLine}\n${otherBio}\n\n`
+  const { otherFirstName, otherAge, otherCity, otherBio, sharedInterests, conversationThread } = params
+  const cityPart = otherCity?.trim() ? ` · ${otherCity.trim()}` : ''
+  const agePart = otherAge != null ? `, ${otherAge}` : ''
+  const whoLine = `${otherFirstName}${agePart}${cityPart}`
+
+  let text =
+    `We have a Fika intro lined up for you — it's for this one person, ${otherFirstName}, not a general pool.\n\n`
+  text += `${whoLine}\n${otherBio}\n\n`
   if (sharedInterests.length > 0) {
-    text += `Shared interests:\n${sharedInterests.map((s: string) => `• ${s}`).join('\n')}\n\n`
+    text += `You both share:\n${sharedInterests.map((s: string) => `• ${s}`).join('\n')}\n\n`
   }
-  text += `Potential conversation thread:\n${conversationThread}\n\nWould you like the introduction?\nReply YES or PASS`
+  text += `Something to talk about:\n${conversationThread}\n\n`
+  text += `Reply YES if you want to meet ${otherFirstName}, or PASS to skip this match (just this person).`
   return text
 }
 
@@ -80,6 +90,7 @@ serve(async (req: Request) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
     const batchWeek = getCurrentBatchWeek()
+    const v2SimpleOffer = Deno.env.get('SMS_PROTOCOL_V2_SIMPLE_OFFER') === 'true'
     const body = await req.json().catch(() => ({}))
     const requestedIds = Array.isArray(body?.match_ids)
       ? (body.match_ids as unknown[]).filter((x) => typeof x === 'string' && x.trim().length > 0) as string[]
@@ -104,6 +115,8 @@ serve(async (req: Request) => {
 
     let sent = 0
     let skipped_no_recent_inbound = 0
+    let sent_outside_24h = 0
+    let skipped_outside_24h_cap = 0
     let skipped_not_in_requested = 0
     for (const match of matches ?? []) {
       if (requestedIds.length > 0 && !requestedIds.includes(match.id)) {
@@ -120,7 +133,7 @@ serve(async (req: Request) => {
         const otherId = userId === match.user_a ? match.user_b : match.user_a
         const { data: otherProfile } = await supabase
           .from('profiles')
-          .select('first_name, birthdate, bio_text')
+          .select('first_name, birthdate, bio_text, city')
           .eq('id', otherId)
           .single()
         const { data: myProfile } = await supabase
@@ -130,9 +143,11 @@ serve(async (req: Request) => {
           .single()
         if (!myProfile?.phone?.trim()) continue
         const phone = (myProfile.phone as string).trim()
-        const okToSend = await hasInboundWithin24h(supabase, phone)
-        if (!okToSend) {
+        const hasRecentInbound = await hasInboundWithin24h(supabase, phone)
+        const isOutside24h = !hasRecentInbound
+        if (isOutside24h && sent_outside_24h >= MAX_SENDS_OUTSIDE_24H) {
           skipped_no_recent_inbound++
+          skipped_outside_24h_cap++
           continue
         }
         const otherFirstName = otherProfile?.first_name?.trim() ?? 'Someone'
@@ -140,13 +155,16 @@ serve(async (req: Request) => {
         const otherBio = (otherProfile?.bio_text as string)?.trim()
           ? (otherProfile.bio_text as string).slice(0, 120) + ((otherProfile.bio_text as string).length > 120 ? '…' : '')
           : 'Looking forward to a good conversation.'
-        const message = buildMatchOfferMessage({
-          otherFirstName,
-          otherAge,
-          otherBio,
-          sharedInterests: sharedInterests.slice(0, 3),
-          conversationThread,
-        })
+        const message = v2SimpleOffer
+          ? SIMPLE_OFFER_MESSAGE
+          : buildMatchOfferMessage({
+              otherFirstName,
+              otherAge,
+              otherCity: (otherProfile?.city as string | null) ?? null,
+              otherBio,
+              sharedInterests: sharedInterests.slice(0, 3),
+              conversationThread,
+            })
         const res = await fetch(SENDBLUE_URL, {
           method: 'POST',
           headers: {
@@ -161,13 +179,19 @@ serve(async (req: Request) => {
         })
         if (res.ok) {
           sent++
+          if (isOutside24h) sent_outside_24h++
           await supabase.from('sms_conversation_states').upsert(
             {
               user_id: userId,
               batch_week: batchWeek,
               match_id: match.id,
               state: 'match_offered',
-              payload: {},
+              payload: v2SimpleOffer
+                ? {
+                    protocol_version: 'v2',
+                    phase: 'offer',
+                  }
+                : {},
               updated_at: new Date().toISOString(),
             },
             { onConflict: 'user_id,batch_week,match_id' }
@@ -182,7 +206,9 @@ serve(async (req: Request) => {
         batch_week: batchWeek,
         sent,
         requested: requestedIds.length,
+        sent_outside_24h,
         skipped_no_recent_inbound,
+        skipped_outside_24h_cap,
         skipped_not_in_requested,
       })
     )
