@@ -214,11 +214,6 @@ export function messageEntryFirstTimeMessagesInactiveMarket(
   return [msg1, msg2, msg3Link]
 }
 
-/** One-time when a market is turned active. */
-export function messageMarketGoLive(cityLabel: string, _nextMondayPhrase: string = 'next Monday'): string {
-  return `Fika is live in ${cityLabel}! Complete your profile — we'll reach out by text when we find a good Fika intro for you.`
-}
-
 /** Reply when user in an inactive market texts in. */
 export function messageInactiveMarketReply(_placeLabel: string): string {
   return `We're not actively growing Fika in your area just yet, but we hope to be soon. When that changes, we'll reach out.`
