@@ -9,7 +9,7 @@ const portalFaqItems = [
   },
   {
     q: 'How do I get introductions?',
-    a: 'Complete your intake once. We’ll reach out when we find a good Fika intro for you, then ask for your availability when we’re scheduling your intro.',
+    a: "We'll reach out when we find a good Fika intro for you, then ask for your availability to find a good time and place for your Fika.",
   },
   {
     q: 'How many intros do I get?',

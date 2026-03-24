@@ -9,7 +9,7 @@ const faqItems = [
   },
   {
     q: 'When will you text me about an intro?',
-    a: "There's no fixed schedule. We'll reach out by SMS when we find a good Fika intro for you.",
+    a: "There's no fixed schedule. We'll reach out when we find a good Fika intro for you, then ask for your availability to find a good time and place for your Fika.",
   },
   {
     q: 'Do I have to meet in person?',

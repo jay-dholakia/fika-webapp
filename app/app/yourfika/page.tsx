@@ -45,7 +45,6 @@ function AppHomeContent() {
 
   const marketNotActive = marketSlug != null && marketActive === false
   const isInactiveMarket = marketNotActive
-  const CONCIERGE_NUMBER = process.env.NEXT_PUBLIC_SENDBLUE_CONCIERGE_NUMBER?.trim() || null
   const SHARE_URL = 'https://letsfika.vercel.app'
   const cityLabelForShare = marketSlug ? (getMarketBySlug(marketSlug)?.label ?? marketLabel ?? 'your area') : null
   const SHARE_TEXT = cityLabelForShare
@@ -480,15 +479,6 @@ function AppHomeContent() {
                       <Link href="/app/availability" className="btn btn-primary" style={{ display: 'inline-block' }}>
                         Set availability
                       </Link>
-                      {CONCIERGE_NUMBER && (
-                        <a
-                          href={`sms:${CONCIERGE_NUMBER}?&body=PASS`}
-                          className="btn btn-secondary"
-                          style={{ display: 'inline-block' }}
-                        >
-                          Pass in SMS
-                        </a>
-                      )}
                     </div>
                   )}
                 </div>

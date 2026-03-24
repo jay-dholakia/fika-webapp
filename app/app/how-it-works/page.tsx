@@ -74,13 +74,11 @@ export default function HowItWorksPage() {
           {marketActive === false ? (
             <>
               You&apos;re in. We&apos;re not actively growing Fika in your area just yet, but we hope to be soon. When that
-              changes, we&apos;ll reach out. Finish your intake if you haven&apos;t yet, so we&apos;re ready when we can
-              match you.
+              changes, we&apos;ll reach out.
             </>
           ) : (
             <>
-              You&apos;re in. We&apos;ll text you when we have a good Fika intro for you. Finish your intake if you
-              haven&apos;t yet — that&apos;s how we find you a good match.
+              You&apos;re in. We&apos;ll text you when we have a good Fika intro for you.
             </>
           )}
         </p>
@@ -135,9 +133,8 @@ export default function HowItWorksPage() {
                   </>
                 ) : (
                   <>
-                    We&apos;ll text you when we have a good Fika intro for you. We&apos;re matching in {cityLabel}. After
-                    your intake is complete, we only text when we have a real Fika intro for you. Know someone who&apos;d
-                    enjoy this? Invite them below.
+                    We&apos;ll text you when we have a good Fika intro for you. We&apos;re matching in {cityLabel}. Know
+                    someone who&apos;d enjoy this? Invite them below.
                   </>
                 )}
               </span>
@@ -189,7 +186,7 @@ export default function HowItWorksPage() {
             <span className="app-how-it-works-step-marker" aria-hidden><span className="app-how-it-works-num">1</span></span>
             <div className="app-how-it-works-step-content">
               <span className="app-how-it-works-when">We find a good intro</span>
-              <span className="app-how-it-works-what">After you complete intake, we look for a good Fika intro for you based on compatibility and location.</span>
+              <span className="app-how-it-works-what">We look for a good Fika intro for you based on compatibility and location.</span>
             </div>
           </li>
           <li className="app-how-it-works-step">

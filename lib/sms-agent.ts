@@ -275,7 +275,7 @@ export function messageAvailabilityLockNotSubmitted(): string {
 
 /** When user is known but hasn't completed onboarding/intake. Text only; send onboardingUrl as a separate message after this. */
 export function messageOnboardingRequired(_onboardingUrl: string): string {
-  return `Hey, we've got you in the system — just need a few more details before we can match you.\n\nFinish up using the link I'll send next.\n\nOnce intake is complete, we'll reach out when we find a good Fika intro for you.`
+  return `Hey, we've got you in the system — just need a few more details before we can match you.\n\nFinish up using the link I'll send next.\n\nAfter that, we'll reach out when we find a good Fika intro for you.`
 }
 
 export function messageWeeklyOptIn(): string {
