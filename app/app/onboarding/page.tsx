@@ -14,6 +14,7 @@ import {
 } from '@/lib/onboarding-data'
 import { buildOnboardingSessionPayload, payloadToAnswers } from '@/lib/onboarding-session-payload'
 import { getMarketFromCityOrLatLngWithDb } from '@/lib/markets'
+import { checkProfilePhotoSingleFace } from '@/lib/avatar-face-check'
 import type { IntakeResponseItem } from '@/lib/db-types'
 import type { ProfileRow } from '@/lib/db-types'
 import type { IntakeResponsesV5Row } from '@/lib/db-types'
@@ -169,6 +170,7 @@ function AppOnboardingContent() {
   const [geoLoading, setGeoLoading] = useState(false)
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null)
+  const [avatarFaceChecking, setAvatarFaceChecking] = useState(false)
   const [languageQuery, setLanguageQuery] = useState('')
   const submitRef = useRef<HTMLButtonElement>(null)
   const lastMultiSelectRef = useRef<{ stepId: string; opt: string; t: number }>({ stepId: '', opt: '', t: 0 })
@@ -986,7 +988,15 @@ function AppOnboardingContent() {
           <h2 className="onboarding-section-title">Confirm & finish</h2>
           <div className="onboarding-field-wrap">
             <label className="onboarding-question" htmlFor="onboarding-avatar">Profile photo</label>
-            <p className="onboarding-body">Upload a clear photo of your face. This helps others feel comfortable meeting you.</p>
+            <p className="onboarding-body">
+              Upload a clear photo of your face. This helps others feel comfortable meeting you. We check that the
+              image shows one clear face before accepting it.
+            </p>
+            {avatarFaceChecking ? (
+              <p className="onboarding-body" style={{ fontSize: '0.9rem', marginTop: '-0.25rem' }}>
+                Verifying photo…
+              </p>
+            ) : null}
             <div className={`onboarding-avatar-zone ${avatarFile || answers.avatar_url ? 'has-file' : ''}`}>
               {avatarPreviewUrl || (typeof answers.avatar_url === 'string' && answers.avatar_url) ? (
                 <img
@@ -1000,17 +1010,33 @@ function AppOnboardingContent() {
                 type="file"
                 accept="image/jpeg,image/png,image/webp,image/gif"
                 className="onboarding-avatar-input"
-                onChange={(e) => {
+                disabled={saving || avatarFaceChecking}
+                onChange={async (e) => {
                   const f = e.target.files?.[0]
-                  if (f) {
+                  const input = e.currentTarget
+                  if (!f) return
+                  setError(null)
+                  setAvatarFaceChecking(true)
+                  try {
+                    const result = await checkProfilePhotoSingleFace(f)
+                    if (!result.ok) {
+                      setError(result.message)
+                      input.value = ''
+                      return
+                    }
+                    setAvatarPreviewUrl((prev) => {
+                      if (prev?.startsWith('blob:')) URL.revokeObjectURL(prev)
+                      return URL.createObjectURL(f)
+                    })
                     setAvatarFile(f)
-                    setAvatarPreviewUrl(URL.createObjectURL(f))
                     if (tokenMode) setAnswers((a) => ({ ...a, avatar_url: '' }))
+                  } finally {
+                    setAvatarFaceChecking(false)
                   }
                 }}
               />
               <label htmlFor="onboarding-avatar" className="onboarding-avatar-label">
-                {avatarFile || answers.avatar_url ? 'Change photo' : 'Choose photo'}
+                {avatarFaceChecking ? 'Checking…' : avatarFile || answers.avatar_url ? 'Change photo' : 'Choose photo'}
               </label>
             </div>
           </div>
@@ -1046,7 +1072,7 @@ function AppOnboardingContent() {
             type="button"
             className="btn btn-primary"
             onClick={handleSubmit}
-            disabled={saving}
+            disabled={saving || avatarFaceChecking}
           >
             {saving ? (
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
