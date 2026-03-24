@@ -29,9 +29,16 @@ type PersonaIdVerificationProps = {
   userId: string
   idVerifiedAt: string | null
   onVerified: () => void | Promise<void>
+  /** Primary = blue CTA; muted = gray (secondary). */
+  buttonVariant?: 'primary' | 'muted'
 }
 
-export function PersonaIdVerification({ userId, idVerifiedAt, onVerified }: PersonaIdVerificationProps) {
+export function PersonaIdVerification({
+  userId,
+  idVerifiedAt,
+  onVerified,
+  buttonVariant = 'primary',
+}: PersonaIdVerificationProps) {
   const [scriptReady, setScriptReady] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -43,6 +50,8 @@ export function PersonaIdVerification({ userId, idVerifiedAt, onVerified }: Pers
   const templateId = process.env.NEXT_PUBLIC_PERSONA_TEMPLATE_ID?.trim()
   const environmentId = process.env.NEXT_PUBLIC_PERSONA_ENVIRONMENT_ID?.trim()
   const configured = Boolean(templateId && environmentId)
+  /** Embedded JS SDK loads /widget with an inquiry template. vtmpl_ = verification template → Persona returns 404. */
+  const templateIdLooksWrong = Boolean(templateId?.startsWith('vtmpl_'))
 
   const destroyClient = useCallback(() => {
     try {
@@ -128,6 +137,21 @@ export function PersonaIdVerification({ userId, idVerifiedAt, onVerified }: Pers
     )
   }
 
+  if (templateIdLooksWrong) {
+    return (
+      <div className="profile-persona-actions">
+        <p className="onboarding-error" role="alert">
+          <strong>Wrong template type.</strong> This value starts with <code>vtmpl_</code> (a{' '}
+          <strong>Verification</strong> template). The embedded flow needs an <strong>Inquiry</strong> template ID
+          starting with <code>itmpl_</code>. In Persona Dashboard open <strong>Inquiry Templates</strong>, pick or
+          create a flow that includes your ID check, copy its template ID, and set{' '}
+          <code>NEXT_PUBLIC_PERSONA_TEMPLATE_ID</code> to that <code>itmpl_…</code> value (same environment as{' '}
+          <code>NEXT_PUBLIC_PERSONA_ENVIRONMENT_ID</code>).
+        </p>
+      </div>
+    )
+  }
+
   if (idVerifiedAt) {
     return (
       <div className="profile-persona-verified">
@@ -153,7 +177,7 @@ export function PersonaIdVerification({ userId, idVerifiedAt, onVerified }: Pers
       <div className="profile-persona-actions">
         <button
           type="button"
-          className="btn btn-primary-muted"
+          className={buttonVariant === 'muted' ? 'btn btn-primary-muted' : 'btn btn-primary'}
           disabled={!scriptReady || busy}
           onClick={() => {
             setError(null)
