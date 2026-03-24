@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { getSupabase } from '@/lib/supabase'
@@ -39,6 +39,7 @@ function AppHomeContent() {
   }, [searchParams, router])
 
   const { loading: onboardingLoading, isComplete: onboardingComplete, intake, refetch, profile } = useOnboardingStatus(userId ?? undefined)
+  const backfillEmbedAttemptedRef = useRef(false)
   const marketSlug = profile?.market ?? (profile?.city ? getMarketFromCity(profile.city)?.slug ?? null : null)
 
   const marketNotActive = marketSlug != null && marketActive === false
@@ -136,6 +137,56 @@ function AppHomeContent() {
   useEffect(() => {
     setLoading(false)
   }, [userId])
+
+  useEffect(() => {
+    backfillEmbedAttemptedRef.current = false
+  }, [userId])
+
+  /** SMS→Google merge and older flows skipped embedding; one-shot backfill when intake is done but embed_vector is missing. */
+  useEffect(() => {
+    if (!userId || !onboardingComplete || onboardingLoading) return
+    if (backfillEmbedAttemptedRef.current) return
+    backfillEmbedAttemptedRef.current = true
+    const supabase = getSupabase()
+    if (!supabase) return
+    supabase
+      .from('intake_responses_v5')
+      .select('embed_vector, completed_at')
+      .eq('user_id', userId)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (error || !data?.completed_at) return
+        const raw = data.embed_vector
+        const hasEmbed = (() => {
+          if (raw == null) return false
+          if (typeof raw === 'string') {
+            const t = raw.trim()
+            if (!t) return false
+            try {
+              const p = JSON.parse(t) as unknown
+              return Array.isArray(p) && p.length > 0
+            } catch {
+              return true
+            }
+          }
+          return Array.isArray(raw) && raw.length > 0
+        })()
+        if (hasEmbed) return
+        void supabase.auth.getSession().then(({ data: { session } }) => {
+          if (!session?.access_token) return
+          void fetch('/api/complete-intake', {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${session.access_token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ embedOnly: true }),
+          }).then((res) => {
+            if (res.ok) refetch()
+          })
+        })
+      })
+  }, [userId, onboardingComplete, onboardingLoading, refetch])
 
   // Load this week's match (one intro per week)
   useEffect(() => {
@@ -464,8 +515,24 @@ function AppHomeContent() {
           orderedSteps={orderedMissingSteps}
           intake={intake}
           userId={userId}
-          onComplete={() => {
+          onComplete={async () => {
             setFillingMissingMode(false)
+            try {
+              const supabase = getSupabase()
+              const { data: { session } } = await supabase?.auth.getSession() ?? { data: { session: null } }
+              if (session?.access_token) {
+                await fetch('/api/complete-intake', {
+                  method: 'POST',
+                  headers: {
+                    Authorization: `Bearer ${session.access_token}`,
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({ embedOnly: true }),
+                })
+              }
+            } catch {
+              // non-fatal: embedding can be retried from settings or admin
+            }
             refetch()
           }}
         />

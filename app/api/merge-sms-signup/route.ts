@@ -14,6 +14,7 @@ import { getCurrentBatchWeek, isPastOptInDeadline } from '@/lib/onboarding'
 import { getMarketFromCityOrLatLngWithDb } from '@/lib/markets'
 import { getActiveMarketSlugs } from '@/lib/admin-markets'
 import { getMarketBySlug } from '@/lib/markets'
+import { computeAndStoreIntakeEmbedding } from '@/lib/intake-embed-server'
 
 export async function POST(request: Request) {
   const authHeader = request.headers.get('Authorization')
@@ -123,6 +124,13 @@ export async function POST(request: Request) {
       },
       { onConflict: 'user_id' }
     )
+    const openaiKey = process.env.EXPO_PUBLIC_OPENAI_API_KEY || process.env.OPENAI_API_KEY
+    if (openaiKey) {
+      const embedResult = await computeAndStoreIntakeEmbedding(supabase, user.id, openaiKey)
+      if (!embedResult.ok) {
+        console.error('merge-sms-signup: intake embedding failed', embedResult.error)
+      }
+    }
   }
 
   await supabase

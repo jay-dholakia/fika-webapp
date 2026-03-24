@@ -40,6 +40,7 @@ type IntakeDetail = {
 type SimSummary = {
   totalProfiles?: number
   usersConsidered: number
+  usersSkippedNoIntake?: number
   usersSkippedNoEmbedding?: number
   pairsScored: number
   filteredOut: number
@@ -326,7 +327,7 @@ export default function AdminSignupsPage() {
           <div className="admin-dashboard" style={{ marginTop: '1rem', marginBottom: '1.25rem' }}>
             <h2 className="admin-dashboard-title">Match preview (no availability, no SMS)</h2>
             <p className="admin-description" style={{ marginBottom: '0.75rem' }}>
-              Ranks pairs by <strong>intake embedding cosine similarity</strong> (users without an embedding are excluded). Hard filters still apply (distance, languages, preferences). Ignores availability overlap; sending an intro SMS creates the live match.
+              Ranks pairs by <strong>intake embedding cosine similarity</strong> only (no fallback score). A user counts only if <code style={{ fontSize: '0.9em' }}>intake_responses_v5.embed_vector</code> is set—usually when they finish onboarding and <code style={{ fontSize: '0.9em' }}>POST /api/complete-intake</code> runs with OpenAI. Hard filters still apply (distance, languages, preferences). Ignores availability overlap; sending an intro SMS creates the live match.
             </p>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
               <label className="admin-toggle" style={{ marginRight: '0.25rem' }}>
@@ -363,8 +364,11 @@ export default function AdminSignupsPage() {
             {simSummary && (
               <p className="admin-dashboard-filter" style={{ marginTop: '0.75rem' }}>
                 {simSummary.totalProfiles != null && `${simSummary.totalProfiles} profiles loaded · `}
+                {simSummary.usersSkippedNoIntake != null && simSummary.usersSkippedNoIntake > 0
+                  ? `${simSummary.usersSkippedNoIntake} no intake row · `
+                  : ''}
                 {simSummary.usersSkippedNoEmbedding != null && simSummary.usersSkippedNoEmbedding > 0
-                  ? `${simSummary.usersSkippedNoEmbedding} skipped (no embedding) · `
+                  ? `${simSummary.usersSkippedNoEmbedding} intake but no embedding · `
                   : ''}
                 {simSummary.usersConsidered} with embedding · Pairs: {simSummary.pairsScored} · Filtered out: {simSummary.filteredOut}
                 {simSummary.scoring ? ` · ${simSummary.scoring.replace(/_/g, ' ')}` : ''}

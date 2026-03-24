@@ -116,17 +116,27 @@ function buildComparisonRows(a: SimCandidate, b: SimCandidate): CompareRow[] {
 }
 
 function ensureEmbedVector(vec: unknown): number[] | null {
-  if (!vec) return null
-  if (Array.isArray(vec) && vec.length > 0 && typeof vec[0] === 'number') return vec as number[]
+  if (vec == null) return null
   if (typeof vec === 'string') {
+    const s = vec.trim()
+    if (!s) return null
     try {
-      const parsed = JSON.parse(vec) as unknown
-      return Array.isArray(parsed) ? parsed as number[] : null
+      return ensureEmbedVector(JSON.parse(s))
     } catch {
       return null
     }
   }
-  return null
+  if (!Array.isArray(vec) || vec.length === 0) return null
+  const out: number[] = []
+  for (const x of vec) {
+    if (typeof x === 'number' && Number.isFinite(x)) out.push(x)
+    else if (typeof x === 'string' && x.trim() !== '') {
+      const n = Number(x)
+      if (Number.isFinite(n)) out.push(n)
+      else return null
+    } else return null
+  }
+  return out.length > 0 ? out : null
 }
 
 function cosineSimilarity(a: number[], b: number[]): number {
@@ -384,6 +394,7 @@ export async function POST(request: Request) {
       summary: {
         totalProfiles: ids.length,
         usersConsidered: 0,
+        usersSkippedNoIntake: 0,
         usersSkippedNoEmbedding: 0,
         pairsScored: 0,
         filteredOut: 0,
@@ -403,11 +414,15 @@ export async function POST(request: Request) {
   const intakeById = new Map<string, IntakeRow>()
   for (const r of (intakeRows ?? []) as IntakeRow[]) intakeById.set(r.user_id, r)
 
+  let usersSkippedNoIntake = 0
   let usersSkippedNoEmbedding = 0
   const candidates: SimCandidate[] = []
   for (const p of userProfiles) {
     const intake = intakeById.get(p.id)
-    if (!intake) continue
+    if (!intake) {
+      usersSkippedNoIntake++
+      continue
+    }
     if (!ensureEmbedVector(intake.embed_vector)) {
       usersSkippedNoEmbedding++
       continue
@@ -425,6 +440,7 @@ export async function POST(request: Request) {
       summary: {
         totalProfiles: userProfiles.length,
         usersConsidered: candidates.length,
+        usersSkippedNoIntake,
         usersSkippedNoEmbedding,
         pairsScored: 0,
         filteredOut: 0,
@@ -517,6 +533,7 @@ export async function POST(request: Request) {
     summary: {
       totalProfiles: userProfiles.length,
       usersConsidered: candidates.length,
+      usersSkippedNoIntake,
       usersSkippedNoEmbedding,
       pairsScored: pairs.length,
       filteredOut,
