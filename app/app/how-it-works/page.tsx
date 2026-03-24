@@ -4,15 +4,12 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useOnboardingStatus } from '@/lib/use-onboarding'
 import { getSupabase } from '@/lib/supabase'
-import { TARGET_COUNT_PER_MARKET, getMarketFromCity } from '@/lib/markets'
+import { getMarketBySlug, getMarketFromCity } from '@/lib/markets'
 
-const TARGET_USERS = TARGET_COUNT_PER_MARKET
 const SHARE_URL = 'https://letsfika.vercel.app'
 
 export default function HowItWorksPage() {
   const [userId, setUserId] = useState<string | null>(null)
-  const [profileCount, setProfileCount] = useState<number | null>(null)
-  const [marketLabel, setMarketLabel] = useState<string | null>(null)
   const [shareCopied, setShareCopied] = useState(false)
   const { loading: onboardingLoading, isComplete: questionnaireComplete, intake, profile } = useOnboardingStatus(userId ?? undefined)
 
@@ -23,24 +20,10 @@ export default function HowItWorksPage() {
   }, [])
 
   const marketSlug = profile?.market ?? (profile?.city ? getMarketFromCity(profile.city)?.slug ?? null : null)
-  useEffect(() => {
-    const url = marketSlug ? `/api/profile-count?market=${encodeURIComponent(marketSlug)}` : '/api/profile-count'
-    fetch(url)
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (data != null && typeof data.count === 'number') {
-          setProfileCount(data.count)
-          setMarketLabel(typeof data.label === 'string' ? data.label : null)
-        }
-      })
-      .catch(() => {})
-  }, [marketSlug])
-
-  const communityUnlocked = profileCount !== null && profileCount >= TARGET_USERS
-  const cityLabel = marketLabel ?? 'your city'
-  const SHARE_TEXT = marketLabel
-    ? `Help me unlock Fika in ${marketLabel} — create an account and get first access when we hit ${TARGET_USERS} people.`
-    : `Help me unlock Fika in our city — create an account and get first access when we hit ${TARGET_USERS} people.`
+  const cityLabel = marketSlug ? (getMarketBySlug(marketSlug)?.label ?? 'your area') : 'your area'
+  const SHARE_TEXT = marketSlug
+    ? `Join me on Fika in ${cityLabel} — real conversations over coffee with people nearby.`
+    : `Join me on Fika — real conversations over coffee with people nearby.`
 
   function copyShareToClipboard(url: string, text: string) {
     const combined = `${text}\n\n${url}`
@@ -57,7 +40,7 @@ export default function HowItWorksPage() {
       <div className="app-card app-welcome-card">
         <h1 className="app-welcome-card-title">Welcome to Fika!</h1>
         <p className="app-welcome-card-text">
-          We&apos;re building real connection—one conversation at a time.
+          You&apos;re in—we match you for thoughtful coffee conversations with people nearby. Finish your intake if you haven&apos;t yet, and we&apos;ll text you when we have a good intro.
         </p>
       </div>
 
@@ -92,54 +75,52 @@ export default function HowItWorksPage() {
               )}
             </div>
           </li>
-          <li className={`app-how-it-works-step ${communityUnlocked ? 'app-how-it-works-step-done' : ''}`}>
+          <li className={`app-how-it-works-step ${questionnaireComplete ? 'app-how-it-works-step-done' : ''}`}>
             <span className="app-how-it-works-step-marker" aria-hidden>
-              {communityUnlocked ? (
+              {questionnaireComplete ? (
                 <span className="app-how-it-works-check" aria-label="Done">✓</span>
               ) : (
                 <span className="app-how-it-works-num">2</span>
               )}
             </span>
             <div className="app-how-it-works-step-content">
-              <span className="app-how-it-works-when">We hit {TARGET_USERS} people in {cityLabel}</span>
+              <span className="app-how-it-works-when">We text you when there&apos;s a good intro</span>
               <span className="app-how-it-works-what">
-                Once {TARGET_USERS} people have signed up in your city, we&apos;ll be ready to run our first introductions! We&apos;ll let you know via email when we&apos;ve gotten there. In the meantime, please share with friends and family who you think would enjoy a Fika too.
+                There&apos;s no waitlist threshold—we&apos;re matching in {cityLabel}. After your intake is complete, we only text when we have a real Fika intro for you. Know someone who&apos;d enjoy this? Invite them below.
               </span>
-              {!communityUnlocked && (
-                <div className="app-how-it-works-250-block">
-                  <div className="app-how-it-works-invite-row">
-                    <button
-                      type="button"
-                      className="app-waitlist-share-btn"
-                      onClick={async () => {
-                        if (typeof navigator !== 'undefined' && navigator.share) {
-                          try {
-                            await navigator.share({
-                              title: 'Fika — Real people. Real conversation.',
-                              text: SHARE_TEXT,
-                              url: SHARE_URL,
-                            })
-                          } catch (e) {
-                            if ((e as Error)?.name !== 'AbortError') copyShareToClipboard(SHARE_URL, SHARE_TEXT)
-                          }
-                        } else {
-                          copyShareToClipboard(SHARE_URL, SHARE_TEXT)
+              <div className="app-how-it-works-250-block">
+                <div className="app-how-it-works-invite-row">
+                  <button
+                    type="button"
+                    className="app-waitlist-share-btn"
+                    onClick={async () => {
+                      if (typeof navigator !== 'undefined' && navigator.share) {
+                        try {
+                          await navigator.share({
+                            title: 'Fika — Real people. Real conversation.',
+                            text: SHARE_TEXT,
+                            url: SHARE_URL,
+                          })
+                        } catch (e) {
+                          if ((e as Error)?.name !== 'AbortError') copyShareToClipboard(SHARE_URL, SHARE_TEXT)
                         }
-                      }}
-                      aria-label="Invite friends"
-                    >
-                      <span className="app-waitlist-share-icon" aria-hidden>
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-                          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-                        </svg>
-                      </span>
-                      <span>Invite friends</span>
-                    </button>
-                    {shareCopied && <p className="app-waitlist-share-feedback">Link copied!</p>}
-                  </div>
+                      } else {
+                        copyShareToClipboard(SHARE_URL, SHARE_TEXT)
+                      }
+                    }}
+                    aria-label="Invite friends"
+                  >
+                    <span className="app-waitlist-share-icon" aria-hidden>
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                      </svg>
+                    </span>
+                    <span>Invite friends</span>
+                  </button>
+                  {shareCopied && <p className="app-waitlist-share-feedback">Link copied!</p>}
                 </div>
-              )}
+              </div>
             </div>
           </li>
         </ol>

@@ -8,7 +8,7 @@ import type { RealtimeChannel } from '@supabase/supabase-js'
 import { authLog } from '@/lib/auth-log'
 import { getMissingIntakeStepIds, getOrderedMissingIntakeSteps } from '@/lib/onboarding'
 import { getAvailabilitySlotLabel } from '@/lib/availability-slots'
-import { TARGET_COUNT_PER_MARKET, getMarketFromCity } from '@/lib/markets'
+import { getMarketBySlug, getMarketFromCity } from '@/lib/markets'
 import { useOnboardingStatus } from '@/lib/use-onboarding'
 import { formatIntakeAnswer, ageFromBirthdate } from '@/lib/intro-detail'
 import { IntroDetailModal, type IntroMatch } from '@/app/app/components/IntroDetailModal'
@@ -41,15 +41,14 @@ function AppHomeContent() {
   const { loading: onboardingLoading, isComplete: onboardingComplete, intake, refetch, profile } = useOnboardingStatus(userId ?? undefined)
   const marketSlug = profile?.market ?? (profile?.city ? getMarketFromCity(profile.city)?.slug ?? null : null)
 
-const TARGET_USERS = TARGET_COUNT_PER_MARKET
-  const communityNotReady = profileCount !== null && profileCount < TARGET_USERS
   const marketNotActive = marketSlug != null && marketActive === false
-  const isInactiveMarket = communityNotReady || marketNotActive
+  const isInactiveMarket = marketNotActive
   const CONCIERGE_NUMBER = process.env.NEXT_PUBLIC_SENDBLUE_CONCIERGE_NUMBER?.trim() || null
   const SHARE_URL = 'https://letsfika.vercel.app'
-  const SHARE_TEXT = marketLabel
-    ? `Help me unlock Fika in ${marketLabel} — create an account and get first access when we hit ${TARGET_USERS} people.`
-    : `Help me unlock Fika in our city — create an account and get first access when we hit ${TARGET_USERS} people.`
+  const cityLabelForShare = marketSlug ? (getMarketBySlug(marketSlug)?.label ?? marketLabel ?? 'your area') : null
+  const SHARE_TEXT = cityLabelForShare
+    ? `Join me on Fika in ${cityLabelForShare} — real conversations over coffee with people nearby.`
+    : `Join me on Fika — real conversations over coffee with people nearby.`
   const showQuestionnaireCard = !onboardingLoading && !onboardingComplete
   const missingIntakeSteps = onboardingComplete && intake ? getMissingIntakeStepIds(intake) : []
   const showNewQuestionsCard = !onboardingLoading && onboardingComplete && missingIntakeSteps.length > 0 && !fillingMissingMode
@@ -286,7 +285,7 @@ const TARGET_USERS = TARGET_COUNT_PER_MARKET
         ) : isInactiveMarket ? (
           <>
             <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem', marginBottom: '1rem' }}>
-              We&apos;re still building community in {marketLabel ?? 'your city'}. Invite friends to help unlock your first intro.
+              Fika isn&apos;t open in {marketLabel ?? 'your area'} yet. Know someone who&apos;d want in? Invite them—we&apos;ll let you know when we launch here.
             </p>
             <div className="app-how-it-works-invite-row" style={{ marginTop: '0.5rem' }}>
               <button
