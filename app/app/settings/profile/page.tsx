@@ -165,6 +165,19 @@ export default function SettingsProfilePage() {
     try {
       await saveProfileFromAnswers()
       await saveIntakeFromAnswers()
+      // Recompute embedding after intake edits so match preview uses latest answers.
+      const supabase = getSupabase()
+      const { data: { session } } = await supabase?.auth.getSession() ?? { data: { session: null } }
+      if (session?.access_token) {
+        await fetch('/api/complete-intake', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ embedOnly: true }),
+        })
+      }
       setSaved(true)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.')
@@ -271,18 +284,20 @@ export default function SettingsProfilePage() {
     if (step.type === 'chips_single' && step.options)
       return (
         <div className="profile-chips">
-          {step.options.map((opt) => (
-            <button
-              key={opt}
-              type="button"
-              className={`onboarding-chip ${value === opt ? 'selected' : ''}`}
-              onPointerDown={(e) => { if (e.button === 0) set(opt) }}
-              onClick={() => set(opt)}
-              disabled={saving}
-            >
-              {opt}
-            </button>
-          ))}
+          {step.options.map((opt) => {
+            const isSelected = value === opt
+            return (
+              <button
+                key={opt}
+                type="button"
+                className={`onboarding-chip ${isSelected ? 'selected' : ''}`}
+                onClick={() => set(isSelected ? '' : opt)}
+                disabled={saving}
+              >
+                {opt}
+              </button>
+            )
+          })}
         </div>
       )
     if (step.type === 'location_permission')

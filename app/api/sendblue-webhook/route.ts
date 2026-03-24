@@ -461,8 +461,19 @@ export async function POST(request: Request) {
     .is('match_id', null)
     .maybeSingle()
 
+  // Per-match state takes priority and may live on a prior batch_week
+  // (e.g. user replies after Monday rollover).
+  const { data: matchStateRow } = await supabase
+    .from('sms_conversation_states')
+    .select('*')
+    .eq('user_id', userId)
+    .not('match_id', 'is', null)
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
   // First contact (no state yet): confirm setup; we reach out when we find a good Fika intro for them.
-  if (!stateRow) {
+  if (!stateRow && !matchStateRow) {
     const { data: profile } = await supabase
       .from('profiles')
       .select('id, first_name, birthdate, city, avatar_url, intent_confirmed_at, lat, lng, market')
@@ -497,7 +508,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true })
   }
 
-  const state = stateRow.state
+  const state = stateRow?.state ?? SMS_STATES.AWAITING_OPT_IN
   const keyword = content.toUpperCase().replace(/\s+/g, ' ').trim()
   const payload = (stateRow?.payload as Record<string, unknown>) ?? {}
 
@@ -505,17 +516,6 @@ export async function POST(request: Request) {
   if (messageHandle && stateRow?.last_sendblue_message_handle === messageHandle) {
     return NextResponse.json({ ok: true })
   }
-
-  // Per-match state (intro YES/PASS) takes priority over global state
-  const { data: matchStateRow } = await supabase
-    .from('sms_conversation_states')
-    .select('*')
-    .eq('user_id', userId)
-    .eq('batch_week', batchWeek)
-    .not('match_id', 'is', null)
-    .order('updated_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
 
   const matchState = matchStateRow?.state
   const matchId = matchStateRow?.match_id
