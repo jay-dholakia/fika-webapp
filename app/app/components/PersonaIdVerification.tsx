@@ -14,15 +14,13 @@ type PersonaConstructor = new (opts: {
   templateId: string
   environmentId: string
   referenceId: string
-  onReady: () => void
+  onReady?: () => void
   onComplete: (args: { inquiryId: string; status?: string }) => void | Promise<void>
   onCancel?: () => void
   onError?: (e: unknown) => void
 }) => PersonaClientLike
 
 const PERSONA_SCRIPT_SRC = 'https://cdn.withpersona.com/dist/persona-v5.5.0.js'
-const PERSONA_SCRIPT_INTEGRITY =
-  'sha384-UK+a2yEU9KOzEmsgI4IlkrXWE4AekM/iAgWF60Zuyule702g7qaQ2nYccO3tnT0A'
 
 type PersonaIdVerificationProps = {
   userId: string
@@ -32,10 +30,12 @@ type PersonaIdVerificationProps = {
 
 export function PersonaIdVerification({ userId, idVerifiedAt, onVerified }: PersonaIdVerificationProps) {
   const [scriptReady, setScriptReady] = useState(false)
-  const [clientReady, setClientReady] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const clientRef = useRef<PersonaClientLike | null>(null)
+  const onVerifiedRef = useRef(onVerified)
+  onVerifiedRef.current = onVerified
 
   const templateId = process.env.NEXT_PUBLIC_PERSONA_TEMPLATE_ID?.trim()
   const environmentId = process.env.NEXT_PUBLIC_PERSONA_ENVIRONMENT_ID?.trim()
@@ -48,21 +48,26 @@ export function PersonaIdVerification({ userId, idVerifiedAt, onVerified }: Pers
       /* ignore */
     }
     clientRef.current = null
-    setClientReady(false)
   }, [])
 
   useEffect(() => {
-    if (!scriptReady || !configured || idVerifiedAt || typeof window === 'undefined') return
-    destroyClient()
+    return () => destroyClient()
+  }, [destroyClient])
+
+  const ensureClient = useCallback(() => {
+    if (typeof window === 'undefined' || !templateId || !environmentId) return null
     const w = window as unknown as { Persona?: { Client: PersonaConstructor } }
     const Ctor = w.Persona?.Client
-    if (!Ctor || !templateId || !environmentId) return
+    if (!Ctor) {
+      setLoadError('Persona failed to load. Disable ad blockers or try another browser.')
+      return null
+    }
+    if (clientRef.current) return clientRef.current
 
     const client = new Ctor({
       templateId,
       environmentId,
       referenceId: userId,
-      onReady: () => setClientReady(true),
       onComplete: async ({ inquiryId }) => {
         setBusy(true)
         setError(null)
@@ -86,7 +91,7 @@ export function PersonaIdVerification({ userId, idVerifiedAt, onVerified }: Pers
             setError(typeof payload?.error === 'string' ? payload.error : 'Verification could not be saved.')
             return
           }
-          onVerified()
+          await onVerifiedRef.current()
         } catch {
           setError('Something went wrong. Try again.')
         } finally {
@@ -100,8 +105,12 @@ export function PersonaIdVerification({ userId, idVerifiedAt, onVerified }: Pers
       },
     })
     clientRef.current = client
-    return () => destroyClient()
-  }, [scriptReady, configured, templateId, environmentId, userId, onVerified, destroyClient, idVerifiedAt])
+    return client
+  }, [templateId, environmentId, userId])
+
+  useEffect(() => {
+    if (idVerifiedAt) destroyClient()
+  }, [idVerifiedAt, destroyClient])
 
   if (!configured) {
     return (
@@ -124,30 +133,46 @@ export function PersonaIdVerification({ userId, idVerifiedAt, onVerified }: Pers
     <>
       <Script
         src={PERSONA_SCRIPT_SRC}
-        integrity={PERSONA_SCRIPT_INTEGRITY}
-        crossOrigin="anonymous"
-        strategy="lazyOnload"
-        onLoad={() => setScriptReady(true)}
+        strategy="afterInteractive"
+        onLoad={() => {
+          setScriptReady(true)
+          setLoadError(null)
+        }}
+        onError={() => {
+          setLoadError('Could not load Persona. Check your network or try again.')
+        }}
       />
       <div className="profile-persona-actions">
         <button
           type="button"
           className="btn btn-primary-muted"
-          disabled={!clientReady || busy}
+          disabled={!scriptReady || busy}
           onClick={() => {
             setError(null)
-            setBusy(true)
+            setLoadError(null)
             try {
-              clientRef.current?.open()
+              const client = ensureClient()
+              if (!client) return
+              // Defer open so clientRef is assigned; Persona may need a tick after construction.
+              queueMicrotask(() => {
+                try {
+                  clientRef.current?.open()
+                } catch {
+                  setError('Could not open verification.')
+                }
+              })
             } catch {
               setError('Could not open verification.')
-            } finally {
-              setBusy(false)
             }
           }}
         >
-          {busy ? 'Opening…' : 'Get ID verified'}
+          {!scriptReady ? 'Loading…' : busy ? 'Saving…' : 'Get ID verified'}
         </button>
+        {loadError && (
+          <p className="onboarding-error" role="alert" style={{ marginTop: '0.5rem' }}>
+            {loadError}
+          </p>
+        )}
         {error && <p className="onboarding-error" role="alert" style={{ marginTop: '0.5rem' }}>{error}</p>}
         <p className="profile-persona-hint" style={{ marginTop: '0.5rem', fontSize: '0.9rem', color: 'var(--color-textSecondary)' }}>
           Verifying adds a blue check on your name so matches know you&apos;ve confirmed your identity with Persona.
