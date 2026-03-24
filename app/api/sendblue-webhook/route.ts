@@ -598,8 +598,9 @@ export async function POST(request: Request) {
             : { data: null as { phone?: string | null; first_name?: string | null; bio_text?: string | null } | null }
           const currentName = currentProfile?.first_name?.trim() ?? 'Someone'
           const otherName = otherProfile?.first_name?.trim() ?? 'Someone'
-          const otherBio = (otherProfile?.bio_text as string | undefined)?.trim()
-            ? String(otherProfile.bio_text).slice(0, 120)
+          const trimmedOtherBio = (otherProfile?.bio_text as string | undefined)?.trim()
+          const otherBio = trimmedOtherBio
+            ? trimmedOtherBio.slice(0, 120)
             : 'Looking forward to a good conversation.'
 
           // Current user teaser + link
@@ -629,8 +630,9 @@ export async function POST(request: Request) {
               .select('bio_text')
               .eq('id', userId)
               .maybeSingle()
-            const myBio = (myBioProfile?.bio_text as string | undefined)?.trim()
-              ? String(myBioProfile.bio_text).slice(0, 120)
+            const trimmedMyBio = (myBioProfile?.bio_text as string | undefined)?.trim()
+            const myBio = trimmedMyBio
+              ? trimmedMyBio.slice(0, 120)
               : 'Looking forward to a good conversation.'
             await sendConciergeAndLog(
               otherProfile.phone,
