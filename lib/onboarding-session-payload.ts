@@ -3,6 +3,7 @@
  * Used by /app/onboarding when token is present (SMS signup flow).
  */
 
+import { HOME_COUNTRY_UNITED_STATES } from './countries-list'
 import { INTAKE_STEPS } from './onboarding-data'
 
 export type AnswersState = Record<
@@ -14,7 +15,10 @@ export function buildOnboardingSessionPayload(answers: AnswersState): Record<str
   const loc = answers.location as { city: string; lat: number; lng: number } | undefined
   const intakeStepsForPayload = INTAKE_STEPS
   const responses = intakeStepsForPayload.map((s) => {
-    const raw = answers[s.id]
+    let raw = answers[s.id]
+    if (s.id === 'q_home_state' && answers.q_home_country !== HOME_COUNTRY_UNITED_STATES) {
+      raw = ''
+    }
     let value: string | string[] | number = raw === undefined || (typeof raw === 'object' && raw !== null && 'city' in raw) ? (s.type === 'multi_select' ? [] : '') : (raw as string | string[] | number)
     const isEmpty = value === '' || (Array.isArray(value) && value.length === 0)
     if (s.required !== true && isEmpty) value = 'N/A'

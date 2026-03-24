@@ -397,15 +397,6 @@ function AppHomeContent() {
             <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem', marginBottom: '1rem' }}>
               You&apos;re in. We&apos;ll text you when we have a good Fika intro for you. When it&apos;s time to schedule, we&apos;ll ask for your availability.
             </p>
-            {CONCIERGE_NUMBER && (
-              <a
-                href={`sms:${CONCIERGE_NUMBER}`}
-                className="btn btn-primary auth-submit"
-                style={{ display: 'inline-block', textAlign: 'center', marginBottom: '0.75rem' }}
-              >
-                Text us
-              </a>
-            )}
             <p style={{ fontSize: '0.95rem' }}>
               Keep your profile current so we can reach out when we find a good Fika intro for you.
             </p>

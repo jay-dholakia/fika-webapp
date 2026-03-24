@@ -1,6 +1,17 @@
 import { getSupabase } from './supabase'
-import type { ProfileRow, IntakeResponsesV5Row } from './db-types'
+import type { IntakeResponseItem, ProfileRow, IntakeResponsesV5Row } from './db-types'
 import { INTAKE_STEPS, type ProfileStep } from './onboarding-data'
+
+function getStringAnswerFromResponses(responses: IntakeResponseItem[], questionId: string): string | null {
+  const r = responses.find((x) => x.question_id === questionId)
+  const a = r?.answer
+  if (typeof a === 'string') {
+    const t = a.trim()
+    if (!t || t === 'N/A') return null
+    return t
+  }
+  return null
+}
 
 /** Profile is complete when these are set (LA Beta; phone optional, avatar required). */
 export function isProfileComplete(p: ProfileRow | null): boolean {
@@ -104,10 +115,12 @@ export function getMissingIntakeStepIds(intake: IntakeResponsesV5Row | null): st
       )
       .map((r) => r.question_id)
   )
+  const homeCountry = getStringAnswerFromResponses(responses, 'q_home_country')
   const missing: string[] = []
   for (const s of INTAKE_STEPS) {
     if (intake?.completed_at && s.id === 'confirm_intent') continue
     if (s.id === 'gender_preference' || s.id === 'age_preference') continue
+    if (s.id === 'q_home_state' && homeCountry !== 'United States') continue
     if (!answered.has(s.id)) missing.push(s.id)
   }
   return missing
@@ -127,10 +140,12 @@ export function getOrderedMissingIntakeSteps(intake: IntakeResponsesV5Row | null
       )
       .map((r) => r.question_id)
   )
+  const homeCountry = getStringAnswerFromResponses(responses, 'q_home_country')
   const out: ProfileStep[] = []
   for (const s of INTAKE_STEPS) {
     if (intake?.completed_at && s.id === 'confirm_intent') continue
     if (s.id === 'gender_preference' || s.id === 'age_preference') continue
+    if (s.id === 'q_home_state' && homeCountry !== 'United States') continue
     if (!answered.has(s.id)) out.push(s)
   }
   return out

@@ -13,6 +13,11 @@ export const INTAKE_EMBEDDING_EXCLUDED_IDS = new Set<string>([
   'q_radius',
   'q_hoping_for',
   'confirm_intent',
+  // Demographics / roots — keep out of similarity embedding
+  'q_home_country',
+  'q_home_state',
+  'q_hometown',
+  'q_ethnicity',
 ])
 
 function responseById(responses: IntakeResponseItem[]): Map<string, IntakeResponseItem> {

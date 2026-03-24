@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { getSupabase } from '@/lib/supabase'
 import { useOnboardingStatus } from '@/lib/use-onboarding'
 import { authLog } from '@/lib/auth-log'
+import { HOME_COUNTRY_UNITED_STATES } from '@/lib/countries-list'
 import {
   PROFILE_STEPS,
   INTAKE_STEPS,
@@ -18,10 +19,20 @@ import type { ProfileRow } from '@/lib/db-types'
 import type { IntakeResponsesV5Row } from '@/lib/db-types'
 
 const ABOUT_YOU_EXTRA_IDS = ['q_hoping_for']
-const SECTION_2_IDS = ['q_life_chapter', 'q_everyday_anchor', 'q_work', 'q_interests', 'q_curiosity']
+const BACKGROUND_STEP_IDS = ['q_home_country', 'q_home_state', 'q_hometown', 'q_ethnicity'] as const
+const SECTION_2_IDS = [
+  ...BACKGROUND_STEP_IDS,
+  'q_life_chapter',
+  'q_everyday_anchor',
+  'q_work',
+  'q_interests',
+  'q_curiosity',
+]
 const SECTION_3_IDS = ['q_topics', 'q_avoid_topics', 'q_openness', 'gender_preference', 'age_preference', 'q_what_makes_great_fika', 'q_radius', 'q_favorite_coffee_shop']
 const ABOUT_YOU_EXTRA_STEPS = INTAKE_STEPS.filter((s) => ABOUT_YOU_EXTRA_IDS.includes(s.id))
 const SECTION_2_STEPS = INTAKE_STEPS.filter((s) => SECTION_2_IDS.includes(s.id))
+const BACKGROUND_STEPS = SECTION_2_STEPS.filter((s) => BACKGROUND_STEP_IDS.includes(s.id as (typeof BACKGROUND_STEP_IDS)[number]))
+const LIFE_CONTEXT_STEPS = SECTION_2_STEPS.filter((s) => !BACKGROUND_STEP_IDS.includes(s.id as (typeof BACKGROUND_STEP_IDS)[number]))
 const SECTION_3_STEPS = INTAKE_STEPS.filter((s) => SECTION_3_IDS.includes(s.id))
 const CONFIRM_STEP = INTAKE_STEPS.find((s) => s.id === 'confirm_intent')!
 const LOCATION_STEP = PROFILE_STEPS.find((s) => s.id === 'location')!
@@ -152,6 +163,7 @@ function AppOnboardingContent() {
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null)
   const [languageQuery, setLanguageQuery] = useState('')
+  const [homeCountryQuery, setHomeCountryQuery] = useState('')
   const submitRef = useRef<HTMLButtonElement>(null)
   const lastMultiSelectRef = useRef<{ stepId: string; opt: string; t: number }>({ stepId: '', opt: '', t: 0 })
 
@@ -325,7 +337,10 @@ function AppOnboardingContent() {
     const supabase = getSupabase()
     if (!supabase) return
     const responses: IntakeResponseItem[] = INTAKE_STEPS.filter((s) => s.id !== 'gender_preference' && s.id !== 'age_preference').map((s) => {
-      const raw = answers[s.id]
+      let raw = answers[s.id]
+      if (s.id === 'q_home_state' && answers.q_home_country !== HOME_COUNTRY_UNITED_STATES) {
+        raw = ''
+      }
       let value: string | string[] | number = raw === undefined || (typeof raw === 'object' && 'city' in (raw as object)) ? (s.type === 'multi_select' ? [] : '') : (raw as string | string[] | number)
       const isEmpty = value === '' || (Array.isArray(value) && value.length === 0)
       if (s.required !== true && isEmpty) value = 'N/A'
@@ -538,6 +553,9 @@ function AppOnboardingContent() {
 
   function renderField(step: ProfileStep) {
     const value = answers[step.id]
+    if (step.id === 'q_home_state' && answers.q_home_country !== HOME_COUNTRY_UNITED_STATES) {
+      return null
+    }
     return (
       <div key={step.id} className="onboarding-field-wrap">
         <h3 className="onboarding-question">{step.question}</h3>
@@ -555,6 +573,91 @@ function AppOnboardingContent() {
               </p>
             )}
           </div>
+        )}
+        {step.type === 'searchable_select' && step.options && (
+          <div>
+            {typeof value === 'string' && value ? (
+              <div style={{ marginBottom: '0.75rem' }}>
+                <button
+                  type="button"
+                  className="onboarding-chip selected"
+                  onClick={() => {
+                    setAnswers((a) => {
+                      const next: AnswersState = { ...a, [step.id]: '' }
+                      if (step.id === 'q_home_country') next.q_home_state = ''
+                      return next
+                    })
+                    setHomeCountryQuery('')
+                  }}
+                  disabled={saving}
+                >
+                  {value} ×
+                </button>
+              </div>
+            ) : null}
+            <input
+              type="text"
+              className="auth-input"
+              placeholder="Type to search"
+              value={step.id === 'q_home_country' ? homeCountryQuery : ''}
+              onChange={(e) => {
+                if (step.id === 'q_home_country') setHomeCountryQuery(e.target.value)
+              }}
+              disabled={saving}
+              autoComplete="off"
+              aria-label="Filter options"
+            />
+            {step.id === 'q_home_country' && !homeCountryQuery.trim() ? (
+              <p className="onboarding-body" style={{ marginTop: '0.5rem', fontSize: '0.9rem' }}>
+                Start typing to find your country.
+              </p>
+            ) : null}
+            <div style={{ marginTop: '0.75rem', display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+              {(step.id === 'q_home_country' ? homeCountryQuery.trim() : '')
+                ? step.options
+                    .filter((opt) => opt.toLowerCase().includes((homeCountryQuery.trim() as string).toLowerCase()))
+                    .slice(0, 80)
+                    .map((opt) => (
+                      <button
+                        key={opt}
+                        type="button"
+                        className={`onboarding-chip ${value === opt ? 'selected' : ''}`}
+                        onClick={() => {
+                          setAnswers((a) => {
+                            const next: AnswersState = { ...a, [step.id]: opt }
+                            if (step.id === 'q_home_country' && opt !== HOME_COUNTRY_UNITED_STATES) {
+                              next.q_home_state = ''
+                            }
+                            return next
+                          })
+                          setHomeCountryQuery('')
+                        }}
+                        disabled={saving}
+                      >
+                        {opt}
+                      </button>
+                    ))
+                : null}
+            </div>
+          </div>
+        )}
+        {step.type === 'select' && step.options && (
+          <select
+            id={`onboarding-${step.id}`}
+            name={step.id}
+            className="auth-input"
+            value={(value as string) ?? ''}
+            onChange={(e) => setAnswers((a) => ({ ...a, [step.id]: e.target.value }))}
+            disabled={saving}
+            aria-label={step.question}
+          >
+            <option value="">Skip (optional)</option>
+            {step.options.map((opt) => (
+              <option key={opt} value={opt}>
+                {opt}
+              </option>
+            ))}
+          </select>
         )}
         {step.type === 'text' && (
           <input
@@ -834,7 +937,20 @@ function AppOnboardingContent() {
 
         <section className="onboarding-section onboarding-section-card">
           <h2 className="onboarding-section-title">Life & context</h2>
-          {SECTION_2_STEPS.map(renderField)}
+          <h3
+            className="onboarding-section-title"
+            style={{ fontSize: '1.05rem', marginTop: '0.25rem', marginBottom: '0.5rem' }}
+          >
+            Background
+          </h3>
+          {BACKGROUND_STEPS.map(renderField)}
+          <h3
+            className="onboarding-section-title"
+            style={{ fontSize: '1.05rem', marginTop: '1.25rem', marginBottom: '0.5rem' }}
+          >
+            Life context
+          </h3>
+          {LIFE_CONTEXT_STEPS.map(renderField)}
         </section>
 
         <section className="onboarding-section onboarding-section-card">

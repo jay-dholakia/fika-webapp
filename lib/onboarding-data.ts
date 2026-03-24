@@ -1,5 +1,9 @@
 // LA Beta onboarding: Profile + Intake (Final). No maxes on multi_select.
-// Types: text | date | chips_single | location_permission | multi_select
+// Types: text | date | chips_single | location_permission | multi_select | searchable_select | select
+
+import { COUNTRY_NAMES } from '@/lib/countries-list'
+import { ETHNICITY_OPTIONS } from '@/lib/ethnicity-options'
+import { US_STATE_NAMES } from '@/lib/us-states-list'
 
 export type StepType =
   | 'text'
@@ -7,6 +11,8 @@ export type StepType =
   | 'chips_single'
   | 'location_permission'
   | 'multi_select'
+  | 'searchable_select'
+  | 'select'
 
 export type ProfileStep = {
   id: string
@@ -102,9 +108,42 @@ export const PROFILE_STEPS: ProfileStep[] = [
 ]
 
 // INTAKE (Final): Block 1 Life context → Block 2 Interests → Block 3 Topics → Block 4 Perspective → Block 5 Matching.
-// Block 1: life chapter (stage) → everyday anchor (daily reality) only.
+// Block 1: optional background (roots) → life chapter → everyday anchor → work.
 // Block 2: interests → curiosity.
 export const INTAKE_STEPS: ProfileStep[] = [
+  // Block 1 — Background (optional): where you're from — not current location
+  {
+    id: 'q_home_country',
+    question: 'Home country',
+    body: "Optional. Where you're from — not necessarily where you live now.",
+    type: 'searchable_select',
+    required: false,
+    options: COUNTRY_NAMES,
+  },
+  {
+    id: 'q_home_state',
+    question: 'Home state (U.S.)',
+    body: 'Optional. Only if your home country is the United States.',
+    type: 'select',
+    required: false,
+    options: US_STATE_NAMES,
+  },
+  {
+    id: 'q_hometown',
+    question: 'Hometown',
+    body: 'Optional. City or region you grew up in.',
+    type: 'text',
+    required: false,
+    placeholder: 'e.g. Columbus, Ohio',
+  },
+  {
+    id: 'q_ethnicity',
+    question: 'Ethnicity',
+    body: 'Optional. Helps us understand our community.',
+    type: 'select',
+    required: false,
+    options: ETHNICITY_OPTIONS,
+  },
   // Block 1 — Life context: stage → daily reality
   {
     id: 'q_life_chapter',

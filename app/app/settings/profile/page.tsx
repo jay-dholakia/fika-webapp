@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { getSupabase } from '@/lib/supabase'
 import { useOnboardingStatus } from '@/lib/use-onboarding'
+import { HOME_COUNTRY_UNITED_STATES } from '@/lib/countries-list'
 import {
   PROFILE_STEPS,
   INTAKE_STEPS,
@@ -39,6 +40,8 @@ const PERSONA_EMBED_CONFIGURED = Boolean(
     process.env.NEXT_PUBLIC_PERSONA_ENVIRONMENT_ID?.trim()
 )
 
+const BACKGROUND_INTAKE_IDS = new Set(['q_home_country', 'q_home_state', 'q_hometown', 'q_ethnicity'])
+
 export default function SettingsProfilePage() {
   const [userId, setUserId] = useState<string | null>(null)
   const { loading: statusLoading, profile, intake, refetch } = useOnboardingStatus(userId ?? undefined)
@@ -47,6 +50,7 @@ export default function SettingsProfilePage() {
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
   const [locationStatus, setLocationStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
+  const [homeCountryQuery, setHomeCountryQuery] = useState('')
 
   useEffect(() => {
     getSupabase()?.auth.getSession().then(({ data: { session } }) => {
@@ -108,7 +112,10 @@ export default function SettingsProfilePage() {
     const responses: IntakeResponseItem[] = []
     for (const step of INTAKE_STEPS) {
       if (step.id === 'gender_preference' || step.id === 'age_preference') continue
-      const answer = answers[step.id]
+      let answer = answers[step.id]
+      if (step.id === 'q_home_state' && answers.q_home_country !== HOME_COUNTRY_UNITED_STATES) {
+        answer = ''
+      }
       const normalized =
         step.id === 'q12_first_conversation' &&
         (answer == null || (typeof answer === 'string' && !String(answer).trim()))
@@ -256,6 +263,102 @@ export default function SettingsProfilePage() {
   function renderStep(step: ProfileStep, value: unknown) {
     const set = (v: string | string[] | number | { city: string; lat: number; lng: number }) =>
       setAnswers((a) => ({ ...a, [step.id]: v }))
+
+    if (step.id === 'q_home_state' && answers.q_home_country !== HOME_COUNTRY_UNITED_STATES) {
+      return null
+    }
+
+    if (step.type === 'searchable_select' && step.options) {
+      const strVal = typeof value === 'string' ? value : ''
+      return (
+        <div>
+          {strVal ? (
+            <div style={{ marginBottom: '0.75rem' }}>
+              <button
+                type="button"
+                className="onboarding-chip selected"
+                onClick={() => {
+                  setAnswers((a) => {
+                    const next: AnswersState = { ...a, [step.id]: '' }
+                    if (step.id === 'q_home_country') next.q_home_state = ''
+                    return next
+                  })
+                  setHomeCountryQuery('')
+                }}
+                disabled={saving}
+              >
+                {strVal} ×
+              </button>
+            </div>
+          ) : null}
+          <input
+            type="text"
+            className="auth-input"
+            placeholder="Type to search"
+            value={step.id === 'q_home_country' ? homeCountryQuery : ''}
+            onChange={(e) => {
+              if (step.id === 'q_home_country') setHomeCountryQuery(e.target.value)
+            }}
+            disabled={saving}
+            autoComplete="off"
+            aria-label="Filter options"
+          />
+          {step.id === 'q_home_country' && !homeCountryQuery.trim() ? (
+            <p className="onboarding-body" style={{ marginTop: '0.5rem', fontSize: '0.9rem' }}>
+              Start typing to find your country.
+            </p>
+          ) : null}
+          <div style={{ marginTop: '0.75rem', display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+            {(step.id === 'q_home_country' ? homeCountryQuery.trim() : '')
+              ? step.options
+                  .filter((opt) => opt.toLowerCase().includes(homeCountryQuery.trim().toLowerCase()))
+                  .slice(0, 80)
+                  .map((opt) => (
+                    <button
+                      key={opt}
+                      type="button"
+                      className={`onboarding-chip ${strVal === opt ? 'selected' : ''}`}
+                      onClick={() => {
+                        setAnswers((a) => {
+                          const next: AnswersState = { ...a, [step.id]: opt }
+                          if (step.id === 'q_home_country' && opt !== HOME_COUNTRY_UNITED_STATES) {
+                            next.q_home_state = ''
+                          }
+                          return next
+                        })
+                        setHomeCountryQuery('')
+                      }}
+                      disabled={saving}
+                    >
+                      {opt}
+                    </button>
+                  ))
+              : null}
+          </div>
+        </div>
+      )
+    }
+
+    if (step.type === 'select' && step.options) {
+      return (
+        <select
+          id={`profile-${step.id}`}
+          name={step.id}
+          className="auth-input"
+          value={(typeof value === 'string' ? value : '') ?? ''}
+          onChange={(e) => set(e.target.value)}
+          disabled={saving}
+          aria-label={step.question}
+        >
+          <option value="">Skip (optional)</option>
+          {step.options.map((opt) => (
+            <option key={opt} value={opt}>
+              {opt}
+            </option>
+          ))}
+        </select>
+      )
+    }
 
     if (step.type === 'text')
       return (
@@ -445,27 +548,73 @@ export default function SettingsProfilePage() {
 
         <section className="profile-section">
           <h3 className="profile-section-title">Questionnaire</h3>
-          {INTAKE_STEPS.filter((step) => step.id !== 'confirm_intent').map((step) => (
-            <div key={step.id} className="profile-field">
-              <label htmlFor={`profile-${step.id}`} className="profile-label">
-                {step.question}
-                {step.minSelections != null && (
-                  <span className="profile-hint"> (at least {step.minSelections})</span>
+          <h4
+            className="profile-section-title"
+            style={{ fontSize: '1rem', fontWeight: 600, marginTop: '0.5rem', marginBottom: '0.75rem' }}
+          >
+            Background
+          </h4>
+          {INTAKE_STEPS.filter((step) => step.id !== 'confirm_intent' && BACKGROUND_INTAKE_IDS.has(step.id)).map(
+            (step) => (
+              <div key={step.id} className="profile-field">
+                <label htmlFor={`profile-${step.id}`} className="profile-label">
+                  {step.question}
+                  {step.minSelections != null && (
+                    <span className="profile-hint"> (at least {step.minSelections})</span>
+                  )}
+                  {step.maxSelections != null && !step.minSelections && (
+                    <span className="profile-hint"> (up to {step.maxSelections})</span>
+                  )}
+                </label>
+                {step.body && (
+                  <div className="onboarding-body">
+                    {step.body.split(/\n\n+/).map((p, i) => (
+                      <p key={i}>{p}</p>
+                    ))}
+                  </div>
                 )}
-                {step.maxSelections != null && !step.minSelections && (
-                  <span className="profile-hint"> (up to {step.maxSelections})</span>
-                )}
-              </label>
-              <div className="profile-input">
-                {renderStep(step, answers[step.id])}
-              </div>
-              {step.id === 'phone' && answers.phone && (
-                <div className="onboarding-body" style={{ marginTop: '0.5rem' }}>
-                  <SmsConciergeCta />
+                <div className="profile-input">
+                  {renderStep(step, answers[step.id])}
                 </div>
-              )}
-            </div>
-          ))}
+              </div>
+            )
+          )}
+          <h4
+            className="profile-section-title"
+            style={{ fontSize: '1rem', fontWeight: 600, marginTop: '1.25rem', marginBottom: '0.75rem' }}
+          >
+            Conversation & preferences
+          </h4>
+          {INTAKE_STEPS.filter((step) => step.id !== 'confirm_intent' && !BACKGROUND_INTAKE_IDS.has(step.id)).map(
+            (step) => (
+              <div key={step.id} className="profile-field">
+                <label htmlFor={`profile-${step.id}`} className="profile-label">
+                  {step.question}
+                  {step.minSelections != null && (
+                    <span className="profile-hint"> (at least {step.minSelections})</span>
+                  )}
+                  {step.maxSelections != null && !step.minSelections && (
+                    <span className="profile-hint"> (up to {step.maxSelections})</span>
+                  )}
+                </label>
+                {step.body && (
+                  <div className="onboarding-body">
+                    {step.body.split(/\n\n+/).map((p, i) => (
+                      <p key={i}>{p}</p>
+                    ))}
+                  </div>
+                )}
+                <div className="profile-input">
+                  {renderStep(step, answers[step.id])}
+                </div>
+                {step.id === 'phone' && answers.phone && (
+                  <div className="onboarding-body" style={{ marginTop: '0.5rem' }}>
+                    <SmsConciergeCta />
+                  </div>
+                )}
+              </div>
+            )
+          )}
         </section>
 
         {error && <p className="onboarding-error" role="alert">{error}</p>}

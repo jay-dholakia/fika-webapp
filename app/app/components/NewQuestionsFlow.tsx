@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { getSupabase } from '@/lib/supabase'
-import { INTAKE_STEPS, type ProfileStep } from '@/lib/onboarding-data'
+import { HOME_COUNTRY_UNITED_STATES } from '@/lib/countries-list'
+import type { ProfileStep } from '@/lib/onboarding-data'
 import { INTAKE_ANSWER_SKIPPED } from '@/lib/intro-detail'
 import type { IntakeResponseItem } from '@/lib/db-types'
 import type { IntakeResponsesV5Row } from '@/lib/db-types'
@@ -72,9 +73,24 @@ export function NewQuestionsFlow({ orderedSteps, intake, userId, onComplete }: N
   const [answers, setAnswers] = useState<AnswersState>(() => initialAnswers)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [homeCountryQuery, setHomeCountryQuery] = useState('')
 
-  const step = orderedSteps[currentIndex]
-  const isLast = currentIndex >= orderedSteps.length - 1
+  const stepsForFlow = useMemo(() => {
+    const country = typeof answers.q_home_country === 'string' ? answers.q_home_country.trim() : ''
+    return orderedSteps.filter(
+      (s) => s.id !== 'q_home_state' || country === HOME_COUNTRY_UNITED_STATES
+    )
+  }, [orderedSteps, answers.q_home_country])
+
+  useEffect(() => {
+    if (stepsForFlow.length === 0) return
+    if (currentIndex >= stepsForFlow.length) {
+      setCurrentIndex(Math.max(0, stepsForFlow.length - 1))
+    }
+  }, [currentIndex, stepsForFlow.length])
+
+  const step = stepsForFlow[currentIndex]
+  const isLast = currentIndex >= stepsForFlow.length - 1
   const value = step ? answers[step.id] : undefined
 
   async function handleNext() {
@@ -101,6 +117,9 @@ export function NewQuestionsFlow({ orderedSteps, intake, userId, onComplete }: N
         step.id === 'q_radius' && (typeof base === 'string' && base !== '')
           ? (base.includes('miles') ? base : `${base} miles`)
           : base
+      if (step.id === 'q_home_state' && answers.q_home_country !== HOME_COUNTRY_UNITED_STATES) {
+        answer = INTAKE_ANSWER_SKIPPED
+      }
       const isEmpty = answer === undefined || answer === '' || (Array.isArray(answer) && answer.length === 0)
       if (step.required !== true && isEmpty) answer = INTAKE_ANSWER_SKIPPED
       await saveIntakeAnswer(userId, step, answer as string | string[] | number)
@@ -134,7 +153,10 @@ export function NewQuestionsFlow({ orderedSteps, intake, userId, onComplete }: N
   const isCompactStep =
     step &&
     ((step.type === 'chips_single' && step.options && step.options.length <= 4) ||
-      (step.type === 'multi_select' && step.options && step.options.length <= 6))
+      (step.type === 'multi_select' && step.options && step.options.length <= 6) ||
+      step.type === 'text' ||
+      step.type === 'select' ||
+      step.type === 'searchable_select')
 
   return (
     <div className="app-card app-new-questions-flow">
@@ -172,6 +194,102 @@ export function NewQuestionsFlow({ orderedSteps, intake, userId, onComplete }: N
             </button>
           )})}
         </div>
+      )}
+
+      {step?.type === 'text' && (
+        <input
+          type="text"
+          className="auth-input"
+          placeholder={step.placeholder || ''}
+          value={typeof value === 'string' ? value : ''}
+          onChange={(e) => setAnswers((a) => ({ ...a, [step.id]: e.target.value }))}
+          disabled={saving}
+          autoComplete="off"
+        />
+      )}
+
+      {step?.type === 'searchable_select' && step.options && (
+        <div>
+          {typeof value === 'string' && value ? (
+            <div style={{ marginBottom: '0.75rem' }}>
+              <button
+                type="button"
+                className="onboarding-chip selected"
+                onClick={() => {
+                  setAnswers((a) => {
+                    const next = { ...a, [step.id]: '' }
+                    if (step.id === 'q_home_country') next.q_home_state = ''
+                    return next
+                  })
+                  setHomeCountryQuery('')
+                }}
+                disabled={saving}
+              >
+                {value} ×
+              </button>
+            </div>
+          ) : null}
+          <input
+            type="text"
+            className="auth-input"
+            placeholder="Type to search"
+            value={step.id === 'q_home_country' ? homeCountryQuery : ''}
+            onChange={(e) => {
+              if (step.id === 'q_home_country') setHomeCountryQuery(e.target.value)
+            }}
+            disabled={saving}
+            autoComplete="off"
+          />
+          {!homeCountryQuery.trim() && step.id === 'q_home_country' ? (
+            <p className="onboarding-body" style={{ marginTop: '0.5rem', fontSize: '0.9rem' }}>
+              Start typing to find your country.
+            </p>
+          ) : null}
+          <div style={{ marginTop: '0.75rem', display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+            {homeCountryQuery.trim()
+              ? step.options
+                  .filter((opt) => opt.toLowerCase().includes(homeCountryQuery.trim().toLowerCase()))
+                  .slice(0, 80)
+                  .map((opt) => (
+                    <button
+                      key={opt}
+                      type="button"
+                      className={`onboarding-chip ${value === opt ? 'selected' : ''}`}
+                      onClick={() => {
+                        setAnswers((a) => {
+                          const next = { ...a, [step.id]: opt }
+                          if (step.id === 'q_home_country' && opt !== HOME_COUNTRY_UNITED_STATES) {
+                            next.q_home_state = ''
+                          }
+                          return next
+                        })
+                        setHomeCountryQuery('')
+                      }}
+                      disabled={saving}
+                    >
+                      {opt}
+                    </button>
+                  ))
+              : null}
+          </div>
+        </div>
+      )}
+
+      {step?.type === 'select' && step.options && (
+        <select
+          className="auth-input"
+          value={typeof value === 'string' ? value : ''}
+          onChange={(e) => setAnswers((a) => ({ ...a, [step.id]: e.target.value }))}
+          disabled={saving}
+          aria-label={step.question}
+        >
+          <option value="">Skip (optional)</option>
+          {step.options.map((opt) => (
+            <option key={opt} value={opt}>
+              {opt}
+            </option>
+          ))}
+        </select>
       )}
 
       {step?.type === 'multi_select' && step.options && (
