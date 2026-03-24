@@ -196,7 +196,7 @@ export function messageEntryFirstTimeMessages(
   appBase: string = 'https://letsfika.vercel.app'
 ): string[] {
   const base = appBase.trim().replace(/\/$/, '') || 'https://letsfika.vercel.app'
-  const msg1 = `You're in.\n\nComplete your intake — we'll reach out by text when we find a good Fika intro for you.`
+  const msg1 = `You're in. We'll text you when we have a good Fika intro for you.`
   const msg2 = `To edit your profile or learn more, use the link I'll send next.`
   const msg3Link = `${base}/app`
   return [msg1, msg2, msg3Link]
@@ -205,11 +205,10 @@ export function messageEntryFirstTimeMessages(
 /** First-time entry when user's market is inactive. Returns 3 messages (URL standalone). */
 export function messageEntryFirstTimeMessagesInactiveMarket(
   appBase: string = 'https://letsfika.vercel.app',
-  cityLabel?: string | null
+  _cityLabel?: string | null
 ): string[] {
   const base = appBase.trim().replace(/\/$/, '') || 'https://letsfika.vercel.app'
-  const city = cityLabel?.trim() || 'your city'
-  const msg1 = `You're in.\n\nWe're still building the Fika community in ${city}. Keep an eye on your portal for updates when we launch.`
+  const msg1 = `You're in. We're not actively growing Fika in your area just yet, but we hope to be soon. When that changes, we'll reach out.`
   const msg2 = `To edit your profile or learn more, use the link I'll send next.`
   const msg3Link = `${base}/app`
   return [msg1, msg2, msg3Link]
@@ -221,9 +220,8 @@ export function messageMarketGoLive(cityLabel: string, _nextMondayPhrase: string
 }
 
 /** Reply when user in an inactive market texts in. */
-export function messageInactiveMarketReply(placeLabel: string): string {
-  const city = placeLabel?.trim() || 'your city'
-  return `We're still building the Fika community in ${city}. Keep an eye on your portal for updates when we launch.`
+export function messageInactiveMarketReply(_placeLabel: string): string {
+  return `We're not actively growing Fika in your area just yet, but we hope to be soon. When that changes, we'll reach out.`
 }
 
 export function messageEntry(): string {

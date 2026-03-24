@@ -85,7 +85,7 @@ export default function Home() {
                 <div className="step-content">
                   <h3 className="step-title">We reach out when we find a good intro</h3>
                   <p className="step-text">
-                    Once your intake is complete, we look for a good Fika intro for you. When we find one, we&apos;ll reach out by text and ask for your availability to schedule.
+                    We&apos;ll text you when we have a good Fika intro for you. Then we&apos;ll ask for your availability to schedule.
                   </p>
                 </div>
               </li>

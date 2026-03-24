@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 /**
  * City markets for Fika: groups of cities that share a 250-person threshold for opt-in.
- * Used for profile count and "building community in [city]" messaging.
+ * Used for profile count and market-based SMS/UI (active vs inactive area).
  * Santa Monica, Culver City, Ladera Heights, etc. count as Los Angeles.
  *
  * Market is resolved in two ways:

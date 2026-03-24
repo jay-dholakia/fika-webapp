@@ -17,6 +17,7 @@ const PERSONA_EMBED_CONFIGURED = Boolean(
 export default function HowItWorksPage() {
   const [userId, setUserId] = useState<string | null>(null)
   const [shareCopied, setShareCopied] = useState(false)
+  const [marketActive, setMarketActive] = useState<boolean | null>(null)
   const {
     loading: onboardingLoading,
     isComplete: questionnaireComplete,
@@ -32,6 +33,24 @@ export default function HowItWorksPage() {
   }, [])
 
   const marketSlug = profile?.market ?? (profile?.city ? getMarketFromCity(profile.city)?.slug ?? null : null)
+
+  useEffect(() => {
+    if (!marketSlug) {
+      setMarketActive(null)
+      return
+    }
+    let cancelled = false
+    fetch(`/api/profile-count?market=${encodeURIComponent(marketSlug)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { active?: boolean } | null) => {
+        if (cancelled || !data || typeof data.active !== 'boolean') return
+        setMarketActive(data.active)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [marketSlug])
   const cityLabel = marketSlug ? (getMarketBySlug(marketSlug)?.label ?? 'your area') : 'your area'
   const SHARE_TEXT = marketSlug
     ? `Join me on Fika in ${cityLabel} — real conversations over coffee with people nearby.`
@@ -52,7 +71,18 @@ export default function HowItWorksPage() {
       <div className="app-card app-welcome-card">
         <h1 className="app-welcome-card-title">Welcome to Fika!</h1>
         <p className="app-welcome-card-text">
-          You&apos;re in—we match you for thoughtful coffee conversations with people nearby. Finish your intake if you haven&apos;t yet, and we&apos;ll text you when we have a good intro.
+          {marketActive === false ? (
+            <>
+              You&apos;re in. We&apos;re not actively growing Fika in your area just yet, but we hope to be soon. When that
+              changes, we&apos;ll reach out. Finish your intake if you haven&apos;t yet, so we&apos;re ready when we can
+              match you.
+            </>
+          ) : (
+            <>
+              You&apos;re in. We&apos;ll text you when we have a good Fika intro for you. Finish your intake if you
+              haven&apos;t yet — that&apos;s how we find you a good match.
+            </>
+          )}
         </p>
       </div>
 
@@ -98,7 +128,18 @@ export default function HowItWorksPage() {
             <div className="app-how-it-works-step-content">
               <span className="app-how-it-works-when">We text you when there&apos;s a good intro</span>
               <span className="app-how-it-works-what">
-                There&apos;s no waitlist threshold—we&apos;re matching in {cityLabel}. After your intake is complete, we only text when we have a real Fika intro for you. Know someone who&apos;d enjoy this? Invite them below.
+                {marketActive === false ? (
+                  <>
+                    We&apos;re not actively growing Fika in your area just yet, but we hope to be soon. When that changes,
+                    we&apos;ll reach out. Know someone who&apos;d enjoy this? Invite them below.
+                  </>
+                ) : (
+                  <>
+                    We&apos;ll text you when we have a good Fika intro for you. We&apos;re matching in {cityLabel}. After
+                    your intake is complete, we only text when we have a real Fika intro for you. Know someone who&apos;d
+                    enjoy this? Invite them below.
+                  </>
+                )}
               </span>
               <div className="app-how-it-works-250-block">
                 <div className="app-how-it-works-invite-row">

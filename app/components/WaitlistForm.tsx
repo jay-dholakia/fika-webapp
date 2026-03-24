@@ -248,7 +248,7 @@ export default function WaitlistForm() {
           aria-describedby="waitlist-consent-text"
         />
         <span id="waitlist-consent-text" className="cta-consent-text">
-          By clicking Notify me, you agree to receive SMS and/or email from Fika about when we launch in your city. Message &amp; data rates may apply for SMS. Reply STOP to opt out of SMS, HELP for help.
+          By clicking Notify me, you agree to receive SMS and/or email from Fika with updates about Fika in your area. Message &amp; data rates may apply for SMS. Reply STOP to opt out of SMS, HELP for help.
         </span>
       </label>
       {message && (

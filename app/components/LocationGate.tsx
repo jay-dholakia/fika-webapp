@@ -172,7 +172,7 @@ export default function LocationGate() {
   if (status === 'la') {
     return (
       <div className="location-gate-result location-gate-la">
-        <p className="location-gate-result-title">You&apos;re in our launch city.</p>
+        <p className="location-gate-result-title">You&apos;re in an area we&apos;re matching in.</p>
         <p className="location-gate-result-body">Text us at our number to get started. We&apos;ll send you a link to complete your profile.</p>
         <Link href="/" className="btn btn-primary">
           Go to home
@@ -184,8 +184,10 @@ export default function LocationGate() {
   if (status === 'not_la') {
     return (
       <div className="location-gate-result location-gate-not-la">
-        <p className="location-gate-result-title">We&apos;re currently in Los Angeles.</p>
-        <p className="location-gate-result-body">Fika is launching in LA first. Join the waitlist and we&apos;ll let you know when we expand to your city.</p>
+        <p className="location-gate-result-title">We&apos;re focused on Los Angeles first.</p>
+        <p className="location-gate-result-body">
+          Join the waitlist for updates when we can offer Fika intros in your area.
+        </p>
         <a href="#cta" className="btn btn-primary">
           Join the waitlist
         </a>

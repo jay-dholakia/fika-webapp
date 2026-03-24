@@ -359,7 +359,7 @@ function AppHomeContent() {
         ) : isInactiveMarket ? (
           <>
             <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem', marginBottom: '1rem' }}>
-              Fika isn&apos;t open in {marketLabel ?? 'your area'} yet. Know someone who&apos;d want in? Invite them—we&apos;ll let you know when we launch here.
+              We&apos;re not actively growing Fika in your area just yet, but we hope to be soon. When that changes, we&apos;ll reach out. Know someone who&apos;d want in? Invite them below.
             </p>
             <div className="app-how-it-works-invite-row" style={{ marginTop: '0.5rem' }}>
               <button
@@ -396,7 +396,7 @@ function AppHomeContent() {
         ) : (
           <>
             <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem', marginBottom: '1rem' }}>
-              You&apos;re all set. We&apos;ll reach out when we find a good Fika intro for you, then ask for your availability when we&apos;re scheduling your intro.
+              You&apos;re in. We&apos;ll text you when we have a good Fika intro for you. When it&apos;s time to schedule, we&apos;ll ask for your availability.
             </p>
             {CONCIERGE_NUMBER && (
               <a

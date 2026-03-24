@@ -151,9 +151,9 @@ export default function AvailabilityPage() {
   if (marketActive === false) {
     return (
       <div className="app-card">
-        <h2 className="app-page-title">Your city isn’t active yet</h2>
+        <h2 className="app-page-title">Availability</h2>
         <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem', marginTop: '0.5rem' }}>
-          Once it&apos;s active, this is where you&apos;ll set your availability so we can find a Fika time that works for you and your match.
+          We&apos;re not actively growing Fika in your area just yet, but we hope to be soon. When that changes, we&apos;ll reach out—and this is where you&apos;ll set times that work when we have a match to schedule.
         </p>
       </div>
     )

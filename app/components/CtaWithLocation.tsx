@@ -118,7 +118,7 @@ export default function CtaWithLocation() {
           aria-describedby="cta-consent-email-text"
         />
         <span id="cta-consent-email-text" className="cta-consent-text">
-          I agree to receive email from Fika when we launch. Unsubscribe anytime.
+          I agree to receive email from Fika with updates about Fika in my area. Unsubscribe anytime.
         </span>
       </label>
       {waitlistMessage && (
