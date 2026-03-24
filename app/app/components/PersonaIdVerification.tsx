@@ -14,6 +14,9 @@ type PersonaConstructor = new (opts: {
   templateId: string
   environmentId: string
   referenceId: string
+  /** Required when our page is nested in iframes; also helps Persona match the allowlisted origin (include https://). */
+  frameAncestors?: string[]
+  messageTargetOrigin?: string
   onReady?: () => void
   onComplete: (args: { inquiryId: string; status?: string }) => void | Promise<void>
   onCancel?: () => void
@@ -64,10 +67,15 @@ export function PersonaIdVerification({ userId, idVerifiedAt, onVerified }: Pers
     }
     if (clientRef.current) return clientRef.current
 
+    const iframeOrigin =
+      process.env.NEXT_PUBLIC_PERSONA_IFRAME_ORIGIN?.trim() || window.location.origin
+
     const client = new Ctor({
       templateId,
       environmentId,
       referenceId: userId,
+      frameAncestors: [iframeOrigin],
+      messageTargetOrigin: iframeOrigin,
       onComplete: async ({ inquiryId }) => {
         setBusy(true)
         setError(null)
