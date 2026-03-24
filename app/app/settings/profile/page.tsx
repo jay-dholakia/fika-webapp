@@ -16,6 +16,8 @@ import type { IntakeResponseItem } from '@/lib/db-types'
 import { toE164, isValidPhone } from '@/lib/phone'
 import { getMarketFromCityOrLatLngWithDb } from '@/lib/markets'
 import { SmsConciergeCta } from '@/app/app/components/SmsConciergeCta'
+import { PersonaIdVerification } from '@/app/app/components/PersonaIdVerification'
+import { VerifiedBadge } from '@/app/app/components/VerifiedBadge'
 
 function parseDate(s: string): string | null {
   const d = new Date(s)
@@ -32,9 +34,14 @@ function is18Plus(dateStr: string): boolean {
   return age >= 18
 }
 
+const PERSONA_EMBED_CONFIGURED = Boolean(
+  process.env.NEXT_PUBLIC_PERSONA_TEMPLATE_ID?.trim() &&
+    process.env.NEXT_PUBLIC_PERSONA_ENVIRONMENT_ID?.trim()
+)
+
 export default function SettingsProfilePage() {
   const [userId, setUserId] = useState<string | null>(null)
-  const { loading: statusLoading, profile, intake } = useOnboardingStatus(userId ?? undefined)
+  const { loading: statusLoading, profile, intake, refetch } = useOnboardingStatus(userId ?? undefined)
   const [answers, setAnswers] = useState<AnswersState>({})
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -391,6 +398,28 @@ export default function SettingsProfilePage() {
         <p style={{ color: 'var(--color-textSecondary)', marginBottom: '1.5rem' }}>
           Edit your profile and questionnaire below. Changes are saved when you click Save.
         </p>
+        {profile?.id_verified_at && typeof answers.first_name === 'string' && answers.first_name.trim() ? (
+          <div className="profile-verified-name-line">
+            <span>{answers.first_name.trim()}</span>
+            <VerifiedBadge />
+          </div>
+        ) : null}
+
+        {PERSONA_EMBED_CONFIGURED ? (
+          <section className="profile-section">
+            <h3 className="profile-section-title">Get ID verified</h3>
+            <p style={{ color: 'var(--color-textSecondary)', marginBottom: '0.75rem', fontSize: '0.95rem' }}>
+              Confirm your identity with Persona. When you&apos;re verified, a blue check appears next to your name for matches.
+            </p>
+            {userId && (
+              <PersonaIdVerification
+                userId={userId}
+                idVerifiedAt={profile?.id_verified_at ?? null}
+                onVerified={refetch}
+              />
+            )}
+          </section>
+        ) : null}
 
         <section className="profile-section">
           <h3 className="profile-section-title">Profile</h3>

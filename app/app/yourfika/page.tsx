@@ -12,6 +12,7 @@ import { getMarketBySlug, getMarketFromCity } from '@/lib/markets'
 import { useOnboardingStatus } from '@/lib/use-onboarding'
 import { formatIntakeAnswer, ageFromBirthdate } from '@/lib/intro-detail'
 import { IntroDetailModal, type IntroMatch } from '@/app/app/components/IntroDetailModal'
+import { VerifiedBadge } from '@/app/app/components/VerifiedBadge'
 import { NewQuestionsFlow } from '@/app/app/components/NewQuestionsFlow'
 import type { IntakeResponseItem } from '@/lib/db-types'
 
@@ -216,7 +217,7 @@ function AppHomeContent() {
           matches.map((m: { user_a: string; user_b: string }) => m.user_a === userId ? m.user_b : m.user_a)
         ))
         Promise.allSettled([
-          supabase.from('profiles').select('id, first_name, city, birthdate').in('id', otherIds),
+          supabase.from('profiles').select('id, first_name, city, birthdate, id_verified_at').in('id', otherIds),
           supabase.from('opt_ins').select('match_id, decision').eq('user_id', userId).in('match_id', matchIds),
           supabase.from('intake_responses_v5').select('user_id, responses').in('user_id', otherIds),
           supabase
@@ -230,9 +231,30 @@ function AppHomeContent() {
           const intakeRes = intakeSettled.status === 'fulfilled' ? intakeSettled.value : { data: null, error: null }
           const statesRes = statesSettled.status === 'fulfilled' ? statesSettled.value : { data: null, error: null }
           // Build list even when profiles fail (e.g. RLS) so we don't hide matches – use empty profile data
-          const profiles = (profilesRes?.data ?? []) as { id: string; first_name: string | null; city: string | null; birthdate: string | null }[]
-          const byId = profiles.reduce<Record<string, { first_name: string; city: string | null; birthdate: string | null }>>((acc, p) => {
-            acc[p.id] = { first_name: p.first_name?.trim() || 'Someone', city: p.city ?? null, birthdate: p.birthdate ?? null }
+          const profiles = (profilesRes?.data ?? []) as {
+            id: string
+            first_name: string | null
+            city: string | null
+            birthdate: string | null
+            id_verified_at: string | null
+          }[]
+          const byId = profiles.reduce<
+            Record<
+              string,
+              {
+                first_name: string
+                city: string | null
+                birthdate: string | null
+                id_verified_at: string | null
+              }
+            >
+          >((acc, p) => {
+            acc[p.id] = {
+              first_name: p.first_name?.trim() || 'Someone',
+              city: p.city ?? null,
+              birthdate: p.birthdate ?? null,
+              id_verified_at: p.id_verified_at ?? null,
+            }
             return acc
           }, {})
           const myOptIns = ((optInsRes?.data ?? []) as { match_id: string; decision: string }[]).reduce<Record<string, 'yes' | 'no'>>((acc, o) => {
@@ -276,6 +298,7 @@ function AppHomeContent() {
               otherUserId: otherId,
               otherFirstName: profile?.first_name ?? 'Someone',
               otherCity: profile?.city ?? null,
+              otherIdVerified: Boolean(profile?.id_verified_at),
               otherAge: profile?.birthdate != null ? ageFromBirthdate(profile.birthdate) : null,
               score: m.score ?? null,
               reasons: (m.reasons as IntroMatch['reasons']) ?? null,
@@ -411,8 +434,10 @@ function AppHomeContent() {
                     onClick={() => setModalIntro(intro)}
                   >
                     <div className="app-intro-card-body">
-                      <strong className="app-intro-name">{intro.otherFirstName}</strong>
-                      {intro.otherCity && <span className="app-intro-meta"> · {intro.otherCity}</span>}
+                      <span className="app-intro-name app-intro-name-with-badge">
+                        <strong className="app-intro-name-text">{intro.otherFirstName}</strong>
+                        {intro.otherIdVerified ? <VerifiedBadge /> : null}
+                      </span>
                       {intro.otherAge != null && <span className="app-intro-meta"> · {intro.otherAge} years old</span>}
                       {(intro.reasons?.conversationHooks?.length || intro.reasons?.conversation_hooks?.length || intro.fikaPreferencePreview) ? (
                         <p className="app-intro-preview">

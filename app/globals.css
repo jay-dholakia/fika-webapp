@@ -2982,6 +2982,42 @@ a {
   font-size: 1.05rem;
   color: var(--color-text);
 }
+.app-intro-name-with-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+.app-intro-name-text {
+  font-weight: 600;
+}
+.app-modal-title--intro.app-intro-name-with-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.app-verified-badge {
+  display: inline-flex;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+.profile-verified-name-line {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0 1rem;
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+.profile-persona-verified {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 500;
+}
 .app-intro-meta {
   font-size: 0.95rem;
   color: var(--color-textSecondary);
@@ -3094,6 +3130,35 @@ a {
   padding: 1.25rem 1.25rem 0.5rem;
   gap: 0.5rem;
 }
+.app-modal-header--intro {
+  flex-direction: column;
+  align-items: stretch;
+  position: relative;
+  padding-top: 2.5rem;
+  padding-bottom: 0.25rem;
+}
+.app-modal-header--intro .app-modal-close {
+  position: absolute;
+  top: 0.65rem;
+  right: 0.65rem;
+}
+.app-modal-header-intro-column {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.65rem;
+  width: 100%;
+}
+.app-modal-header-avatar--intro {
+  width: 5.5rem;
+  height: 5.5rem;
+  font-size: 1.75rem;
+}
+.app-modal-title--intro {
+  width: 100%;
+  text-align: center;
+}
 .app-modal-header-title-row {
   display: flex;
   align-items: center;
@@ -3180,7 +3245,19 @@ a {
 .app-intro-detail-meta {
   font-size: 0.95rem;
   color: var(--color-textSecondary);
+  margin-bottom: 0.75rem;
+}
+.app-intro-at-a-glance {
   margin-bottom: 1rem;
+}
+.app-intro-at-a-glance-lede {
+  margin: 0 0 0.5rem;
+  font-size: 0.98rem;
+  line-height: 1.55;
+  color: var(--color-text);
+}
+.app-intro-at-a-glance-bullets {
+  margin-top: 0.25rem;
 }
 .app-intro-detail-section {
   margin-bottom: 1.25rem;

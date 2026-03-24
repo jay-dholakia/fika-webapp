@@ -20,6 +20,9 @@ export type ProfileRow = {
   sms_opted_out_at?: string | null // ISO; when set, we don't send SMS until they text back
   languages?: string[] | null
   avatar_url?: string | null
+  /** ISO timestamp when Persona government-ID verification succeeded */
+  id_verified_at?: string | null
+  persona_inquiry_id?: string | null
   intent_confirmed_at: string | null // ISO
   in_match_bowl?: boolean
   intro_balance?: number
@@ -42,6 +45,8 @@ export type IntakeResponsesV5Row = {
   availability_times?: string[] | null
   completed_at: string | null // ISO
   embed_vector?: string | number[] | null
+  /** See `IntroCardSummary` in intro-card-summary.ts */
+  intro_card_summary?: { paragraph: string; bullets: string[]; source?: string } | null
   updated_at?: string
   created_at?: string
 }

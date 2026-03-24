@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { buildIntakeEmbeddingText } from '@/lib/intake-embedding-text'
 import type { IntakeResponseItem } from '@/lib/db-types'
+import { computeAndStoreIntroCardSummary } from '@/lib/intro-card-summary-server'
 
 async function fetchOpenAiEmbedding(text: string, apiKey: string): Promise<number[]> {
   const res = await fetch('https://api.openai.com/v1/embeddings', {
@@ -60,6 +61,11 @@ export async function computeAndStoreIntakeEmbedding(
         })
         .eq('user_id', userId)
       if (updateError) return { ok: false, error: updateError.message }
+      try {
+        await computeAndStoreIntroCardSummary(supabase, userId, openaiKey)
+      } catch {
+        /* non-fatal: modal uses client fallback if column missing or RLS */
+      }
       return { ok: true, embedded: true, completedAt }
     } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : 'Embedding failed' }
@@ -74,5 +80,10 @@ export async function computeAndStoreIntakeEmbedding(
     })
     .eq('user_id', userId)
   if (updateError) return { ok: false, error: updateError.message }
+  try {
+    await computeAndStoreIntroCardSummary(supabase, userId, openaiKey)
+  } catch {
+    /* non-fatal */
+  }
   return { ok: true, embedded: false, completedAt }
 }

@@ -7,6 +7,12 @@ import {
   formatIntakeAnswer,
   filterSafeIntakeResponses,
 } from '@/lib/intro-detail'
+import {
+  parseIntroCardSummary,
+  buildIntroCardFallback,
+  type IntroCardSummary,
+} from '@/lib/intro-card-summary'
+import { VerifiedBadge } from '@/app/app/components/VerifiedBadge'
 import { summarizeAvailabilitySlots, getAvailabilitySlotLabel } from '@/lib/availability-slots'
 import type { IntakeResponseItem } from '@/lib/db-types'
 
@@ -46,6 +52,8 @@ export type IntroMatch = {
   /** When confirmed: venue name and neighborhood for card/modal display */
   confirmedVenueName?: string | null
   confirmedVenueNeighborhood?: string | null
+  /** True when the other user completed Persona ID verification */
+  otherIdVerified?: boolean
 }
 
 type ModalDetail = {
@@ -55,8 +63,10 @@ type ModalDetail = {
     pronouns: string | null
     avatar_url: string | null
     languages: string[] | null
+    id_verified_at: string | null
   }
   intakeResponses: IntakeResponseItem[]
+  introCardSummary: IntroCardSummary
 }
 
 type IntroDetailModalProps = {
@@ -102,7 +112,7 @@ export function IntroDetailModal({
     Promise.all([
       supabase
         .from('profiles')
-        .select('birthdate, bio_text, pronouns, avatar_url, languages')
+        .select('birthdate, bio_text, pronouns, avatar_url, languages, id_verified_at')
         .eq('id', intro.otherUserId)
         .single()
         .then((r) => {
@@ -115,59 +125,86 @@ export function IntroDetailModal({
             log('profile fetch: no data')
             return null
           }
-          const d = r.data as { birthdate?: string | null; bio_text?: string | null; pronouns?: string | null; avatar_url?: string | null; languages?: string[] | null }
+          const d = r.data as {
+            birthdate?: string | null
+            bio_text?: string | null
+            pronouns?: string | null
+            avatar_url?: string | null
+            languages?: string[] | null
+            id_verified_at?: string | null
+          }
           const profile = {
             birthdate: d.birthdate ?? null,
             bio_text: d.bio_text ?? null,
             pronouns: d.pronouns ?? null,
             avatar_url: d.avatar_url ?? null,
             languages: Array.isArray(d.languages) ? d.languages : null,
+            id_verified_at: d.id_verified_at ?? null,
           }
           log('profile loaded', { hasAvatar: !!profile.avatar_url, hasBio: !!profile.bio_text?.trim(), hasLanguages: !!profile.languages?.length })
           return profile
         }),
       supabase
         .from('intake_responses_v5')
-        .select('responses')
+        .select('responses, intro_card_summary')
         .eq('user_id', intro.otherUserId)
         .maybeSingle()
         .then((r) => {
-          if (cancelled) return []
+          if (cancelled) return { responses: [] as IntakeResponseItem[], introRaw: null as unknown }
           if (r.error) {
             log('intake fetch error', { error: r.error.message, code: r.error.code })
-            return []
+            return { responses: [] as IntakeResponseItem[], introRaw: null }
           }
           if (r.data == null) {
             log('intake fetch: no row (user may have no intake, or RLS blocking matched-user read)')
-            return []
+            return { responses: [] as IntakeResponseItem[], introRaw: null }
           }
           const responses = r.data?.responses
           if (!Array.isArray(responses)) {
             log('intake fetch: responses not array', { raw: responses == null ? 'null/undefined' : typeof responses })
-            return []
+            return { responses: [] as IntakeResponseItem[], introRaw: null }
           }
           const filtered = filterSafeIntakeResponses(responses as IntakeResponseItem[])
           log('intake loaded', { rawCount: responses.length, safeCount: filtered.length, questionIds: filtered.map((x) => x.question_id) })
-          return filtered
+          return { responses: filtered, introRaw: r.data.intro_card_summary }
         }),
     ])
-      .then(([profile, intakeResponses]) => {
+      .then(([profile, intakeBundle]) => {
         if (cancelled) return
+        const intakeResponses = intakeBundle.responses
+        const stored = parseIntroCardSummary(intakeBundle.introRaw)
+        const introCardSummary = stored ?? buildIntroCardFallback(intakeResponses)
         log('detail set', {
           hasProfile: !!profile,
           intakeCount: intakeResponses?.length ?? 0,
         })
         setDetail({
-          profile: profile ?? { birthdate: null, bio_text: null, pronouns: null, avatar_url: null, languages: null },
+          profile: profile ?? {
+            birthdate: null,
+            bio_text: null,
+            pronouns: null,
+            avatar_url: null,
+            languages: null,
+            id_verified_at: null,
+          },
           intakeResponses: intakeResponses ?? [],
+          introCardSummary,
         })
       })
       .catch((err) => {
         if (!cancelled) {
           log('fetch failed', err)
           setDetail({
-            profile: { birthdate: null, bio_text: null, pronouns: null, avatar_url: null, languages: null },
+            profile: {
+              birthdate: null,
+              bio_text: null,
+              pronouns: null,
+              avatar_url: null,
+              languages: null,
+              id_verified_at: null,
+            },
             intakeResponses: [],
+            introCardSummary: buildIntroCardFallback([]),
           })
         }
       })
@@ -236,26 +273,30 @@ export function IntroDetailModal({
   return (
     <div className="app-modal-overlay" onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="intro-modal-title">
       <div className="app-modal" onClick={(e) => e.stopPropagation()}>
-        <header className="app-modal-header">
-          <div className="app-modal-header-title-row">
+        <header className="app-modal-header app-modal-header--intro">
+          <button type="button" className="app-modal-close" onClick={onClose} aria-label="Close">
+            ×
+          </button>
+          <div className="app-modal-header-intro-column">
             {detail?.profile?.avatar_url ? (
               <img
                 src={detail.profile.avatar_url}
                 alt=""
-                className="app-modal-header-avatar"
+                className="app-modal-header-avatar app-modal-header-avatar--intro"
               />
             ) : (
-              <span className="app-modal-header-avatar app-modal-header-avatar-fallback" aria-hidden>
+              <span
+                className="app-modal-header-avatar app-modal-header-avatar-fallback app-modal-header-avatar--intro"
+                aria-hidden
+              >
                 {intro.otherFirstName?.charAt(0)?.toUpperCase() || '?'}
               </span>
             )}
-            <h2 id="intro-modal-title" className="app-modal-title">
-              {intro.otherFirstName}
+            <h2 id="intro-modal-title" className="app-modal-title app-modal-title--intro app-intro-name-with-badge">
+              <span>{intro.otherFirstName}</span>
+              {(intro.otherIdVerified || detail?.profile?.id_verified_at) ? <VerifiedBadge /> : null}
             </h2>
           </div>
-          <button type="button" className="app-modal-close" onClick={onClose} aria-label="Close">
-            ×
-          </button>
         </header>
 
         <div className="app-modal-body">
@@ -266,14 +307,27 @@ export function IntroDetailModal({
               <div className="app-intro-detail-profile">
                 <div className="app-intro-detail-profile-text">
                   <div className="app-intro-detail-meta">
-                    {intro.otherCity && <span>{intro.otherCity}</span>}
-                    {age != null && (
-                      <span>{intro.otherCity ? ' · ' : ''}{age} years old</span>
-                    )}
+                    {age != null && <span>{age} years old</span>}
                     {detail?.profile?.pronouns && (
-                      <span> · {detail.profile.pronouns}</span>
+                      <span>{age != null ? ' · ' : ''}{detail.profile.pronouns}</span>
                     )}
                   </div>
+                  {detail?.introCardSummary &&
+                    (detail.introCardSummary.paragraph.trim() || detail.introCardSummary.bullets.length > 0) ? (
+                    <section className="app-intro-detail-section app-intro-at-a-glance">
+                      <h3 className="app-intro-detail-section-title">At a glance</h3>
+                      {detail.introCardSummary.paragraph.trim() ? (
+                        <p className="app-intro-at-a-glance-lede">{detail.introCardSummary.paragraph}</p>
+                      ) : null}
+                      {detail.introCardSummary.bullets.length > 0 ? (
+                        <ul className="app-intro-detail-hooks app-intro-at-a-glance-bullets">
+                          {detail.introCardSummary.bullets.map((line, i) => (
+                            <li key={i}>{line}</li>
+                          ))}
+                        </ul>
+                      ) : null}
+                    </section>
+                  ) : null}
                   {detail?.profile?.languages?.length ? (
                     <p className="app-intro-detail-languages">
                       Speaks {detail.profile.languages.join(', ')}
@@ -329,17 +383,6 @@ export function IntroDetailModal({
                   <ul className="app-intro-detail-hooks">
                     {(intro.reasons?.whyWeIntroducedYou ?? []).map((line, i) => (
                       <li key={i}>{line}</li>
-                    ))}
-                  </ul>
-                </section>
-              ) : null}
-
-              {conversationHooks.length > 0 ? (
-                <section className="app-intro-detail-section">
-                  <h3 className="app-intro-detail-section-title">Start here</h3>
-                  <ul className="app-intro-detail-hooks">
-                    {conversationHooks.slice(0, 4).map((hook, i) => (
-                      <li key={i}>{hook}</li>
                     ))}
                   </ul>
                 </section>
