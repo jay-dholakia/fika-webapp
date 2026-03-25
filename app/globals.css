@@ -1651,6 +1651,14 @@ a {
 .onboarding-avatar-label:hover {
   opacity: 0.95;
 }
+.onboarding-avatar-photo-error {
+  margin: 0;
+  max-width: 22rem;
+  text-align: center;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  color: var(--color-error);
+}
 .onboarding-progress {
   height: 3px;
   background: var(--color-border);

@@ -77,13 +77,14 @@ export async function checkProfilePhotoSingleFace(file: File): Promise<ProfilePh
       return {
         ok: false,
         message:
-          "We couldn't detect a clear face. Use a well-lit photo where your face fills a good part of the frame.",
+          "Photo didn't pass. Pick a clear, front-facing shot so people know who they're meeting through Fika.",
       }
     }
     if (valid.length > 1) {
       return {
         ok: false,
-        message: 'Please use a photo with only one face.',
+        message:
+          'Please use a photo with only one face in the frame so your profile matches who shows up for intros.',
       }
     }
     return { ok: true }

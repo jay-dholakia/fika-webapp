@@ -171,6 +171,7 @@ function AppOnboardingContent() {
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null)
   const [avatarFaceChecking, setAvatarFaceChecking] = useState(false)
+  const [avatarPhotoError, setAvatarPhotoError] = useState<string | null>(null)
   const [languageQuery, setLanguageQuery] = useState('')
   const submitRef = useRef<HTMLButtonElement>(null)
   const lastMultiSelectRef = useRef<{ stepId: string; opt: string; t: number }>({ stepId: '', opt: '', t: 0 })
@@ -390,6 +391,7 @@ function AppOnboardingContent() {
 
   async function handleSubmit() {
     setError(null)
+    setAvatarPhotoError(null)
     const err = validateAll()
     if (err) {
       setError(err)
@@ -1038,6 +1040,11 @@ function AppOnboardingContent() {
               <label htmlFor="onboarding-avatar" className="onboarding-avatar-label">
                 {avatarFaceChecking ? 'Checking…' : avatarFile || answers.avatar_url ? 'Change photo' : 'Choose photo'}
               </label>
+              {avatarPhotoError ? (
+                <p className="onboarding-avatar-photo-error" role="alert">
+                  {avatarPhotoError}
+                </p>
+              ) : null}
             </div>
           </div>
           <div className="onboarding-field-wrap onboarding-consent-card">
