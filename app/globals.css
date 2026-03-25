@@ -1624,6 +1624,12 @@ a {
   border-color: var(--color-primary);
   background: var(--color-primary-soft);
 }
+.onboarding-avatar-zone.onboarding-avatar-zone--error {
+  border-color: var(--color-error);
+}
+.onboarding-avatar-zone.onboarding-avatar-zone--error.has-file {
+  border-color: var(--color-error);
+}
 .onboarding-avatar-preview {
   width: 96px;
   height: 96px;
@@ -1651,10 +1657,19 @@ a {
 .onboarding-avatar-label:hover {
   opacity: 0.95;
 }
-.onboarding-avatar-photo-error {
+.onboarding-confirm-errors {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.onboarding-confirm-errors .onboarding-avatar-photo-error {
   margin: 0;
+}
+.onboarding-avatar-photo-error {
+  margin: 0.75rem 0 0;
   max-width: 22rem;
-  text-align: center;
+  text-align: left;
   font-size: 0.875rem;
   line-height: 1.4;
   color: var(--color-error);

@@ -39,6 +39,20 @@ const CONFIRM_STEP = INTAKE_STEPS.find((s) => s.id === 'confirm_intent')!
 const LOCATION_STEP = PROFILE_STEPS.find((s) => s.id === 'location')!
 const PROFILE_STEPS_BEFORE_LOCATION = PROFILE_STEPS.filter((s) => s.id !== 'location')
 
+/** Outline the avatar zone when the message is about the photo / upload (not e.g. zip lookup). */
+function isAvatarZoneErrorMessage(msg: string | null | undefined): boolean {
+  if (!msg) return false
+  return /profile photo|photo didn't|face|avatar|upload|only one face|verify this|couldn't read|couldn't verify/i.test(
+    msg
+  )
+}
+
+/** Zip / geolocation errors stay at the page bottom near the location controls. */
+function isLocationErrorMessage(msg: string | null | undefined): boolean {
+  if (!msg) return false
+  return /zip code|look up that zip|geolocation|location access|couldn't get your location/i.test(msg)
+}
+
 type AnswersState = Record<string, string | string[] | number | { city: string; lat: number; lng: number }>
 
 /** Prefill answers from existing profile + intake (logged-in flow). */
@@ -999,7 +1013,9 @@ function AppOnboardingContent() {
                 Verifying photo…
               </p>
             ) : null}
-            <div className={`onboarding-avatar-zone ${avatarFile || answers.avatar_url ? 'has-file' : ''}`}>
+            <div
+              className={`onboarding-avatar-zone ${avatarFile || answers.avatar_url ? 'has-file' : ''} ${avatarPhotoError || isAvatarZoneErrorMessage(error) ? 'onboarding-avatar-zone--error' : ''}`}
+            >
               {avatarPreviewUrl || (typeof answers.avatar_url === 'string' && answers.avatar_url) ? (
                 <img
                   src={avatarPreviewUrl ?? (answers.avatar_url as string)}
@@ -1018,11 +1034,12 @@ function AppOnboardingContent() {
                   const input = e.currentTarget
                   if (!f) return
                   setError(null)
+                  setAvatarPhotoError(null)
                   setAvatarFaceChecking(true)
                   try {
                     const result = await checkProfilePhotoSingleFace(f)
                     if (!result.ok) {
-                      setError(result.message)
+                      setAvatarPhotoError(result.message)
                       input.value = ''
                       return
                     }
@@ -1040,12 +1057,17 @@ function AppOnboardingContent() {
               <label htmlFor="onboarding-avatar" className="onboarding-avatar-label">
                 {avatarFaceChecking ? 'Checking…' : avatarFile || answers.avatar_url ? 'Change photo' : 'Choose photo'}
               </label>
-              {avatarPhotoError ? (
-                <p className="onboarding-avatar-photo-error" role="alert">
-                  {avatarPhotoError}
-                </p>
-              ) : null}
             </div>
+            {avatarPhotoError || (error && !isLocationErrorMessage(error)) ? (
+              <div className="onboarding-confirm-errors" role="alert">
+                {avatarPhotoError ? (
+                  <p className="onboarding-avatar-photo-error">{avatarPhotoError}</p>
+                ) : null}
+                {error && error !== avatarPhotoError && !isLocationErrorMessage(error) ? (
+                  <p className="onboarding-avatar-photo-error">{error}</p>
+                ) : null}
+              </div>
+            ) : null}
           </div>
           <div className="onboarding-field-wrap onboarding-consent-card">
             <h3 className="onboarding-question">{CONFIRM_STEP.question}</h3>
@@ -1093,7 +1115,11 @@ function AppOnboardingContent() {
         </section>
       </div>
 
-      {error && <p className="onboarding-error" role="alert">{error}</p>}
+      {error && isLocationErrorMessage(error) ? (
+        <p className="onboarding-error" role="alert">
+          {error}
+        </p>
+      ) : null}
     </div>
   )
 }
