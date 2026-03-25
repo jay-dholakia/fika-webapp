@@ -7,8 +7,9 @@ export type ProfilePhotoFaceCheckResult = { ok: true } | { ok: false; message: s
 
 const MP_VERSION = '0.10.17'
 const WASM_BASE = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VERSION}/wasm`
+/** BlazeFace short-range; use `.tflite` — the `*.task` URL no longer exists on GCS. */
 const FACE_MODEL =
-  'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/latest/blaze_face_short_range.task'
+  'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/latest/blaze_face_short_range.tflite'
 
 const MIN_CATEGORY_SCORE = 0.5
 /** Min share of image area covered by face bbox (rejects tiny background faces). */
