@@ -425,7 +425,6 @@ export default function SettingsProfilePage() {
                 key={opt}
                 type="button"
                 className={`onboarding-chip ${selected ? 'multi-selected' : ''}`}
-                onPointerDown={(e) => { if (e.button === 0) toggle() }}
                 onClick={toggle}
                 disabled={saving || (!isExclusiveOption && atMax && !selected)}
               >

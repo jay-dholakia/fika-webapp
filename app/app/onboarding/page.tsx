@@ -797,9 +797,6 @@ function AppOnboardingContent() {
                 key={opt}
                 type="button"
                 className={`onboarding-chip ${value === opt ? 'selected' : ''}`}
-                onPointerDown={(e) => {
-                  if (e.button === 0) setAnswers((a) => ({ ...a, [step.id]: opt }))
-                }}
                 onClick={() => setAnswers((a) => ({ ...a, [step.id]: opt }))}
                 disabled={saving}
               >
@@ -948,13 +945,6 @@ function AppOnboardingContent() {
                         key={opt}
                         type="button"
                         className={`onboarding-chip ${selected ? 'multi-selected' : ''}`}
-                        onPointerDown={(e) => {
-                          if (e.button === 0) {
-                            e.preventDefault()
-                            handleMultiSelect(opt)
-                            if (isSearchableTypeahead && !selected) setLanguageQuery('')
-                          }
-                        }}
                         onClick={(e) => {
                           e.preventDefault()
                           handleMultiSelect(opt)

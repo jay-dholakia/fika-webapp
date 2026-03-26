@@ -3728,6 +3728,100 @@ a {
   align-items: center;
   gap: 1rem;
 }
+.admin-nav-desktop {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+.admin-nav-toggle {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--color-text);
+  border-radius: 8px;
+  transition: background 0.2s, box-shadow 0.2s;
+}
+.admin-nav-toggle:hover {
+  background: var(--color-border);
+}
+.admin-nav-toggle:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--color-surface) inset, 0 0 0 4px var(--color-primary);
+}
+.admin-nav-toggle-bar {
+  display: block;
+  width: 22px;
+  height: 2px;
+  background: currentColor;
+  border-radius: 1px;
+  transition: transform 0.25s, opacity 0.25s;
+}
+.admin-nav-toggle[aria-expanded="true"] .admin-nav-toggle-bar:nth-child(1) {
+  transform: translateY(7px) rotate(45deg);
+}
+.admin-nav-toggle[aria-expanded="true"] .admin-nav-toggle-bar:nth-child(2) {
+  opacity: 0;
+}
+.admin-nav-toggle[aria-expanded="true"] .admin-nav-toggle-bar:nth-child(3) {
+  transform: translateY(-7px) rotate(-45deg);
+}
+
+.admin-nav-mobile {
+  display: none;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+  overflow: hidden;
+  max-height: 0;
+  transition: max-height 0.3s ease;
+}
+.admin-nav-mobile-open {
+  max-height: 340px;
+}
+.admin-nav-mobile-inner {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 0.75rem 1.5rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.admin-nav-mobile-inner .admin-link {
+  display: block;
+  padding: 0.6rem 0;
+  font-size: 1rem;
+  color: var(--color-text);
+}
+.admin-nav-mobile-inner .admin-link:hover {
+  text-decoration: none;
+  background: var(--color-background);
+  border-radius: 8px;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+}
+
+@media (max-width: 767px) {
+  .admin-badge-desktop {
+    display: none;
+  }
+  .admin-nav-desktop {
+    display: none;
+  }
+  .admin-nav-toggle {
+    display: flex;
+  }
+  .admin-nav-mobile {
+    display: block;
+  }
+}
 .admin-badge {
   font-size: 0.75rem;
   font-weight: 600;
