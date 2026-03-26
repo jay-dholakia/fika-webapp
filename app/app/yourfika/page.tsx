@@ -395,7 +395,7 @@ function AppHomeContent() {
         ) : (
           <>
             <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem', marginBottom: '1rem' }}>
-              You&apos;re in. We&apos;ll text you when we have a good Fika intro for you. When it&apos;s time to schedule, we&apos;ll ask for your availability.
+              You&apos;re in. We&apos;ll text you when we have a good Fika intro for you. Scheduling happens over SMS—we&apos;ll propose a time and place you can confirm by text.
             </p>
             <p style={{ fontSize: '0.95rem' }}>
               Keep your profile current so we can reach out when we find a good Fika intro for you.
@@ -456,7 +456,7 @@ function AppHomeContent() {
                       ) : null}
                     </div>
                     {intro.matchState === 'awaiting_availability' ? (
-                      <span className="app-intro-card-status">Set availability</span>
+                      <span className="app-intro-card-status">Scheduling</span>
                     ) : intro.myDecision === 'yes' ? (
                       <span className="app-intro-card-status">In progress</span>
                     ) : intro.myDecision === 'no' ? (
@@ -465,13 +465,6 @@ function AppHomeContent() {
                       <span className="app-intro-card-cta">View details →</span>
                     )}
                   </button>
-                  {intro.matchState === 'awaiting_availability' && (
-                    <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                      <Link href="/app/availability" className="btn btn-primary" style={{ display: 'inline-block' }}>
-                        Set availability
-                      </Link>
-                    </div>
-                  )}
                 </div>
               ))}
             </div>

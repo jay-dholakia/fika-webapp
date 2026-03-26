@@ -1,5 +1,5 @@
 // SMS cron: day-of reminder for confirmed Fikas today.
-// Uses PT "today" and real time from batch_week + confirmed_slot_id (same as 3h reminder).
+// "Today" is per match market (profiles.market → IANA zone); slot time uses same market zone.
 // Invoked by pg_cron. Requires SENDBLUE_API_KEY_ID, SENDBLUE_API_SECRET_KEY.
 
 declare const Deno: { env: { get(key: string): string | undefined } }
@@ -7,26 +7,14 @@ declare const Deno: { env: { get(key: string): string | undefined } }
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 // @ts-ignore Deno
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+// @ts-ignore Deno
+import { getFikaDateFromSlot, getTodayYmdInTimezone } from '../_shared/fika-schedule-time.ts'
+// @ts-ignore Deno
+import { fetchMarketMapForIds, timezoneForMatch } from '../_shared/fetch-match-market-map.ts'
 
 const SENDBLUE_URL = 'https://api.sendblue.co/api/send-message'
 
 const MS_24_H = 24 * 60 * 60 * 1000
-
-const DAY_OFFSET: Record<string, number> = { mon: 0, tue: 1, wed: 2, thu: 3, fri: 4, sat: 5, sun: 6 }
-
-/** Today (YYYY-MM-DD) in America/Los_Angeles. */
-function getTodayPT(): string {
-  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' })
-}
-
-/** Fika date (YYYY-MM-DD) from batch_week (Monday) + slotId (e.g. wed_14_30). */
-function getFikaDateFromSlot(batchWeek: string, slotId: string): string {
-  const monday = new Date(batchWeek + 'T12:00:00Z')
-  const prefix = slotId.slice(0, 3).toLowerCase()
-  const offset = DAY_OFFSET[prefix] ?? 2
-  monday.setUTCDate(monday.getUTCDate() + offset)
-  return monday.toISOString().slice(0, 10)
-}
 
 /** Display time from slotId e.g. wed_14_30 -> "2:30pm". */
 function slotToTimeStr(slotId: string): string {
@@ -74,15 +62,20 @@ serve(async () => {
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
-    const todayPT = getTodayPT()
     const { data: matches } = await supabase
       .from('match_candidates')
-      .select('id, user_a, user_b, batch_week, confirmed_slot_id, confirmed_venue_id, reasons')
+      .select('id, user_a, user_b, week_anchor_monday, confirmed_slot_id, confirmed_venue_id, reasons')
       .eq('scheduling_status', 'confirmed')
       .not('confirmed_venue_id', 'is', null)
-    const todayMatches = (matches ?? []).filter(
-      (m: { batch_week: string | null; confirmed_slot_id: string | null }) =>
-        m.batch_week && m.confirmed_slot_id && getFikaDateFromSlot(m.batch_week, m.confirmed_slot_id) === todayPT
+    const matchRows = matches ?? []
+    const userIds = [...new Set(matchRows.flatMap((m: { user_a: string; user_b: string }) => [m.user_a, m.user_b]))]
+    const marketMap = await fetchMarketMapForIds(supabase, userIds)
+    const todayMatches = matchRows.filter(
+      (m: { user_a: string; user_b: string; week_anchor_monday: string | null; confirmed_slot_id: string | null }) => {
+        if (!m.week_anchor_monday || !m.confirmed_slot_id) return false
+        const tz = timezoneForMatch(m, marketMap)
+        return getFikaDateFromSlot(m.week_anchor_monday, m.confirmed_slot_id) === getTodayYmdInTimezone(tz)
+      }
     )
 
     let sent = 0

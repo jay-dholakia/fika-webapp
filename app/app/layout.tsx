@@ -175,9 +175,6 @@ function AppLayoutInner({
           <Link href="/app/yourfika" className={pathname === '/app/yourfika' || pathname?.startsWith('/app/onboarding') ? 'app-sidebar-link active' : 'app-sidebar-link'} onClick={() => setMobileMenuOpen(false)}>
             Your Fika
           </Link>
-          <Link href="/app/availability" className={pathname === '/app/availability' ? 'app-sidebar-link active' : 'app-sidebar-link'} onClick={() => setMobileMenuOpen(false)}>
-            Your Availability
-          </Link>
         </nav>
         <div className="app-sidebar-footer">
           <Link href="/app/settings/profile" className={pathname === '/app/settings/profile' ? 'app-sidebar-link active' : 'app-sidebar-link'} onClick={() => setMobileMenuOpen(false)}>

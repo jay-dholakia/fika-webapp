@@ -212,7 +212,7 @@ export const INTAKE_STEPS: ProfileStep[] = [
     required: false,
     placeholder: 'Short description (optional)',
   },
-  // Block 2 — Interests: interests → curiosity → recs → free afternoon
+  // Block 2 — Interests: interests → curiosity → recs
   {
     id: 'q_interests',
     question: 'What are some of your interests?',
@@ -356,6 +356,21 @@ export const INTAKE_STEPS: ProfileStep[] = [
     type: 'chips_single',
     required: true,
     options: ['5 miles', '10 miles', '25 miles', '50 miles'],
+  },
+  {
+    id: 'q_typical_fika_times',
+    question: 'When are you usually free for a Fika?',
+    body: 'Select all that typically work — we use this to suggest times that fit both people.',
+    type: 'multi_select',
+    required: true,
+    options: [
+      'Weekday mornings',
+      'Weekday afternoons',
+      'Weekday evenings',
+      'Weekend mornings',
+      'Weekend afternoons',
+      'Weekend evenings',
+    ],
   },
   {
     id: 'q_favorite_coffee_shop',

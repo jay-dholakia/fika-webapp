@@ -48,8 +48,8 @@ export function isOnboardingComplete(
   return isProfileComplete(profile) || hasEssentials
 }
 
-/** Get current batch week (Monday) as YYYY-MM-DD, in UTC so the value is consistent everywhere. */
-export function getCurrentBatchWeek(): string {
+/** Current week anchor: Monday YYYY-MM-DD (UTC) for slot resolution and SMS partitioning. */
+export function getCurrentWeekAnchorMonday(): string {
   const d = new Date()
   const day = d.getUTCDay()
   const date = d.getUTCDate()
@@ -67,36 +67,36 @@ const OPT_IN_DEADLINE_MONDAY_HOUR_UTC = 18
 const OPT_IN_DEADLINE_MONDAY_MINUTE_UTC = 0
 
 /**
- * Returns the opt-in deadline for a batch week (Monday YYYY-MM-DD).
+ * Opt-in deadline for a week anchor Monday (YYYY-MM-DD).
  * Deadline = Monday 11am PT. Before this we accept opt-in; after this, window closed.
  */
-export function getOptInDeadlineForBatchWeek(batchWeek: string): Date {
-  const monday = new Date(batchWeek + 'T00:00:00Z')
+export function getOptInDeadlineForWeekAnchorMonday(weekAnchorMonday: string): Date {
+  const monday = new Date(weekAnchorMonday + 'T00:00:00Z')
   monday.setUTCHours(OPT_IN_DEADLINE_MONDAY_HOUR_UTC, OPT_IN_DEADLINE_MONDAY_MINUTE_UTC, 0, 0)
   return monday
 }
 
 /** Intro accept/pass deadline = Tuesday 9pm PT (Wednesday 04:00 UTC). After this, intro offer expires. */
-export function getIntroAcceptDeadlineForBatchWeek(batchWeek: string): Date {
-  const monday = new Date(batchWeek + 'T00:00:00Z')
+export function getIntroAcceptDeadlineForWeekAnchorMonday(weekAnchorMonday: string): Date {
+  const monday = new Date(weekAnchorMonday + 'T00:00:00Z')
   const wednesday = new Date(monday)
   wednesday.setUTCDate(wednesday.getUTCDate() + 2)
   wednesday.setUTCHours(4, 0, 0, 0)
   return wednesday
 }
 
-export function isPastIntroAcceptDeadline(batchWeek?: string): boolean {
-  const week = batchWeek ?? getCurrentBatchWeek()
-  return new Date() >= getIntroAcceptDeadlineForBatchWeek(week)
+export function isPastIntroAcceptDeadline(weekAnchorMonday?: string): boolean {
+  const week = weekAnchorMonday ?? getCurrentWeekAnchorMonday()
+  return new Date() >= getIntroAcceptDeadlineForWeekAnchorMonday(week)
 }
 
 /**
- * True if the opt-in deadline for the given batch week has passed.
- * Uses current batch week if batchWeek is omitted.
+ * True if the opt-in deadline for the given week anchor has passed.
+ * Uses current week anchor if omitted.
  */
-export function isPastOptInDeadline(batchWeek?: string): boolean {
-  const week = batchWeek ?? getCurrentBatchWeek()
-  const deadline = getOptInDeadlineForBatchWeek(week)
+export function isPastOptInDeadline(weekAnchorMonday?: string): boolean {
+  const week = weekAnchorMonday ?? getCurrentWeekAnchorMonday()
+  const deadline = getOptInDeadlineForWeekAnchorMonday(week)
   return new Date() >= deadline
 }
 

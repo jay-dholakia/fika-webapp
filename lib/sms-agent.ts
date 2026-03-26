@@ -1,10 +1,11 @@
 /**
  * SMS agent: state machine, message templates, venue picker, slot↔day/window mapping.
- * Used by webhook and Edge Functions. Copy: we reach out by SMS when we find a good Fika intro — no fixed weekly blast.
+ * Used by webhook and Edge Functions. Copy: we reach out by SMS when we find a good Fika intro; we text a time and place to confirm — no fixed weekly blast.
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { haversineKm } from '@/lib/distance'
+import { searchNearbyCafesGooglePlaces, upsertVenueFromGooglePlace } from '@/lib/google-places-venues'
 import { DEFAULT_RADIUS_KM } from '@/lib/intake-radius'
 
 export const SMS_STATES = {
@@ -115,74 +116,76 @@ function hasValidLatLng(u: UserLocation): boolean {
 }
 
 /**
- * Pick a venue for a match using lat/lng when both users have coordinates:
- * only considers venues within each user's willing-to-travel radius (from intake q_radius),
- * then chooses the venue that minimizes the maximum distance to either user (fair to both).
- * Falls back to city-based selection when lat/lng are missing.
+ * Pick a venue from `venues` only: lat/lng minimax within each user's radius (no city / random fallbacks).
+ * When this returns null, `pickVenueForMatch` uses Google Places.
  */
-export async function pickVenueForMatch(
+export async function pickVenueFromDatabase(
   supabase: SupabaseClient,
   userA: UserLocation,
   userB: UserLocation
 ): Promise<{ id: string; name: string; neighborhood: string | null; city: string } | null> {
-  const userACity = userA.city ?? null
-  const userBCity = userB.city ?? null
   const maxDistA = userA.radius_km != null && Number.isFinite(Number(userA.radius_km)) ? Number(userA.radius_km) : DEFAULT_RADIUS_KM
   const maxDistB = userB.radius_km != null && Number.isFinite(Number(userB.radius_km)) ? Number(userB.radius_km) : DEFAULT_RADIUS_KM
 
-  if (hasValidLatLng(userA) && hasValidLatLng(userB)) {
-    const latA = Number(userA.lat)
-    const lngA = Number(userA.lng)
-    const latB = Number(userB.lat)
-    const lngB = Number(userB.lng)
+  if (!hasValidLatLng(userA) || !hasValidLatLng(userB)) return null
 
-    const { data: venues } = await supabase
-      .from('venues')
-      .select('id, name, neighborhood, city, lat, lng')
-      .not('lat', 'is', null)
-      .not('lng', 'is', null)
+  const latA = Number(userA.lat)
+  const lngA = Number(userA.lng)
+  const latB = Number(userB.lat)
+  const lngB = Number(userB.lng)
 
-    if (venues?.length) {
-      type VenueRow = { id: string; name: string; neighborhood: string | null; city: string; lat: number; lng: number }
-      const withScores = (venues as VenueRow[])
-        .map((v) => {
-          const latV = typeof v.lat === 'number' ? v.lat : Number(v.lat)
-          const lngV = typeof v.lng === 'number' ? v.lng : Number(v.lng)
-          if (!Number.isFinite(latV) || !Number.isFinite(lngV)) return null
-          const distA = haversineKm(latA, lngA, latV, lngV)
-          const distB = haversineKm(latB, lngB, latV, lngV)
-          if (distA > maxDistA || distB > maxDistB) return null
-          const maxDist = Math.max(distA, distB)
-          return { venue: v, maxDist }
-        })
-        .filter((x): x is { venue: VenueRow; maxDist: number } => x != null)
-        .sort((a, b) => a.maxDist - b.maxDist)
-
-      if (withScores.length > 0) {
-        const { venue } = withScores[0]
-        return { id: venue.id, name: venue.name, neighborhood: venue.neighborhood, city: venue.city }
-      }
-    }
-  }
-
-  const city = userACity || userBCity || 'Los Angeles'
-  const { data } = await supabase
+  const { data: venues } = await supabase
     .from('venues')
-    .select('id, name, neighborhood, city')
-    .ilike('city', `%${city}%`)
-    .limit(1)
-    .maybeSingle()
-  if (data) return data
-  const { data: fallback } = await supabase
-    .from('venues')
-    .select('id, name, neighborhood, city')
-    .limit(1)
-    .maybeSingle()
-  return fallback
+    .select('id, name, neighborhood, city, lat, lng')
+    .not('lat', 'is', null)
+    .not('lng', 'is', null)
+
+  if (!venues?.length) return null
+
+  type VenueRow = { id: string; name: string; neighborhood: string | null; city: string; lat: number; lng: number }
+  const withScores = (venues as VenueRow[])
+    .map((v) => {
+      const latV = typeof v.lat === 'number' ? v.lat : Number(v.lat)
+      const lngV = typeof v.lng === 'number' ? v.lng : Number(v.lng)
+      if (!Number.isFinite(latV) || !Number.isFinite(lngV)) return null
+      const distA = haversineKm(latA, lngA, latV, lngV)
+      const distB = haversineKm(latB, lngB, latV, lngV)
+      if (distA > maxDistA || distB > maxDistB) return null
+      const maxDist = Math.max(distA, distB)
+      return { venue: v, maxDist }
+    })
+    .filter((x): x is { venue: VenueRow; maxDist: number } => x != null)
+    .sort((a, b) => a.maxDist - b.maxDist)
+
+  if (withScores.length === 0) return null
+  const { venue } = withScores[0]
+  return { id: venue.id, name: venue.name, neighborhood: venue.neighborhood, city: venue.city }
+}
+
+/**
+ * Prefer curated `venues`, then Google Places (New) nearby cafes; upserts discovered places for reuse.
+ * Pass `meetingAtUtc` when the proposed Fika time is known so Google picks can respect regular opening hours.
+ */
+export async function pickVenueForMatch(
+  supabase: SupabaseClient,
+  userA: UserLocation,
+  userB: UserLocation,
+  opts?: { meetingAtUtc?: Date }
+): Promise<{ id: string; name: string; neighborhood: string | null; city: string } | null> {
+  const fromDb = await pickVenueFromDatabase(supabase, userA, userB)
+  if (fromDb) return fromDb
+
+  const place = await searchNearbyCafesGooglePlaces({
+    userA,
+    userB,
+    meetingAtUtc: opts?.meetingAtUtc,
+  })
+  if (!place) return null
+  return upsertVenueFromGooglePlace(supabase, place)
 }
 
 // ---------- Message templates ----------
-// After intake, we text when we have a good Fika intro; scheduling uses overlapping availability.
+// After intake, we text when we have a good Fika intro; scheduling proposes a time and place by SMS for YES/NO confirmation.
 
 /** One-line hint so users save the concierge number and don't miss intros. */
 export function messageSaveAsContactHint(): string {
@@ -250,7 +253,7 @@ export function messageFikaUserInitiatedCommitment(): string {
 
 /** Body before availability link (link sent as separate message). */
 export function messageFikaUserInitiatedLinkBody(_availabilityUrl: string): string {
-  return `We'll reach out when we find a good Fika intro for you.\n\nWe'll ask for your availability when we're scheduling your intro.`
+  return `We'll reach out when we find a good Fika intro for you.\n\nWhen it's time to meet, we'll text you a proposed time and place to confirm by reply.`
 }
 
 /** Generic concierge reply when user texts in. */
@@ -260,17 +263,17 @@ export function messageTextFikaToGetLink(): string {
 
 /** Reminder to set availability when a match is in progress. Text only; send availability link as separate message. */
 export function messageAvailabilityReminder(_availabilityUrl: string): string {
-  return `Quick reminder to set your availability in the app so we can schedule your Fika.\n\nUse the link I'll send next.`
+  return `Quick reminder: when we have a time and place for your Fika, we'll text it to you—reply YES or NO to confirm.\n\nYou can also use the link I'll send next for your account.`
 }
 
 /** Availability received — scheduling next. */
 export function messageAvailabilityLockAllSet(): string {
-  return `You're all set — we have your availability.\n\nWe'll follow up by text with intro details when your match is ready.`
+  return `You're all set.\n\nWe'll text you with a proposed time and place when your intro is ready to schedule.`
 }
 
 /** Availability not submitted in time for this intro round. */
 export function messageAvailabilityLockNotSubmitted(): string {
-  return `We didn't get your availability in time for this round.\n\nNo worries — we'll reach out when we find another good Fika intro for you.`
+  return `We couldn't lock in a time for this round.\n\nNo worries — we'll reach out when we find another good Fika intro for you.`
 }
 
 /** When user is known but hasn't completed onboarding/intake. Text only; send onboardingUrl as a separate message after this. */
@@ -299,12 +302,12 @@ export function messageWeeklyPoolAwaitingOptInNudge(): string {
 
 /** Legacy name: weekly blast disabled. */
 export function messageWeeklyPoolYoureInAvailability(): string {
-  return `You're in.\n\nSet your availability using the link I'll send next when we're scheduling your intro.`
+  return `You're in.\n\nWe'll text you a proposed time and place when we're scheduling your intro.\n\nUse the link I'll send next for your profile.`
 }
 
 /** Legacy: between rounds / window closed — neutral copy. */
 export function messageWeeklyPoolOptInWindowClosed(_nextSundayPhrase: string): string {
-  return `We're not opening new availability for this period.\n\n${pickReadyForIntroMessage()}`
+  return `We're not opening new opt-ins for this period.\n\n${pickReadyForIntroMessage()}`
 }
 
 /** Legacy name: weekly blast disabled. */
@@ -354,9 +357,9 @@ export function messageTeaserPreview(params: {
   return `Nice — quick preview:\n\nYou'd be meeting ${otherFirstName}.\n${otherBio}`
 }
 
-/** Prompt while waiting for availability after both users said YES. */
+/** Nudge when state is still AWAITING_AVAILABILITY (legacy state name; scheduling is proposal-first). */
 export function messageAwaitingAvailabilityReady(): string {
-  return `You're almost set.\n\nOpen your Fika link, save your availability, then text READY here.`
+  return `You're almost set.\n\nWhen we send a time and place, reply YES to confirm or NO if it doesn't work. Reply HELP anytime.`
 }
 
 /** Tuesday intro with full plan (one proposed time + venue). Reply YES by 9 PM tonight. */
@@ -410,9 +413,9 @@ export function messageOptInConfirmation(): string {
   return pickReadyForIntroMessage()
 }
 
-/** When user replies YES (legacy): send availability link. Text only; send availabilityUrl as a separate message after this. */
+/** When user replies YES (legacy): may send app link. Text only; send availabilityUrl as a separate message after this. */
 export function messageOptInSetAvailability(_availabilityUrl: string): string {
-  return `We found a good Fika intro for you.\n\nSet your availability using the link I'll send next so we can schedule your Fika.`
+  return `We found a good Fika intro for you.\n\nWe'll text you a proposed time and place next—reply YES or NO to confirm.\n\nYou can also open your Fika with the link I'll send next.`
 }
 
 export function messageSkipped(): string {
@@ -466,16 +469,16 @@ export function messageProposalDeclinedToOther(): string {
 /** Re-propose a new time to the person who declined (attempt 2). */
 export function messageReProposalToDecliner(params: { day: string; time: string; venueName: string; neighborhood: string }): string {
   const { day, time, venueName, neighborhood } = params
-  return `How about ${day} ${time} at ${venueName} (${neighborhood})?\n\nReply YES or NO.`
+  return `How about ${day} at ${time} at ${venueName} (${neighborhood}) near both of you?\n\nReply YES or NO.`
 }
 
 /** Notify the other person we're trying a different time. */
 export function messageReProposalToOther(params: { day: string; time: string; venueName: string; neighborhood: string }): string {
   const { day, time, venueName, neighborhood } = params
-  return `They couldn't do that time — how about ${day} ${time} at ${venueName} (${neighborhood})?\n\nReply YES to confirm.`
+  return `They couldn't do that time — would ${day} at ${time} at ${venueName} (${neighborhood}) near both of you work?\n\nReply YES or NO.`
 }
 
-/** Propose one time from shared availability; ask them to confirm. Second YES-er gets this first, then first YES-er. */
+/** Propose one time + place; ask them to confirm. Second YES-er gets this first, then first YES-er. */
 export function messageProposalToConfirm(params: {
   otherFirstName: string
   day: string
@@ -484,7 +487,7 @@ export function messageProposalToConfirm(params: {
   neighborhood: string
 }): string {
   const { otherFirstName, day, time, venueName, neighborhood } = params
-  return `You're matched with ${otherFirstName}.\n\n${day} ${time} at ${venueName} (${neighborhood}).\n\nReply YES to confirm.`
+  return `We're thinking ${day} at ${time} at ${venueName} (${neighborhood}) near both of you — does that work?\n\nReply YES or NO.`
 }
 
 // ---------- Day-of relay (here / on my way / running late / can't make it) ----------
@@ -513,58 +516,15 @@ export function messageRelayClosedFeedbackPrompt(): string {
   return `Your Fika coordination thread is now closed.\nHow did it go? Reply with quick feedback so we can improve your future Fikas.`
 }
 
-/** Fika date (YYYY-MM-DD) from batch_week (Monday) + slotId (e.g. wed_14_30). */
-export function getFikaDateFromSlot(batchWeek: string, slotId: string): string {
-  const monday = new Date(batchWeek + 'T12:00:00Z')
-  const dayMap: Record<string, number> = { mon: 0, tue: 1, wed: 2, thu: 3, fri: 4, sat: 5, sun: 6 }
-  const dayPrefix = slotId.slice(0, 3).toLowerCase()
-  const offset = dayMap[dayPrefix] ?? 2
-  monday.setUTCDate(monday.getUTCDate() + offset)
-  return monday.toISOString().slice(0, 10)
-}
-
-/** Today's date (YYYY-MM-DD) in America/Los_Angeles. */
-export function getTodayPT(): string {
-  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' })
-}
-
-/** True if the Fika for this match is today (PT). */
-export function isFikaToday(batchWeek: string, slotId: string): boolean {
-  return getFikaDateFromSlot(batchWeek, slotId) === getTodayPT()
-}
-
-const DAY_OFFSET: Record<string, number> = { mon: 0, tue: 1, wed: 2, thu: 3, fri: 4, sat: 5, sun: 6 }
-
-/** Fika start time in ms (PT, using PST -08:00). Used to block relay after Fika and for post-Fika timing. */
-export function getFikaTimeMs(batchWeek: string, slotId: string): number | null {
-  const monday = new Date(batchWeek + 'T12:00:00Z')
-  const prefix = slotId.slice(0, 3).toLowerCase()
-  const offset = DAY_OFFSET[prefix] ?? 2
-  monday.setUTCDate(monday.getUTCDate() + offset)
-  const dateStr = monday.toISOString().slice(0, 10)
-  const parts = slotId.split('_')
-  const hour = parseInt(parts[1] ?? '14', 10)
-  const min = parseInt(parts[2] ?? '0', 10)
-  const iso = `${dateStr}T${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}:00-08:00`
-  const d = new Date(iso)
-  return isNaN(d.getTime()) ? null : d.getTime()
-}
-
-/** True if now is inside relay window: 3h before start through 2h after start. */
-export function isInRelayWindow(batchWeek: string, slotId: string): boolean {
-  const ms = getFikaTimeMs(batchWeek, slotId)
-  if (ms == null) return false
-  const now = Date.now()
-  const opensAt = ms - 3 * 60 * 60 * 1000
-  const closesAt = ms + 2 * 60 * 60 * 1000
-  return now >= opensAt && now <= closesAt
-}
-
-/** True if relay window has already closed for this Fika. */
-export function isRelayClosed(batchWeek: string, slotId: string): boolean {
-  const ms = getFikaTimeMs(batchWeek, slotId)
-  return ms != null && Date.now() > ms + 2 * 60 * 60 * 1000
-}
+export {
+  getFikaDateFromSlot,
+  getFikaTimeMs,
+  getTodayPT,
+  getTodayYmdInTimezone,
+  isFikaToday,
+  isInRelayWindow,
+  isRelayClosed,
+} from '@/lib/fika-schedule-time'
 
 /** Post-Fika: ask how it went and for feedback (sent ~2 hours after Fika). */
 export function messagePostFikaFeedback(): string {
@@ -646,7 +606,7 @@ export function fallbackAwaitingConfirm(): string {
 }
 
 export function fallbackAwaitingAvailability(): string {
-  return `Open your Fika link, save your availability, then text READY here.`
+  return `Reply YES or NO to the time we proposed, or text HELP.`
 }
 
 export function fallbackConfirmed(): string {
@@ -724,7 +684,7 @@ export function isHelpKeyword(content: string): boolean {
   return ['help', 'help me', '?', 'what'].includes(k) || k.startsWith('help')
 }
 
-/** After saving availability in the app, user texts READY to confirm (webhook clears pending). */
+/** Keyword READY — legacy handler still clears pending match_availability rows if any exist. */
 export function isAvailabilityReadyKeyword(content: string): boolean {
   const k = normalizeKeyword(content).replace(/[!?.]+$/g, '').trim()
   return k === 'ready'
@@ -793,14 +753,14 @@ export async function getOrCreateSmsState(
   supabase: SupabaseClient,
   userId: string,
   state: string,
-  opts: { batch_week?: string; match_id?: string; payload?: Record<string, unknown> }
+  opts: { week_anchor_monday?: string; match_id?: string; payload?: Record<string, unknown> }
 ): Promise<void> {
-  const batchWeek = opts.batch_week ?? null
+  const weekAnchorMonday = opts.week_anchor_monday ?? null
   const matchId = opts.match_id ?? null
   if (matchId == null) {
     await supabase.rpc('upsert_global_sms_conversation_state', {
       p_user_id: userId,
-      p_batch_week: batchWeek,
+      p_week_anchor_monday: weekAnchorMonday,
       p_state: state,
       p_payload: opts.payload ?? {},
       p_last_sendblue_message_handle: null,
@@ -810,12 +770,12 @@ export async function getOrCreateSmsState(
   await supabase.from('sms_conversation_states').upsert(
     {
       user_id: userId,
-      batch_week: batchWeek,
+      week_anchor_monday: weekAnchorMonday,
       match_id: matchId,
       state,
       payload: opts.payload ?? {},
       updated_at: new Date().toISOString(),
     },
-    { onConflict: 'user_id,batch_week,match_id' }
+    { onConflict: 'user_id,week_anchor_monday,match_id' }
   )
 }

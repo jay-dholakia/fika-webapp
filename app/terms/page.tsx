@@ -32,7 +32,7 @@ export default function TermsPage() {
         <p>You must be at least 18 years old and able to form a binding contract to use Fika. By using the service, you represent that you meet these requirements.</p>
 
         <h2>Your account</h2>
-        <p>You must provide accurate, current information and keep it up to date. One account per person. You create and access your account via our website, signing in with Google or another method we offer. You provide your phone number so we can send introductions, availability requests when we find a good Fika intro for you, scheduling, and coordination via SMS. Message and data rates may apply. You may opt out of SMS by replying STOP (see our <Link href="/privacy">Privacy Policy</Link> for details). You’re responsible for everything that happens on your account. Keep your credentials and phone secure.</p>
+        <p>You must provide accurate, current information and keep it up to date. One account per person. You create and access your account via our website, signing in with Google or another method we offer. You provide your phone number so we can send introductions, proposed times and places when we find a good Fika intro for you, scheduling, and coordination via SMS. Message and data rates may apply. You may opt out of SMS by replying STOP (see our <Link href="/privacy">Privacy Policy</Link> for details). You’re responsible for everything that happens on your account. Keep your credentials and phone secure.</p>
 
         <h2>Acceptable use</h2>
         <p>You agree to use Fika in a respectful, lawful way. You will not:</p>
@@ -46,7 +46,7 @@ export default function TermsPage() {
         <p>This applies to your profile, your SMS replies to Fika, your use of the web portal, any messaging with other users, and any other use of the service. We may remove content or suspend or terminate accounts that violate these rules.</p>
 
         <h2>The service</h2>
-        <p>Fika provides introductions and helps you coordinate meetups in real life. Much of your interaction—receiving intros, sharing availability when we find a good Fika intro for you, and confirming times—happens via SMS. You can also use our web portal to set your profile, set availability, view intros, and manage your account. We may offer messaging with your match; see our <Link href="/privacy">Privacy Policy</Link> for how we handle that data. We don’t guarantee matches or any particular outcome. The service is provided “as is” to the extent permitted by law.</p>
+        <p>Fika provides introductions and helps you coordinate meetups in real life. Much of your interaction—receiving intros, getting proposed times and places by text when we find a good Fika intro for you, and confirming by reply—happens via SMS. You can also use our web portal to set your profile, view intros, and manage your account. We may offer messaging with your match; see our <Link href="/privacy">Privacy Policy</Link> for how we handle that data. We don’t guarantee matches or any particular outcome. The service is provided “as is” to the extent permitted by law.</p>
 
         <h2>SMS and messaging</h2>
         <p><strong>SMS.</strong> By providing your phone number, you agree to receive SMS from Fika (intros, scheduling, reminders). Message and data rates may apply. You can reply STOP to opt out of these messages. See our <Link href="/privacy">Privacy Policy</Link> for details.</p>

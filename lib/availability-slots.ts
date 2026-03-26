@@ -4,7 +4,7 @@
  * Slot id format: day_HH_MM (e.g. wed_09_00, sat_18_30).
  */
 
-import { getOptInDeadlineForBatchWeek } from './onboarding'
+import { getOptInDeadlineForWeekAnchorMonday } from './onboarding'
 
 const DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const
 
@@ -159,34 +159,34 @@ export function summarizeAvailabilitySlots(slotIds: string[]): string[] {
   return result
 }
 
-/** Monday of the week after batch_week (YYYY-MM-DD). */
-export function getNextWeekMonday(batchWeek: string): string {
-  const d = new Date(batchWeek + 'T12:00:00')
+/** Monday of the week after the given anchor Monday (YYYY-MM-DD). */
+export function getNextWeekMonday(weekAnchorMonday: string): string {
+  const d = new Date(weekAnchorMonday + 'T12:00:00')
   d.setDate(d.getDate() + 7)
   return d.toISOString().slice(0, 10)
 }
 
-/** Wednesday of the availability week (batch_week is Monday; Wed = batch_week + 2). Uses UTC so the returned date is consistent. */
-export function getAvailabilityWeekWednesday(batchWeek: string): string {
-  const d = new Date(batchWeek + 'T12:00:00Z')
+/** Wednesday of the availability week (anchor Monday; Wed = anchor + 2). Uses UTC so the returned date is consistent. */
+export function getAvailabilityWeekWednesday(weekAnchorMonday: string): string {
+  const d = new Date(weekAnchorMonday + 'T12:00:00Z')
   d.setUTCDate(d.getUTCDate() + 2)
   return d.toISOString().slice(0, 10)
 }
 
-/** Opt-in + availability lock = Monday 11am PT (same as getOptInDeadlineForBatchWeek). */
-export function getAvailabilityLockDate(batchWeek: string): Date {
-  return getOptInDeadlineForBatchWeek(batchWeek)
+/** Opt-in + availability lock = Monday 11am PT (same as getOptInDeadlineForWeekAnchorMonday). */
+export function getAvailabilityLockDate(weekAnchorMonday: string): Date {
+  return getOptInDeadlineForWeekAnchorMonday(weekAnchorMonday)
 }
 
 /** True when availability for that week can no longer be edited (Monday 11am PT has passed). */
-export function isAvailabilityLocked(batchWeek: string): boolean {
-  const lockAt = getAvailabilityLockDate(batchWeek)
+export function isAvailabilityLocked(weekAnchorMonday: string): boolean {
+  const lockAt = getAvailabilityLockDate(weekAnchorMonday)
   return new Date() >= lockAt
 }
 
 /** Human-readable date range for the availability week: Wed–Sat (e.g. "Wed, Mar 5 – Sat, Mar 8"). */
-export function formatNextWeekRange(batchWeek: string): string {
-  const wed = new Date(getAvailabilityWeekWednesday(batchWeek) + 'T12:00:00Z')
+export function formatNextWeekRange(weekAnchorMonday: string): string {
+  const wed = new Date(getAvailabilityWeekWednesday(weekAnchorMonday) + 'T12:00:00Z')
   const sat = new Date(wed)
   sat.setUTCDate(sat.getUTCDate() + 3)
   const wedStr = wed.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })

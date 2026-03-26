@@ -1,5 +1,5 @@
 -- Opt-in window ends Monday 11am PT (was 12pm PT). Reschedule sms-opt-in-expiration to 18:00 UTC (11am PDT).
-select cron.unschedule('sms-opt-in-expiration');
+select cron.unschedule(jobid) from cron.job where jobname = 'sms-opt-in-expiration';
 select cron.schedule(
   'sms-opt-in-expiration',
   '0 18 * * 1',

@@ -54,7 +54,7 @@ export type IntakeResponsesV5Row = {
 export type WeeklyMatchOptInRow = {
   id?: string
   user_id: string
-  batch_week: string // Monday date YYYY-MM-DD
+  week_anchor_monday: string // Monday date YYYY-MM-DD
   opted_in_at: string // ISO timestamp; row exists only when opted in
 }
 
@@ -62,7 +62,7 @@ export type WeeklyMatchOptInRow = {
 export type WeeklyAvailabilityRow = {
   id?: string
   user_id: string
-  batch_week: string // Monday date YYYY-MM-DD
+  week_anchor_monday: string // Monday date YYYY-MM-DD
   availability_slots?: string[] | null
   /** True after app save with slots; cleared when user texts READY */
   pending_sms_ready_confirmation?: boolean
@@ -95,7 +95,7 @@ export type MessageRow = {
 export type SmsConversationStateRow = {
   id: string
   user_id: string
-  batch_week: string | null // YYYY-MM-DD Monday
+  week_anchor_monday: string | null // YYYY-MM-DD Monday
   match_id: string | null
   state: string
   payload: Record<string, unknown>

@@ -394,7 +394,7 @@ export function IntroDetailModal({
                 if (windows.length === 0) return null
                 return (
                   <section className="app-intro-detail-section">
-                    <h3 className="app-intro-detail-section-title">When you&apos;re both free</h3>
+                    <h3 className="app-intro-detail-section-title">Possible times for your Fika</h3>
                     <ul className="app-intro-detail-hooks">
                       {windows.map((w, i) => (
                         <li key={i}>{w}</li>

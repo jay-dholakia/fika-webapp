@@ -193,14 +193,14 @@ export default function HowItWorksPage() {
             <span className="app-how-it-works-step-marker" aria-hidden><span className="app-how-it-works-num">2</span></span>
             <div className="app-how-it-works-step-content">
               <span className="app-how-it-works-when">We text you</span>
-              <span className="app-how-it-works-what">When we find a good Fika intro for you, we reach out by SMS and ask for your availability to schedule.</span>
+              <span className="app-how-it-works-what">When we find a good Fika intro for you, we reach out by SMS. When it&apos;s time to meet, we text you a proposed time and place to confirm.</span>
             </div>
           </li>
           <li className="app-how-it-works-step">
             <span className="app-how-it-works-step-marker" aria-hidden><span className="app-how-it-works-num">3</span></span>
             <div className="app-how-it-works-step-content">
               <span className="app-how-it-works-when">We make the plan</span>
-              <span className="app-how-it-works-what">Once both people are in, we propose a real time and place based on overlapping availability.</span>
+              <span className="app-how-it-works-what">Once both people are in, we text you a real time and place to confirm—based on your profiles, usual free times, and location.</span>
             </div>
           </li>
           <li className="app-how-it-works-step">

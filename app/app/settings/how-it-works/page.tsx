@@ -5,11 +5,11 @@ import { useState } from 'react'
 const portalFaqItems = [
   {
     q: 'How are intros chosen?',
-    a: 'We use your profile, preferences, and overlapping availability to find a good Fika intro and suggest a real time you are both free. Intros are sent by SMS.',
+    a: 'We use your profile, preferences, and when you’re usually free to find a good Fika intro. We text you a proposed time and place to confirm. Intros are sent by SMS.',
   },
   {
     q: 'How do I get introductions?',
-    a: "We'll reach out when we find a good Fika intro for you, then ask for your availability to find a good time and place for your Fika.",
+    a: "We'll reach out when we find a good Fika intro for you. When it's time to schedule, we'll text you a proposed time and place—reply to confirm.",
   },
   {
     q: 'How many intros do I get?',

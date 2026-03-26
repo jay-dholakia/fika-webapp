@@ -4,10 +4,8 @@
  */
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
-import { getCurrentBatchWeek } from './onboarding'
 import { sendMessage } from './sendblue'
 import { insertMessageLedger } from './message-ledger'
-import { getOrCreateSmsState, SMS_STATES } from './sms-agent'
 import { ageFromBirthdate } from './intro-detail'
 import { getActiveMarketSlugs } from './admin-markets'
 

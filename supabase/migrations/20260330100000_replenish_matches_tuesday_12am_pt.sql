@@ -1,5 +1,5 @@
 -- Replenish matches at Monday 12:30pm PT (~19:30 UTC) so match_candidates exist shortly after the opt-in/availability deadline and before Tuesday 9am PT match delivery.
-select cron.unschedule('replenish-matches');
+select cron.unschedule(jobid) from cron.job where jobname = 'replenish-matches';
 
 select cron.schedule(
   'replenish-matches',

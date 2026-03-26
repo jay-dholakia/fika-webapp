@@ -6,27 +6,14 @@ declare const Deno: { env: { get(key: string): string | undefined } }
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 // @ts-ignore Deno
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+// @ts-ignore Deno
+import { getFikaTimeMs } from '../_shared/fika-schedule-time.ts'
+// @ts-ignore Deno
+import { fetchMarketMapForIds, timezoneForMatch } from '../_shared/fetch-match-market-map.ts'
 
 const SENDBLUE_URL = 'https://api.sendblue.co/api/send-message'
 
 const MS_24_H = 24 * 60 * 60 * 1000
-
-const DAY_OFFSET: Record<string, number> = { mon: 0, tue: 1, wed: 2, thu: 3, fri: 4, sat: 5, sun: 6 }
-
-/** Fika datetime (PT) from batch_week (Monday YYYY-MM-DD) + slotId (e.g. wed_14_30). Uses PST (-08:00). */
-function getFikaTimeMs(batchWeek: string, slotId: string): number | null {
-  const monday = new Date(batchWeek + 'T12:00:00Z')
-  const prefix = slotId.slice(0, 3).toLowerCase()
-  const offset = DAY_OFFSET[prefix] ?? 2
-  monday.setUTCDate(monday.getUTCDate() + offset)
-  const dateStr = monday.toISOString().slice(0, 10)
-  const parts = slotId.split('_')
-  const hour = parseInt(parts[1] ?? '14', 10)
-  const min = parseInt(parts[2] ?? '0', 10)
-  const iso = `${dateStr}T${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}:00-08:00`
-  const d = new Date(iso)
-  return isNaN(d.getTime()) ? null : d.getTime()
-}
 
 /** Display time from slotId e.g. wed_14_30 -> "2:30pm". */
 function slotToTimeStr(slotId: string): string {
@@ -78,16 +65,20 @@ serve(async () => {
     const now = Date.now()
     const { data: matches } = await supabase
       .from('match_candidates')
-      .select('id, user_a, user_b, batch_week, confirmed_slot_id, confirmed_venue_id, three_hour_reminder_sent_at')
+      .select('id, user_a, user_b, week_anchor_monday, confirmed_slot_id, confirmed_venue_id, three_hour_reminder_sent_at')
       .eq('scheduling_status', 'confirmed')
       .not('confirmed_venue_id', 'is', null)
       .not('confirmed_slot_id', 'is', null)
-      .not('batch_week', 'is', null)
+      .not('week_anchor_monday', 'is', null)
       .is('three_hour_reminder_sent_at', null)
 
+    const matchRows = matches ?? []
+    const userIds = [...new Set(matchRows.flatMap((m: { user_a: string; user_b: string }) => [m.user_a, m.user_b]))]
+    const marketMap = await fetchMarketMapForIds(supabase, userIds)
     const toSend: { id: string; timeStr: string; venueName: string; neighborhood: string; userIds: string[] }[] = []
-    for (const m of matches ?? []) {
-      const fikaMs = getFikaTimeMs(m.batch_week, m.confirmed_slot_id)
+    for (const m of matchRows) {
+      const tz = timezoneForMatch(m, marketMap)
+      const fikaMs = getFikaTimeMs(m.week_anchor_monday, m.confirmed_slot_id, tz)
       if (fikaMs == null) continue
       const diff = fikaMs - now
       if (diff >= MS_2_5_H && diff <= MS_3_5_H) {

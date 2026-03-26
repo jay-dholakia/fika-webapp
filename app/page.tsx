@@ -85,7 +85,7 @@ export default function Home() {
                 <div className="step-content">
                   <h3 className="step-title">We reach out when we find a good intro</h3>
                   <p className="step-text">
-                    We&apos;ll text you when we have a good Fika intro for you. Then we&apos;ll ask for your availability to schedule.
+                    We&apos;ll text you when we have a good Fika intro for you. When it&apos;s time to meet, we&apos;ll text you a proposed time and place to confirm.
                   </p>
                 </div>
               </li>
@@ -94,7 +94,7 @@ export default function Home() {
                 <div className="step-content">
                   <h3 className="step-title">We make the plan</h3>
                   <p className="step-text">
-                    <strong>Get your introduction</strong> — Once both people are in, we send an intro with a time and place based on your shared availability and location.
+                    <strong>Get your introduction</strong> — Once both people are in, we text you a concrete time and place (using what you told us in your profile and your usual free times), and you confirm by text.
                   </p>
                 </div>
               </li>

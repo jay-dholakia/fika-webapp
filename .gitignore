@@ -31,3 +31,6 @@ yarn-error.log*
 # OS
 .DS_Store
 Thumbs.db
+
+# Supabase CLI (local link / version cache)
+supabase/.temp/

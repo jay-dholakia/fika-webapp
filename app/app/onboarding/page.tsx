@@ -29,7 +29,17 @@ const SECTION_2_IDS = [
   'q_interests',
   'q_curiosity',
 ]
-const SECTION_3_IDS = ['q_topics', 'q_avoid_topics', 'q_openness', 'gender_preference', 'age_preference', 'q_what_makes_great_fika', 'q_radius', 'q_favorite_coffee_shop']
+const SECTION_3_IDS = [
+  'q_topics',
+  'q_avoid_topics',
+  'q_openness',
+  'gender_preference',
+  'age_preference',
+  'q_what_makes_great_fika',
+  'q_radius',
+  'q_typical_fika_times',
+  'q_favorite_coffee_shop',
+]
 const ABOUT_YOU_EXTRA_STEPS = INTAKE_STEPS.filter((s) => ABOUT_YOU_EXTRA_IDS.includes(s.id))
 const SECTION_2_STEPS = INTAKE_STEPS.filter((s) => SECTION_2_IDS.includes(s.id))
 const BACKGROUND_STEPS = SECTION_2_STEPS.filter((s) => BACKGROUND_STEP_IDS.includes(s.id as (typeof BACKGROUND_STEP_IDS)[number]))
@@ -317,6 +327,10 @@ function AppOnboardingContent() {
       if (s.type === 'multi_select' && s.maxSelections) {
         const arr = Array.isArray(raw) ? raw : []
         if (arr.length > s.maxSelections) return `Please choose at most ${s.maxSelections}.`
+      }
+      if (s.type === 'multi_select' && s.minSelections) {
+        const arr = Array.isArray(raw) ? raw : []
+        if (arr.length < s.minSelections) return `Please choose at least ${s.minSelections} for: ${s.question}`
       }
     }
     for (const s of ABOUT_YOU_EXTRA_STEPS) {

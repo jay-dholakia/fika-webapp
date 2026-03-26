@@ -234,7 +234,7 @@ function embeddingPairScore(a: SimCandidate, b: SimCandidate): { score: number; 
   return { score, sectionScores: { embedding_cosine: score } }
 }
 
-function getBatchWeekMonday(now: Date): string {
+function getWeekAnchorMonday(now: Date): string {
   const monday = new Date(now)
   const day = monday.getUTCDay()
   const diffToMonday = (day + 6) % 7
@@ -243,8 +243,8 @@ function getBatchWeekMonday(now: Date): string {
   return monday.toISOString().split('T')[0]
 }
 
-function getExpiresAtWednesdayMidnightUtc(batchWeek: string): string {
-  const d = new Date(`${batchWeek}T00:00:00.000Z`)
+function getExpiresAtWednesdayMidnightUtc(weekAnchorMonday: string): string {
+  const d = new Date(`${weekAnchorMonday}T00:00:00.000Z`)
   d.setUTCDate(d.getUTCDate() + 2)
   return d.toISOString()
 }
@@ -291,11 +291,11 @@ export async function POST(request: Request) {
         )
       })
 
-    const batchWeek = getBatchWeekMonday(new Date())
+    const weekAnchorMonday = getWeekAnchorMonday(new Date())
     let targetMatchIds: string[] | null = null
 
     if (selectedPairs.length > 0) {
-      const expiresAt = getExpiresAtWednesdayMidnightUtc(batchWeek)
+      const expiresAt = getExpiresAtWednesdayMidnightUtc(weekAnchorMonday)
       const createdIds: string[] = []
       for (const pair of selectedPairs) {
         const userA = pair.userAId < pair.userBId ? pair.userAId : pair.userBId
@@ -311,7 +311,7 @@ export async function POST(request: Request) {
             score,
             reasons,
             status: 'active',
-            batch_week: batchWeek,
+            week_anchor_monday: weekAnchorMonday,
             expires_at: expiresAt,
           })
           .select('id')
@@ -330,7 +330,7 @@ export async function POST(request: Request) {
             })
             .eq('user_a', userA)
             .eq('user_b', userB)
-            .eq('batch_week', batchWeek)
+            .eq('week_anchor_monday', weekAnchorMonday)
             .select('id')
             .single()
           if (updateErr) return NextResponse.json({ error: updateErr.message }, { status: 500 })
@@ -375,11 +375,11 @@ export async function POST(request: Request) {
   let candidateIds: string[] | null = null
 
   if (optedInOnly) {
-    const batchWeek = getBatchWeekMonday(new Date())
+    const weekAnchorMonday = getWeekAnchorMonday(new Date())
     const { data: optIns } = await supabase
       .from('weekly_match_opt_ins')
       .select('user_id')
-      .eq('batch_week', batchWeek)
+      .eq('week_anchor_monday', weekAnchorMonday)
     candidateIds = (optIns ?? []).map((x: { user_id: string }) => x.user_id)
   }
 

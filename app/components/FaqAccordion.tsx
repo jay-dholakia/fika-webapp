@@ -5,11 +5,11 @@ import { useState } from 'react'
 const faqItems = [
   {
     q: 'How do you decide who to introduce me to?',
-    a: 'We use your profile, preferences, and overlapping availability to find a strong Fika intro and suggest a real time you are both free. When we have one for you, we text you on this number.',
+    a: 'We use your profile, preferences, and when you’re usually free to find a strong Fika intro. When we have one for you, we text you on this number with a proposed time and place to confirm.',
   },
   {
     q: 'When will you text me about an intro?',
-    a: "There's no fixed schedule. We'll reach out when we find a good Fika intro for you, then ask for your availability to find a good time and place for your Fika.",
+    a: "There's no fixed schedule. We'll reach out when we find a good Fika intro for you, then text you a proposed time and place to confirm your Fika.",
   },
   {
     q: 'Do I have to meet in person?',

@@ -10,7 +10,7 @@ import { sendMessage } from '@/lib/sendblue'
 import { insertMessageLedger } from '@/lib/message-ledger'
 import { getOrCreateSmsState, messageEntryFirstTimeMessages, messageEntryFirstTimeMessagesInactiveMarket, SMS_STATES } from '@/lib/sms-agent'
 import { getTimezoneFromLatLng, getNextMondayPhrase } from '@/lib/sms-day-aware'
-import { getCurrentBatchWeek, isPastOptInDeadline } from '@/lib/onboarding'
+import { getCurrentWeekAnchorMonday, isPastOptInDeadline } from '@/lib/onboarding'
 import { getMarketFromCityOrLatLngWithDb } from '@/lib/markets'
 import { getActiveMarketSlugs } from '@/lib/admin-markets'
 import { getMarketBySlug } from '@/lib/markets'
@@ -144,16 +144,16 @@ export async function POST(request: Request) {
   // After first-time merge: send entry SMS sequence (3 messages). Creates global SMS state for the batch week.
   if (session.phone && process.env.SENDBLUE_API_KEY_ID) {
     try {
-      const batchWeek = getCurrentBatchWeek()
+      const weekAnchorMonday = getCurrentWeekAnchorMonday()
       await getOrCreateSmsState(supabase, user.id, SMS_STATES.AWAITING_OPT_IN, {
-        batch_week: batchWeek,
+        week_anchor_monday: weekAnchorMonday,
       })
       const appBase = (process.env.APP_CANONICAL_URL ?? '').trim().replace(/\/$/, '') || 'https://letsfika.vercel.app'
       const activeSlugs = await getActiveMarketSlugs(supabase)
       const isActiveMarket = market != null && activeSlugs.includes(market)
       const messages = isActiveMarket
         ? (() => {
-            const isAfterDeadline = isPastOptInDeadline(batchWeek)
+            const isAfterDeadline = isPastOptInDeadline(weekAnchorMonday)
             const timezone = getTimezoneFromLatLng(lat, lng)
             const nextMondayPhrase = getNextMondayPhrase(timezone)
             return messageEntryFirstTimeMessages(isAfterDeadline, nextMondayPhrase, appBase)
@@ -170,7 +170,7 @@ export async function POST(request: Request) {
           content_snippet: messages[i],
           context: 'first_time_entry_merge',
           message_handle: sent.message_handle ?? null,
-          batch_week: batchWeek,
+          week_anchor_monday: weekAnchorMonday,
         })
         if (i < messages.length - 1) {
           await new Promise((r) => setTimeout(r, 1000))
@@ -180,7 +180,7 @@ export async function POST(request: Request) {
         await supabase.from('sms_conversation_states').update({
           last_sendblue_message_handle: lastHandle,
           updated_at: new Date().toISOString(),
-        }).eq('user_id', user.id).eq('batch_week', batchWeek).is('match_id', null)
+        }).eq('user_id', user.id).eq('week_anchor_monday', weekAnchorMonday).is('match_id', null)
       }
     } catch {
       // Non-fatal

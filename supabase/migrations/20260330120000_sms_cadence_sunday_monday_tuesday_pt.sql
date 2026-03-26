@@ -6,7 +6,7 @@
 --   Tuesday 9pm PT  = intro accept deadline (code); Wednesday 4am UTC = match expiration
 
 -- 1) Sunday 19:00 UTC = Sunday 12pm PT — weekly opt-in
-select cron.unschedule('sms-weekly-opt-in');
+select cron.unschedule(jobid) from cron.job where jobname = 'sms-weekly-opt-in';
 select cron.schedule(
   'sms-weekly-opt-in',
   '0 19 * * 0',
@@ -23,7 +23,7 @@ select cron.schedule(
 );
 
 -- 2) Monday 02:00 UTC = Sunday 7pm PT — follow-up
-select cron.unschedule('sms-follow-up');
+select cron.unschedule(jobid) from cron.job where jobname = 'sms-follow-up';
 select cron.schedule(
   'sms-follow-up',
   '0 2 * * 1',
@@ -40,7 +40,7 @@ select cron.schedule(
 );
 
 -- 3) Monday 19:00 UTC = Monday 12pm PT — opt-in expiration (at deadline)
-select cron.unschedule('sms-opt-in-expiration');
+select cron.unschedule(jobid) from cron.job where jobname = 'sms-opt-in-expiration';
 select cron.schedule(
   'sms-opt-in-expiration',
   '0 19 * * 1',
@@ -57,7 +57,7 @@ select cron.schedule(
 );
 
 -- 4) Tuesday 16:00 UTC = Tuesday 9am PT — match delivery
-select cron.unschedule('sms-match-delivery');
+select cron.unschedule(jobid) from cron.job where jobname = 'sms-match-delivery';
 select cron.schedule(
   'sms-match-delivery',
   '0 16 * * 2',
@@ -74,7 +74,7 @@ select cron.schedule(
 );
 
 -- 5) Wednesday 04:00 UTC = Tuesday 9pm PT — match/intro expiration (after accept/pass deadline)
-select cron.unschedule('sms-match-expiration');
+select cron.unschedule(jobid) from cron.job where jobname = 'sms-match-expiration';
 select cron.schedule(
   'sms-match-expiration',
   '0 4 * * 3',

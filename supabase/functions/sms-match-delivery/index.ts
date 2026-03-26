@@ -14,7 +14,7 @@ const SIMPLE_OFFER_MESSAGE =
 const MS_24_H = 24 * 60 * 60 * 1000
 const MAX_SENDS_OUTSIDE_24H = 200
 
-function getCurrentBatchWeek(): string {
+function getCurrentWeekAnchorMonday(): string {
   const d = new Date()
   const day = d.getUTCDay()
   const date = d.getUTCDate()
@@ -89,7 +89,7 @@ serve(async (req: Request) => {
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
-    const batchWeek = getCurrentBatchWeek()
+    const weekAnchorMonday = getCurrentWeekAnchorMonday()
     const v2SimpleOffer = Deno.env.get('SMS_PROTOCOL_V2_SIMPLE_OFFER') === 'true'
     const body = await req.json().catch(() => ({}))
     const requestedIds = Array.isArray(body?.match_ids)
@@ -99,7 +99,7 @@ serve(async (req: Request) => {
     let matchesQuery = supabase
       .from('match_candidates')
       .select('id, user_a, user_b, reasons, status')
-      .eq('batch_week', batchWeek)
+      .eq('week_anchor_monday', weekAnchorMonday)
       .eq('status', 'active')
     if (requestedIds.length > 0) {
       matchesQuery = matchesQuery.in('id', requestedIds)
@@ -109,7 +109,7 @@ serve(async (req: Request) => {
     const { data: alreadyOffered } = await supabase
       .from('sms_conversation_states')
       .select('match_id')
-      .eq('batch_week', batchWeek)
+      .eq('week_anchor_monday', weekAnchorMonday)
       .eq('state', 'match_offered')
     const offeredSet = new Set((alreadyOffered ?? []).map((r: { match_id: string }) => r.match_id))
 
@@ -183,7 +183,7 @@ serve(async (req: Request) => {
           await supabase.from('sms_conversation_states').upsert(
             {
               user_id: userId,
-              batch_week: batchWeek,
+              week_anchor_monday: weekAnchorMonday,
               match_id: match.id,
               state: 'match_offered',
               payload: v2SimpleOffer
@@ -194,7 +194,7 @@ serve(async (req: Request) => {
                 : {},
               updated_at: new Date().toISOString(),
             },
-            { onConflict: 'user_id,batch_week,match_id' }
+            { onConflict: 'user_id,week_anchor_monday,match_id' }
           )
         }
       }
@@ -203,7 +203,7 @@ serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         ok: true,
-        batch_week: batchWeek,
+        week_anchor_monday: weekAnchorMonday,
         sent,
         requested: requestedIds.length,
         sent_outside_24h,

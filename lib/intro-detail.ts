@@ -20,6 +20,7 @@ export const SAFE_INTAKE_QUESTION_IDS = new Set([
   'q_hoping_for',
   'q_what_makes_great_fika',
   'q_openness',
+  'q_typical_fika_times',
 ])
 
 const questionById = new Map(INTAKE_STEPS.map((s) => [s.id, s.question]))

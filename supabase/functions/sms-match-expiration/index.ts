@@ -11,7 +11,7 @@ const SENDBLUE_URL = 'https://api.sendblue.co/api/send-message'
 
 const MS_24_H = 24 * 60 * 60 * 1000
 
-function getCurrentBatchWeek(): string {
+function getCurrentWeekAnchorMonday(): string {
   const d = new Date()
   const day = d.getUTCDay()
   const date = d.getUTCDate()
@@ -59,26 +59,26 @@ serve(async () => {
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
-    const batchWeek = getCurrentBatchWeek()
+    const weekAnchorMonday = getCurrentWeekAnchorMonday()
 
     const { data: matches } = await supabase
       .from('match_candidates')
       .select('id, user_a, user_b, scheduling_status, status')
-      .eq('batch_week', batchWeek)
+      .eq('week_anchor_monday', weekAnchorMonday)
     const activeMatches =
       matches?.filter(
         (m: { scheduling_status: string | null; status: string | null }) =>
           m.status === 'active' && m.scheduling_status !== 'confirmed'
       ) ?? []
     if (!activeMatches.length) {
-      return new Response(JSON.stringify({ ok: true, batch_week: batchWeek, notified: 0, expired: 0 }))
+      return new Response(JSON.stringify({ ok: true, week_anchor_monday: weekAnchorMonday, notified: 0, expired: 0 }))
     }
 
     const matchIds = activeMatches.map((m) => m.id)
     const { data: states } = await supabase
       .from('sms_conversation_states')
       .select('match_id, user_id, state')
-      .eq('batch_week', batchWeek)
+      .eq('week_anchor_monday', weekAnchorMonday)
       .in('match_id', matchIds)
       .not('match_id', 'is', null)
 
@@ -109,7 +109,7 @@ serve(async () => {
 
     const allNotifyIds = Array.from(new Set([...userIdsWaiting, ...userIdsNoResponse]))
     if (!allNotifyIds.length) {
-      return new Response(JSON.stringify({ ok: true, batch_week: batchWeek, notified: 0, expired: activeMatches.length }))
+      return new Response(JSON.stringify({ ok: true, week_anchor_monday: weekAnchorMonday, notified: 0, expired: activeMatches.length }))
     }
 
     const { data: profiles } = await supabase
@@ -165,10 +165,10 @@ serve(async () => {
 
     for (const m of activeMatches) {
       await supabase.from('match_candidates').update({ scheduling_status: 'expired' }).eq('id', m.id)
-      await supabase.from('sms_conversation_states').delete().eq('batch_week', batchWeek).eq('match_id', m.id)
+      await supabase.from('sms_conversation_states').delete().eq('week_anchor_monday', weekAnchorMonday).eq('match_id', m.id)
     }
 
-    return new Response(JSON.stringify({ ok: true, batch_week: batchWeek, notified, expired: activeMatches.length, skipped_no_recent_inbound }))
+    return new Response(JSON.stringify({ ok: true, week_anchor_monday: weekAnchorMonday, notified, expired: activeMatches.length, skipped_no_recent_inbound }))
   } catch (e) {
     return new Response(JSON.stringify({ error: String(e) }), { status: 500 })
   }
