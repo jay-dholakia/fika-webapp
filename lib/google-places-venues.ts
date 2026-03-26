@@ -57,6 +57,7 @@ export type GoogleNearbyPlace = {
   lat: number
   lng: number
   formattedAddress: string
+  businessStatus?: string | null
 }
 
 /** Google Places OpeningHours / Period (subset). */
@@ -132,6 +133,11 @@ function isOpenAtMeetingTime(
   return false
 }
 
+function isPermanentlyClosedBusinessStatus(status: string | null | undefined): boolean {
+  const s = status?.trim().toUpperCase() ?? ''
+  return s === 'PERMANENTLY_CLOSED' || s === 'CLOSED_PERMANENTLY'
+}
+
 /**
  * With a proposed meeting time: use regular hours + IANA timezone when present.
  * `openNow` reflects the request time, not the meeting — only used when there is no `meetingAtUtc`.
@@ -146,7 +152,9 @@ function placePassesOpeningFilter(
     const verdict = isOpenAtMeetingTime(meetingAtUtc, timeZone?.id, regular)
     if (verdict === true) return true
     if (verdict === false) return false
-    return true
+    // Fail closed: if we can't confidently determine open hours for the meeting time,
+    // don't suggest the venue.
+    return false
   }
   if (currentOpening?.openNow === false) return false
   return true
@@ -191,7 +199,7 @@ export async function searchNearbyCafesGooglePlaces(params: {
         'Content-Type': 'application/json',
         'X-Goog-Api-Key': apiKey,
         'X-Goog-FieldMask':
-          'places.id,places.displayName,places.location,places.formattedAddress,places.types,places.currentOpeningHours,places.regularOpeningHours,places.timeZone',
+          'places.id,places.displayName,places.location,places.formattedAddress,places.types,places.businessStatus,places.currentOpeningHours,places.regularOpeningHours,places.timeZone',
       },
       body: JSON.stringify({
         locationRestriction: {
@@ -217,6 +225,7 @@ export async function searchNearbyCafesGooglePlaces(params: {
         displayName?: { text?: string }
         formattedAddress?: string
         location?: { latitude?: number; longitude?: number }
+        businessStatus?: string
         currentOpeningHours?: OpeningHoursPayload
         regularOpeningHours?: OpeningHoursPayload
         timeZone?: TimeZonePayload
@@ -232,8 +241,10 @@ export async function searchNearbyCafesGooglePlaces(params: {
       const lat = p.location?.latitude
       const lng = p.location?.longitude
       const formattedAddress = p.formattedAddress?.trim() ?? ''
+      const businessStatus = p.businessStatus ?? null
       if (!placeId || !name || lat == null || lng == null) continue
       if (isBlockedChainName(name)) continue
+      if (isPermanentlyClosedBusinessStatus(businessStatus)) continue
       if (!placePassesOpeningFilter(meetingAtUtc, p.currentOpeningHours, p.regularOpeningHours, p.timeZone)) continue
 
       const distA = haversineKm(latA, lngA, lat, lng)
@@ -247,6 +258,7 @@ export async function searchNearbyCafesGooglePlaces(params: {
         lng,
         formattedAddress: formattedAddress || name,
         maxDist,
+        businessStatus,
       })
     }
 
@@ -259,6 +271,7 @@ export async function searchNearbyCafesGooglePlaces(params: {
       lat: best.lat,
       lng: best.lng,
       formattedAddress: best.formattedAddress,
+      businessStatus: best.businessStatus ?? null,
     }
   } catch (e) {
     console.warn('[google-places-venues] searchNearby error', e)
@@ -291,6 +304,8 @@ export async function upsertVenueFromGooglePlace(
     lat: place.lat,
     lng: place.lng,
     google_place_id: googlePlaceId,
+    google_business_status: place.businessStatus ?? null,
+    google_permanently_closed: isPermanentlyClosedBusinessStatus(place.businessStatus),
     updated_at: new Date().toISOString(),
   }
 

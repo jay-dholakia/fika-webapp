@@ -138,6 +138,7 @@ export async function pickVenueFromDatabase(
   const { data: venues } = await supabase
     .from('venues')
     .select('id, name, neighborhood, city, lat, lng')
+    .eq('google_permanently_closed', false)
     .not('lat', 'is', null)
     .not('lng', 'is', null)
 
@@ -173,13 +174,20 @@ export async function pickVenueForMatch(
   userB: UserLocation,
   opts?: { meetingAtUtc?: Date }
 ): Promise<{ id: string; name: string; neighborhood: string | null; city: string } | null> {
+  // When we know the proposed meeting time, prefer a fresh Google validation
+  // (hours + businessStatus) instead of relying on cached/old venue rows.
+  if (opts?.meetingAtUtc) {
+    const place = await searchNearbyCafesGooglePlaces({ userA, userB, meetingAtUtc: opts.meetingAtUtc })
+    if (place) return upsertVenueFromGooglePlace(supabase, place)
+  }
+
   const fromDb = await pickVenueFromDatabase(supabase, userA, userB)
   if (fromDb) return fromDb
 
   const place = await searchNearbyCafesGooglePlaces({
     userA,
     userB,
-    meetingAtUtc: opts?.meetingAtUtc,
+    meetingAtUtc: undefined,
   })
   if (!place) return null
   return upsertVenueFromGooglePlace(supabase, place)
