@@ -73,6 +73,86 @@ async function hasInboundWithin24h(supabase: any, phone: string): Promise<boolea
   return Number.isFinite(last) && Date.now() - last <= MS_24_H
 }
 
+function isDuplicateKeyError(error: unknown): boolean {
+  const code = (error as { code?: string } | null)?.code
+  const message = (error as { message?: string } | null)?.message ?? ''
+  return code === '23505' || message.toLowerCase().includes('duplicate key')
+}
+
+async function setMatchOfferedState(params: {
+  supabase: any
+  userId: string
+  weekAnchorMonday: string
+  matchId: string
+  payload: Record<string, unknown>
+}): Promise<void> {
+  const { supabase, userId, weekAnchorMonday, matchId, payload } = params
+  const updatedAt = new Date().toISOString()
+  const baseRow = {
+    user_id: userId,
+    week_anchor_monday: weekAnchorMonday,
+    match_id: matchId,
+    state: 'match_offered',
+    payload,
+    updated_at: updatedAt,
+  }
+
+  const { data: updatedRows, error: updateError } = await supabase
+    .from('sms_conversation_states')
+    .update({
+      state: 'match_offered',
+      payload,
+      updated_at: updatedAt,
+    })
+    .eq('user_id', userId)
+    .eq('week_anchor_monday', weekAnchorMonday)
+    .eq('match_id', matchId)
+    .select('id')
+    .limit(1)
+
+  if (updateError) {
+    console.error('[sms-match-delivery] state update failed', {
+      userId,
+      weekAnchorMonday,
+      matchId,
+      error: updateError,
+    })
+    return
+  }
+  if ((updatedRows ?? []).length > 0) return
+
+  const { error: insertError } = await supabase.from('sms_conversation_states').insert(baseRow)
+  if (!insertError) return
+  if (!isDuplicateKeyError(insertError)) {
+    console.error('[sms-match-delivery] state insert failed', {
+      userId,
+      weekAnchorMonday,
+      matchId,
+      error: insertError,
+    })
+    return
+  }
+
+  const { error: retryUpdateError } = await supabase
+    .from('sms_conversation_states')
+    .update({
+      state: 'match_offered',
+      payload,
+      updated_at: updatedAt,
+    })
+    .eq('user_id', userId)
+    .eq('week_anchor_monday', weekAnchorMonday)
+    .eq('match_id', matchId)
+  if (retryUpdateError) {
+    console.error('[sms-match-delivery] retry state update failed', {
+      userId,
+      weekAnchorMonday,
+      matchId,
+      error: retryUpdateError,
+    })
+  }
+}
+
 serve(async (req: Request) => {
   try {
     if (Deno.env.get('SMS_OUTBOUND_DISABLED') === 'true') {
@@ -180,22 +260,18 @@ serve(async (req: Request) => {
         if (res.ok) {
           sent++
           if (isOutside24h) sent_outside_24h++
-          await supabase.from('sms_conversation_states').upsert(
-            {
-              user_id: userId,
-              week_anchor_monday: weekAnchorMonday,
-              match_id: match.id,
-              state: 'match_offered',
-              payload: v2SimpleOffer
-                ? {
-                    protocol_version: 'v2',
-                    phase: 'offer',
-                  }
-                : {},
-              updated_at: new Date().toISOString(),
-            },
-            { onConflict: 'user_id,week_anchor_monday,match_id' }
-          )
+          await setMatchOfferedState({
+            supabase,
+            userId,
+            weekAnchorMonday,
+            matchId: match.id,
+            payload: v2SimpleOffer
+              ? {
+                  protocol_version: 'v2',
+                  phase: 'offer',
+                }
+              : {},
+          })
         }
       }
       offeredSet.add(match.id)
