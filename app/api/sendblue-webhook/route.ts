@@ -1072,7 +1072,6 @@ export async function POST(request: Request) {
     const cancelMatch = async () => {
       await supabase.from('match_candidates').update({
         scheduling_status: 'expired',
-        updated_at: new Date().toISOString(),
       }).eq('id', matchId)
       await sendConciergeAndLog(fromNumber, messageProposalMaxRetries(), 'proposal_max_retries', { userId, weekAnchorMonday, matchId })
       if (otherId) {
@@ -1128,7 +1127,6 @@ export async function POST(request: Request) {
       suggested_venue_id: venue.id,
       default_slot_id: nextSlotId,
       overlapping_slot_ids: candidateSlots,
-      updated_at: new Date().toISOString(),
     }).eq('id', matchId)
 
     const newPayload = {
@@ -1280,7 +1278,6 @@ export async function POST(request: Request) {
       }
       await supabase.from('match_candidates').update({
         scheduling_status: 'expired',
-        updated_at: new Date().toISOString(),
       }).eq('id', matchId)
       await supabase.from('sms_conversation_states').delete().eq('id', matchStateRow!.id)
       return NextResponse.json({ ok: true })
