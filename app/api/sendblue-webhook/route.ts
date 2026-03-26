@@ -731,7 +731,16 @@ export async function POST(request: Request) {
 
           // Proposal-first scheduling: after both YES, propose a concrete time+place.
           // Slot pool comes from intake q_typical_fika_times (intersection → union → full grid fallback).
-          const firstYesUserId = yesUsers[0].user_id
+          const firstYesUserId = yesUsers[0]?.user_id
+          if (!firstYesUserId) {
+            await sendConciergeAndLog(
+              fromNumber,
+              "Got your YES — we're syncing your intro now. We'll text you in a moment.",
+              'yes_sync_retry_v2',
+              { userId, weekAnchorMonday, matchId }
+            )
+            return NextResponse.json({ ok: true })
+          }
           const { data: userA } = await supabase.from('profiles').select('city, lat, lng').eq('id', match.user_a).single()
           const { data: userB } = await supabase.from('profiles').select('city, lat, lng').eq('id', match.user_b).single()
           const [intakeA, intakeB] = await Promise.all([
@@ -822,7 +831,16 @@ export async function POST(request: Request) {
           return NextResponse.json({ ok: true })
         }
 
-        const firstYesUserId = yesUsers[0].user_id
+        const firstYesUserId = yesUsers[0]?.user_id
+        if (!firstYesUserId) {
+          await sendConciergeAndLog(
+            fromNumber,
+            "Got your YES — we're syncing your intro now. We'll text you in a moment.",
+            'yes_sync_retry_v1',
+            { userId, weekAnchorMonday, matchId }
+          )
+          return NextResponse.json({ ok: true })
+        }
         const { data: userA } = await supabase.from('profiles').select('city, lat, lng').eq('id', match.user_a).single()
         const { data: userB } = await supabase.from('profiles').select('city, lat, lng').eq('id', match.user_b).single()
         const [intakeA, intakeB] = await Promise.all([
