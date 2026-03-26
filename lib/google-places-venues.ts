@@ -318,6 +318,33 @@ export async function upsertVenueFromGooglePlace(
     const code = (error as { code?: string } | null)?.code
     console.warn('[google-places-venues] upsert error', { code, message: error.message })
 
+    // If prod has a partial unique index on google_place_id, Postgres can't use it for ON CONFLICT,
+    // which yields 42P10. Fall back to select→insert so venue selection still works.
+    if (code === '42P10') {
+      const { data: existingFirst } = await supabase
+        .from('venues')
+        .select('id, name, neighborhood, city')
+        .eq('google_place_id', googlePlaceId)
+        .maybeSingle()
+      if (existingFirst) return existingFirst
+
+      const { data: inserted, error: insertError } = await supabase
+        .from('venues')
+        .insert(row)
+        .select('id, name, neighborhood, city')
+        .maybeSingle()
+      if (!insertError) return inserted ?? null
+
+      const insertCode = (insertError as { code?: string } | null)?.code
+      console.warn('[google-places-venues] insert fallback error', { code: insertCode, message: insertError.message })
+      const { data: existingAfter } = await supabase
+        .from('venues')
+        .select('id, name, neighborhood, city')
+        .eq('google_place_id', googlePlaceId)
+        .maybeSingle()
+      return existingAfter ?? null
+    }
+
     // Backward-compat: if prod DB is missing newer columns, retry with a minimal payload.
     if (code === 'PGRST204') {
       const minimalRow = {
