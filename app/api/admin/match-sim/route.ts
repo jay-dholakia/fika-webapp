@@ -273,14 +273,22 @@ function passesFilters(
     if (!preferenceAllows(bPref, bGender, aGender)) return { ok: false, reason: 'gender_pref' }
   }
 
-  if (!relaxedFilters) {
+  {
     const preferAround = 'Prefer around my age'
     const aAround = a.profile.age_preference?.trim() === preferAround
     const bAround = b.profile.age_preference?.trim() === preferAround
-    if ((aAround || bAround) && a.age != null && b.age != null && Math.abs(a.age - b.age) > 3) {
-      return { ok: false, reason: 'age_pref' }
-    }
 
+    if (aAround) {
+      if (a.age == null || b.age == null) return { ok: false, reason: 'age_pref' }
+      if (Math.abs(a.age - b.age) > 3) return { ok: false, reason: 'age_pref' }
+    }
+    if (bAround) {
+      if (a.age == null || b.age == null) return { ok: false, reason: 'age_pref' }
+      if (Math.abs(a.age - b.age) > 3) return { ok: false, reason: 'age_pref' }
+    }
+  }
+
+  if (!relaxedFilters) {
     const convOnly = 'Conversation with new people — not necessarily friendship'
     const activeFriends = 'Actively looking for new friends'
     const aHop = getMulti(a.intake, 'q_hoping_for')[0] ?? null
