@@ -1127,9 +1127,10 @@ export async function POST(request: Request) {
   }
 
   if (
-    state === SMS_STATES.GLOBAL_READY ||
-    state === SMS_STATES.AWAITING_OPT_IN ||
-    state === SMS_STATES.OPTED_IN
+    !matchId &&
+    (state === SMS_STATES.GLOBAL_READY ||
+      state === SMS_STATES.AWAITING_OPT_IN ||
+      state === SMS_STATES.OPTED_IN)
   ) {
     await sendConciergeAndLog(fromNumber, messageEntryReminder(), 'global_ready_match_first', { userId, weekAnchorMonday })
     return NextResponse.json({ ok: true })
