@@ -901,6 +901,21 @@ export async function POST(request: Request) {
             { userId, weekAnchorMonday, matchId }
           )
 
+          if (otherId && otherProfile?.phone) {
+            await sendConciergeAndLog(
+              otherProfile.phone,
+              messageProposalToConfirm({
+                otherFirstName: currentName,
+                day: proposedDay,
+                time: proposedTime,
+                venueName: venue.name,
+                neighborhood: venue.neighborhood ?? venue.city,
+              }),
+              'proposal_to_confirm_other_symmetric',
+              { userId: otherId, weekAnchorMonday, matchId }
+            )
+          }
+
           await supabase.from('match_candidates').update({
             suggested_venue_id: venue.id,
             default_slot_id: slotId,
@@ -924,6 +939,24 @@ export async function POST(request: Request) {
             },
             lastSendblueMessageHandle: messageHandle,
           })
+          if (otherId) {
+            await setPerMatchSmsState({
+              userId: otherId,
+              weekAnchorMonday,
+              matchId,
+              state: SMS_STATES.AWAITING_SECOND_CONFIRM,
+              payload: {
+                proposed_slot_id: slotId,
+                proposed_venue_id: venue.id,
+                proposed_day: proposedDay,
+                proposed_time: proposedTime,
+                venue_name: venue.name,
+                neighborhood: venue.neighborhood ?? venue.city,
+                first_yes_user_id: firstYesUserId,
+                proposal_attempt: 1,
+              },
+            })
+          }
           return NextResponse.json({ ok: true })
         }
 
@@ -967,12 +1000,27 @@ export async function POST(request: Request) {
           return NextResponse.json({ ok: true })
         }
         const { day: proposedDay, time: proposedTime } = slotIdToDisplayTime(slotId)
+        const { data: currentProfile } = await supabase
+          .from('profiles')
+          .select('first_name')
+          .eq('id', userId)
+          .single()
         const { data: otherProfile } = await supabase
           .from('profiles')
           .select('first_name')
           .eq('id', firstYesUserId)
           .single()
         const otherName = otherProfile?.first_name?.trim() ?? 'Your match'
+        const currentName = currentProfile?.first_name?.trim() ?? 'Your match'
+        const { data: pair } = await supabase
+          .from('match_candidates')
+          .select('user_a, user_b')
+          .eq('id', matchId)
+          .maybeSingle()
+        const otherId = pair ? (pair.user_a === userId ? pair.user_b : pair.user_a) : null
+        const { data: otherPhoneProfile } = otherId
+          ? await supabase.from('profiles').select('phone').eq('id', otherId).maybeSingle()
+          : { data: null as { phone?: string | null } | null }
         await sendConciergeAndLog(fromNumber, messageProposalToConfirm({
           otherFirstName: otherName,
           day: proposedDay,
@@ -980,6 +1028,20 @@ export async function POST(request: Request) {
           venueName: venue.name,
           neighborhood: venue.neighborhood ?? venue.city,
         }), 'proposal_to_confirm', { userId, weekAnchorMonday, matchId })
+        if (otherId && otherPhoneProfile?.phone) {
+          await sendConciergeAndLog(
+            otherPhoneProfile.phone,
+            messageProposalToConfirm({
+              otherFirstName: currentName,
+              day: proposedDay,
+              time: proposedTime,
+              venueName: venue.name,
+              neighborhood: venue.neighborhood ?? venue.city,
+            }),
+            'proposal_to_confirm_other_symmetric',
+            { userId: otherId, weekAnchorMonday, matchId }
+          )
+        }
         await supabase.from('match_candidates').update({
           suggested_venue_id: venue.id,
           default_slot_id: slotId,
@@ -1002,6 +1064,24 @@ export async function POST(request: Request) {
           },
           lastSendblueMessageHandle: messageHandle,
         })
+        if (otherId) {
+          await setPerMatchSmsState({
+            userId: otherId,
+            weekAnchorMonday,
+            matchId,
+            state: SMS_STATES.AWAITING_SECOND_CONFIRM,
+            payload: {
+              proposed_slot_id: slotId,
+              proposed_venue_id: venue.id,
+              proposed_day: proposedDay,
+              proposed_time: proposedTime,
+              venue_name: venue.name,
+              neighborhood: venue.neighborhood ?? venue.city,
+              first_yes_user_id: firstYesUserId,
+              proposal_attempt: 1,
+            },
+          })
+        }
       }
     } else if (isMatchPassKeyword(content) || keyword === 'PASS') {
       const { error: passUpsertError } = await supabase.from('opt_ins').upsert(
@@ -1180,44 +1260,60 @@ export async function POST(request: Request) {
     const venueName = (matchPayload.venue_name as string) ?? 'the spot'
     const neighborhood = (matchPayload.neighborhood as string) ?? ''
     const firstYesUserId = matchPayload.first_yes_user_id as string | undefined
-    const { data: match } = await supabase.from('match_candidates').select('user_a, user_b').eq('id', matchId).single()
+    const { data: match } = await supabase.from('match_candidates').select('user_a, user_b, suggested_venue_id, scheduling_status').eq('id', matchId).single()
     if (!match) return NextResponse.json({ ok: true })
     const otherId = (firstYesUserId && firstYesUserId !== userId) ? firstYesUserId : (match.user_a === userId ? match.user_b : match.user_a)
-    const { data: otherProfile } = await supabase.from('profiles').select('phone, first_name').eq('id', otherId).maybeSingle()
-    const currentName = (await supabase.from('profiles').select('first_name').eq('id', userId).single()).data?.first_name?.trim() ?? 'Your match'
-    if (otherProfile?.phone) {
-      await sendConciergeAndLog(otherProfile.phone, messageProposalToConfirm({
-        otherFirstName: currentName,
-        day: proposedDay,
-        time: proposedTime,
-        venueName,
-        neighborhood,
-      }), 'proposal_to_confirm_other', { userId: otherId, weekAnchorMonday, matchId })
+    await setPerMatchSmsState({
+      userId,
+      weekAnchorMonday,
+      matchId,
+      state: SMS_STATES.CONFIRMED,
+      payload: {
+        ...matchPayload,
+      },
+      lastSendblueMessageHandle: messageHandle,
+    })
+
+    const { data: otherState } = await supabase
+      .from('sms_conversation_states')
+      .select('state')
+      .eq('user_id', otherId)
+      .eq('week_anchor_monday', weekAnchorMonday)
+      .eq('match_id', matchId)
+      .maybeSingle()
+
+    const otherConfirmed = otherState?.state === SMS_STATES.CONFIRMED
+    if (!otherConfirmed) {
+      await sendConciergeAndLog(fromNumber, messageYesWaitingForOther(), 'proposal_yes_waiting_for_other', {
+        userId,
+        weekAnchorMonday,
+        matchId,
+      })
+      return NextResponse.json({ ok: true })
     }
-    await supabase.from('match_candidates').update({
-      suggested_venue_id: proposedVenueId,
-      default_slot_id: proposedSlotId,
-    }).eq('id', matchId)
+
+    if (match.scheduling_status !== 'confirmed' && match.suggested_venue_id) {
+      await supabase.from('match_candidates').update({
+        confirmed_venue_id: match.suggested_venue_id,
+        confirmed_slot_id: proposedSlotId,
+        scheduling_status: 'confirmed',
+        confirmed_at: new Date().toISOString(),
+      }).eq('id', matchId)
+    }
+
+    const { day: dayLabel, time: timeStr } = slotIdToDisplayTime(proposedSlotId)
+    await sendConciergeAndLog(fromNumber, messageYoureAllSet(dayLabel, timeStr, venueName, neighborhood), 'youre_all_set', { userId, weekAnchorMonday, matchId })
+    const { data: otherProfile } = await supabase.from('profiles').select('phone').eq('id', otherId).maybeSingle()
+    if (otherProfile?.phone) {
+      await sendConciergeAndLog(otherProfile.phone, messageYoureAllSet(dayLabel, timeStr, venueName, neighborhood), 'youre_all_set_other', { userId: otherId, weekAnchorMonday, matchId })
+    }
     await setPerMatchSmsState({
       userId: otherId,
       weekAnchorMonday,
       matchId,
-      state: SMS_STATES.AWAITING_FIRST_CONFIRM,
-      payload: {
-        proposed_slot_id: proposedSlotId,
-        proposed_venue_id: proposedVenueId,
-        proposed_day: proposedDay,
-        proposed_time: proposedTime,
-        venue_name: venueName,
-        neighborhood,
-        first_yes_user_id: userId,
-        proposal_attempt: (matchPayload.proposal_attempt as number) ?? 1,
-      },
-    })
-    await supabase.from('sms_conversation_states').update({
       state: SMS_STATES.CONFIRMED,
-      updated_at: new Date().toISOString(),
-    }).eq('id', matchStateRow!.id)
+      payload: { ...matchPayload },
+    })
     return NextResponse.json({ ok: true })
   }
 
