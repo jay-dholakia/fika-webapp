@@ -409,7 +409,7 @@ export function messageVenueProposed(day: string, time: string, venueName: strin
 
 /** Both confirmed — Fika is locked in. */
 export function messageYoureAllSet(day: string, time: string, venueName: string, neighborhood: string): string {
-  return `Your Fika is confirmed ☕\n\n${day} — ${time}\n${venueName} (${neighborhood})\n\nNeed to coordinate or update anything? Just reply here.`
+  return `Your Fika is confirmed ☕\n\n${day} — ${time}\n${venueName} (${neighborhood})\n\nWe'll send a reminder 12 hours before.\nYou can also text this thread ~3 hours before to coordinate if you're running behind.`
 }
 
 export function messageDayOfReminder(time: string, venueName: string, neighborhood: string, starterQuestion?: string): string {
@@ -569,12 +569,22 @@ export function messageSmsOptBackIn(): string {
 
 /** Confirmed Fika upcoming: reminder. Text only; send webappUrl as a separate message after this. */
 export function messageConfirmedUpcoming(day: string, time: string, venueName: string, neighborhood: string, _webappUrl: string): string {
-  return `Your Fika is coming up — ${day} at ${time} at ${venueName} (${neighborhood}). ☕\n\nQuestions? Reply RESCHEDULE or CANCEL and we'll help. I'll send you the link to manage your account next.`
+  return `Your Fika is coming up — ${day} at ${time} at ${venueName} (${neighborhood}). ☕\n\nNeed to change it? Reply RESCHEDULE or CANCEL and we'll help. I'll send you the link to manage your account next.`
 }
 
 /** RESCHEDULE acknowledged. */
 export function messageRescheduleAck(): string {
   return `We'll help you reschedule — we'll text you shortly to pick a new time.`
+}
+
+/** RESCHEDULE rejected: only allow one reschedule per person per Fika. */
+export function messageRescheduleLimitReached(): string {
+  return `Totally understand — to keep things simple, we can only reschedule once per Fika.\n\nReply CANCEL to cancel this intro, or we’ll reach out with another intro soon.`
+}
+
+/** Notify the other person that their partner is rescheduling. */
+export function messageRescheduleHeadsUpToOther(): string {
+  return `Heads up — your Fika partner needs to reschedule. We’re proposing a new time now.`
 }
 
 /** CANCEL acknowledged. */

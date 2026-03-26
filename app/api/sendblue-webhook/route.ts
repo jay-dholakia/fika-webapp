@@ -46,6 +46,8 @@ import {
   messageSmsOptBackIn,
   messageConfirmedUpcoming,
   messageRescheduleAck,
+  messageRescheduleLimitReached,
+  messageRescheduleHeadsUpToOther,
   messageCancelAck,
   getFallbackForState,
   fallbackGeneric,
@@ -710,7 +712,159 @@ export async function POST(request: Request) {
   )
   if (upcomingMatch) {
     if (isRescheduleKeyword(content)) {
-      await sendConciergeAndLog(fromNumber, messageRescheduleAck(), 'reschedule_ack', { userId })
+      // One reschedule per person per match.
+      const { data: myMatchState } = await supabase
+        .from('sms_conversation_states')
+        .select('payload, week_anchor_monday')
+        .eq('user_id', userId)
+        .eq('match_id', upcomingMatch.id)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      const myPayload = (myMatchState?.payload as Record<string, unknown>) ?? {}
+      const rescheduleRequests = (myPayload.reschedule_requests as Record<string, number> | null) ?? {}
+      const already = (rescheduleRequests[userId] ?? 0) >= 1
+      if (already) {
+        await sendConciergeAndLog(fromNumber, messageRescheduleLimitReached(), 'reschedule_limit_reached', { userId, matchId: upcomingMatch.id })
+        return NextResponse.json({ ok: true })
+      }
+
+      const otherUserId = upcomingMatch.user_a === userId ? upcomingMatch.user_b : upcomingMatch.user_a
+      const { data: otherProfile } = await supabase.from('profiles').select('phone').eq('id', otherUserId).maybeSingle()
+      if (otherProfile?.phone) {
+        await sendConciergeAndLog(otherProfile.phone, messageRescheduleHeadsUpToOther(), 'reschedule_heads_up_other', {
+          userId: otherUserId,
+          matchId: upcomingMatch.id,
+        })
+      }
+
+      // Invalidate the old confirmed plan immediately so reminders don't fire.
+      await supabase.from('match_candidates').update({
+        scheduling_status: 'rescheduling',
+        confirmed_slot_id: null,
+        confirmed_venue_id: null,
+        confirmed_at: null,
+      }).eq('id', upcomingMatch.id)
+
+      // Propose an immediate alternative (same as normal proposal logic).
+      const matchTz = await fetchMatchMarketTimezone(supabase, upcomingMatch.user_a, upcomingMatch.user_b)
+      const [intakeA, intakeB] = await Promise.all([
+        supabase.from('intake_responses_v5').select('responses').eq('user_id', upcomingMatch.user_a).maybeSingle(),
+        supabase.from('intake_responses_v5').select('responses').eq('user_id', upcomingMatch.user_b).maybeSingle(),
+      ])
+      const candidates = generateProposalCandidates({
+        responsesA: intakeA?.data?.responses ?? null,
+        responsesB: intakeB?.data?.responses ?? null,
+        timeZone: matchTz,
+      })
+      const oldSlotId = upcomingMatch.confirmed_slot_id as string | null
+      const pick = candidates.find((c) => (oldSlotId ? c.slotId !== oldSlotId : true)) ?? null
+      if (!pick) {
+        await sendConciergeAndLog(
+          fromNumber,
+          "We couldn't find a time that works for both. We'll reach out when we find another good Fika intro for you.",
+          'reschedule_no_overlap',
+          { userId, matchId: upcomingMatch.id }
+        )
+        return NextResponse.json({ ok: true })
+      }
+
+      const { data: profA } = await supabase.from('profiles').select('city, lat, lng, phone, first_name').eq('id', upcomingMatch.user_a).maybeSingle()
+      const { data: profB } = await supabase.from('profiles').select('city, lat, lng, phone, first_name').eq('id', upcomingMatch.user_b).maybeSingle()
+      const radiusA = getIntakeRadiusKm(intakeA?.data?.responses ?? null)
+      const radiusB = getIntakeRadiusKm(intakeB?.data?.responses ?? null)
+
+      const venue = await pickVenueForMatch(
+        supabase,
+        { city: profA?.city ?? null, lat: profA?.lat ?? null, lng: profA?.lng ?? null, radius_km: radiusA },
+        { city: profB?.city ?? null, lat: profB?.lat ?? null, lng: profB?.lng ?? null, radius_km: radiusB },
+        { meetingAtUtc: new Date(pick.meetingMsUtc) }
+      )
+      if (!venue) {
+        await sendConciergeAndLog(fromNumber, "We're setting up a spot — we'll text you in a moment.", 'reschedule_venue_setup', {
+          userId,
+          matchId: upcomingMatch.id,
+        })
+        return NextResponse.json({ ok: true })
+      }
+
+      const proposalWeekAnchorMonday = pick.weekAnchorMonday
+      const slotId = pick.slotId
+      const meetingMsUtc = pick.meetingMsUtc
+      const { day: proposedDay, time: proposedTime } = slotIdToDisplayTime(slotId)
+      const meetingDateLabel = formatMeetingDateLabel(new Date(meetingMsUtc), matchTz)
+
+      // Update match and set symmetric confirmation state for both users.
+      await supabase.from('match_candidates').update({
+        suggested_venue_id: venue.id,
+        default_slot_id: slotId,
+        overlapping_slot_ids: candidates.map((c) => c.slotId),
+        week_anchor_monday: proposalWeekAnchorMonday,
+        scheduling_status: 'rescheduling',
+      }).eq('id', upcomingMatch.id)
+
+      const nextRescheduleRequests = { ...rescheduleRequests, [userId]: (rescheduleRequests[userId] ?? 0) + 1 }
+      const newPayload = {
+        proposed_slot_id: slotId,
+        proposed_meeting_ms_utc: meetingMsUtc,
+        proposed_venue_id: venue.id,
+        proposed_day: proposedDay,
+        proposed_time: proposedTime,
+        venue_name: venue.name,
+        neighborhood: venue.neighborhood ?? venue.city,
+        proposal_attempt: 1,
+        reschedule_requests: nextRescheduleRequests,
+      }
+
+      const nameA = profA?.first_name?.trim() ?? 'Your match'
+      const nameB = profB?.first_name?.trim() ?? 'Your match'
+
+      // Send proposal to the requester
+      await sendConciergeAndLog(
+        fromNumber,
+        messageProposalToConfirm({
+          otherFirstName: otherUserId === upcomingMatch.user_a ? nameA : nameB,
+          meetingDateLabel: meetingDateLabel || proposedDay,
+          time: proposedTime,
+          venueName: venue.name,
+          neighborhood: venue.neighborhood ?? venue.city,
+        }),
+        'reschedule_proposal_to_confirm',
+        { userId, matchId: upcomingMatch.id, weekAnchorMonday: proposalWeekAnchorMonday }
+      )
+
+      // Send proposal to the other person (if we have phone)
+      if (otherProfile?.phone) {
+        await sendConciergeAndLog(
+          otherProfile.phone,
+          messageProposalToConfirm({
+            otherFirstName: otherUserId === upcomingMatch.user_a ? nameB : nameA,
+            meetingDateLabel: meetingDateLabel || proposedDay,
+            time: proposedTime,
+            venueName: venue.name,
+            neighborhood: venue.neighborhood ?? venue.city,
+          }),
+          'reschedule_proposal_to_confirm_other',
+          { userId: otherUserId, matchId: upcomingMatch.id, weekAnchorMonday: proposalWeekAnchorMonday }
+        )
+      }
+
+      await setPerMatchSmsState({
+        userId,
+        weekAnchorMonday: proposalWeekAnchorMonday,
+        matchId: upcomingMatch.id,
+        state: SMS_STATES.AWAITING_SECOND_CONFIRM,
+        payload: { ...newPayload },
+        lastSendblueMessageHandle: messageHandle,
+      })
+      await setPerMatchSmsState({
+        userId: otherUserId,
+        weekAnchorMonday: proposalWeekAnchorMonday,
+        matchId: upcomingMatch.id,
+        state: SMS_STATES.AWAITING_SECOND_CONFIRM,
+        payload: { ...newPayload },
+      })
+
       return NextResponse.json({ ok: true })
     }
     if (isCancelKeyword(content)) {
