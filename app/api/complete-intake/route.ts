@@ -65,7 +65,7 @@ export async function POST(request: Request) {
           .single()
         if (profile?.phone) {
           const weekAnchorMonday = getCurrentWeekAnchorMonday()
-          await getOrCreateSmsState(serviceSupabase, user.id, SMS_STATES.AWAITING_OPT_IN, {
+          await getOrCreateSmsState(serviceSupabase, user.id, SMS_STATES.GLOBAL_READY, {
             week_anchor_monday: weekAnchorMonday,
           })
           const appBase = (process.env.APP_CANONICAL_URL ?? '').trim().replace(/\/$/, '') || 'https://letsfika.vercel.app'

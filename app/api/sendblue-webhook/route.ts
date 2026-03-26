@@ -547,7 +547,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true })
   }
 
-  const state = stateRow?.state ?? SMS_STATES.AWAITING_OPT_IN
+  const state = stateRow?.state ?? SMS_STATES.GLOBAL_READY
   const keyword = content.toUpperCase().replace(/\s+/g, ' ').trim()
   const payload = (stateRow?.payload as Record<string, unknown>) ?? {}
 
@@ -556,9 +556,55 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true })
   }
 
-  const matchState = matchStateRow?.state
-  const matchId = matchStateRow?.match_id
-  const matchPayload = (matchStateRow?.payload as Record<string, unknown>) ?? {}
+  let matchState = matchStateRow?.state
+  let matchId = matchStateRow?.match_id
+  let matchPayload = (matchStateRow?.payload as Record<string, unknown>) ?? {}
+
+  // Recovery path: if a user replies YES/PASS but match state row is missing,
+  // resolve their latest active match so we still treat the reply as a match response.
+  if (!matchId && (isMatchYesKeyword(content) || keyword === 'YES' || isMatchPassKeyword(content) || keyword === 'PASS')) {
+    const { data: recentMatches } = await supabase
+      .from('match_candidates')
+      .select('id, week_anchor_monday, created_at')
+      .or(`user_a.eq.${userId},user_b.eq.${userId}`)
+      .eq('status', 'active')
+      .order('created_at', { ascending: false })
+      .limit(5)
+
+    const candidateMatchIds = (recentMatches ?? []).map((m: { id: string }) => m.id)
+    if (candidateMatchIds.length > 0) {
+      const { data: myOptIns } = await supabase
+        .from('opt_ins')
+        .select('match_id, decision')
+        .eq('user_id', userId)
+        .in('match_id', candidateMatchIds)
+      const optedMatchIds = new Set(
+        (myOptIns ?? [])
+          .filter((o: { decision?: string | null }) => o.decision === 'yes' || o.decision === 'no')
+          .map((o: { match_id: string }) => o.match_id)
+      )
+      const recovered = (recentMatches ?? []).find((m: { id: string }) => !optedMatchIds.has(m.id)) ??
+        (recentMatches ?? [])[0]
+      if (recovered?.id) {
+        matchId = recovered.id
+        matchState = SMS_STATES.MATCH_OFFERED
+        matchPayload = {}
+        await supabase
+          .from('sms_conversation_states')
+          .upsert(
+            {
+              user_id: userId,
+              week_anchor_monday: recovered.week_anchor_monday ?? weekAnchorMonday,
+              match_id: recovered.id,
+              state: SMS_STATES.MATCH_OFFERED,
+              payload: { recovered_missing_match_state: true },
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: 'user_id,week_anchor_monday,match_id' }
+          )
+      }
+    }
+  }
 
   if (isHelpKeyword(content)) {
     await sendConciergeAndLog(fromNumber, getFallbackForState(matchState ?? state), 'help_fallback', { userId, weekAnchorMonday, matchId: matchId ?? undefined })
@@ -880,13 +926,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true })
   }
 
-  if (state === SMS_STATES.AWAITING_OPT_IN) {
-    await sendConciergeAndLog(fromNumber, messageEntryReminder(), 'legacy_awaiting_opt_in_match_first', { userId, weekAnchorMonday })
-    return NextResponse.json({ ok: true })
-  }
-
-  if (state === SMS_STATES.OPTED_IN) {
-    await sendConciergeAndLog(fromNumber, messageEntryReminder(), 'legacy_opted_in_match_first', { userId, weekAnchorMonday })
+  if (
+    state === SMS_STATES.GLOBAL_READY ||
+    state === SMS_STATES.AWAITING_OPT_IN ||
+    state === SMS_STATES.OPTED_IN
+  ) {
+    await sendConciergeAndLog(fromNumber, messageEntryReminder(), 'global_ready_match_first', { userId, weekAnchorMonday })
     return NextResponse.json({ ok: true })
   }
 

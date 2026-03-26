@@ -145,7 +145,7 @@ export async function POST(request: Request) {
   if (session.phone && process.env.SENDBLUE_API_KEY_ID) {
     try {
       const weekAnchorMonday = getCurrentWeekAnchorMonday()
-      await getOrCreateSmsState(supabase, user.id, SMS_STATES.AWAITING_OPT_IN, {
+      await getOrCreateSmsState(supabase, user.id, SMS_STATES.GLOBAL_READY, {
         week_anchor_monday: weekAnchorMonday,
       })
       const appBase = (process.env.APP_CANONICAL_URL ?? '').trim().replace(/\/$/, '') || 'https://letsfika.vercel.app'

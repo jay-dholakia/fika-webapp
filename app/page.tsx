@@ -23,7 +23,7 @@ export default function Home() {
                     <span className="hero-title-accent">Real conversation.</span>
                   </h1>
                   <p className="hero-sub">
-                    Real intros by text when we find a good fit. You meet. You talk. You connect.
+                    Thoughtful intros, sent by text. You meet. You talk. You connect.
                   </p>
                 </div>
               </section>

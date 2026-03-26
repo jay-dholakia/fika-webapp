@@ -9,6 +9,7 @@ import { searchNearbyCafesGooglePlaces, upsertVenueFromGooglePlace } from '@/lib
 import { DEFAULT_RADIUS_KM } from '@/lib/intake-radius'
 
 export const SMS_STATES = {
+  GLOBAL_READY: 'global_ready',
   AWAITING_OPT_IN: 'awaiting_opt_in',
   OPTED_IN: 'opted_in',
   MATCH_OFFERED: 'match_offered',
@@ -722,6 +723,7 @@ export function isGreetingKeyword(content: string): boolean {
 /** Human fallback / help message for a given state. */
 export function getFallbackForState(state: string): string {
   switch (state) {
+    case SMS_STATES.GLOBAL_READY:
     case SMS_STATES.AWAITING_OPT_IN:
       return fallbackAwaitingOptIn()
     case SMS_STATES.OPTED_IN:

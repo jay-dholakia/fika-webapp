@@ -75,22 +75,41 @@ function AuthCallbackContent() {
     }
 
     let mounted = true
-    const timeout = setTimeout(() => {
-      if (!mounted) return
-      client.auth.getSession().then(({ data: { session } }) => {
-        if (!mounted || !session) return
-        checkExistingAccountAndRedirect(session)
-      })
-    }, 100)
+    let failTimer: ReturnType<typeof setTimeout> | null = null
 
     const { data: { subscription } } = client.auth.onAuthStateChange((_event, session) => {
       if (!mounted || !session) return
-      checkExistingAccountAndRedirect(session)
+      void checkExistingAccountAndRedirect(session)
     })
+
+    async function finishAuth() {
+      const code = searchParams.get('code')
+      if (code) {
+        const { error: exchangeErr } = await client.auth.exchangeCodeForSession(code)
+        if (exchangeErr) {
+          if (mounted) setError(exchangeErr.message || 'Could not complete sign-in.')
+          return
+        }
+      }
+
+      const { data: { session } } = await client.auth.getSession()
+      if (session) {
+        await checkExistingAccountAndRedirect(session)
+        return
+      }
+
+      // Prevent infinite "Signing you in..." spinner if no session arrives.
+      failTimer = setTimeout(() => {
+        if (!mounted) return
+        setError('Could not complete sign-in. Please try again.')
+      }, 4000)
+    }
+
+    void finishAuth()
 
     return () => {
       mounted = false
-      clearTimeout(timeout)
+      if (failTimer) clearTimeout(failTimer)
       subscription.unsubscribe()
     }
   }, [searchParams, router])
