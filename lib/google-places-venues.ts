@@ -306,7 +306,6 @@ export async function upsertVenueFromGooglePlace(
     google_place_id: googlePlaceId,
     google_business_status: place.businessStatus ?? null,
     google_permanently_closed: isPermanentlyClosedBusinessStatus(place.businessStatus),
-    updated_at: new Date().toISOString(),
   }
 
   const { data, error } = await supabase
@@ -316,7 +315,29 @@ export async function upsertVenueFromGooglePlace(
     .maybeSingle()
 
   if (error) {
-    console.warn('[google-places-venues] upsert error', error.message)
+    const code = (error as { code?: string } | null)?.code
+    console.warn('[google-places-venues] upsert error', { code, message: error.message })
+
+    // Backward-compat: if prod DB is missing newer columns, retry with a minimal payload.
+    if (code === 'PGRST204') {
+      const minimalRow = {
+        name: place.name,
+        neighborhood: null as string | null,
+        city,
+        address: place.formattedAddress,
+        lat: place.lat,
+        lng: place.lng,
+        google_place_id: googlePlaceId,
+      }
+      const { data: retryData, error: retryError } = await supabase
+        .from('venues')
+        .upsert(minimalRow, { onConflict: 'google_place_id' })
+        .select('id, name, neighborhood, city')
+        .maybeSingle()
+      if (!retryError) return retryData ?? null
+      console.warn('[google-places-venues] upsert retry error', { code: (retryError as any)?.code, message: retryError.message })
+    }
+
     const { data: existing } = await supabase
       .from('venues')
       .select('id, name, neighborhood, city')
