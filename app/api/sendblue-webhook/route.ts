@@ -108,6 +108,12 @@ function isPassDecision(decision: string | null | undefined): boolean {
   return decision === PASS_DECISION || decision === 'no'
 }
 
+function isDuplicateKeyError(error: unknown): boolean {
+  const code = (error as { code?: string } | null)?.code
+  const message = (error as { message?: string } | null)?.message ?? ''
+  return code === '23505' || message.toLowerCase().includes('duplicate key')
+}
+
 function formatConciergeNumber(digits: string): string {
   if (digits.length === 10) return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`
   if (digits.length === 11 && digits.startsWith('1')) return `(${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(7)}`
@@ -199,6 +205,89 @@ export async function POST(request: Request) {
       match_id: opts?.matchId ?? null,
     })
     return result
+  }
+
+  async function setPerMatchSmsState(params: {
+    userId: string
+    weekAnchorMonday: string
+    matchId: string
+    state: string
+    payload?: Record<string, unknown>
+    lastSendblueMessageHandle?: string | null
+  }) {
+    const { userId, weekAnchorMonday, matchId, state, payload, lastSendblueMessageHandle } = params
+    const updatedAt = new Date().toISOString()
+    const stateRow = {
+      user_id: userId,
+      week_anchor_monday: weekAnchorMonday,
+      match_id: matchId,
+      state,
+      payload: payload ?? {},
+      updated_at: updatedAt,
+      ...(lastSendblueMessageHandle !== undefined ? { last_sendblue_message_handle: lastSendblueMessageHandle } : {}),
+    }
+
+    const { data: updatedRows, error: updateError } = await supabase
+      .from('sms_conversation_states')
+      .update({
+        state,
+        payload: payload ?? {},
+        updated_at: updatedAt,
+        ...(lastSendblueMessageHandle !== undefined ? { last_sendblue_message_handle: lastSendblueMessageHandle } : {}),
+      })
+      .eq('user_id', userId)
+      .eq('week_anchor_monday', weekAnchorMonday)
+      .eq('match_id', matchId)
+      .select('id')
+      .limit(1)
+
+    if (updateError) {
+      console.error('[sendblue-webhook] per-match state update failed', {
+        userId,
+        weekAnchorMonday,
+        matchId,
+        state,
+        error: updateError,
+      })
+      return { ok: false as const, error: updateError }
+    }
+    if ((updatedRows ?? []).length > 0) return { ok: true as const }
+
+    const { error: insertError } = await supabase.from('sms_conversation_states').insert(stateRow)
+    if (!insertError) return { ok: true as const }
+    if (!isDuplicateKeyError(insertError)) {
+      console.error('[sendblue-webhook] per-match state insert failed', {
+        userId,
+        weekAnchorMonday,
+        matchId,
+        state,
+        error: insertError,
+      })
+      return { ok: false as const, error: insertError }
+    }
+
+    const { error: retryUpdateError } = await supabase
+      .from('sms_conversation_states')
+      .update({
+        state,
+        payload: payload ?? {},
+        updated_at: updatedAt,
+        ...(lastSendblueMessageHandle !== undefined ? { last_sendblue_message_handle: lastSendblueMessageHandle } : {}),
+      })
+      .eq('user_id', userId)
+      .eq('week_anchor_monday', weekAnchorMonday)
+      .eq('match_id', matchId)
+    if (retryUpdateError) {
+      console.error('[sendblue-webhook] per-match state retry update failed', {
+        userId,
+        weekAnchorMonday,
+        matchId,
+        state,
+        error: retryUpdateError,
+      })
+      return { ok: false as const, error: retryUpdateError }
+    }
+    return { ok: true as const }
   }
 
   const isConcierge = isConciergeNumber(toNumber)
@@ -600,19 +689,13 @@ export async function POST(request: Request) {
         matchId = recovered.id
         matchState = SMS_STATES.MATCH_OFFERED
         matchPayload = {}
-        await supabase
-          .from('sms_conversation_states')
-          .upsert(
-            {
-              user_id: userId,
-              week_anchor_monday: recovered.week_anchor_monday ?? weekAnchorMonday,
-              match_id: recovered.id,
-              state: SMS_STATES.MATCH_OFFERED,
-              payload: { recovered_missing_match_state: true },
-              updated_at: new Date().toISOString(),
-            },
-            { onConflict: 'user_id,week_anchor_monday,match_id' }
-          )
+        await setPerMatchSmsState({
+          userId,
+          weekAnchorMonday: recovered.week_anchor_monday ?? weekAnchorMonday,
+          matchId: recovered.id,
+          state: SMS_STATES.MATCH_OFFERED,
+          payload: { recovered_missing_match_state: true },
+        })
       }
     }
   }
@@ -670,18 +753,14 @@ export async function POST(request: Request) {
       const yesUsers = yesOpts ?? []
       if (yesUsers.length === 1) {
         await sendConciergeAndLog(fromNumber, messageYesWaitingForOther(), 'yes_waiting_for_other', { userId, weekAnchorMonday, matchId })
-        await supabase.from('sms_conversation_states').upsert(
-          {
-            user_id: userId,
-            week_anchor_monday: weekAnchorMonday,
-            match_id: matchId,
-            state: SMS_STATES.YES_WAITING,
-            payload: { ...matchPayload },
-            last_sendblue_message_handle: messageHandle,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: 'user_id,week_anchor_monday,match_id' }
-        )
+        await setPerMatchSmsState({
+          userId,
+          weekAnchorMonday,
+          matchId,
+          state: SMS_STATES.YES_WAITING,
+          payload: { ...matchPayload },
+          lastSendblueMessageHandle: messageHandle,
+        })
       } else {
         if (protocolV2Enabled) {
           const { data: pair } = await supabase
@@ -828,27 +907,23 @@ export async function POST(request: Request) {
             overlapping_slot_ids: candidateSlots,
           }).eq('id', matchId)
 
-          await supabase.from('sms_conversation_states').upsert(
-            {
-              user_id: userId,
-              week_anchor_monday: weekAnchorMonday,
-              match_id: matchId,
-              state: SMS_STATES.AWAITING_SECOND_CONFIRM,
-              payload: {
-                proposed_slot_id: slotId,
-                proposed_venue_id: venue.id,
-                proposed_day: proposedDay,
-                proposed_time: proposedTime,
-                venue_name: venue.name,
-                neighborhood: venue.neighborhood ?? venue.city,
-                first_yes_user_id: firstYesUserId,
-                proposal_attempt: 1,
-              },
-              last_sendblue_message_handle: messageHandle,
-              updated_at: new Date().toISOString(),
+          await setPerMatchSmsState({
+            userId,
+            weekAnchorMonday,
+            matchId,
+            state: SMS_STATES.AWAITING_SECOND_CONFIRM,
+            payload: {
+              proposed_slot_id: slotId,
+              proposed_venue_id: venue.id,
+              proposed_day: proposedDay,
+              proposed_time: proposedTime,
+              venue_name: venue.name,
+              neighborhood: venue.neighborhood ?? venue.city,
+              first_yes_user_id: firstYesUserId,
+              proposal_attempt: 1,
             },
-            { onConflict: 'user_id,week_anchor_monday,match_id' }
-          )
+            lastSendblueMessageHandle: messageHandle,
+          })
           return NextResponse.json({ ok: true })
         }
 
@@ -910,27 +985,23 @@ export async function POST(request: Request) {
           default_slot_id: slotId,
           overlapping_slot_ids: candidateSlots,
         }).eq('id', matchId)
-        await supabase.from('sms_conversation_states').upsert(
-          {
-            user_id: userId,
-            week_anchor_monday: weekAnchorMonday,
-            match_id: matchId,
-            state: SMS_STATES.AWAITING_SECOND_CONFIRM,
-            payload: {
-              proposed_slot_id: slotId,
-              proposed_venue_id: venue.id,
-              proposed_day: proposedDay,
-              proposed_time: proposedTime,
-              venue_name: venue.name,
-              neighborhood: venue.neighborhood ?? venue.city,
-              first_yes_user_id: firstYesUserId,
-              proposal_attempt: 1,
-            },
-            last_sendblue_message_handle: messageHandle,
-            updated_at: new Date().toISOString(),
+        await setPerMatchSmsState({
+          userId,
+          weekAnchorMonday,
+          matchId,
+          state: SMS_STATES.AWAITING_SECOND_CONFIRM,
+          payload: {
+            proposed_slot_id: slotId,
+            proposed_venue_id: venue.id,
+            proposed_day: proposedDay,
+            proposed_time: proposedTime,
+            venue_name: venue.name,
+            neighborhood: venue.neighborhood ?? venue.city,
+            first_yes_user_id: firstYesUserId,
+            proposal_attempt: 1,
           },
-          { onConflict: 'user_id,week_anchor_monday,match_id' }
-        )
+          lastSendblueMessageHandle: messageHandle,
+        })
       }
     } else if (isMatchPassKeyword(content) || keyword === 'PASS') {
       const { error: passUpsertError } = await supabase.from('opt_ins').upsert(
@@ -1086,17 +1157,13 @@ export async function POST(request: Request) {
           neighborhood: venue.neighborhood ?? venue.city,
         }), 'reproposal_to_other', { userId: otherId, weekAnchorMonday, matchId })
       }
-      await supabase.from('sms_conversation_states').upsert(
-        {
-          user_id: otherId,
-          week_anchor_monday: weekAnchorMonday,
-          match_id: matchId,
-          state: SMS_STATES.AWAITING_SECOND_CONFIRM,
-          payload: newPayload,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'user_id,week_anchor_monday,match_id' }
-      )
+      await setPerMatchSmsState({
+        userId: otherId,
+        weekAnchorMonday,
+        matchId,
+        state: SMS_STATES.AWAITING_SECOND_CONFIRM,
+        payload: newPayload,
+      })
     }
     await supabase.from('sms_conversation_states').update({
       state: SMS_STATES.AWAITING_SECOND_CONFIRM,
@@ -1133,26 +1200,22 @@ export async function POST(request: Request) {
       suggested_venue_id: proposedVenueId,
       default_slot_id: proposedSlotId,
     }).eq('id', matchId)
-    await supabase.from('sms_conversation_states').upsert(
-      {
-        user_id: otherId,
-        week_anchor_monday: weekAnchorMonday,
-        match_id: matchId,
-        state: SMS_STATES.AWAITING_FIRST_CONFIRM,
-        payload: {
-          proposed_slot_id: proposedSlotId,
-          proposed_venue_id: proposedVenueId,
-          proposed_day: proposedDay,
-          proposed_time: proposedTime,
-          venue_name: venueName,
-          neighborhood,
-          first_yes_user_id: userId,
-          proposal_attempt: (matchPayload.proposal_attempt as number) ?? 1,
-        },
-        updated_at: new Date().toISOString(),
+    await setPerMatchSmsState({
+      userId: otherId,
+      weekAnchorMonday,
+      matchId,
+      state: SMS_STATES.AWAITING_FIRST_CONFIRM,
+      payload: {
+        proposed_slot_id: proposedSlotId,
+        proposed_venue_id: proposedVenueId,
+        proposed_day: proposedDay,
+        proposed_time: proposedTime,
+        venue_name: venueName,
+        neighborhood,
+        first_yes_user_id: userId,
+        proposal_attempt: (matchPayload.proposal_attempt as number) ?? 1,
       },
-      { onConflict: 'user_id,week_anchor_monday,match_id' }
-    )
+    })
     await supabase.from('sms_conversation_states').update({
       state: SMS_STATES.CONFIRMED,
       updated_at: new Date().toISOString(),
