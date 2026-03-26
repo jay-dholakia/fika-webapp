@@ -20,7 +20,6 @@ import {
   messageFikaUserInitiatedCommitment,
   messageFikaUserInitiatedLinkBody,
   messageTextFikaToGetLink,
-  messageConversationContext,
   messageSchedulingDay,
   messageSchedulingWindow,
   messageVenueProposed,
@@ -44,13 +43,15 @@ import {
   messageThanksForFeedbackAgain,
   messageSmsOptOut,
   messageSmsOptBackIn,
-  messageConfirmedUpcoming,
+  messageSmsHelpConfirmedUpcoming,
+  messageGratitudeAckUpcoming,
+  messageSmsAiRateLimited,
+  messageConciergeAiFallbackShort,
   messageRescheduleAck,
   messageRescheduleLimitReached,
   messageRescheduleHeadsUpToOther,
   messageCancelAck,
-  getFallbackForState,
-  fallbackGeneric,
+  messageSmsHelp,
   isMatchYesKeyword,
   isMatchPassKeyword,
   isProposalDeclineKeyword,
@@ -61,7 +62,7 @@ import {
   isStopKeyword,
   isRescheduleKeyword,
   isCancelKeyword,
-  isGreetingKeyword,
+  isGratitudeOrShortAckKeyword,
   getFikaTimeMs,
   getTodayYmdInTimezone,
   pickVenueForMatch,
@@ -89,6 +90,13 @@ import {
   messageSmsSignupLinkAlreadySent,
 } from '@/lib/sms-signup'
 import { insertMessageLedger } from '@/lib/message-ledger'
+import {
+  countConfirmedFikaAiRepliesLast24h,
+  fetchConfirmedFikaConciergeReply,
+  getOpenAiKeyForSms,
+  getSmsAiMaxPer24h,
+  CONFIRMED_FIKA_CONCIERGE_AI_CONTEXT,
+} from '@/lib/sms-concierge-ai'
 
 const CONCIERGE_RAW = (process.env.SENDBLUE_CONCIERGE_NUMBER || '').replace(/\D/g, '')
 /** Normalize to 10 digits for US numbers (strip leading 1) so 13102102404 and 3102102404 match. */
@@ -332,6 +340,11 @@ export async function POST(request: Request) {
   )
   const fromPhone = normalizeIncomingPhone(fromNumber)
 
+  function smsFail(message: string, payload: Record<string, unknown>) {
+    console.error('[sendblue-webhook]', message, payload)
+    return NextResponse.json({ error: message }, { status: 500 })
+  }
+
   async function sendConciergeAndLog(
     toPhone: string,
     content: string,
@@ -339,6 +352,14 @@ export async function POST(request: Request) {
     opts?: { userId?: string | null; weekAnchorMonday?: string; matchId?: string }
   ) {
     const result = await sendConcierge(toPhone, content)
+    if (!result.ok) {
+      console.error('[sendblue-webhook] sendConcierge failed', {
+        context,
+        error: result.error,
+        toLast4: toPhone.replace(/\D/g, '').slice(-4),
+      })
+      throw new Error(result.error ?? 'sendblue_send_failed')
+    }
     await insertMessageLedger(supabase, {
       user_id: opts?.userId ?? null,
       direction: 'outbound',
@@ -435,6 +456,7 @@ export async function POST(request: Request) {
     return { ok: true as const }
   }
 
+  try {
   const isConcierge = isConciergeNumber(toNumber)
   console.log('[sendblue-webhook] route', { isConcierge, toNumber: toNumber ? 'set' : 'empty' })
 
@@ -483,8 +505,7 @@ export async function POST(request: Request) {
     })
     if (insertErr) {
       console.error('[sendblue-webhook] onboarding_sessions insert', insertErr.message)
-      await sendConciergeAndLog(fromNumber, "Something went wrong. Try again or sign up at letsfika.co", 'signup_error')
-      return NextResponse.json({ ok: true })
+      return smsFail('onboarding_sessions_insert_failed', { message: insertErr.message })
     }
     const link = `${appBase}/signup?token=${token}`
     await sendConciergeAndLog(fromNumber, messageSmsSignupLinkSent(link), 'signup_link_sent')
@@ -541,7 +562,7 @@ export async function POST(request: Request) {
     if (!matchIdReady) {
       await sendConciergeAndLog(
         fromNumber,
-        'Reply YES or NO to the time we proposed, or text HELP.',
+        'Reply Yes or No to the time we proposed, or text Help.',
         'availability_ready_no_pending',
         { userId }
       )
@@ -585,7 +606,7 @@ export async function POST(request: Request) {
 
     await sendConciergeAndLog(
       fromNumber,
-      'Reply YES or NO to the time we proposed, or text HELP.',
+      'Reply Yes or No to the time we proposed, or text Help.',
       'availability_ready_no_pending',
       { userId, matchId: matchIdReady }
     )
@@ -693,7 +714,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true })
   }
 
-  // ----- Confirmed Fika upcoming (not today, or they text on non–Fika day): fun reminder + CTA -----
+  // ----- Confirmed Fika upcoming: keywords deterministic; thanks → ack; else OpenAI (no state changes) -----
   const { data: upcomingMatches } = await supabase
     .from('match_candidates')
     .select('id, user_a, user_b, week_anchor_monday, confirmed_slot_id, confirmed_venue_id')
@@ -711,6 +732,39 @@ export async function POST(request: Request) {
     }
   )
   if (upcomingMatch) {
+    const upcomingTz = getTimezoneForMatchFromMap(upcomingMatch, upcomingMarketMap)
+    const { data: venueRowUpcoming } = await supabase
+      .from('venues')
+      .select('name, neighborhood, city')
+      .eq('id', upcomingMatch.confirmed_venue_id)
+      .single()
+    const { day: upDay, time: upTime } = slotIdToDisplayTime(upcomingMatch.confirmed_slot_id)
+    const venueNameUp = venueRowUpcoming?.name ?? 'the spot'
+    const neighborhoodUp = venueRowUpcoming?.neighborhood ?? venueRowUpcoming?.city ?? ''
+    const webappUrlUp = getAppBase()
+    const inRelayUpcoming = isInRelayWindow(
+      upcomingMatch.week_anchor_monday,
+      upcomingMatch.confirmed_slot_id,
+      upcomingTz
+    )
+
+    if (isHelpKeyword(content)) {
+      await sendConciergeAndLog(
+        fromNumber,
+        messageSmsHelpConfirmedUpcoming({
+          day: upDay,
+          time: upTime,
+          venueName: venueNameUp,
+          neighborhood: neighborhoodUp,
+        }),
+        'confirmed_upcoming_help',
+        { userId, matchId: upcomingMatch.id }
+      )
+      await new Promise((r) => setTimeout(r, 1000))
+      await sendConciergeAndLog(fromNumber, webappUrlUp, 'confirmed_upcoming_help_url', { userId })
+      return NextResponse.json({ ok: true })
+    }
+
     if (isRescheduleKeyword(content)) {
       // One reschedule per person per match.
       const { data: myMatchState } = await supabase
@@ -781,11 +835,11 @@ export async function POST(request: Request) {
         { meetingAtUtc: new Date(pick.meetingMsUtc) }
       )
       if (!venue) {
-        await sendConciergeAndLog(fromNumber, "We're setting up a spot — we'll text you in a moment.", 'reschedule_venue_setup', {
+        return smsFail('pick_venue_for_match_failed_reschedule', {
           userId,
           matchId: upcomingMatch.id,
+          meetingMsUtc: pick.meetingMsUtc,
         })
-        return NextResponse.json({ ok: true })
       }
 
       const proposalWeekAnchorMonday = pick.weekAnchorMonday
@@ -871,18 +925,59 @@ export async function POST(request: Request) {
       await sendConciergeAndLog(fromNumber, messageCancelAck(), 'cancel_ack', { userId })
       return NextResponse.json({ ok: true })
     }
-    const { data: venue } = await supabase
-      .from('venues')
-      .select('name, neighborhood, city')
-      .eq('id', upcomingMatch.confirmed_venue_id)
-      .single()
-    const { day, time } = slotIdToDisplayTime(upcomingMatch.confirmed_slot_id)
-    const venueName = venue?.name ?? 'the spot'
-    const neighborhood = venue?.neighborhood ?? venue?.city ?? ''
-    const webappUrl = getAppBase()
-    await sendConciergeAndLog(fromNumber, messageConfirmedUpcoming(day, time, venueName, neighborhood, webappUrl), 'confirmed_upcoming', { userId })
-    await new Promise((r) => setTimeout(r, 1000))
-    await sendConciergeAndLog(fromNumber, webappUrl, 'confirmed_upcoming_url', { userId })
+
+    if (isGratitudeOrShortAckKeyword(content)) {
+      await sendConciergeAndLog(fromNumber, messageGratitudeAckUpcoming(), 'confirmed_upcoming_gratitude_ack', {
+        userId,
+        matchId: upcomingMatch.id,
+      })
+      return NextResponse.json({ ok: true })
+    }
+
+    const aiCount = await countConfirmedFikaAiRepliesLast24h(supabase, userId)
+    if (aiCount >= getSmsAiMaxPer24h()) {
+      await sendConciergeAndLog(fromNumber, messageSmsAiRateLimited(), 'confirmed_fika_concierge_ai_rate_limited', {
+        userId,
+        matchId: upcomingMatch.id,
+      })
+      return NextResponse.json({ ok: true })
+    }
+
+    const apiKey = getOpenAiKeyForSms()
+    const fikaSummary = `Confirmed Fika: ${upDay} at ${upTime} at ${venueNameUp} (${neighborhoodUp}).`
+    const relayWindowDescription = inRelayUpcoming
+      ? 'Right now the user is inside the coordination window (~3 hours before through ~2 hours after start): messages here may be relayed to their intro for last-minute coordination.'
+      : 'The user is not in that coordination window yet; it opens ~3 hours before start. Plan changes use keywords Reschedule or Cancel.'
+    const allowedActionsLine =
+      'Keyword actions only: Help, Reschedule, Cancel. Other texts must not be treated as scheduling changes.'
+
+    if (!apiKey) {
+      await sendConciergeAndLog(fromNumber, messageConciergeAiFallbackShort(webappUrlUp), 'confirmed_fika_concierge_ai_no_key', {
+        userId,
+        matchId: upcomingMatch.id,
+      })
+      return NextResponse.json({ ok: true })
+    }
+
+    const aiReply = await fetchConfirmedFikaConciergeReply({
+      apiKey,
+      userMessage: content,
+      fikaSummary,
+      relayWindowDescription,
+      allowedActionsLine,
+    })
+    if (!aiReply.ok) {
+      console.error('[sendblue-webhook] confirmed Fika concierge AI failed', aiReply.error)
+      await sendConciergeAndLog(fromNumber, messageConciergeAiFallbackShort(webappUrlUp), 'confirmed_fika_concierge_ai_error', {
+        userId,
+        matchId: upcomingMatch.id,
+      })
+      return NextResponse.json({ ok: true })
+    }
+    await sendConciergeAndLog(fromNumber, aiReply.text, CONFIRMED_FIKA_CONCIERGE_AI_CONTEXT, {
+      userId,
+      matchId: upcomingMatch.id,
+    })
     return NextResponse.json({ ok: true })
   }
 
@@ -998,7 +1093,7 @@ export async function POST(request: Request) {
   }
 
   if (isHelpKeyword(content)) {
-    await sendConciergeAndLog(fromNumber, getFallbackForState(matchState ?? state), 'help_fallback', { userId, weekAnchorMonday, matchId: matchId ?? undefined })
+    await sendConciergeAndLog(fromNumber, messageSmsHelp(), 'help', { userId, weekAnchorMonday, matchId: matchId ?? undefined })
     return NextResponse.json({ ok: true })
   }
 
@@ -1024,13 +1119,7 @@ export async function POST(request: Request) {
       )
       if (optInUpsertError) {
         console.error('[sendblue-webhook] opt_in upsert failed', { userId, matchId, error: optInUpsertError })
-        await sendConciergeAndLog(
-          fromNumber,
-          "Got your YES — we're syncing your intro now. We'll text you in a moment.",
-          'yes_sync_retry_optin_write_failed',
-          { userId, weekAnchorMonday, matchId }
-        )
-        return NextResponse.json({ ok: true })
+        return smsFail('opt_in_upsert_failed', { userId, matchId, message: optInUpsertError.message })
       }
       const { data: match } = await supabase
         .from('match_candidates')
@@ -1130,13 +1219,7 @@ export async function POST(request: Request) {
           // Slot pool comes from intake q_typical_fika_times (intersection → union → full grid fallback).
           const firstYesUserId = yesUsers[0]?.user_id
           if (!firstYesUserId) {
-            await sendConciergeAndLog(
-              fromNumber,
-              "Got your YES — we're syncing your intro now. We'll text you in a moment.",
-              'yes_sync_retry_v2',
-              { userId, weekAnchorMonday, matchId }
-            )
-            return NextResponse.json({ ok: true })
+            return smsFail('yes_users_empty_v2', { userId, weekAnchorMonday, matchId })
           }
           const { data: userA } = await supabase.from('profiles').select('city, lat, lng').eq('id', match.user_a).single()
           const { data: userB } = await supabase.from('profiles').select('city, lat, lng').eq('id', match.user_b).single()
@@ -1172,12 +1255,12 @@ export async function POST(request: Request) {
             { meetingAtUtc: new Date(meetingMsV2) }
           )
           if (!venue) {
-            await sendConciergeAndLog(fromNumber, "We're setting up a spot — we'll text you in a moment.", 'venue_setup', {
+            return smsFail('pick_venue_for_match_failed_v2', {
               userId,
               weekAnchorMonday,
               matchId,
+              meetingMsUtc: meetingMsV2,
             })
-            return NextResponse.json({ ok: true })
           }
 
           const { day: proposedDay, time: proposedTime } = slotIdToDisplayTime(slotId)
@@ -1266,13 +1349,7 @@ export async function POST(request: Request) {
 
         const firstYesUserId = yesUsers[0]?.user_id
         if (!firstYesUserId) {
-          await sendConciergeAndLog(
-            fromNumber,
-            "Got your YES — we're syncing your intro now. We'll text you in a moment.",
-            'yes_sync_retry_v1',
-            { userId, weekAnchorMonday, matchId }
-          )
-          return NextResponse.json({ ok: true })
+          return smsFail('yes_users_empty_v1', { userId, weekAnchorMonday, matchId })
         }
         const { data: userA } = await supabase.from('profiles').select('city, lat, lng').eq('id', match.user_a).single()
         const { data: userB } = await supabase.from('profiles').select('city, lat, lng').eq('id', match.user_b).single()
@@ -1406,13 +1483,7 @@ export async function POST(request: Request) {
       )
       if (passUpsertError) {
         console.error('[sendblue-webhook] pass upsert failed', { userId, matchId, error: passUpsertError })
-        await sendConciergeAndLog(
-          fromNumber,
-          "Got your PASS — we're syncing this update now. We'll text you in a moment.",
-          'pass_sync_retry_optin_write_failed',
-          { userId, weekAnchorMonday, matchId }
-        )
-        return NextResponse.json({ ok: true })
+        return smsFail('pass_upsert_failed', { userId, matchId, message: passUpsertError.message })
       }
       await sendConciergeAndLog(fromNumber, messagePassConfirmation(), 'pass_confirmation', { userId, weekAnchorMonday, matchId })
       const { data: matchRow } = await supabase.from('match_candidates').select('user_a, user_b').eq('id', matchId).single()
@@ -1437,7 +1508,12 @@ export async function POST(request: Request) {
       }
       await supabase.from('sms_conversation_states').delete().eq('id', matchStateRow!.id)
     } else {
-      await sendConciergeAndLog(fromNumber, getFallbackForState(SMS_STATES.MATCH_OFFERED), 'fallback_match_offered', { userId, weekAnchorMonday, matchId })
+      return smsFail('unrecognized_match_offered_reply', {
+        userId,
+        weekAnchorMonday,
+        matchId,
+        contentPreview: content.slice(0, 80),
+      })
     }
     return NextResponse.json({ ok: true })
   }
@@ -1754,7 +1830,12 @@ export async function POST(request: Request) {
       }).eq('id', matchStateRow!.id)
       await sendConciergeAndLog(fromNumber, messageSchedulingWindow(), 'scheduling_window', { userId, weekAnchorMonday, matchId })
     } else {
-      await sendConciergeAndLog(fromNumber, getFallbackForState(SMS_STATES.ACCEPTED_SCHEDULING_DAY), 'fallback_scheduling_day', { userId, weekAnchorMonday, matchId })
+      return smsFail('unrecognized_scheduling_day_reply', {
+        userId,
+        weekAnchorMonday,
+        matchId,
+        contentPreview: content.slice(0, 80),
+      })
     }
     return NextResponse.json({ ok: true })
   }
@@ -1794,23 +1875,34 @@ export async function POST(request: Request) {
         { city: userB?.city ?? null, lat: userB?.lat ?? null, lng: userB?.lng ?? null, radius_km: radiusB },
         { meetingAtUtc: meetingMsWin != null ? new Date(meetingMsWin) : undefined }
       )
-      const timeStr = chosenSlot ? (slotIdToDayAndWindow(chosenSlot) ? '7pm' : '2pm') : '7pm'
-      if (venue) {
-        await supabase.from('match_candidates').update({
-          suggested_venue_id: venue.id,
-          default_slot_id: chosenSlot || undefined,
-          overlapping_slot_ids: intakeCandidateSlots,
-        }).eq('id', matchId)
-        await supabase.from('sms_conversation_states').update({
-          state: SMS_STATES.VENUE_PROPOSED,
-          payload: { ...matchPayload, selected_window: window, slot_id: chosenSlot },
-          last_sendblue_message_handle: messageHandle,
-          updated_at: new Date().toISOString(),
-        }).eq('id', matchStateRow!.id)
-        await sendConciergeAndLog(fromNumber, messageVenueProposed(selectedDay, timeStr, venue.name, venue.neighborhood ?? venue.city), 'venue_proposed', { userId, weekAnchorMonday, matchId })
+      if (!venue) {
+        return smsFail('pick_venue_for_match_failed_scheduling_window', {
+          userId,
+          weekAnchorMonday,
+          matchId,
+          chosenSlot: chosenSlot ?? null,
+        })
       }
+      const timeStr = chosenSlot ? (slotIdToDayAndWindow(chosenSlot) ? '7pm' : '2pm') : '7pm'
+      await supabase.from('match_candidates').update({
+        suggested_venue_id: venue.id,
+        default_slot_id: chosenSlot || undefined,
+        overlapping_slot_ids: intakeCandidateSlots,
+      }).eq('id', matchId)
+      await supabase.from('sms_conversation_states').update({
+        state: SMS_STATES.VENUE_PROPOSED,
+        payload: { ...matchPayload, selected_window: window, slot_id: chosenSlot },
+        last_sendblue_message_handle: messageHandle,
+        updated_at: new Date().toISOString(),
+      }).eq('id', matchStateRow!.id)
+      await sendConciergeAndLog(fromNumber, messageVenueProposed(selectedDay, timeStr, venue.name, venue.neighborhood ?? venue.city), 'venue_proposed', { userId, weekAnchorMonday, matchId })
     } else {
-      await sendConciergeAndLog(fromNumber, getFallbackForState(SMS_STATES.SCHEDULING_WINDOW), 'fallback_scheduling_window', { userId, weekAnchorMonday, matchId })
+      return smsFail('unrecognized_scheduling_window_reply', {
+        userId,
+        weekAnchorMonday,
+        matchId,
+        contentPreview: content.slice(0, 80),
+      })
     }
     return NextResponse.json({ ok: true })
   }
@@ -1843,12 +1935,29 @@ export async function POST(request: Request) {
         }
       }
     } else {
-      await sendConciergeAndLog(fromNumber, getFallbackForState(SMS_STATES.VENUE_PROPOSED), 'fallback_venue_proposed', { userId, weekAnchorMonday, matchId })
+      return smsFail('unrecognized_venue_proposed_reply', {
+        userId,
+        weekAnchorMonday,
+        matchId,
+        contentPreview: content.slice(0, 80),
+      })
     }
     return NextResponse.json({ ok: true })
   }
 
-  // ----- Unrecognized: state-aware fallback so we always respond -----
-  await sendConciergeAndLog(fromNumber, getFallbackForState((matchState as string) || state), 'fallback_generic', { userId, weekAnchorMonday, matchId: matchId ?? undefined })
-  return NextResponse.json({ ok: true })
+  return smsFail('unhandled_inbound_sms', {
+    userId,
+    weekAnchorMonday,
+    matchId: matchId ?? undefined,
+    state,
+    matchState,
+    contentPreview: content.slice(0, 80),
+  })
+  } catch (e) {
+    console.error('[sendblue-webhook] unhandled', e)
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : 'internal_error' },
+      { status: 500 }
+    )
+  }
 }
