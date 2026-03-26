@@ -407,9 +407,9 @@ export default function AdminSignupsPage() {
                   ? `${simSummary.usersSkippedNoIntake} no intake row · `
                   : ''}
                 {simSummary.usersSkippedNoEmbedding != null && simSummary.usersSkippedNoEmbedding > 0
-                  ? `${simSummary.usersSkippedNoEmbedding} intake but no embedding · `
+                  ? `${simSummary.usersSkippedNoEmbedding} skipped (legacy) · `
                   : ''}
-                {simSummary.usersConsidered} with embedding · Pairs: {simSummary.pairsScored} · Filtered out: {simSummary.filteredOut}
+                {simSummary.usersConsidered} with intake · Pairs: {simSummary.pairsScored} · Filtered out: {simSummary.filteredOut}
                 {simSummary.relaxedFilters ? ' · relaxed filters' : ' · strict filters'}
                 {simSummary.scoring ? ` · ${simSummary.scoring.replace(/_/g, ' ')}` : ''}
               </p>
@@ -441,13 +441,14 @@ export default function AdminSignupsPage() {
                       <th>#</th>
                       <th>Pair</th>
                       <th className="admin-table-num">Score</th>
-                      <th>Cosine</th>
+                      <th>Top signals</th>
                     </tr>
                   </thead>
                   <tbody>
                     {visiblePairs.map((p, idx) => {
                       const pairKey = `${p.userAId}:${p.userBId}`
                       const topFactors = Object.entries(p.sectionScores ?? {})
+                        .filter(([k]) => k !== 'avoid_topics_penalty')
                         .sort((a, b) => b[1] - a[1])
                         .slice(0, 3)
                         .map(([k, v]) => `${k.replace(/_/g, ' ')} ${v.toFixed(2)}`)
@@ -635,10 +636,15 @@ export default function AdminSignupsPage() {
               </p>
 
               <div className="admin-modal-section">
-                <h3 className="admin-modal-section-title">Embedding similarity</h3>
+                <h3 className="admin-modal-section-title">Score breakdown</h3>
+                <p className="admin-modal-meta">Subscores are 0–1 overlap or fit; avoid-topics penalty is subtracted from the weighted total.</p>
                 <dl className="admin-modal-dl">
                   {Object.entries(simPairModal.sectionScores ?? {})
-                    .sort((a, b) => b[1] - a[1])
+                    .sort((a, b) => {
+                      if (a[0] === 'avoid_topics_penalty') return 1
+                      if (b[0] === 'avoid_topics_penalty') return -1
+                      return b[1] - a[1]
+                    })
                     .map(([k, v]) => (
                       <span key={k}>
                         <dt>{k.replace(/_/g, ' ')}</dt>

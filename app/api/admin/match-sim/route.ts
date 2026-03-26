@@ -4,7 +4,7 @@ import { createServerSupabase } from '@/lib/supabase-server'
 import { isAdminByUserId } from '@/lib/admin-markets'
 import { getIntakeRadiusKm } from '@/lib/intake-radius'
 
-/** Admin simulation: ranks pairs by intake embed_vector cosine similarity (+ hard filters). `trigger_sms` → `match_candidates` + `sms-match-delivery`. */
+/** Admin simulation: ranks pairs by structured intake overlap + distance (+ hard filters). `trigger_sms` → `match_candidates` + `sms-match-delivery`. */
 export const dynamic = 'force-dynamic'
 
 type ProfileRow = {
@@ -26,7 +26,6 @@ type ProfileRow = {
 type IntakeRow = {
   user_id: string
   responses: unknown
-  embed_vector: unknown
 }
 
 type SimCandidate = {
@@ -108,6 +107,8 @@ function buildComparisonRows(a: SimCandidate, b: SimCandidate): CompareRow[] {
     { label: 'Curiosity', a: asDisplay(getResponseValue(a.intake, 'q_curiosity')), b: asDisplay(getResponseValue(b.intake, 'q_curiosity')) },
     { label: 'Great Fika looks like', a: asDisplay(getResponseValue(a.intake, 'q_what_makes_great_fika')), b: asDisplay(getResponseValue(b.intake, 'q_what_makes_great_fika')) },
     { label: 'Hoping for', a: asDisplay(getResponseValue(a.intake, 'q_hoping_for')), b: asDisplay(getResponseValue(b.intake, 'q_hoping_for')) },
+    { label: 'Typical Fika times', a: asDisplay(getResponseValue(a.intake, 'q_typical_fika_times')), b: asDisplay(getResponseValue(b.intake, 'q_typical_fika_times')) },
+    { label: 'Openness', a: asDisplay(getResponseValue(a.intake, 'q_openness')), b: asDisplay(getResponseValue(b.intake, 'q_openness')) },
     { label: 'Avoid topics', a: asDisplay(getResponseValue(a.intake, 'q_avoid_topics')), b: asDisplay(getResponseValue(b.intake, 'q_avoid_topics')) },
     { label: 'Languages', a: asDisplay(a.profile.languages), b: asDisplay(b.profile.languages) },
     { label: 'Gender preference', a: asDisplay(a.profile.gender_preference), b: asDisplay(b.profile.gender_preference) },
@@ -115,42 +116,112 @@ function buildComparisonRows(a: SimCandidate, b: SimCandidate): CompareRow[] {
   ]
 }
 
-function ensureEmbedVector(vec: unknown): number[] | null {
-  if (vec == null) return null
-  if (typeof vec === 'string') {
-    const s = vec.trim()
-    if (!s) return null
-    try {
-      return ensureEmbedVector(JSON.parse(s))
-    } catch {
-      return null
-    }
-  }
-  if (!Array.isArray(vec) || vec.length === 0) return null
-  const out: number[] = []
-  for (const x of vec) {
-    if (typeof x === 'number' && Number.isFinite(x)) out.push(x)
-    else if (typeof x === 'string' && x.trim() !== '') {
-      const n = Number(x)
-      if (Number.isFinite(n)) out.push(n)
-      else return null
-    } else return null
-  }
-  return out.length > 0 ? out : null
+const OPENNESS_OPEN_ANYONE = "I'm open to anyone"
+const OPENNESS_RELATE = "Someone I'd instantly relate to"
+const OPENNESS_BUBBLE = 'Someone outside my usual bubble'
+
+/** Overlap count / max(selected lengths); 0 if either side empty. */
+function multiSelectOverlapScore(a: string[], b: string[]): number {
+  if (a.length === 0 || b.length === 0) return 0
+  const overlap = a.filter((v) => b.includes(v)).length
+  return overlap / Math.max(a.length, b.length)
 }
 
-function cosineSimilarity(a: number[], b: number[]): number {
-  if (a.length !== b.length || a.length === 0) return 0
-  let dot = 0
-  let na = 0
-  let nb = 0
-  for (let i = 0; i < a.length; i++) {
-    dot += a[i] * b[i]
-    na += a[i] * a[i]
-    nb += b[i] * b[i]
+function distanceProportionScore(distanceKm: number | null, maxKm: number): number {
+  if (distanceKm == null || maxKm <= 0) return 0.5
+  return Math.max(0, Math.min(1, 1 - distanceKm / maxKm))
+}
+
+function opennessFitSubscore(oa: string | null, ob: string | null): number {
+  if (!oa || !ob) return 0.55
+  if (oa === OPENNESS_OPEN_ANYONE && ob === OPENNESS_OPEN_ANYONE) return 1
+  if (oa === OPENNESS_OPEN_ANYONE || ob === OPENNESS_OPEN_ANYONE) return 0.88
+  if (oa === ob) return 1
+  return 0.5
+}
+
+const AVOID_IGNORE = new Set(['Nothing in particular', 'Prefer not to say'])
+
+/** Maps avoid-topic chip → interest labels that conflict if the other person selected them. */
+const AVOID_TO_INTERESTS: Record<string, string[]> = {
+  Politics: ['Politics & current events'],
+  Religion: ['Philosophy'],
+  'Work & career': ['Entrepreneurship & startups', 'Investing & finance'],
+  'Relationship status': [],
+  Health: ['Fitness', 'Running', 'Hiking', 'Outdoors', 'Yoga / Pilates', 'Weightlifting', 'Cycling', 'Swimming'],
+  'Personal finances': ['Investing & finance'],
+}
+
+function avoidTopicsPenalty(a: SimCandidate, b: SimCandidate): number {
+  const avoidA = getMulti(a.intake, 'q_avoid_topics').filter((x) => !AVOID_IGNORE.has(x))
+  const avoidB = getMulti(b.intake, 'q_avoid_topics').filter((x) => !AVOID_IGNORE.has(x))
+  const interestsA = getMulti(a.intake, 'q_interests')
+  const interestsB = getMulti(b.intake, 'q_interests')
+  let hits = 0
+  for (const av of avoidA) {
+    const mapped = AVOID_TO_INTERESTS[av]
+    if (mapped?.some((t) => interestsB.includes(t))) hits++
   }
-  if (na === 0 || nb === 0) return 0
-  return Math.max(0, dot / (Math.sqrt(na) * Math.sqrt(nb)))
+  for (const av of avoidB) {
+    const mapped = AVOID_TO_INTERESTS[av]
+    if (mapped?.some((t) => interestsA.includes(t))) hits++
+  }
+  return Math.min(0.12, hits * 0.04)
+}
+
+const STRUCTURED_WEIGHTS = {
+  interests: 0.28,
+  greatFika: 0.22,
+  lifeChapter: 0.14,
+  curiosity: 0.12,
+  everydayAnchor: 0.1,
+  distance: 0.06,
+  openness: 0.04,
+} as const
+
+function structuredPairScore(
+  a: SimCandidate,
+  b: SimCandidate,
+  distanceKm: number | null
+): { score: number; sectionScores: Record<string, number> } {
+  const sInt = multiSelectOverlapScore(getMulti(a.intake, 'q_interests'), getMulti(b.intake, 'q_interests'))
+  const sGf = multiSelectOverlapScore(
+    getMulti(a.intake, 'q_what_makes_great_fika'),
+    getMulti(b.intake, 'q_what_makes_great_fika')
+  )
+  const sLc = multiSelectOverlapScore(getMulti(a.intake, 'q_life_chapter'), getMulti(b.intake, 'q_life_chapter'))
+  const sCur = multiSelectOverlapScore(getMulti(a.intake, 'q_curiosity'), getMulti(b.intake, 'q_curiosity'))
+  const sEa = multiSelectOverlapScore(getMulti(a.intake, 'q_everyday_anchor'), getMulti(b.intake, 'q_everyday_anchor'))
+  const maxKm = a.radiusKm + b.radiusKm
+  const sDist = distanceProportionScore(distanceKm, maxKm)
+  const oa = getMulti(a.intake, 'q_openness')[0] ?? null
+  const ob = getMulti(b.intake, 'q_openness')[0] ?? null
+  const sOpen = opennessFitSubscore(oa, ob)
+  const pen = avoidTopicsPenalty(a, b)
+
+  let raw =
+    STRUCTURED_WEIGHTS.interests * sInt +
+    STRUCTURED_WEIGHTS.greatFika * sGf +
+    STRUCTURED_WEIGHTS.lifeChapter * sLc +
+    STRUCTURED_WEIGHTS.curiosity * sCur +
+    STRUCTURED_WEIGHTS.everydayAnchor * sEa +
+    STRUCTURED_WEIGHTS.distance * sDist +
+    STRUCTURED_WEIGHTS.openness * sOpen
+  raw = Math.max(0, Math.min(1, raw - pen))
+
+  return {
+    score: raw,
+    sectionScores: {
+      q_interests: sInt,
+      q_what_makes_great_fika: sGf,
+      q_life_chapter: sLc,
+      q_curiosity: sCur,
+      q_everyday_anchor: sEa,
+      distance: sDist,
+      q_openness_fit: sOpen,
+      avoid_topics_penalty: pen,
+    },
+  }
 }
 
 function sameGender(a: string, b: string): boolean {
@@ -217,21 +288,27 @@ function passesFilters(
     if ((aHop === convOnly && bHop === activeFriends) || (aHop === activeFriends && bHop === convOnly)) {
       return { ok: false, reason: 'hoping_for' }
     }
+
+    const timesA = getMulti(a.intake, 'q_typical_fika_times')
+    const timesB = getMulti(b.intake, 'q_typical_fika_times')
+    if (timesA.length === 0 || timesB.length === 0) {
+      return { ok: false, reason: 'fika_times' }
+    }
+    if (!timesA.some((t) => timesB.includes(t))) {
+      return { ok: false, reason: 'fika_times' }
+    }
+
+    const oa = getMulti(a.intake, 'q_openness')[0] ?? null
+    const ob = getMulti(b.intake, 'q_openness')[0] ?? null
+    if (oa && ob && oa !== OPENNESS_OPEN_ANYONE && ob !== OPENNESS_OPEN_ANYONE) {
+      const clash =
+        (oa === OPENNESS_RELATE && ob === OPENNESS_BUBBLE) ||
+        (oa === OPENNESS_BUBBLE && ob === OPENNESS_RELATE)
+      if (clash) return { ok: false, reason: 'openness' }
+    }
   }
 
   return { ok: true }
-}
-
-/** Cosine similarity between intake embedding vectors (same space as complete-intake). */
-function embeddingPairScore(a: SimCandidate, b: SimCandidate): { score: number; sectionScores: Record<string, number> } {
-  const aVec = ensureEmbedVector(a.intake.embed_vector)
-  const bVec = ensureEmbedVector(b.intake.embed_vector)
-  if (!aVec || !bVec) {
-    return { score: 0, sectionScores: {} }
-  }
-  const sim = cosineSimilarity(aVec, bVec)
-  const score = Math.max(0, Math.min(1, sim))
-  return { score, sectionScores: { embedding_cosine: score } }
 }
 
 function getWeekAnchorMonday(now: Date): string {
@@ -411,7 +488,7 @@ export async function POST(request: Request) {
         optedInOnly,
         relaxedFilters,
         market,
-        scoring: 'embedding_cosine',
+        scoring: 'structured_v1',
       },
       pairs: [],
     })
@@ -419,23 +496,18 @@ export async function POST(request: Request) {
 
   const { data: intakeRows, error: intakeErr } = await supabase
     .from('intake_responses_v5')
-    .select('user_id, responses, embed_vector')
+    .select('user_id, responses')
     .in('user_id', ids)
   if (intakeErr) return NextResponse.json({ error: intakeErr.message }, { status: 500 })
   const intakeById = new Map<string, IntakeRow>()
   for (const r of (intakeRows ?? []) as IntakeRow[]) intakeById.set(r.user_id, r)
 
   let usersSkippedNoIntake = 0
-  let usersSkippedNoEmbedding = 0
   const candidates: SimCandidate[] = []
   for (const p of userProfiles) {
     const intake = intakeById.get(p.id)
     if (!intake) {
       usersSkippedNoIntake++
-      continue
-    }
-    if (!ensureEmbedVector(intake.embed_vector)) {
-      usersSkippedNoEmbedding++
       continue
     }
     candidates.push({
@@ -452,13 +524,13 @@ export async function POST(request: Request) {
         totalProfiles: userProfiles.length,
         usersConsidered: candidates.length,
         usersSkippedNoIntake,
-        usersSkippedNoEmbedding,
+        usersSkippedNoEmbedding: 0,
         pairsScored: 0,
         filteredOut: 0,
         optedInOnly,
         relaxedFilters,
         market,
-        scoring: 'embedding_cosine',
+        scoring: 'structured_v1',
       },
       pairs: [],
     })
@@ -496,11 +568,11 @@ export async function POST(request: Request) {
         filteredOut++
         continue
       }
-      const score = embeddingPairScore(a, b)
       const distanceKm =
         a.profile.lat != null && a.profile.lng != null && b.profile.lat != null && b.profile.lng != null
           ? calculateDistance(a.profile.lat, a.profile.lng, b.profile.lat, b.profile.lng)
           : null
+      const scored = structuredPairScore(a, b, distanceKm)
       const aLang = Array.isArray(a.profile.languages) ? a.profile.languages : []
       const bLang = Array.isArray(b.profile.languages) ? b.profile.languages : []
       const langSet = new Set(aLang.map((x) => x.trim().toLowerCase()))
@@ -525,7 +597,7 @@ export async function POST(request: Request) {
         userBAge: b.age,
         userBGender: b.profile.gender ?? null,
         userBCity: b.profile.city ?? null,
-        score: score.score,
+        score: scored.score,
         distanceKm,
         sharedLanguages,
         hopingA,
@@ -533,7 +605,7 @@ export async function POST(request: Request) {
         overlapGreatFika,
         overlapInterests,
         compareRows,
-        sectionScores: score.sectionScores,
+        sectionScores: scored.sectionScores,
       })
     }
   }
@@ -546,13 +618,13 @@ export async function POST(request: Request) {
       totalProfiles: userProfiles.length,
       usersConsidered: candidates.length,
       usersSkippedNoIntake,
-      usersSkippedNoEmbedding,
+      usersSkippedNoEmbedding: 0,
       pairsScored: pairs.length,
       filteredOut,
       optedInOnly,
       relaxedFilters,
       market,
-      scoring: 'embedding_cosine',
+      scoring: 'structured_v1',
     },
     pairs: top,
   })
