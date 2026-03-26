@@ -34,16 +34,16 @@ function deriveStage(row: {
   scheduling_status: string | null
   confirmed_slot_id: string | null
   confirmed_at: string | null
-  optA: 'yes' | 'no' | null
-  optB: 'yes' | 'no' | null
+  optA: 'opt_in' | 'pass' | null
+  optB: 'opt_in' | 'pass' | null
 }): FikaStage {
-  if (row.optA === 'no' || row.optB === 'no') return 'passed'
+  if (row.optA === 'pass' || row.optB === 'pass') return 'passed'
   if (row.scheduling_status === 'expired') return 'expired'
   if (row.scheduling_status === 'confirmed' || row.confirmed_slot_id || row.confirmed_at) return 'confirmed'
   if (row.scheduling_status && row.scheduling_status !== 'confirmed') return 'scheduling'
   if (row.status === 'active' || row.status == null) {
-    if (row.optA === 'yes' && row.optB === 'yes') return 'scheduling'
-    if (row.optA === 'yes' || row.optB === 'yes') return 'awaiting_other_opt_in'
+    if (row.optA === 'opt_in' && row.optB === 'opt_in') return 'scheduling'
+    if (row.optA === 'opt_in' || row.optB === 'opt_in') return 'awaiting_other_opt_in'
     if (row.optA == null && row.optB == null) return 'awaiting_opt_in'
     return 'offered'
   }
@@ -152,9 +152,15 @@ export async function GET(request: Request) {
   }
 
   const optKey = (match_id: string, user_id: string) => `${match_id}:${user_id}`
-  const optBy = new Map<string, { decision: 'yes' | 'no' | null; answered_at: string | null; payment_status: string | null }>()
+  const optBy = new Map<string, { decision: 'opt_in' | 'pass' | null; answered_at: string | null; payment_status: string | null }>()
   for (const o of (optIns ?? []) as any[]) {
-    const decision = (o.decision as string | null) === 'yes' ? 'yes' : (o.decision as string | null) === 'no' ? 'no' : null
+    const rawDecision = (o.decision as string | null)
+    const decision =
+      rawDecision === 'opt_in' || rawDecision === 'yes'
+        ? 'opt_in'
+        : rawDecision === 'pass' || rawDecision === 'no'
+          ? 'pass'
+          : null
     optBy.set(optKey(o.match_id as string, o.user_id as string), {
       decision,
       answered_at: (o.answered_at as string | null) ?? null,

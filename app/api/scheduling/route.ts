@@ -1,6 +1,8 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 
+const OPT_IN_DECISION = 'opt_in'
+
 type SchedulingAction =
   | 'confirm_default'
   | 'confirm_final'
@@ -103,18 +105,18 @@ export async function POST(request: Request) {
       if (existingOpt?.id) {
         await supabase
           .from('opt_ins')
-          .update({ decision: 'yes', confirmed_slot_id: defaultId })
+          .update({ decision: OPT_IN_DECISION, confirmed_slot_id: defaultId })
           .eq('id', existingOpt.id)
       } else {
         await supabase
           .from('opt_ins')
-          .insert({ match_id: row.id, user_id: user.id, decision: 'yes', confirmed_slot_id: defaultId })
+          .insert({ match_id: row.id, user_id: user.id, decision: OPT_IN_DECISION, confirmed_slot_id: defaultId })
       }
       const { data: optIns } = await supabase
         .from('opt_ins')
         .select('user_id, confirmed_slot_id')
         .eq('match_id', row.id)
-        .eq('decision', 'yes')
+        .eq('decision', OPT_IN_DECISION)
       const bothConfirmedDefault =
         optIns?.length === 2 &&
         optIns?.every((o) => o.confirmed_slot_id === defaultId)

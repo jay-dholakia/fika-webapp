@@ -97,6 +97,17 @@ function getAppBase(): string {
   return base || 'https://letsfika.vercel.app'
 }
 
+const OPT_IN_DECISION = 'opt_in'
+const PASS_DECISION = 'pass'
+
+function isOptInDecision(decision: string | null | undefined): boolean {
+  return decision === OPT_IN_DECISION || decision === 'yes'
+}
+
+function isPassDecision(decision: string | null | undefined): boolean {
+  return decision === PASS_DECISION || decision === 'no'
+}
+
 function formatConciergeNumber(digits: string): string {
   if (digits.length === 10) return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`
   if (digits.length === 11 && digits.startsWith('1')) return `(${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(7)}`
@@ -580,7 +591,7 @@ export async function POST(request: Request) {
         .in('match_id', candidateMatchIds)
       const optedMatchIds = new Set(
         (myOptIns ?? [])
-          .filter((o: { decision?: string | null }) => o.decision === 'yes' || o.decision === 'no')
+          .filter((o: { decision?: string | null }) => isOptInDecision(o.decision) || isPassDecision(o.decision))
           .map((o: { match_id: string }) => o.match_id)
       )
       const recovered = (recentMatches ?? []).find((m: { id: string }) => !optedMatchIds.has(m.id)) ??
@@ -622,15 +633,25 @@ export async function POST(request: Request) {
         .eq('match_id', matchId)
         .neq('user_id', userId)
         .maybeSingle()
-      if (otherOpt?.decision === 'no') {
+      if (isPassDecision(otherOpt?.decision)) {
         await sendConciergeAndLog(fromNumber, messageMatchPassed(), 'match_passed', { userId, weekAnchorMonday, matchId })
         await supabase.from('sms_conversation_states').delete().eq('id', matchStateRow!.id)
         return NextResponse.json({ ok: true })
       }
-      await supabase.from('opt_ins').upsert(
-        { match_id: matchId, user_id: userId, decision: 'yes' },
+      const { error: optInUpsertError } = await supabase.from('opt_ins').upsert(
+        { match_id: matchId, user_id: userId, decision: OPT_IN_DECISION },
         { onConflict: 'match_id,user_id' }
       )
+      if (optInUpsertError) {
+        console.error('[sendblue-webhook] opt_in upsert failed', { userId, matchId, error: optInUpsertError })
+        await sendConciergeAndLog(
+          fromNumber,
+          "Got your YES — we're syncing your intro now. We'll text you in a moment.",
+          'yes_sync_retry_optin_write_failed',
+          { userId, weekAnchorMonday, matchId }
+        )
+        return NextResponse.json({ ok: true })
+      }
       const { data: match } = await supabase
         .from('match_candidates')
         .select('id, user_a, user_b, reasons, default_slot_id')
@@ -644,7 +665,7 @@ export async function POST(request: Request) {
         .from('opt_ins')
         .select('user_id, answered_at')
         .eq('match_id', matchId)
-        .eq('decision', 'yes')
+        .eq('decision', OPT_IN_DECISION)
         .order('answered_at', { ascending: true })
       const yesUsers = yesOpts ?? []
       if (yesUsers.length === 1) {
@@ -912,10 +933,20 @@ export async function POST(request: Request) {
         )
       }
     } else if (isMatchPassKeyword(content) || keyword === 'PASS') {
-      await supabase.from('opt_ins').upsert(
-        { match_id: matchId, user_id: userId, decision: 'no' },
+      const { error: passUpsertError } = await supabase.from('opt_ins').upsert(
+        { match_id: matchId, user_id: userId, decision: PASS_DECISION },
         { onConflict: 'match_id,user_id' }
       )
+      if (passUpsertError) {
+        console.error('[sendblue-webhook] pass upsert failed', { userId, matchId, error: passUpsertError })
+        await sendConciergeAndLog(
+          fromNumber,
+          "Got your PASS — we're syncing this update now. We'll text you in a moment.",
+          'pass_sync_retry_optin_write_failed',
+          { userId, weekAnchorMonday, matchId }
+        )
+        return NextResponse.json({ ok: true })
+      }
       await sendConciergeAndLog(fromNumber, messagePassConfirmation(), 'pass_confirmation', { userId, weekAnchorMonday, matchId })
       const { data: matchRow } = await supabase.from('match_candidates').select('user_a, user_b').eq('id', matchId).single()
       const otherId = matchRow ? (matchRow.user_a === userId ? matchRow.user_b : matchRow.user_a) : null
@@ -929,7 +960,7 @@ export async function POST(request: Request) {
       }
       if (otherId) {
         const { data: otherOpt } = await supabase.from('opt_ins').select('decision').eq('match_id', matchId).eq('user_id', otherId).maybeSingle()
-        if (otherOpt?.decision === 'yes') {
+        if (isOptInDecision(otherOpt?.decision)) {
           const { data: otherProf } = await supabase.from('profiles').select('phone').eq('id', otherId).maybeSingle()
           if (otherProf?.phone) {
             await sendConciergeAndLog(otherProf.phone, messageMatchPassed(), 'match_passed_to_other', { userId: otherId, weekAnchorMonday, matchId })
@@ -1131,10 +1162,20 @@ export async function POST(request: Request) {
 
   if (matchState === SMS_STATES.AWAITING_AVAILABILITY && matchId) {
     if (isMatchPassKeyword(content) || keyword === 'PASS') {
-      await supabase.from('opt_ins').upsert(
-        { match_id: matchId, user_id: userId, decision: 'no' },
+      const { error: passUpsertError } = await supabase.from('opt_ins').upsert(
+        { match_id: matchId, user_id: userId, decision: PASS_DECISION },
         { onConflict: 'match_id,user_id' }
       )
+      if (passUpsertError) {
+        console.error('[sendblue-webhook] v2 pass upsert failed', { userId, matchId, error: passUpsertError })
+        await sendConciergeAndLog(
+          fromNumber,
+          "Got your PASS — we're syncing this update now. We'll text you in a moment.",
+          'v2_pass_sync_retry_optin_write_failed',
+          { userId, weekAnchorMonday, matchId }
+        )
+        return NextResponse.json({ ok: true })
+      }
       await sendConciergeAndLog(fromNumber, messagePassConfirmation(), 'v2_pass_after_teaser', {
         userId,
         weekAnchorMonday,
@@ -1153,7 +1194,7 @@ export async function POST(request: Request) {
           .eq('match_id', matchId)
           .eq('user_id', otherId)
           .maybeSingle()
-        if (otherOpt?.decision === 'yes') {
+        if (isOptInDecision(otherOpt?.decision)) {
           const { data: otherProf } = await supabase
             .from('profiles')
             .select('phone')

@@ -257,7 +257,7 @@ function AppHomeContent() {
             return acc
           }, {})
           const myOptIns = ((optInsRes?.data ?? []) as { match_id: string; decision: string }[]).reduce<Record<string, 'yes' | 'no'>>((acc, o) => {
-            acc[o.match_id] = o.decision === 'yes' ? 'yes' : 'no'
+            acc[o.match_id] = (o.decision === 'opt_in' || o.decision === 'yes') ? 'yes' : 'no'
             return acc
           }, {})
           const myStates = ((statesRes?.data ?? []) as { match_id: string; state: string }[]).reduce<Record<string, string>>((acc, s) => {

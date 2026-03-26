@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { getSupabase } from '@/lib/supabase'
 
 type OptInLite = {
-  decision: 'yes' | 'no' | null
+  decision: 'opt_in' | 'pass' | null
   answered_at: string | null
   payment_status: string | null
 }
