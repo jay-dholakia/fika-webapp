@@ -61,6 +61,7 @@ import {
   isCancelKeyword,
   isGreetingKeyword,
   getFikaTimeMs,
+  getTodayYmdInTimezone,
   pickVenueForMatch,
   messageInactiveMarketReply,
   messageAvailabilityLockAllSet,
@@ -95,6 +96,29 @@ const CONCIERGE = CONCIERGE_RAW.length === 11 && CONCIERGE_RAW.startsWith('1')
 function getAppBase(): string {
   const base = (process.env.APP_CANONICAL_URL ?? '').trim().replace(/\/$/, '')
   return base || 'https://letsfika.vercel.app'
+}
+
+function formatMeetingDateLabel(date: Date, timeZone: string): string {
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    weekday: 'short',
+    month: 'short',
+    day: '2-digit',
+  }).format(date)
+}
+
+/**
+ * Add calendar days to a YYYY-MM-DD value, in a given IANA timezone.
+ * This avoids “48 hours” drift and matches the “same local calendar day + 2” rule.
+ */
+function addDaysYmdInTimezone(ymd: string, days: number, timeZone: string): string {
+  const [yStr, mStr, dStr] = ymd.split('-')
+  const y = Number.parseInt(yStr, 10)
+  const m = Number.parseInt(mStr, 10)
+  const d = Number.parseInt(dStr, 10)
+  const base = new Date(Date.UTC(y, m - 1, d, 12, 0, 0))
+  base.setUTCDate(base.getUTCDate() + days)
+  return base.toLocaleDateString('en-CA', { timeZone })
 }
 
 const OPT_IN_DECISION = 'opt_in'
@@ -851,7 +875,20 @@ export async function POST(request: Request) {
             intakeA?.data?.responses ?? null,
             intakeB?.data?.responses ?? null
           )
-          const slotId = getBestDefaultSlot(candidateSlots) ?? candidateSlots[0] ?? null
+          const radiusA = getIntakeRadiusKm(intakeA?.data?.responses ?? null)
+          const radiusB = getIntakeRadiusKm(intakeB?.data?.responses ?? null)
+          const matchTzV2 = await fetchMatchMarketTimezone(supabase, match.user_a, match.user_b)
+
+          const proposalSentYmdV2 = getTodayYmdInTimezone(matchTzV2)
+          const earliestAllowedYmdV2 = addDaysYmdInTimezone(proposalSentYmdV2, 2, matchTzV2)
+          const eligibleSlotIdsV2 = candidateSlots.filter((s) => {
+            const meetingMs = getFikaTimeMs(weekAnchorMonday, s, matchTzV2)
+            if (meetingMs == null) return false
+            const proposedYmd = new Date(meetingMs).toLocaleDateString('en-CA', { timeZone: matchTzV2 })
+            return proposedYmd >= earliestAllowedYmdV2
+          })
+
+          const slotId = getBestDefaultSlot(eligibleSlotIdsV2) ?? eligibleSlotIdsV2[0] ?? null
           if (!slotId) {
             await sendConciergeAndLog(
               fromNumber,
@@ -861,9 +898,6 @@ export async function POST(request: Request) {
             )
             return NextResponse.json({ ok: true })
           }
-          const radiusA = getIntakeRadiusKm(intakeA?.data?.responses ?? null)
-          const radiusB = getIntakeRadiusKm(intakeB?.data?.responses ?? null)
-          const matchTzV2 = await fetchMatchMarketTimezone(supabase, match.user_a, match.user_b)
           const meetingMsV2 = getFikaTimeMs(weekAnchorMonday, slotId, matchTzV2)
           const venue = await pickVenueForMatch(
             supabase,
@@ -881,6 +915,7 @@ export async function POST(request: Request) {
           }
 
           const { day: proposedDay, time: proposedTime } = slotIdToDisplayTime(slotId)
+          const meetingDateLabelV2 = meetingMsV2 != null ? formatMeetingDateLabel(new Date(meetingMsV2), matchTzV2) : ''
           const { data: firstYesProfile } = await supabase
             .from('profiles')
             .select('first_name')
@@ -892,7 +927,7 @@ export async function POST(request: Request) {
             fromNumber,
             messageProposalToConfirm({
               otherFirstName: firstYesName,
-              day: proposedDay,
+              meetingDateLabel: meetingDateLabelV2 || proposedDay,
               time: proposedTime,
               venueName: venue.name,
               neighborhood: venue.neighborhood ?? venue.city,
@@ -906,7 +941,7 @@ export async function POST(request: Request) {
               otherProfile.phone,
               messageProposalToConfirm({
                 otherFirstName: currentName,
-                day: proposedDay,
+                meetingDateLabel: meetingDateLabelV2 || proposedDay,
                 time: proposedTime,
                 venueName: venue.name,
                 neighborhood: venue.neighborhood ?? venue.city,
@@ -980,14 +1015,29 @@ export async function POST(request: Request) {
           intakeA?.data?.responses ?? null,
           intakeB?.data?.responses ?? null
         )
-        const slotId = getBestDefaultSlot(candidateSlots) ?? candidateSlots[0] ?? null
-        if (!slotId) {
-          await sendConciergeAndLog(fromNumber, "We couldn't find a time that works for both. We'll reach out when we find another good Fika intro for you.", 'no_overlap', { userId, weekAnchorMonday, matchId })
-          return NextResponse.json({ ok: true })
-        }
         const radiusA = getIntakeRadiusKm(intakeA?.data?.responses ?? null)
         const radiusB = getIntakeRadiusKm(intakeB?.data?.responses ?? null)
         const matchTzV1 = await fetchMatchMarketTimezone(supabase, match.user_a, match.user_b)
+
+        const proposalSentYmdV1 = getTodayYmdInTimezone(matchTzV1)
+        const earliestAllowedYmdV1 = addDaysYmdInTimezone(proposalSentYmdV1, 2, matchTzV1)
+        const eligibleSlotIdsV1 = candidateSlots.filter((s) => {
+          const meetingMs = getFikaTimeMs(weekAnchorMonday, s, matchTzV1)
+          if (meetingMs == null) return false
+          const proposedYmd = new Date(meetingMs).toLocaleDateString('en-CA', { timeZone: matchTzV1 })
+          return proposedYmd >= earliestAllowedYmdV1
+        })
+
+        const slotId = getBestDefaultSlot(eligibleSlotIdsV1) ?? eligibleSlotIdsV1[0] ?? null
+        if (!slotId) {
+          await sendConciergeAndLog(fromNumber, "We couldn't find a time that works for both. We'll reach out when we find another good Fika intro for you.", 'no_overlap', {
+            userId,
+            weekAnchorMonday,
+            matchId,
+          })
+          return NextResponse.json({ ok: true })
+        }
+
         const meetingMsV1 = getFikaTimeMs(weekAnchorMonday, slotId, matchTzV1)
         const venue = await pickVenueForMatch(
           supabase,
@@ -1000,6 +1050,7 @@ export async function POST(request: Request) {
           return NextResponse.json({ ok: true })
         }
         const { day: proposedDay, time: proposedTime } = slotIdToDisplayTime(slotId)
+        const meetingDateLabelV1 = meetingMsV1 != null ? formatMeetingDateLabel(new Date(meetingMsV1), matchTzV1) : ''
         const { data: currentProfile } = await supabase
           .from('profiles')
           .select('first_name')
@@ -1023,7 +1074,7 @@ export async function POST(request: Request) {
           : { data: null as { phone?: string | null } | null }
         await sendConciergeAndLog(fromNumber, messageProposalToConfirm({
           otherFirstName: otherName,
-          day: proposedDay,
+          meetingDateLabel: meetingDateLabelV1 || proposedDay,
           time: proposedTime,
           venueName: venue.name,
           neighborhood: venue.neighborhood ?? venue.city,
@@ -1033,7 +1084,7 @@ export async function POST(request: Request) {
             otherPhoneProfile.phone,
             messageProposalToConfirm({
               otherFirstName: currentName,
-              day: proposedDay,
+              meetingDateLabel: meetingDateLabelV1 || proposedDay,
               time: proposedTime,
               venueName: venue.name,
               neighborhood: venue.neighborhood ?? venue.city,
@@ -1179,7 +1230,18 @@ export async function POST(request: Request) {
       intakeA?.data?.responses ?? null,
       intakeB?.data?.responses ?? null
     )
-    const nextSlotId = nextAlternateProposalSlot(currentSlotId, candidateSlots)
+
+    const matchTzRe = await fetchMatchMarketTimezone(supabase, matchRow!.user_a, matchRow!.user_b)
+    const proposalSentYmdRe = getTodayYmdInTimezone(matchTzRe)
+    const earliestAllowedYmdRe = addDaysYmdInTimezone(proposalSentYmdRe, 2, matchTzRe)
+    const eligibleSlotIdsRe = candidateSlots.filter((s) => {
+      const meetingMs = getFikaTimeMs(weekAnchorMonday, s, matchTzRe)
+      if (meetingMs == null) return false
+      const proposedYmd = new Date(meetingMs).toLocaleDateString('en-CA', { timeZone: matchTzRe })
+      return proposedYmd >= earliestAllowedYmdRe
+    })
+
+    const nextSlotId = nextAlternateProposalSlot(currentSlotId, eligibleSlotIdsRe)
 
     if (!nextSlotId) {
       await cancelMatch()
@@ -1190,7 +1252,6 @@ export async function POST(request: Request) {
     const { data: userB } = await supabase.from('profiles').select('city, lat, lng').eq('id', matchRow!.user_b).single()
     const radiusA = getIntakeRadiusKm(intakeA?.data?.responses ?? null)
     const radiusB = getIntakeRadiusKm(intakeB?.data?.responses ?? null)
-    const matchTzRe = await fetchMatchMarketTimezone(supabase, matchRow!.user_a, matchRow!.user_b)
     const meetingMsRe = getFikaTimeMs(weekAnchorMonday, nextSlotId, matchTzRe)
     const venue = await pickVenueForMatch(
       supabase,
@@ -1204,6 +1265,7 @@ export async function POST(request: Request) {
     }
 
     const { day: newDay, time: newTime } = slotIdToDisplayTime(nextSlotId)
+    const meetingDateLabelRe = meetingMsRe != null ? formatMeetingDateLabel(new Date(meetingMsRe), matchTzRe) : ''
     await supabase.from('match_candidates').update({
       suggested_venue_id: venue.id,
       default_slot_id: nextSlotId,
@@ -1221,7 +1283,7 @@ export async function POST(request: Request) {
     }
 
     await sendConciergeAndLog(fromNumber, messageReProposalToDecliner({
-      day: newDay,
+      meetingDateLabel: meetingDateLabelRe || newDay,
       time: newTime,
       venueName: venue.name,
       neighborhood: venue.neighborhood ?? venue.city,
@@ -1230,7 +1292,7 @@ export async function POST(request: Request) {
       const { data: otherProf } = await supabase.from('profiles').select('phone').eq('id', otherId).maybeSingle()
       if (otherProf?.phone) {
         await sendConciergeAndLog(otherProf.phone, messageReProposalToOther({
-          day: newDay,
+          meetingDateLabel: meetingDateLabelRe || newDay,
           time: newTime,
           venueName: venue.name,
           neighborhood: venue.neighborhood ?? venue.city,

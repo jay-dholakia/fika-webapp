@@ -437,7 +437,7 @@ export function messagePassConfirmation(): string {
 
 /** First person said YES — waiting for the other to confirm. */
 export function messageYesWaitingForOther(): string {
-  return `Nice — we'll let you know as soon as they confirm.`
+  return `Awesome — I’ve sent this to them. As soon as they say YES, we’ll lock it in for you both.`
 }
 
 /** Notify the person who said YES when the other passed or intro didn't get confirmed. */
@@ -476,27 +476,27 @@ export function messageProposalDeclinedToOther(): string {
 }
 
 /** Re-propose a new time to the person who declined (attempt 2). */
-export function messageReProposalToDecliner(params: { day: string; time: string; venueName: string; neighborhood: string }): string {
-  const { day, time, venueName, neighborhood } = params
-  return `How about ${day} at ${time} at ${venueName} (${neighborhood}) near both of you?\n\nReply YES or NO.`
+export function messageReProposalToDecliner(params: { meetingDateLabel: string; time: string; venueName: string; neighborhood: string }): string {
+  const { meetingDateLabel, time, venueName, neighborhood } = params
+  return `Perfect — how about ${meetingDateLabel} at ${time} at ${venueName} (${neighborhood}) near both of you?\n\nReply YES or NO.`
 }
 
 /** Notify the other person we're trying a different time. */
-export function messageReProposalToOther(params: { day: string; time: string; venueName: string; neighborhood: string }): string {
-  const { day, time, venueName, neighborhood } = params
-  return `They couldn't do that time — would ${day} at ${time} at ${venueName} (${neighborhood}) near both of you work?\n\nReply YES or NO.`
+export function messageReProposalToOther(params: { meetingDateLabel: string; time: string; venueName: string; neighborhood: string }): string {
+  const { meetingDateLabel, time, venueName, neighborhood } = params
+  return `No worries — would ${meetingDateLabel} at ${time} at ${venueName} (${neighborhood}) near both of you work?\n\nReply YES or NO.`
 }
 
 /** Propose one time + place; ask them to confirm. Second YES-er gets this first, then first YES-er. */
 export function messageProposalToConfirm(params: {
   otherFirstName: string
-  day: string
+  meetingDateLabel: string
   time: string
   venueName: string
   neighborhood: string
 }): string {
-  const { otherFirstName, day, time, venueName, neighborhood } = params
-  return `We're thinking ${day} at ${time} at ${venueName} (${neighborhood}) near both of you — does that work?\n\nReply YES or NO.`
+  const { otherFirstName, meetingDateLabel, time, venueName, neighborhood } = params
+  return `Awesome — we’re lining up ${meetingDateLabel} at ${time} at ${venueName} (${neighborhood}) near both of you. Does that work?\n\nReply YES or NO.`
 }
 
 // ---------- Day-of relay (here / on my way / running late / can't make it) ----------

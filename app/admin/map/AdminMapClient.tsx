@@ -32,6 +32,21 @@ interface MapPoint {
   age: number | null
 }
 
+interface FikaMarker {
+  matchId: string
+  category: 'scheduled' | 'confirmed'
+  lat: number
+  lng: number
+  venueName: string | null
+  venueNeighborhood: string | null
+  venueCity: string | null
+  confirmedAt: string | null
+  schedulingStatus: string | null
+  userA: { id: string; firstName: string | null; phone: string | null } | null
+  userB: { id: string; firstName: string | null; phone: string | null } | null
+  market: string | null
+}
+
 interface MapPolygon {
   slug: string
   label: string
@@ -277,11 +292,19 @@ function getFirstPolygonGeometry(geo: GeoJSON.GeoJSON): GeoJSON.Polygon | null {
 }
 
 export default function AdminMapClient() {
-  const [data, setData] = useState<{ points: MapPoint[]; polygons: MapPolygon[]; markets: MarketRow[] } | null>(null)
+  const [data, setData] = useState<{
+    points: MapPoint[]
+    polygons: MapPolygon[]
+    markets: MarketRow[]
+    fikas: FikaMarker[]
+  } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [editMarketSlug, setEditMarketSlug] = useState<string | null>(null)
   const [filterMarket, setFilterMarket] = useState<string>('')
+  const [showUsers, setShowUsers] = useState(true)
+  const [showScheduledFikas, setShowScheduledFikas] = useState(true)
+  const [showConfirmedFikas, setShowConfirmedFikas] = useState(true)
   const [hasEdited, setHasEdited] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -310,7 +333,7 @@ export default function AdminMapClient() {
     const { data: { session } } = await supabase?.auth.getSession() ?? { data: { session: null } }
     const headers: HeadersInit = { 'Content-Type': 'application/json' }
     if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`
-    const res = await fetch('/api/admin/map-data', { credentials: 'include', headers })
+    const res = await fetch('/api/admin/map-data?include_fikas=1', { credentials: 'include', headers })
     if (res.status === 401) {
       const d = await res.json().catch(() => ({}))
       if (d?.code === 'NO_SESSION') window.location.href = '/login?next=/admin/map'
@@ -319,7 +342,7 @@ export default function AdminMapClient() {
     if (res.status === 403) throw new Error("Your account doesn't have admin access.")
     if (!res.ok) throw new Error('Failed to load map data')
     const json = await res.json()
-    return { points: json.points ?? [], polygons: json.polygons ?? [], markets: json.markets ?? [] }
+    return { points: json.points ?? [], polygons: json.polygons ?? [], markets: json.markets ?? [], fikas: json.fikas ?? [] }
   }, [])
 
   useEffect(() => {
@@ -401,11 +424,18 @@ export default function AdminMapClient() {
     ? data.points.filter((p) => p.market === filterMarket)
     : data.points
 
+  const pointsToRender = showUsers ? pointsFiltered : []
+  const fikasFiltered = filterMarket ? data.fikas.filter((f) => f.market === filterMarket) : data.fikas
+  const fikasToRender = fikasFiltered.filter((f) => {
+    if (f.category === 'scheduled') return showScheduledFikas
+    return showConfirmedFikas
+  })
+
   return (
     <div className="admin-card">
-      <h1 className="admin-title">Sign-ups map</h1>
+      <h1 className="admin-title">Fika geo map</h1>
       <p className="admin-description" style={{ marginBottom: '1rem' }}>
-        User dots with zone boundaries. Only profiles with location set are shown.
+        Overlay users, scheduled fikas, and confirmed fikas on the geo map. Use the checkboxes to toggle what you see.
       </p>
       <div style={{ marginBottom: '0.75rem' }}>
         <DailyGrowthChart
@@ -481,6 +511,21 @@ export default function AdminMapClient() {
             </button>
           </>
         )}
+      </div>
+
+      <div style={{ marginBottom: '0.75rem', display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
+        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+          <input type="checkbox" checked={showUsers} onChange={(e) => setShowUsers(e.target.checked)} />
+          Show users
+        </label>
+        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+          <input type="checkbox" checked={showScheduledFikas} onChange={(e) => setShowScheduledFikas(e.target.checked)} />
+          Show scheduled fikas
+        </label>
+        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+          <input type="checkbox" checked={showConfirmedFikas} onChange={(e) => setShowConfirmedFikas(e.target.checked)} />
+          Show confirmed fikas
+        </label>
       </div>
       {saveError && (
         <p className="admin-error" style={{ marginBottom: '0.75rem' }} role="alert">
@@ -560,7 +605,7 @@ export default function AdminMapClient() {
               setEditedRing(null)
             }}
           />
-          {pointsFiltered.map((p) => (
+          {pointsToRender.map((p) => (
             <CircleMarker
               key={p.id}
               center={[p.lat, p.lng]}
@@ -581,6 +626,44 @@ export default function AdminMapClient() {
               </Popup>
             </CircleMarker>
           ))}
+
+          {fikasToRender.map((f) => {
+            const isConfirmed = f.category === 'confirmed'
+            const color = isConfirmed ? '#2563eb' : '#f59e0b'
+            const fillColor = isConfirmed ? '#3b82f6' : '#fbbf24'
+            const radius = isConfirmed ? 8 : 7
+            const title = isConfirmed ? 'Confirmed Fika' : 'Scheduled Fika'
+            const usersText = `${f.userA?.firstName ?? '—'} ↔ ${f.userB?.firstName ?? '—'}`
+            const whenText = isConfirmed
+              ? f.confirmedAt
+                ? `Confirmed: ${new Date(f.confirmedAt).toLocaleString()}`
+                : 'Confirmed'
+              : f.schedulingStatus
+                ? `Stage: ${f.schedulingStatus}`
+                : 'Scheduled'
+            return (
+              <CircleMarker
+                key={`${f.matchId}-${f.category}`}
+                center={[f.lat, f.lng]}
+                radius={radius}
+                pane="markers"
+                pathOptions={{ color, fillColor, fillOpacity: 0.85, weight: 1.5 }}
+              >
+                <Popup>
+                  <div style={{ minWidth: 220 }}>
+                    <p style={{ margin: 0, fontWeight: 700 }}>{title}</p>
+                    <p style={{ margin: '4px 0 0 0', fontSize: 12, color: '#666' }}>{usersText}</p>
+                    <p style={{ margin: '4px 0 0 0', fontSize: 12, color: '#666' }}>
+                      {f.venueName ?? '—'}
+                      {f.venueNeighborhood ? ` (${f.venueNeighborhood})` : ''}
+                      {f.venueCity ? ` · ${f.venueCity}` : ''}
+                    </p>
+                    <p style={{ margin: '4px 0 0 0', fontSize: 12, color: '#666' }}>{whenText}</p>
+                  </div>
+                </Popup>
+              </CircleMarker>
+            )
+          })}
         </MapContainer>
       </div>
     </div>
