@@ -7,6 +7,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname()
   const isMarkets = pathname === '/admin' || pathname === '/admin/'
   const isMap = pathname?.startsWith('/admin/map')
+  const isFikas = pathname?.startsWith('/admin/fikas')
   const isSignups = pathname?.startsWith('/admin/signups')
   const isSmsControl = pathname?.startsWith('/admin/sms-control')
 
@@ -28,6 +29,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               className={`admin-link ${isMap ? 'admin-link-active' : ''}`}
             >
               Geo map
+            </Link>
+            <Link
+              href="/admin/fikas"
+              className={`admin-link ${isFikas ? 'admin-link-active' : ''}`}
+            >
+              Fikas
             </Link>
             <Link
               href="/admin/signups"
