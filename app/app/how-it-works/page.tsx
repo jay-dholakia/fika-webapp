@@ -104,7 +104,8 @@ export default function HowItWorksPage() {
             <div className="app-how-it-works-step-content">
               <span className="app-how-it-works-when">Complete the intro questionnaire</span>
               <span className="app-how-it-works-what">
-                Answer a few questions so we can match you with the right people. Takes about 5 minutes.
+                Answer a few questions so we can introduce you to people nearby who are similar enough to connect and
+                different enough to stay interesting. Takes about 5 minutes.
               </span>
               {!questionnaireComplete && !onboardingLoading && (
                 <p style={{ margin: '0.5rem 0 0 0' }}>
@@ -129,12 +130,13 @@ export default function HowItWorksPage() {
                 {marketActive === false ? (
                   <>
                     We&apos;re not actively growing Fika in your area just yet, but we hope to be soon. When that changes,
-                    we&apos;ll reach out. Know someone who&apos;d enjoy this? Invite them below.
+                    we&apos;ll reach out. The steps below are how it works once we&apos;re live in your market. Know someone
+                    who&apos;d enjoy this? Invite them below.
                   </>
                 ) : (
                   <>
-                    We&apos;ll text you when we have a good Fika intro for you. We&apos;re matching in {cityLabel}. Know
-                    someone who&apos;d enjoy this? Invite them below.
+                    There&apos;s no fixed schedule—we text you when we have a fit. We&apos;re matching in {cityLabel}. The
+                    section below walks through what happens next. Know someone who&apos;d enjoy this? Invite them below.
                   </>
                 )}
               </span>
@@ -179,42 +181,43 @@ export default function HowItWorksPage() {
       <section className="app-how-it-works-section" aria-labelledby="intro-flow-heading">
         <h2 id="intro-flow-heading" className="app-how-it-works-section-title">How intros work</h2>
         <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.9375rem', marginBottom: '1rem' }}>
-          We only text you when we have a good Fika intro for you—simple and intentional.
+          From when we have a match to when you&apos;re at the table—here&apos;s the sequence.
         </p>
         <ol className="app-how-it-works-timeline" aria-label="How intros work">
           <li className="app-how-it-works-step">
             <span className="app-how-it-works-step-marker" aria-hidden><span className="app-how-it-works-num">1</span></span>
             <div className="app-how-it-works-step-content">
-              <span className="app-how-it-works-when">We find a good intro</span>
-              <span className="app-how-it-works-what">We look for a good Fika intro for you based on compatibility and location.</span>
+              <span className="app-how-it-works-when">Get set up</span>
+              <span className="app-how-it-works-what">
+                Your intake and profile shape who we introduce you to: people nearby, close enough in vibe to click, far
+                enough apart to keep the conversation interesting.
+              </span>
             </div>
           </li>
           <li className="app-how-it-works-step">
             <span className="app-how-it-works-step-marker" aria-hidden><span className="app-how-it-works-num">2</span></span>
             <div className="app-how-it-works-step-content">
-              <span className="app-how-it-works-when">We text you</span>
-              <span className="app-how-it-works-what">When we find a good Fika intro for you, we reach out by SMS. When it&apos;s time to meet, we text you a proposed time and place to confirm.</span>
+              <span className="app-how-it-works-when">Get your Fika intro</span>
+              <span className="app-how-it-works-what">
+                We reach out by SMS with a snapshot for each of you. If you&apos;re both up for it, we move forward from
+                there.
+              </span>
             </div>
           </li>
           <li className="app-how-it-works-step">
             <span className="app-how-it-works-step-marker" aria-hidden><span className="app-how-it-works-num">3</span></span>
             <div className="app-how-it-works-step-content">
-              <span className="app-how-it-works-when">We make the plan</span>
-              <span className="app-how-it-works-what">Once both people are in, we text you a real time and place to confirm—based on your profiles, usual free times, and location.</span>
+              <span className="app-how-it-works-when">Lock time and place</span>
+              <span className="app-how-it-works-what">
+                We suggest a slot and a spot using your availability and neighborhoods—you lock it in with a quick reply.
+              </span>
             </div>
           </li>
           <li className="app-how-it-works-step">
             <span className="app-how-it-works-step-marker" aria-hidden><span className="app-how-it-works-num">4</span></span>
             <div className="app-how-it-works-step-content">
-              <span className="app-how-it-works-when">Confirm</span>
-              <span className="app-how-it-works-what">Both people confirm by text. If timing does not work, we look for the next good Fika intro for you.</span>
-            </div>
-          </li>
-          <li className="app-how-it-works-step">
-            <span className="app-how-it-works-step-marker" aria-hidden><span className="app-how-it-works-num">5</span></span>
-            <div className="app-how-it-works-step-content">
               <span className="app-how-it-works-when">Meet up</span>
-              <span className="app-how-it-works-what">Meet up for your Fika. No endless texting — just a real, face-to-face conversation over coffee.</span>
+              <span className="app-how-it-works-what">Head to the meetup and have the conversation—that&apos;s the whole point.</span>
             </div>
           </li>
         </ol>

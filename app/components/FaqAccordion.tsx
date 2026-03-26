@@ -4,24 +4,20 @@ import { useState } from 'react'
 
 const faqItems = [
   {
-    q: 'How do you decide who to introduce me to?',
-    a: 'We use your profile, preferences, and when you’re usually free to find a strong Fika intro. When we have one for you, we text you on this number with a proposed time and place to confirm.',
-  },
-  {
-    q: 'When will you text me about an intro?',
-    a: "There's no fixed schedule. We'll reach out when we find a good Fika intro for you, then text you a proposed time and place to confirm your Fika.",
+    q: 'How do you choose who I meet?',
+    a: 'We use your profile, preferences, and when you’re usually free. There’s no fixed weekly cadence—we text you on our number when we have a good intro. You’ll get a proposed time and a public place (often a café) to confirm by text.',
   },
   {
     q: 'Do I have to meet in person?',
-    a: 'Yes—Fika is designed for in‑person conversation (usually a café or similar public spot).',
+    a: 'Yes. Fika is for in‑person conversation in a public spot—usually a café or similar.',
   },
   {
     q: 'What if we don’t click?',
-    a: 'No pressure. It’s one conversation. After that, you can stay in touch or leave it at one great Fika. Your call.',
+    a: 'No pressure—it’s one conversation. Stay in touch or leave it at that; your call.',
   },
   {
     q: 'What do you do with my email and number?',
-    a: 'We do not sell or share your email or phone number with anyone. We only use them to communicate with you about Fika. Your Fika intros also never get access to your information.',
+    a: 'We don’t sell or share them. We only use them to run Fika, and your intros never get your contact info.',
   },
   {
     q: 'What does it cost?',

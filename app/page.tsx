@@ -76,25 +76,25 @@ export default function Home() {
                 <div className="step-content">
                   <h3 className="step-title">Get set up</h3>
                   <p className="step-text">
-                    <strong>Text our number to join.</strong> Answer a few quick questions so we can introduce you to people nearby that are similar enough to connect, and different enough to keep it interesting.
+                    Text our number and answer a few quick questions. We use that to introduce you to people nearby who are similar enough to connect and different enough to stay interesting.
                   </p>
                 </div>
               </li>
               <li className="step">
                 <span className="step-num">2</span>
                 <div className="step-content">
-                  <h3 className="step-title">We reach out when we find a good intro</h3>
+                  <h3 className="step-title">Get your Fika intro</h3>
                   <p className="step-text">
-                    We&apos;ll text you when we have a good Fika intro for you. When it&apos;s time to meet, we&apos;ll text you a proposed time and place to confirm.
+                    When we have an intro for you, we&apos;ll text you a bit about them and text them a bit about you. If you both are down to meet for a Fika, we&apos;ll set it up for you.
                   </p>
                 </div>
               </li>
               <li className="step">
                 <span className="step-num">3</span>
                 <div className="step-content">
-                  <h3 className="step-title">We make the plan</h3>
+                  <h3 className="step-title">Lock time and place</h3>
                   <p className="step-text">
-                    <strong>Get your introduction</strong> — Once both people are in, we text you a concrete time and place (using what you told us in your profile and your usual free times), and you confirm by text.
+                    We propose a time and place based on when you&apos;re both available and where you live. Confirm by text.
                   </p>
                 </div>
               </li>
@@ -103,7 +103,7 @@ export default function Home() {
                 <div className="step-content">
                   <h3 className="step-title">Meet up</h3>
                   <p className="step-text">
-                    Confirm and show up. No endless texting — just a real conversation with someone new.
+                    Show up for your Fika. Simple as that.
                   </p>
                 </div>
               </li>
