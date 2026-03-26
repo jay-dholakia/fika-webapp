@@ -36,6 +36,8 @@ function pickReadyForIntroMessage(): string {
 
 /** Slot id prefix (wed, thu, ...) to SMS day label */
 const SLOT_DAY_TO_LABEL: Record<string, string> = {
+  mon: 'MON',
+  tue: 'TUE',
   wed: 'WED',
   thu: 'THU',
   fri: 'FRI',
