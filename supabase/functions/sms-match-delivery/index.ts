@@ -12,6 +12,13 @@ const SENDBLUE_URL = 'https://api.sendblue.co/api/send-message'
 const SIMPLE_OFFER_MESSAGE =
   "We found someone we think you should meet.\n\nWant us to set it up?\n\nReply YES or PASS."
 
+/** Same public origin as other SMS (e.g. lib/sms-agent letsfika.co) — Edge Functions don’t use Vercel’s APP_CANONICAL_URL. */
+const PUBLIC_APP_ORIGIN = 'https://letsfika.co'
+
+function buildYourFikaPortalUrlMessage(): string {
+  return `More details in your Fika account:\n${PUBLIC_APP_ORIGIN}/app/yourfika`
+}
+
 const MS_24_H = 24 * 60 * 60 * 1000
 const MAX_SENDS_OUTSIDE_24H = 200
 
@@ -305,6 +312,30 @@ serve(async (req: Request) => {
                 }
               : {},
           })
+          // Follow-up: Your Fika URL so they can see details in the app (same cadence as webhook teaser+link).
+          await new Promise((r) => setTimeout(r, 1000))
+          const portalBody = buildYourFikaPortalUrlMessage()
+          const urlRes = await fetch(SENDBLUE_URL, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'sb-api-key-id': apiKeyId,
+              'sb-api-secret-key': apiSecret,
+            },
+            body: JSON.stringify({
+              number: phone,
+              content: portalBody,
+            }),
+          })
+          if (!urlRes.ok) {
+            const errText = await urlRes.text().catch(() => '')
+            console.error('[sms-match-delivery] yourfika portal url send failed', {
+              userId,
+              matchId: match.id,
+              status: urlRes.status,
+              errText,
+            })
+          }
         }
       }
       offeredSet.add(match.id)
