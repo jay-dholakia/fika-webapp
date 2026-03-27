@@ -49,7 +49,7 @@ function AuthCallbackContent() {
       // If they came with an SMS merge token, allow through (merge will create/update profile).
       if (smsToken) {
         const controller = new AbortController()
-        const timeoutId = setTimeout(() => controller.abort(), 12000)
+        const timeoutId = setTimeout(() => controller.abort(), 3000)
         try {
           const res = await fetch('/api/merge-sms-signup', {
             method: 'POST',
