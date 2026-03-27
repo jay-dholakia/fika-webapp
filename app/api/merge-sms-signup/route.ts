@@ -16,6 +16,18 @@ import { getActiveMarketSlugs } from '@/lib/admin-markets'
 import { getMarketBySlug } from '@/lib/markets'
 import { computeAndStoreIntakeEmbedding } from '@/lib/intake-embed-server'
 
+async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
+  })
+  try {
+    return await Promise.race([promise, timeoutPromise])
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId)
+  }
+}
+
 export async function POST(request: Request) {
   const authHeader = request.headers.get('Authorization')
   if (!authHeader?.startsWith('Bearer ')) {
@@ -126,9 +138,17 @@ export async function POST(request: Request) {
     )
     const openaiKey = process.env.EXPO_PUBLIC_OPENAI_API_KEY || process.env.OPENAI_API_KEY
     if (openaiKey) {
-      const embedResult = await computeAndStoreIntakeEmbedding(supabase, user.id, openaiKey)
-      if (!embedResult.ok) {
-        console.error('merge-sms-signup: intake embedding failed', embedResult.error)
+      try {
+        const embedResult = await withTimeout(
+          computeAndStoreIntakeEmbedding(supabase, user.id, openaiKey),
+          8000,
+          'computeAndStoreIntakeEmbedding'
+        )
+        if (!embedResult.ok) {
+          console.error('merge-sms-signup: intake embedding failed', embedResult.error)
+        }
+      } catch (e) {
+        console.error('merge-sms-signup: intake embedding timeout/error', e)
       }
     }
   }
@@ -161,15 +181,22 @@ export async function POST(request: Request) {
         : messageEntryFirstTimeMessagesInactiveMarket(appBase, getMarketBySlug(market)?.label ?? market)
       let lastHandle: string | undefined
       for (let i = 0; i < messages.length; i++) {
-        const sent = await sendMessage(session.phone, messages[i], { fromNumber: 'concierge' })
-        if (sent.message_handle) lastHandle = sent.message_handle
+        const sent = await withTimeout(
+          sendMessage(session.phone, messages[i], { fromNumber: 'concierge' }),
+          6000,
+          'sendMessage(first_time_entry_merge)'
+        ).catch((e) => {
+          console.error('merge-sms-signup: sendMessage timeout/error', e)
+          return null
+        })
+        if (sent?.message_handle) lastHandle = sent.message_handle
         await insertMessageLedger(supabase, {
           user_id: user.id,
           direction: 'outbound',
           peer_phone: session.phone,
           content_snippet: messages[i],
           context: 'first_time_entry_merge',
-          message_handle: sent.message_handle ?? null,
+          message_handle: sent?.message_handle ?? null,
           week_anchor_monday: weekAnchorMonday,
         })
         if (i < messages.length - 1) {

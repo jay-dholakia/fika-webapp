@@ -36,30 +36,49 @@ function AuthCallbackContent() {
       return
     }
 
+    function isLikelyMobileDevice(): boolean {
+      if (typeof navigator === 'undefined') return false
+      const ua = navigator.userAgent.toLowerCase()
+      return /iphone|ipad|ipod|android|mobile/.test(ua)
+    }
+
     async function checkExistingAccountAndRedirect(session: { access_token: string; user: { id: string } }) {
       if (mergeCalledRef.current) return
       mergeCalledRef.current = true
 
       // If they came with an SMS merge token, allow through (merge will create/update profile).
       if (smsToken) {
-        const res = await fetch('/api/merge-sms-signup', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ token: smsToken }),
-        })
-        if (!res.ok) {
-          console.error('merge-sms-signup failed', res.status)
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 12000)
+        try {
+          const res = await fetch('/api/merge-sms-signup', {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${session.access_token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ token: smsToken }),
+            signal: controller.signal,
+          })
+          if (!res.ok) {
+            console.error('merge-sms-signup failed', res.status)
+            router.replace(nextPath)
+            return
+          }
+        } catch (e) {
+          console.error('merge-sms-signup timeout/error', e)
           router.replace(nextPath)
           return
+        } finally {
+          clearTimeout(timeoutId)
         }
         // SMS onboarding: open Messages to the concierge thread (no pre-filled body).
         // Profile links and follow-ups arrive there.
         const concierge = process.env.NEXT_PUBLIC_SENDBLUE_CONCIERGE_NUMBER?.trim()
-        if (concierge) {
+        if (concierge && isLikelyMobileDevice()) {
           window.location.href = `sms:${concierge}`
+          // Fallback if device/browser does not hand off to Messages.
+          setTimeout(() => router.replace(nextPath), 1200)
           return
         }
         router.replace(nextPath)
