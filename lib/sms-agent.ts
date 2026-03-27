@@ -330,6 +330,25 @@ export function messageWeeklyOptInFollowUp(): string {
   return `Quick update: ${pickReadyForIntroMessage()}`
 }
 
+/** Rich “you both care about …” line from overlap + optional hook text. */
+export function formatMatchIntroSharedContext(sharedInterests: string[], conversationThread: string): string {
+  const cleaned = sharedInterests.map((s) => String(s).trim()).filter(Boolean).slice(0, 6)
+  const thread = conversationThread.trim()
+  if (cleaned.length === 0) {
+    return thread || "You're both pointed in a similar direction — we think it could be a rich conversation."
+  }
+  let interestPart: string
+  if (cleaned.length === 1) interestPart = cleaned[0]!
+  else if (cleaned.length === 2) interestPart = `${cleaned[0]} & ${cleaned[1]}`
+  else interestPart = `${cleaned.slice(0, -1).join(', ')}, & ${cleaned[cleaned.length - 1]}`
+  let line = `You both care about ${interestPart}.`
+  if (thread) {
+    const t = thread.length > 220 ? `${thread.slice(0, 217)}…` : thread
+    line += ` ${t}`
+  }
+  return line
+}
+
 export function messageMatchOffer(params: {
   otherFirstName: string
   otherAge: number | null
@@ -338,20 +357,27 @@ export function messageMatchOffer(params: {
   sharedInterests: string[]
   conversationThread: string
 }): string {
-  const { otherFirstName, otherAge, otherCity, otherBio, sharedInterests, conversationThread } = params
-  const cityPart = otherCity?.trim() ? ` · ${otherCity.trim()}` : ''
-  const agePart = otherAge != null ? `, ${otherAge}` : ''
-  const whoLine = `${otherFirstName}${agePart}${cityPart}`
+  const { otherFirstName, otherAge, otherCity, sharedInterests, conversationThread } = params
+  const cityTrim = otherCity?.trim() ?? ''
+  const whoLine =
+    otherAge != null && cityTrim
+      ? `${otherFirstName}, ${otherAge} — ${cityTrim}`
+      : otherAge != null
+        ? `${otherFirstName}, ${otherAge}`
+        : cityTrim
+          ? `${otherFirstName} — ${cityTrim}`
+          : otherFirstName
 
-  let text =
-    `We have a Fika intro lined up for you — it's for this one person, ${otherFirstName}, not a general pool.\n\n`
-  text += `${whoLine}\n${otherBio}\n\n`
-  if (sharedInterests.length > 0) {
-    text += `You both share:\n${sharedInterests.map((s) => `• ${s}`).join('\n')}\n\n`
-  }
-  text += `Something to talk about:\n${conversationThread}\n\n`
-  text += `Reply Yes if you want to meet ${otherFirstName}, or Pass to skip this match (just this person).`
-  return text
+  const contextBlock = formatMatchIntroSharedContext(sharedInterests, conversationThread)
+
+  return (
+    `We found someone we think you should meet.\n\n` +
+    `${whoLine}\n\n` +
+    `${contextBlock}\n\n` +
+    `Could be a good conversation.\n\n` +
+    `Want the intro?\n` +
+    `Reply YES or PASS.`
+  )
 }
 
 /** Phase 1 (new protocol): simple simultaneous offer, no profile details yet. */
@@ -361,7 +387,7 @@ export function messageStrongIntroOffer(): string {
 
 /** User text didn’t match Yes / Pass / Help while the intro is still open. */
 export function messageMatchOfferedUnrecognized(): string {
-  return `Reply Yes to confirm your Fika plan, or Pass to skip this match. Reply Help for more.`
+  return `Reply YES to confirm, or PASS to skip this match. Reply Help for more.`
 }
 
 /** Phase 2 teaser after both users say YES. */
@@ -412,9 +438,15 @@ export function messageVenueProposed(day: string, time: string, venueName: strin
   return `Looks like ${day} ${time.toLowerCase()} works for you both.\n\nHow about:\n\n${time} at ${venueName} in ${neighborhood}\n\nReply Confirm or Change`
 }
 
-/** Both confirmed — Fika is locked in. */
-export function messageYoureAllSet(day: string, time: string, venueName: string, neighborhood: string): string {
-  return `Your Fika is confirmed ☕\n\n${day} — ${time}\n${venueName} (${neighborhood})\n\nWe'll send a reminder on the day of your Fika.\nYou'll also be able to text your intro directly on this number ~3 hours before the scheduled time to communicate about any last minute things (running late, can't find parking, etc.)`
+/** Both confirmed — Fika is locked in. `dateLine` e.g. Mon (3/31) — 1pm; `venueLine` e.g. Vees Cafe (90016). */
+export function messageYoureAllSet(params: {
+  otherFirstName: string
+  dateLine: string
+  venueLine: string
+}): string {
+  const { otherFirstName, dateLine, venueLine } = params
+  const name = otherFirstName.trim() || 'your intro'
+  return `Your Fika is set with ${name} ☕️\n\n${dateLine}\n${venueLine}\n\nWe'll send a reminder the day of.\nYou'll be able to message each other through this thread a few hours before your Fika.`
 }
 
 export function messageDayOfReminder(time: string, venueName: string, neighborhood: string, starterQuestion?: string): string {
@@ -494,7 +526,31 @@ export function messageReProposalToOther(params: { meetingDateLabel: string; tim
   return `No worries — would ${meetingDateLabel} at ${time} at ${venueName} (${neighborhood}) near both of you work?\n\nReply Yes or No.`
 }
 
-/** Propose one time + place; ask them to confirm. Second YES-er gets this first, then first YES-er. */
+export type ProposalConfirmFields = {
+  meetingDateLabel: string
+  time: string
+  venueName: string
+  neighborhood: string
+}
+
+/** Same proposal for both (e.g. reschedule flow). */
+export function messageProposalToConfirmSymmetric(params: ProposalConfirmFields): string {
+  const { meetingDateLabel, time, venueName, neighborhood } = params
+  return `Awesome — we're lining up ${meetingDateLabel} at ${time} at ${venueName} (${neighborhood}) near both of you. Does that work?\n\nReply YES or NO.`
+}
+
+/** User who said YES first — the other person just completed the pair. */
+export function messageProposalToConfirmFirstYes(params: ProposalConfirmFields & { otherFirstName: string }): string {
+  const { otherFirstName, meetingDateLabel, time, venueName, neighborhood } = params
+  return `${otherFirstName} confirmed your Fika. You're all set — here's a time and place that could work:\n\n${meetingDateLabel} at ${time} at ${venueName} (${neighborhood}). Does that work?\n\nReply YES or NO.`
+}
+
+/** User who said YES second — they just triggered the proposal. */
+export function messageProposalToConfirmSecondYes(params: ProposalConfirmFields): string {
+  return messageProposalToConfirmSymmetric(params)
+}
+
+/** @deprecated Prefer messageProposalToConfirmSymmetric or first/second variants. */
 export function messageProposalToConfirm(params: {
   otherFirstName: string
   meetingDateLabel: string
@@ -502,8 +558,8 @@ export function messageProposalToConfirm(params: {
   venueName: string
   neighborhood: string
 }): string {
-  const { otherFirstName, meetingDateLabel, time, venueName, neighborhood } = params
-  return `Awesome — we’re lining up ${meetingDateLabel} at ${time} at ${venueName} (${neighborhood}) near both of you. Does that work?\n\nReply Yes or No.`
+  const { meetingDateLabel, time, venueName, neighborhood } = params
+  return messageProposalToConfirmSymmetric({ meetingDateLabel, time, venueName, neighborhood })
 }
 
 // ---------- Day-of relay (here / on my way / running late / can't make it) ----------

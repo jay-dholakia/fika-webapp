@@ -10,7 +10,7 @@ import { fetchUserIdsWithUpcomingConfirmedFika } from '../_shared/upcoming-confi
 
 const SENDBLUE_URL = 'https://api.sendblue.co/api/send-message'
 const SIMPLE_OFFER_MESSAGE =
-  "We found a strong Fika intro for you — want us to set it up?\n\nReply YES or PASS."
+  "We found someone we think you should meet.\n\nWant us to set it up?\n\nReply YES or PASS."
 
 const MS_24_H = 24 * 60 * 60 * 1000
 const MAX_SENDS_OUTSIDE_24H = 200
@@ -36,6 +36,24 @@ function ageFromBirthdate(birthdate: string | null): number | null {
   return age >= 0 ? age : null
 }
 
+function formatMatchIntroSharedContext(sharedInterests: string[], conversationThread: string): string {
+  const cleaned = sharedInterests.map((s: string) => String(s).trim()).filter(Boolean).slice(0, 6)
+  const thread = conversationThread.trim()
+  if (cleaned.length === 0) {
+    return thread || "You're both pointed in a similar direction — we think it could be a rich conversation."
+  }
+  let interestPart: string
+  if (cleaned.length === 1) interestPart = cleaned[0]!
+  else if (cleaned.length === 2) interestPart = `${cleaned[0]} & ${cleaned[1]}`
+  else interestPart = `${cleaned.slice(0, -1).join(', ')}, & ${cleaned[cleaned.length - 1]}`
+  let line = `You both care about ${interestPart}.`
+  if (thread) {
+    const t = thread.length > 220 ? `${thread.slice(0, 217)}…` : thread
+    line += ` ${t}`
+  }
+  return line
+}
+
 function buildMatchOfferMessage(params: {
   otherFirstName: string
   otherAge: number | null
@@ -44,20 +62,27 @@ function buildMatchOfferMessage(params: {
   sharedInterests: string[]
   conversationThread: string
 }): string {
-  const { otherFirstName, otherAge, otherCity, otherBio, sharedInterests, conversationThread } = params
-  const cityPart = otherCity?.trim() ? ` · ${otherCity.trim()}` : ''
-  const agePart = otherAge != null ? `, ${otherAge}` : ''
-  const whoLine = `${otherFirstName}${agePart}${cityPart}`
+  const { otherFirstName, otherAge, otherCity, sharedInterests, conversationThread } = params
+  const cityTrim = otherCity?.trim() ?? ''
+  const whoLine =
+    otherAge != null && cityTrim
+      ? `${otherFirstName}, ${otherAge} — ${cityTrim}`
+      : otherAge != null
+        ? `${otherFirstName}, ${otherAge}`
+        : cityTrim
+          ? `${otherFirstName} — ${cityTrim}`
+          : otherFirstName
 
-  let text =
-    `We have a Fika intro lined up for you — it's for this one person, ${otherFirstName}, not a general pool.\n\n`
-  text += `${whoLine}\n${otherBio}\n\n`
-  if (sharedInterests.length > 0) {
-    text += `You both share:\n${sharedInterests.map((s: string) => `• ${s}`).join('\n')}\n\n`
-  }
-  text += `Something to talk about:\n${conversationThread}\n\n`
-  text += `Reply YES if you want to meet ${otherFirstName}, or PASS to skip this match (just this person).`
-  return text
+  const contextBlock = formatMatchIntroSharedContext(sharedInterests, conversationThread)
+
+  return (
+    `We found someone we think you should meet.\n\n` +
+    `${whoLine}\n\n` +
+    `${contextBlock}\n\n` +
+    `Could be a good conversation.\n\n` +
+    `Want the intro?\n` +
+    `Reply YES or PASS.`
+  )
 }
 
 async function hasInboundWithin24h(supabase: any, phone: string): Promise<boolean> {
