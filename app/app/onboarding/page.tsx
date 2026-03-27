@@ -498,7 +498,7 @@ function AppOnboardingContent() {
     }
     const origin = typeof window !== 'undefined' ? window.location.origin : ''
     // After Google + merge, auth callback opens the concierge SMS thread (no draft text).
-    const redirectTo = `${origin}/auth/callback?next=/app/how-it-works&sms_token=${encodeURIComponent(smsToken)}`
+    const redirectTo = `${origin}/auth/exchange?next=/app/how-it-works&sms_token=${encodeURIComponent(smsToken)}`
     await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo } })
   }
 

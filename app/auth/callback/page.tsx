@@ -14,7 +14,7 @@ function AuthCallbackContent() {
     const next = searchParams.get('next') ?? '/app/how-it-works'
     const nextPath = next.startsWith('/') ? next : '/app/how-it-works'
     const smsToken = searchParams.get('sms_token')
-    const errorParam = searchParams.get('error_description') || searchParams.get('error')
+    const errorParam = searchParams.get('auth_error') || searchParams.get('error_description') || searchParams.get('error')
 
     const supabase = getSupabase()
     if (!supabase) {
@@ -23,8 +23,16 @@ function AuthCallbackContent() {
     }
     const client = supabase
 
+    function toFriendlyAuthError(message: string): string {
+      const m = message.toLowerCase()
+      if (m.includes('pkce code verifier not found')) {
+        return 'Could not complete sign-in on this browser. Please return to Login and try Google sign-in again from the same browser window.'
+      }
+      return message
+    }
+
     if (errorParam) {
-      setError(decodeURIComponent(errorParam))
+      setError(toFriendlyAuthError(decodeURIComponent(errorParam)))
       return
     }
 
@@ -82,24 +90,7 @@ function AuthCallbackContent() {
       void checkExistingAccountAndRedirect(session)
     })
 
-    function toFriendlyAuthError(message: string): string {
-      const m = message.toLowerCase()
-      if (m.includes('pkce code verifier not found')) {
-        return 'Could not complete sign-in on this browser. Please return to Login and try Google sign-in again from the same browser window.'
-      }
-      return message
-    }
-
     async function finishAuth() {
-      const code = searchParams.get('code')
-      if (code) {
-        const { error: exchangeErr } = await client.auth.exchangeCodeForSession(code)
-        if (exchangeErr) {
-          if (mounted) setError(toFriendlyAuthError(exchangeErr.message || 'Could not complete sign-in.'))
-          return
-        }
-      }
-
       const { data: { session } } = await client.auth.getSession()
       if (session) {
         await checkExistingAccountAndRedirect(session)

@@ -18,7 +18,7 @@ function LoginContent() {
     const origin = typeof window !== 'undefined' ? window.location.origin : ''
     const next = searchParams.get('next')?.trim() || '/app/how-it-works'
     const nextPath = next.startsWith('/') ? next : '/app/how-it-works'
-    const redirectTo = `${origin}/auth/callback?next=${encodeURIComponent(nextPath)}`
+    const redirectTo = `${origin}/auth/exchange?next=${encodeURIComponent(nextPath)}`
     await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo } })
   }
 
