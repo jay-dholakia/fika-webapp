@@ -82,12 +82,20 @@ function AuthCallbackContent() {
       void checkExistingAccountAndRedirect(session)
     })
 
+    function toFriendlyAuthError(message: string): string {
+      const m = message.toLowerCase()
+      if (m.includes('pkce code verifier not found')) {
+        return 'Could not complete sign-in on this browser. Please return to Login and try Google sign-in again from the same browser window.'
+      }
+      return message
+    }
+
     async function finishAuth() {
       const code = searchParams.get('code')
       if (code) {
         const { error: exchangeErr } = await client.auth.exchangeCodeForSession(code)
         if (exchangeErr) {
-          if (mounted) setError(exchangeErr.message || 'Could not complete sign-in.')
+          if (mounted) setError(toFriendlyAuthError(exchangeErr.message || 'Could not complete sign-in.'))
           return
         }
       }
@@ -122,6 +130,9 @@ function AuthCallbackContent() {
         </p>
         <a href="/" className="btn btn-primary" style={{ marginTop: '1rem' }}>
           Back to home
+        </a>
+        <a href="/login" className="btn btn-secondary" style={{ marginTop: '0.75rem', marginLeft: '0.5rem' }}>
+          Try login again
         </a>
       </div>
     )
