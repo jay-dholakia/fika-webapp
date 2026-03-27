@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase-server'
 import { isAdminByUserId } from '@/lib/admin-markets'
@@ -348,6 +349,100 @@ async function getAdminUserId(request: Request): Promise<string | null> {
   return null
 }
 
+/**
+ * Insert or update a match_candidate for admin trigger_sms.
+ * Handles 23505 when a row already exists: unique may be (user_a, user_b, week_anchor_monday)
+ * or only (user_a, user_b). Updating by week alone can match 0 rows → PostgREST PGRST116 on .single().
+ */
+async function insertOrUpdateMatchCandidateForTrigger(
+  supabase: SupabaseClient,
+  params: {
+    userA: string
+    userB: string
+    weekAnchorMonday: string
+    expiresAt: string
+    score: number
+    reasons: Record<string, unknown>
+  }
+): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  const { userA, userB, weekAnchorMonday, expiresAt, score, reasons } = params
+
+  const { data: inserted, error: insertErr } = await supabase
+    .from('match_candidates')
+    .insert({
+      user_a: userA,
+      user_b: userB,
+      score,
+      reasons,
+      status: 'active',
+      week_anchor_monday: weekAnchorMonday,
+      expires_at: expiresAt,
+    })
+    .select('id')
+    .maybeSingle()
+
+  if (!insertErr && inserted?.id) return { ok: true, id: inserted.id as string }
+
+  if (insertErr?.code !== '23505') {
+    return { ok: false, error: insertErr?.message ?? 'insert failed' }
+  }
+
+  const { data: sameWeekRows } = await supabase
+    .from('match_candidates')
+    .select('id')
+    .eq('user_a', userA)
+    .eq('user_b', userB)
+    .eq('week_anchor_monday', weekAnchorMonday)
+    .limit(2)
+
+  const sameWeekId = sameWeekRows?.[0]?.id as string | undefined
+  if (sameWeekId) {
+    const { data: updated, error: updateErr } = await supabase
+      .from('match_candidates')
+      .update({
+        score,
+        reasons,
+        expires_at: expiresAt,
+      })
+      .eq('id', sameWeekId)
+      .select('id')
+      .maybeSingle()
+    if (updateErr) return { ok: false, error: updateErr.message }
+    if (updated?.id) return { ok: true, id: updated.id as string }
+    return { ok: false, error: 'update by id returned no row' }
+  }
+
+  const { data: pairRows } = await supabase
+    .from('match_candidates')
+    .select('id')
+    .eq('user_a', userA)
+    .eq('user_b', userB)
+    .order('week_anchor_monday', { ascending: false })
+    .limit(1)
+
+  const pairId = pairRows?.[0]?.id as string | undefined
+  if (!pairId) {
+    return { ok: false, error: 'duplicate insert but no existing row for this pair' }
+  }
+
+  const { data: updatedPair, error: updatePairErr } = await supabase
+    .from('match_candidates')
+    .update({
+      score,
+      reasons,
+      expires_at: expiresAt,
+      week_anchor_monday: weekAnchorMonday,
+      status: 'active',
+    })
+    .eq('id', pairId)
+    .select('id')
+    .maybeSingle()
+
+  if (updatePairErr) return { ok: false, error: updatePairErr.message }
+  if (updatedPair?.id) return { ok: true, id: updatedPair.id as string }
+  return { ok: false, error: 'update pair row returned no row' }
+}
+
 export async function POST(request: Request) {
   const userId = await getAdminUserId(request)
   if (!userId) return NextResponse.json({ error: 'Not signed in', code: 'NO_SESSION' }, { status: 401 })
@@ -388,41 +483,18 @@ export async function POST(request: Request) {
         const score = typeof pair.score === 'number' && Number.isFinite(pair.score) ? pair.score : 0
         const reasons = (pair.reasons && typeof pair.reasons === 'object') ? pair.reasons : {}
 
-        const { data: inserted, error: insertErr } = await supabase
-          .from('match_candidates')
-          .insert({
-            user_a: userA,
-            user_b: userB,
-            score,
-            reasons,
-            status: 'active',
-            week_anchor_monday: weekAnchorMonday,
-            expires_at: expiresAt,
-          })
-          .select('id')
-          .single()
-
-        if (insertErr) {
-          if (insertErr.code !== '23505') {
-            return NextResponse.json({ error: insertErr.message }, { status: 500 })
-          }
-          const { data: updated, error: updateErr } = await supabase
-            .from('match_candidates')
-            .update({
-              score,
-              reasons,
-              expires_at: expiresAt,
-            })
-            .eq('user_a', userA)
-            .eq('user_b', userB)
-            .eq('week_anchor_monday', weekAnchorMonday)
-            .select('id')
-            .single()
-          if (updateErr) return NextResponse.json({ error: updateErr.message }, { status: 500 })
-          if (updated?.id) createdIds.push(updated.id as string)
-        } else if (inserted?.id) {
-          createdIds.push(inserted.id as string)
+        const result = await insertOrUpdateMatchCandidateForTrigger(supabase, {
+          userA,
+          userB,
+          weekAnchorMonday,
+          expiresAt,
+          score,
+          reasons,
+        })
+        if (!result.ok) {
+          return NextResponse.json({ error: result.error, code: 'MATCH_CANDIDATE_UPSERT' }, { status: 500 })
         }
+        createdIds.push(result.id)
       }
       targetMatchIds = createdIds
     }
