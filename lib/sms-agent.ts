@@ -533,7 +533,7 @@ export type ProposalConfirmFields = {
   neighborhood: string
 }
 
-/** Same proposal for both (e.g. reschedule flow). */
+/** Same proposal for both parties (symmetric time confirmation). */
 export function messageProposalToConfirmSymmetric(params: ProposalConfirmFields): string {
   const { meetingDateLabel, time, venueName, neighborhood } = params
   return `Awesome — we're lining up ${meetingDateLabel} at ${time} at ${venueName} (${neighborhood}) near both of you. Does that work?\n\nReply YES or NO.`
@@ -630,7 +630,7 @@ export function messageSmsOptBackIn(): string {
 
 /** Confirmed Fika upcoming: reminder. Text only; send webappUrl as a separate message after this. */
 export function messageConfirmedUpcoming(day: string, time: string, venueName: string, neighborhood: string, _webappUrl: string): string {
-  return `Your Fika is coming up — ${day} at ${time} at ${venueName} (${neighborhood}). ☕\n\nNeed to change it? Reply Reschedule or Cancel and we'll help. I'll send you the link to manage your account next.`
+  return `Your Fika is coming up — ${day} at ${time} at ${venueName} (${neighborhood}). ☕\n\nIf you can't make it, reply Cancel and we'll let your intro know. I'll send you the link to manage your account next.`
 }
 
 /** HELP while user has a confirmed upcoming Fika (deterministic; no AI). */
@@ -641,7 +641,7 @@ export function messageSmsHelpConfirmedUpcoming(params: {
   neighborhood: string
 }): string {
   const { day, time, venueName, neighborhood } = params
-  return `You're set for ${day} at ${time} at ${venueName} (${neighborhood}). ☕\n\nTo change plans: reply Reschedule or Cancel.\n\nAbout 3 hours before start through ~2 hours after, you can text your intro on this number to coordinate (running late, parking, etc.).\n\nOr open your account at letsfika.co`
+  return `You're set for ${day} at ${time} at ${venueName} (${neighborhood}). ☕\n\nWe can't move this Fika's time by text. If you can't make it, reply Cancel.\n\nAbout 3 hours before start through ~2 hours after, you can text your intro on this number to coordinate (running late, parking, etc.).\n\nOr open your account at letsfika.co`
 }
 
 /** Short ack for thanks / ok / 👍 on upcoming Fika thread. */
@@ -651,33 +651,54 @@ export function messageGratitudeAckUpcoming(): string {
 
 /** Rate limit hit for AI concierge replies. */
 export function messageSmsAiRateLimited(): string {
-  return `I can only send a few tips per day in text. For plan changes reply Reschedule or Cancel, or open letsfika.co — see you soon!`
+  return `I can only send a few tips per day in text. If you can't make this Fika, reply Cancel — or open letsfika.co. See you soon!`
 }
 
 /** When OpenAI is off or fails; no state change. */
 export function messageConciergeAiFallbackShort(appBase: string): string {
   const base = appBase.replace(/\/$/, '')
-  return `Thanks for texting! I can’t go deep here. For plan changes: reply Help, Reschedule, or Cancel — or open ${base}`
+  return `Thanks for texting! I can’t go deep here. Reply Help or Cancel — or open ${base}`
 }
 
-/** RESCHEDULE acknowledged. */
-export function messageRescheduleAck(): string {
-  return `We'll help you reschedule — we'll text you shortly to pick a new time.`
-}
-
-/** RESCHEDULE rejected: only allow one reschedule per person per Fika. */
-export function messageRescheduleLimitReached(): string {
-  return `Totally understand — to keep things simple, we can only reschedule once per Fika.\n\nReply Cancel to cancel this intro, or we’ll reach out with another intro soon.`
-}
-
-/** Notify the other person that their partner is rescheduling. */
-export function messageRescheduleHeadsUpToOther(): string {
-  return `Heads up — your Fika partner needs to reschedule. We’re proposing a new time now.`
+/** User asked to reschedule; SMS no longer supports changing time. */
+export function messageRescheduleNotSupported(appBase: string): string {
+  const base = appBase.replace(/\/$/, '')
+  return `We can't change this Fika's time by text. If you can't make it, reply Cancel — we'll let your intro know.\n\n${base}`
 }
 
 /** CANCEL acknowledged. */
 export function messageCancelAck(): string {
   return `Got your cancel — we'll follow up and let your Fika intro know.`
+}
+
+/** Canceller: cancel + optional retry (no rescheduling). */
+export function messageCancelRetryInitiator(): string {
+  return `Can't make your Fika?\n\nWe'll let them know.\n\nWant us to try this intro again another time?\nReply YES or NO.`
+}
+
+/** Other participant after someone cancelled a confirmed Fika. */
+export function messageCancelRetryOtherUser(): string {
+  return `Your Fika won't work at the original time.\n\nWant to try this intro again another time?\nReply YES or NO.`
+}
+
+export function messageCancelRetryBothYes(): string {
+  return `Got it — we'll reach back out with a new time.`
+}
+
+export function messageCancelRetryClosed(): string {
+  return `No worries — we'll close this one out here.`
+}
+
+export function messageCancelRetryNudge(): string {
+  return `Quick check — want to try this intro again another time?\nReply YES or NO.`
+}
+
+export function messageCancelRetryHelp(): string {
+  return `Reply YES if you'd like us to try this intro again another time, or NO if not. We can't propose new times by text.`
+}
+
+export function messageCancelAlreadyInCancelRetryFlow(): string {
+  return `We already have your cancel — reply YES or NO about trying this intro again another time.`
 }
 
 /** HELP: one static reply (no state-based routing). */
@@ -773,6 +794,20 @@ export function isRescheduleKeyword(content: string): boolean {
 export function isCancelKeyword(content: string): boolean {
   const k = normalizeKeyword(content)
   return ['cancel', 'cancelled', 'canceled'].includes(k)
+}
+
+/** Retry opt-in after cancel (same as match YES). */
+export function isCancelRetryYesKeyword(content: string): boolean {
+  return isMatchYesKeyword(content)
+}
+
+/** Decline retry intro (narrower than match PASS — no "skip" alone). */
+export function isCancelRetryNoKeyword(content: string): boolean {
+  const k = normalizeKeyword(content)
+  return (
+    ['no', 'nope', 'nah', 'pass', 'n', 'not now', 'no thanks', 'not this one', 'not this time'].includes(k) ||
+    k.startsWith('no ')
+  )
 }
 
 /**

@@ -1,6 +1,7 @@
 {
   "framework": "nextjs",
   "crons": [
-    { "path": "/api/cron/day-of-reminder", "schedule": "0 9 * * *" }
+    { "path": "/api/cron/day-of-reminder", "schedule": "0 9 * * *" },
+    { "path": "/api/cron/cancel-retry-timeout", "schedule": "0 * * * *" }
   ]
 }

@@ -5,7 +5,8 @@
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { sendMessage } from './sendblue'
-import { insertMessageLedger } from './message-ledger'
+import { parseCancelRetryFlow, CANCEL_RETRY_SCHEDULING_STATUS } from './cancel-retry-flow'
+import { finalizeCancelRetryIfDeadlinePassed, sendCancelRetryNudgeIfDue } from './cancel-retry-notify'
 import { ageFromBirthdate } from './intro-detail'
 import { getActiveMarketSlugs } from './admin-markets'
 
@@ -83,4 +84,43 @@ export async function runDayOfReminder(): Promise<{ sent: number; error?: string
     }
   }
   return { sent }
+}
+
+/** Hourly (or similar): nudge silent users; close intro at deadline (no reply → NO). */
+export async function runCancelRetryCron(): Promise<{
+  nudged: number
+  finalized: number
+  error?: string
+}> {
+  const supabase = getSupabase()
+  if (!supabase) return { nudged: 0, finalized: 0, error: 'No Supabase' }
+  if (!process.env.SENDBLUE_API_KEY_ID) return { nudged: 0, finalized: 0, error: 'Sendblue not configured' }
+
+  const { data: rows, error: qErr } = await supabase
+    .from('match_candidates')
+    .select('id, user_a, user_b, cancel_retry_flow')
+    .eq('scheduling_status', CANCEL_RETRY_SCHEDULING_STATUS)
+
+  if (qErr) return { nudged: 0, finalized: 0, error: qErr.message }
+
+  let nudged = 0
+  let finalized = 0
+
+  for (const r of rows ?? []) {
+    const flow = parseCancelRetryFlow(r.cancel_retry_flow)
+    if (!flow || flow.phase !== 'cancel_pending_retry') continue
+
+    const match = { id: r.id as string, user_a: r.user_a as string, user_b: r.user_b as string }
+
+    const closed = await finalizeCancelRetryIfDeadlinePassed(supabase, match, flow)
+    if (closed) {
+      finalized++
+      continue
+    }
+
+    const after = await sendCancelRetryNudgeIfDue(supabase, match, flow)
+    if (after) nudged++
+  }
+
+  return { nudged, finalized }
 }

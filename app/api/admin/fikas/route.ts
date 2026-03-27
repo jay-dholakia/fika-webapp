@@ -38,6 +38,7 @@ function deriveStage(row: {
   optB: 'opt_in' | 'pass' | null
 }): FikaStage {
   if (row.optA === 'pass' || row.optB === 'pass') return 'passed'
+  if (row.scheduling_status === 'cancelled_pending_retry') return 'expired'
   if (row.scheduling_status === 'expired') return 'expired'
   if (row.scheduling_status === 'confirmed' || row.confirmed_slot_id || row.confirmed_at) return 'confirmed'
   if (row.scheduling_status && row.scheduling_status !== 'confirmed') return 'scheduling'

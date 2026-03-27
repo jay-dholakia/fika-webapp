@@ -49,10 +49,12 @@ import {
   messageGratitudeAckUpcoming,
   messageSmsAiRateLimited,
   messageConciergeAiFallbackShort,
-  messageRescheduleAck,
-  messageRescheduleLimitReached,
-  messageRescheduleHeadsUpToOther,
+  messageRescheduleNotSupported,
   messageCancelAck,
+  messageCancelRetryInitiator,
+  messageCancelRetryOtherUser,
+  messageCancelRetryHelp,
+  messageCancelAlreadyInCancelRetryFlow,
   messageSmsHelp,
   isMatchYesKeyword,
   isMatchPassKeyword,
@@ -64,6 +66,8 @@ import {
   isStopKeyword,
   isRescheduleKeyword,
   isCancelKeyword,
+  isCancelRetryYesKeyword,
+  isCancelRetryNoKeyword,
   isGratitudeOrShortAckKeyword,
   getFikaTimeMs,
   getTodayYmdInTimezone,
@@ -101,6 +105,14 @@ import {
   CONFIRMED_FIKA_CONCIERGE_AI_CONTEXT,
 } from '@/lib/sms-concierge-ai'
 import { formatYoureAllSetDateLine, formatYoureAllSetVenueLine } from '@/lib/youre-all-set-format'
+import {
+  CANCEL_RETRY_SCHEDULING_STATUS,
+  buildInitialCancelRetryFlow,
+  parseCancelRetryFlow,
+  applyRetryAnswer,
+  outcomeFromDecisions,
+} from '@/lib/cancel-retry-flow'
+import { completeCancelRetryMatch } from '@/lib/cancel-retry-notify'
 
 const CONCIERGE_RAW = (process.env.SENDBLUE_CONCIERGE_NUMBER || '').replace(/\D/g, '')
 /** Normalize to 10 digits for US numbers (strip leading 1) so 13102102404 and 3102102404 match. */
@@ -584,6 +596,85 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, suppressed: 'human_mode' })
   }
 
+  // ----- Cancel / retry intro (no rescheduling): YES/NO after a confirmed Fika was cancelled -----
+  const { data: cancelRetryRows } = await supabase
+    .from('match_candidates')
+    .select('id, user_a, user_b, cancel_retry_flow')
+    .or(`user_a.eq.${userId},user_b.eq.${userId}`)
+    .eq('scheduling_status', CANCEL_RETRY_SCHEDULING_STATUS)
+    .order('updated_at', { ascending: false })
+    .limit(1)
+  const cancelRetryRow = cancelRetryRows?.[0] as
+    | { id: string; user_a: string; user_b: string; cancel_retry_flow: unknown }
+    | undefined
+  if (cancelRetryRow) {
+    const flow = parseCancelRetryFlow(cancelRetryRow.cancel_retry_flow)
+    if (flow && flow.phase === 'cancel_pending_retry') {
+      if (isHelpKeyword(content)) {
+        await sendConciergeAndLog(fromNumber, messageCancelRetryHelp(), 'cancel_retry_help', {
+          userId,
+          matchId: cancelRetryRow.id,
+        })
+        return NextResponse.json({ ok: true })
+      }
+      if (isCancelKeyword(content)) {
+        await sendConciergeAndLog(fromNumber, messageCancelAlreadyInCancelRetryFlow(), 'cancel_retry_already_pending', {
+          userId,
+          matchId: cancelRetryRow.id,
+        })
+        return NextResponse.json({ ok: true })
+      }
+
+      let yesNo: boolean | null = null
+      if (isCancelRetryYesKeyword(content) && !isCancelRetryNoKeyword(content)) {
+        yesNo = true
+      } else if (isCancelRetryNoKeyword(content)) {
+        yesNo = false
+      }
+
+      if (yesNo === null) {
+        await sendConciergeAndLog(
+          fromNumber,
+          'Reply YES or NO — want us to try this intro again another time?',
+          'cancel_retry_prompt_yes_or_no',
+          { userId, matchId: cancelRetryRow.id }
+        )
+        return NextResponse.json({ ok: true })
+      }
+
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const { data: fresh } = await supabase
+          .from('match_candidates')
+          .select('id, user_a, user_b, cancel_retry_flow')
+          .eq('id', cancelRetryRow.id)
+          .maybeSingle()
+        const f = parseCancelRetryFlow(fresh?.cancel_retry_flow)
+        if (!f || f.phase !== 'cancel_pending_retry') {
+          return NextResponse.json({ ok: true })
+        }
+        const next = applyRetryAnswer(f, userId, fresh!.user_a, fresh!.user_b, yesNo)
+        const outcome = outcomeFromDecisions(next)
+        if (outcome) {
+          await completeCancelRetryMatch(
+            supabase,
+            { id: fresh!.id, user_a: fresh!.user_a, user_b: fresh!.user_b },
+            next,
+            outcome
+          )
+          return NextResponse.json({ ok: true })
+        }
+        const { error: updErr } = await supabase
+          .from('match_candidates')
+          .update({ cancel_retry_flow: next as unknown as Record<string, unknown> })
+          .eq('id', fresh!.id)
+        if (!updErr) {
+          return NextResponse.json({ ok: true })
+        }
+      }
+      return NextResponse.json({ ok: true })
+    }
+  }
+
   // ----- READY keyword: legacy match_availability confirmation (optional; proposal-first uses YES/NO) -----
   if (isAvailabilityReadyKeyword(content)) {
     const { data: awaiting } = await supabase
@@ -831,161 +922,51 @@ export async function POST(request: Request) {
     }
 
     if (isRescheduleKeyword(content)) {
-      // One reschedule per person per match.
-      const { data: myMatchState } = await supabase
-        .from('sms_conversation_states')
-        .select('payload, week_anchor_monday')
-        .eq('user_id', userId)
-        .eq('match_id', upcomingMatch.id)
-        .order('updated_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
-      const myPayload = (myMatchState?.payload as Record<string, unknown>) ?? {}
-      const rescheduleRequests = (myPayload.reschedule_requests as Record<string, number> | null) ?? {}
-      const already = (rescheduleRequests[userId] ?? 0) >= 1
-      if (already) {
-        await sendConciergeAndLog(fromNumber, messageRescheduleLimitReached(), 'reschedule_limit_reached', { userId, matchId: upcomingMatch.id })
-        return NextResponse.json({ ok: true })
-      }
-
-      const otherUserId = upcomingMatch.user_a === userId ? upcomingMatch.user_b : upcomingMatch.user_a
-      const { data: otherProfile } = await supabase.from('profiles').select('phone').eq('id', otherUserId).maybeSingle()
-      if (otherProfile?.phone) {
-        await sendConciergeAndLog(otherProfile.phone, messageRescheduleHeadsUpToOther(), 'reschedule_heads_up_other', {
-          userId: otherUserId,
-          matchId: upcomingMatch.id,
-        })
-      }
-
-      // Invalidate the old confirmed plan immediately so reminders don't fire.
-      await supabase.from('match_candidates').update({
-        scheduling_status: 'rescheduling',
-        confirmed_slot_id: null,
-        confirmed_venue_id: null,
-        confirmed_at: null,
-      }).eq('id', upcomingMatch.id)
-
-      // Propose an immediate alternative (same as normal proposal logic).
-      const matchTz = await fetchMatchMarketTimezone(supabase, upcomingMatch.user_a, upcomingMatch.user_b)
-      const [intakeA, intakeB] = await Promise.all([
-        supabase.from('intake_responses_v5').select('responses').eq('user_id', upcomingMatch.user_a).maybeSingle(),
-        supabase.from('intake_responses_v5').select('responses').eq('user_id', upcomingMatch.user_b).maybeSingle(),
-      ])
-      const candidates = generateProposalCandidates({
-        responsesA: intakeA?.data?.responses ?? null,
-        responsesB: intakeB?.data?.responses ?? null,
-        timeZone: matchTz,
-      })
-      const oldSlotId = upcomingMatch.confirmed_slot_id as string | null
-      const pick = candidates.find((c) => (oldSlotId ? c.slotId !== oldSlotId : true)) ?? null
-      if (!pick) {
-        await sendConciergeAndLog(
-          fromNumber,
-          "We couldn't find a time that works for both. We'll reach out when we find another good Fika intro for you.",
-          'reschedule_no_overlap',
-          { userId, matchId: upcomingMatch.id }
-        )
-        return NextResponse.json({ ok: true })
-      }
-
-      const { data: profA } = await supabase.from('profiles').select('city, lat, lng, phone, first_name').eq('id', upcomingMatch.user_a).maybeSingle()
-      const { data: profB } = await supabase.from('profiles').select('city, lat, lng, phone, first_name').eq('id', upcomingMatch.user_b).maybeSingle()
-      const radiusA = getIntakeRadiusKm(intakeA?.data?.responses ?? null)
-      const radiusB = getIntakeRadiusKm(intakeB?.data?.responses ?? null)
-
-      const venue = await pickVenueForMatch(
-        supabase,
-        { city: profA?.city ?? null, lat: profA?.lat ?? null, lng: profA?.lng ?? null, radius_km: radiusA },
-        { city: profB?.city ?? null, lat: profB?.lat ?? null, lng: profB?.lng ?? null, radius_km: radiusB },
-        { meetingAtUtc: new Date(pick.meetingMsUtc) }
-      )
-      if (!venue) {
-        return smsFail('pick_venue_for_match_failed_reschedule', {
-          userId,
-          matchId: upcomingMatch.id,
-          meetingMsUtc: pick.meetingMsUtc,
-        })
-      }
-
-      const proposalWeekAnchorMonday = pick.weekAnchorMonday
-      const slotId = pick.slotId
-      const meetingMsUtc = pick.meetingMsUtc
-      const { day: proposedDay, time: proposedTime } = slotIdToDisplayTime(slotId)
-      const meetingDateLabel = formatMeetingDateLabel(new Date(meetingMsUtc), matchTz)
-
-      // Update match and set symmetric confirmation state for both users.
-      await supabase.from('match_candidates').update({
-        suggested_venue_id: venue.id,
-        default_slot_id: slotId,
-        overlapping_slot_ids: candidates.map((c) => c.slotId),
-        week_anchor_monday: proposalWeekAnchorMonday,
-        scheduling_status: 'rescheduling',
-      }).eq('id', upcomingMatch.id)
-
-      const nextRescheduleRequests = { ...rescheduleRequests, [userId]: (rescheduleRequests[userId] ?? 0) + 1 }
-      const newPayload = {
-        proposed_slot_id: slotId,
-        proposed_meeting_ms_utc: meetingMsUtc,
-        proposed_venue_id: venue.id,
-        proposed_day: proposedDay,
-        proposed_time: proposedTime,
-        venue_name: venue.name,
-        neighborhood: venue.neighborhood ?? venue.city,
-        proposal_attempt: 1,
-        reschedule_requests: nextRescheduleRequests,
-      }
-
-      const nameA = profA?.first_name?.trim() ?? 'Your match'
-      const nameB = profB?.first_name?.trim() ?? 'Your match'
-
-      // Send proposal to the requester
       await sendConciergeAndLog(
         fromNumber,
-        messageProposalToConfirmSymmetric({
-          meetingDateLabel: meetingDateLabel || proposedDay,
-          time: proposedTime,
-          venueName: venue.name,
-          neighborhood: venue.neighborhood ?? venue.city,
-        }),
-        'reschedule_proposal_to_confirm',
-        { userId, matchId: upcomingMatch.id, weekAnchorMonday: proposalWeekAnchorMonday }
+        messageRescheduleNotSupported(webappUrlUp),
+        'reschedule_not_supported',
+        { userId, matchId: upcomingMatch.id }
       )
-
-      // Send proposal to the other person (if we have phone)
-      if (otherProfile?.phone) {
-        await sendConciergeAndLog(
-          otherProfile.phone,
-          messageProposalToConfirmSymmetric({
-            meetingDateLabel: meetingDateLabel || proposedDay,
-            time: proposedTime,
-            venueName: venue.name,
-            neighborhood: venue.neighborhood ?? venue.city,
-          }),
-          'reschedule_proposal_to_confirm_other',
-          { userId: otherUserId, matchId: upcomingMatch.id, weekAnchorMonday: proposalWeekAnchorMonday }
-        )
-      }
-
-      await setPerMatchSmsState({
-        userId,
-        weekAnchorMonday: proposalWeekAnchorMonday,
-        matchId: upcomingMatch.id,
-        state: SMS_STATES.AWAITING_SECOND_CONFIRM,
-        payload: { ...newPayload },
-        lastSendblueMessageHandle: messageHandle,
-      })
-      await setPerMatchSmsState({
-        userId: otherUserId,
-        weekAnchorMonday: proposalWeekAnchorMonday,
-        matchId: upcomingMatch.id,
-        state: SMS_STATES.AWAITING_SECOND_CONFIRM,
-        payload: { ...newPayload },
-      })
-
       return NextResponse.json({ ok: true })
     }
     if (isCancelKeyword(content)) {
-      await sendConciergeAndLog(fromNumber, messageCancelAck(), 'cancel_ack', { userId })
+      const otherId = upcomingMatch.user_a === userId ? upcomingMatch.user_b : upcomingMatch.user_a
+      const flow = buildInitialCancelRetryFlow({
+        initiatorUserId: userId,
+        snapshot: {
+          cancelled_confirmed_slot_id: upcomingMatch.confirmed_slot_id,
+          cancelled_confirmed_venue_id: upcomingMatch.confirmed_venue_id,
+          cancelled_week_anchor_monday: upcomingMatch.week_anchor_monday,
+        },
+      })
+      const { error: cancelUpdErr } = await supabase
+        .from('match_candidates')
+        .update({
+          scheduling_status: CANCEL_RETRY_SCHEDULING_STATUS,
+          cancel_retry_flow: flow as unknown as Record<string, unknown>,
+          confirmed_slot_id: null,
+          confirmed_venue_id: null,
+          confirmed_at: null,
+        })
+        .eq('id', upcomingMatch.id)
+      if (cancelUpdErr) {
+        console.error('[sendblue-webhook] cancel_retry persist failed', cancelUpdErr)
+        await sendConciergeAndLog(fromNumber, messageCancelAck(), 'cancel_ack_fallback', { userId, matchId: upcomingMatch.id })
+        return NextResponse.json({ ok: true })
+      }
+      await sendConciergeAndLog(fromNumber, messageCancelRetryInitiator(), 'cancel_retry_initiator', {
+        userId,
+        matchId: upcomingMatch.id,
+      })
+      const { data: otherProfileCancel } = await supabase.from('profiles').select('phone').eq('id', otherId).maybeSingle()
+      const otherPhoneCancel = otherProfileCancel?.phone?.trim()
+      if (otherPhoneCancel) {
+        await sendConciergeAndLog(otherPhoneCancel, messageCancelRetryOtherUser(), 'cancel_retry_notify_other', {
+          userId: otherId,
+          matchId: upcomingMatch.id,
+        })
+      }
       return NextResponse.json({ ok: true })
     }
 
@@ -1010,9 +991,9 @@ export async function POST(request: Request) {
     const fikaSummary = `Confirmed Fika: ${upDay} at ${upTime} at ${venueNameUp} (${neighborhoodUp}).`
     const relayWindowDescription = inRelayUpcoming
       ? 'Right now the user is inside the coordination window (~3 hours before through ~2 hours after start): messages here may be relayed to their intro for last-minute coordination.'
-      : 'The user is not in that coordination window yet; it opens ~3 hours before start. Plan changes use keywords Reschedule or Cancel.'
+      : 'The user is not in that coordination window yet; it opens ~3 hours before start. They cannot change the scheduled time by text; they can reply Cancel if they cannot make it, or Help.'
     const allowedActionsLine =
-      'Keyword actions only: Help, Reschedule, Cancel. Other texts must not be treated as scheduling changes.'
+      'Keyword actions only: Help and Cancel (for backing out of this Fika). Reschedule is not available by SMS. Other texts must not be treated as scheduling changes.'
 
     if (!apiKey) {
       await sendConciergeAndLog(fromNumber, messageConciergeAiFallbackShort(webappUrlUp), 'confirmed_fika_concierge_ai_no_key', {

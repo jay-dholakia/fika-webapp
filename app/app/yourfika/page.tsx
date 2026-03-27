@@ -315,7 +315,12 @@ function AppHomeContent() {
               confirmedVenueId: m.confirmed_venue_id ?? null,
             }
           })
-          const filtered = list.filter((i) => i.myDecision !== 'no' && i.schedulingStatus !== 'expired')
+          const filtered = list.filter(
+            (i) =>
+              i.myDecision !== 'no' &&
+              i.schedulingStatus !== 'expired' &&
+              i.schedulingStatus !== 'cancelled_pending_retry'
+          )
           setIntros(filtered)
           setIntrosLoading(false)
           const venueIds = Array.from(new Set(filtered.map((i) => i.confirmedVenueId).filter(Boolean) as string[]))
