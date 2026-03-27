@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase-server'
 import { isAdminByUserId } from '@/lib/admin-markets'
 import { getIntakeRadiusKm } from '@/lib/intake-radius'
+import { fetchUserIdsWithUpcomingConfirmedFika } from '@/lib/upcoming-confirmed-fika'
 
 /** Admin simulation: ranks pairs by structured intake overlap + distance (+ hard filters). `trigger_sms` → `match_candidates` + `sms-match-delivery`. */
 export const dynamic = 'force-dynamic'
@@ -471,6 +472,26 @@ export async function POST(request: Request) {
         )
       })
 
+    const blockedUpcoming = await fetchUserIdsWithUpcomingConfirmedFika(supabase)
+    if (selectedPairs.length > 0) {
+      for (const pair of selectedPairs) {
+        const userA = pair.userAId < pair.userBId ? pair.userAId : pair.userBId
+        const userB = pair.userAId < pair.userBId ? pair.userBId : pair.userAId
+        if (blockedUpcoming.has(userA) || blockedUpcoming.has(userB)) {
+          const blockedIds = [userA, userB].filter((id) => blockedUpcoming.has(id))
+          return NextResponse.json(
+            {
+              error:
+                'One or both users have a confirmed Fika that has not happened yet. They cannot receive a new intro until after that Fika.',
+              code: 'BLOCKED_UPCOMING_CONFIRMED',
+              blockedUserIds: blockedIds,
+            },
+            { status: 400 }
+          )
+        }
+      }
+    }
+
     const weekAnchorMonday = getWeekAnchorMonday(new Date())
     let targetMatchIds: string[] | null = null
 
@@ -555,14 +576,18 @@ export async function POST(request: Request) {
   if (profilesErr) return NextResponse.json({ error: profilesErr.message }, { status: 500 })
 
   const userProfiles = (profiles ?? []) as ProfileRow[]
-  const ids = userProfiles.map((p) => p.id)
+  const blockedUpcoming = await fetchUserIdsWithUpcomingConfirmedFika(supabase)
+  const usersSkippedUpcomingConfirmed = userProfiles.filter((p) => blockedUpcoming.has(p.id)).length
+  const filteredProfiles = userProfiles.filter((p) => !blockedUpcoming.has(p.id))
+  const ids = filteredProfiles.map((p) => p.id)
   if (ids.length < 2) {
     return NextResponse.json({
       summary: {
-        totalProfiles: ids.length,
+        totalProfiles: userProfiles.length,
         usersConsidered: 0,
         usersSkippedNoIntake: 0,
         usersSkippedNoEmbedding: 0,
+        usersSkippedUpcomingConfirmed,
         pairsScored: 0,
         filteredOut: 0,
         optedInOnly,
@@ -584,7 +609,7 @@ export async function POST(request: Request) {
 
   let usersSkippedNoIntake = 0
   const candidates: SimCandidate[] = []
-  for (const p of userProfiles) {
+  for (const p of filteredProfiles) {
     const intake = intakeById.get(p.id)
     if (!intake) {
       usersSkippedNoIntake++
@@ -605,6 +630,7 @@ export async function POST(request: Request) {
         usersConsidered: candidates.length,
         usersSkippedNoIntake,
         usersSkippedNoEmbedding: 0,
+        usersSkippedUpcomingConfirmed,
         pairsScored: 0,
         filteredOut: 0,
         optedInOnly,
@@ -699,6 +725,7 @@ export async function POST(request: Request) {
       usersConsidered: candidates.length,
       usersSkippedNoIntake,
       usersSkippedNoEmbedding: 0,
+      usersSkippedUpcomingConfirmed,
       pairsScored: pairs.length,
       filteredOut,
       optedInOnly,

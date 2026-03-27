@@ -359,6 +359,11 @@ export function messageStrongIntroOffer(): string {
   return `We found a strong Fika intro for you — want us to set it up?\n\nReply Yes or Pass.`
 }
 
+/** User text didn’t match Yes / Pass / Help while the intro is still open. */
+export function messageMatchOfferedUnrecognized(): string {
+  return `Reply Yes to confirm your Fika plan, or Pass to skip this match. Reply Help for more.`
+}
+
 /** Phase 2 teaser after both users say YES. */
 export function messageTeaserPreview(params: {
   otherFirstName: string

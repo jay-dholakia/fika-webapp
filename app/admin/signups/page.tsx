@@ -13,10 +13,12 @@ type SignupRow = {
   city: string | null
   market: string | null
   createdAt: string | null
+  hasUpcomingConfirmedFika?: boolean
 }
 type ProfileDetail = {
   id: string
   firstName: string | null
+  hasUpcomingConfirmedFika?: boolean
   birthdate: string | null
   gender: string | null
   genderPreference: string | null
@@ -42,6 +44,7 @@ type SimSummary = {
   usersConsidered: number
   usersSkippedNoIntake?: number
   usersSkippedNoEmbedding?: number
+  usersSkippedUpcomingConfirmed?: number
   pairsScored: number
   filteredOut: number
   optedInOnly: boolean
@@ -409,6 +412,9 @@ export default function AdminSignupsPage() {
                 {simSummary.usersSkippedNoEmbedding != null && simSummary.usersSkippedNoEmbedding > 0
                   ? `${simSummary.usersSkippedNoEmbedding} skipped (legacy) · `
                   : ''}
+                {simSummary.usersSkippedUpcomingConfirmed != null && simSummary.usersSkippedUpcomingConfirmed > 0
+                  ? `${simSummary.usersSkippedUpcomingConfirmed} upcoming confirmed Fika (excluded from sim) · `
+                  : ''}
                 {simSummary.usersConsidered} with intake · Pairs: {simSummary.pairsScored} · Filtered out: {simSummary.filteredOut}
                 {simSummary.relaxedFilters ? ' · relaxed filters' : ' · strict filters'}
                 {simSummary.scoring ? ` · ${simSummary.scoring.replace(/_/g, ' ')}` : ''}
@@ -517,7 +523,17 @@ export default function AdminSignupsPage() {
                       }}
                     >
                       <td>{formatDate(s.createdAt)}</td>
-                      <td>{s.firstName ?? '—'}</td>
+                      <td>
+                        <span>{s.firstName ?? '—'}</span>
+                        {s.hasUpcomingConfirmedFika ? (
+                          <span
+                            className="admin-badge admin-badge-upcoming-fika"
+                            title="Has a confirmed Fika that has not happened yet — not eligible for a new intro"
+                          >
+                            Upcoming Fika
+                          </span>
+                        ) : null}
+                      </td>
                       <td>{s.city ?? s.market ?? '—'}</td>
                     </tr>
                   ))}
@@ -559,7 +575,18 @@ export default function AdminSignupsPage() {
                       <h3 className="admin-modal-section-title">Profile</h3>
                       <dl className="admin-modal-dl">
                         <dt>Name</dt>
-                        <dd>{modalProfile.firstName ?? '—'}</dd>
+                        <dd>
+                          {modalProfile.firstName ?? '—'}
+                          {modalProfile.hasUpcomingConfirmedFika ? (
+                            <span
+                              className="admin-badge admin-badge-upcoming-fika"
+                              style={{ marginLeft: '0.5rem', verticalAlign: 'middle' }}
+                              title="Has a confirmed Fika that has not happened yet — not eligible for a new intro"
+                            >
+                              Upcoming Fika
+                            </span>
+                          ) : null}
+                        </dd>
                         <dt>City</dt>
                         <dd>{modalProfile.city ?? '—'}</dd>
                         <dt>Market</dt>

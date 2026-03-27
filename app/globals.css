@@ -3832,6 +3832,12 @@ a {
   padding: 0.35rem 0.6rem;
   border-radius: 6px;
 }
+.admin-badge-upcoming-fika {
+  margin-left: 0.5rem;
+  color: var(--color-text);
+  background: color-mix(in srgb, var(--color-primary) 14%, var(--color-bg-soft));
+  border: 1px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
+}
 .admin-link {
   font-size: 0.9rem;
   color: var(--color-primary);

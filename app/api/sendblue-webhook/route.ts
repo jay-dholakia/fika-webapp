@@ -70,6 +70,7 @@ import {
   messageAvailabilityLockAllSet,
   messageTeaserPreview,
   messageAwaitingAvailabilityReady,
+  messageMatchOfferedUnrecognized,
 } from '@/lib/sms-agent'
 import { getActiveMarketSlugs } from '@/lib/admin-markets'
 import { getMarketBySlug } from '@/lib/markets'
@@ -613,30 +614,58 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true })
   }
 
-  // ----- Relay just closed and follow-up not sent yet: send closure + feedback prompt -----
-  const { data: recentlyClosedMatches } = await supabase
-    .from('match_candidates')
-    .select('id, user_a, user_b, week_anchor_monday, confirmed_slot_id, post_fika_sent_at')
-    .or(`user_a.eq.${userId},user_b.eq.${userId}`)
-    .eq('scheduling_status', 'confirmed')
-    .is('post_fika_sent_at', null)
-    .not('week_anchor_monday', 'is', null)
-    .not('confirmed_slot_id', 'is', null)
+  // Open intro in progress (sms state + match still active): do not run post–Fika “relay closed”
+  // logic at all — otherwise we’d query stale confirmed rows and compete with the intro flow.
+  const { data: statesWithMatch } = await supabase
+    .from('sms_conversation_states')
+    .select('match_id')
+    .eq('user_id', userId)
+    .not('match_id', 'is', null)
     .order('updated_at', { ascending: false })
-  const recentlyClosedMarketMap = await buildUserMarketMap(supabase, recentlyClosedMatches ?? [])
-  const recentlyClosed = (recentlyClosedMatches ?? []).find(
-    (m: { user_a: string; user_b: string; week_anchor_monday: string; confirmed_slot_id: string }) =>
-      m.week_anchor_monday &&
-      m.confirmed_slot_id &&
-      isRelayClosed(m.week_anchor_monday, m.confirmed_slot_id, getTimezoneForMatchFromMap(m, recentlyClosedMarketMap))
+    .limit(25)
+  const stateMatchIds = Array.from(
+    new Set(
+      (statesWithMatch ?? [])
+        .map((r: { match_id: string | null }) => r.match_id)
+        .filter((id): id is string => typeof id === 'string' && id.length > 0)
+    )
   )
-  if (recentlyClosed) {
-    await sendConciergeAndLog(fromNumber, messageRelayClosedFeedbackPrompt(), 'relay_closed_feedback_prompt', { userId, matchId: recentlyClosed.id })
-    await supabase
+  let userHasActiveMatchSmsFlow = false
+  if (stateMatchIds.length > 0) {
+    const { data: mcForStates } = await supabase
       .from('match_candidates')
-      .update({ post_fika_sent_at: new Date().toISOString() })
-      .eq('id', recentlyClosed.id)
-    return NextResponse.json({ ok: true })
+      .select('status')
+      .in('id', stateMatchIds)
+    userHasActiveMatchSmsFlow = (mcForStates ?? []).some((m: { status: string }) => m.status === 'active')
+  }
+
+  // ----- Relay just closed and follow-up not sent yet: send closure + feedback prompt -----
+  // Omit entirely while user has an active intro — that path handles their reply first.
+  if (!userHasActiveMatchSmsFlow) {
+    const { data: recentlyClosedMatches } = await supabase
+      .from('match_candidates')
+      .select('id, user_a, user_b, week_anchor_monday, confirmed_slot_id, post_fika_sent_at')
+      .or(`user_a.eq.${userId},user_b.eq.${userId}`)
+      .eq('scheduling_status', 'confirmed')
+      .is('post_fika_sent_at', null)
+      .not('week_anchor_monday', 'is', null)
+      .not('confirmed_slot_id', 'is', null)
+      .order('updated_at', { ascending: false })
+    const recentlyClosedMarketMap = await buildUserMarketMap(supabase, recentlyClosedMatches ?? [])
+    const recentlyClosed = (recentlyClosedMatches ?? []).find(
+      (m: { user_a: string; user_b: string; week_anchor_monday: string; confirmed_slot_id: string }) =>
+        m.week_anchor_monday &&
+        m.confirmed_slot_id &&
+        isRelayClosed(m.week_anchor_monday, m.confirmed_slot_id, getTimezoneForMatchFromMap(m, recentlyClosedMarketMap))
+    )
+    if (recentlyClosed) {
+      await sendConciergeAndLog(fromNumber, messageRelayClosedFeedbackPrompt(), 'relay_closed_feedback_prompt', { userId, matchId: recentlyClosed.id })
+      await supabase
+        .from('match_candidates')
+        .update({ post_fika_sent_at: new Date().toISOString() })
+        .eq('id', recentlyClosed.id)
+      return NextResponse.json({ ok: true })
+    }
   }
 
   // ----- Post-Fika feedback: if we already sent follow-up and they're replying, store it -----
@@ -1508,11 +1537,10 @@ export async function POST(request: Request) {
       }
       await supabase.from('sms_conversation_states').delete().eq('id', matchStateRow!.id)
     } else {
-      return smsFail('unrecognized_match_offered_reply', {
+      await sendConciergeAndLog(fromNumber, messageMatchOfferedUnrecognized(), 'match_offered_unrecognized_nudge', {
         userId,
         weekAnchorMonday,
         matchId,
-        contentPreview: content.slice(0, 80),
       })
     }
     return NextResponse.json({ ok: true })

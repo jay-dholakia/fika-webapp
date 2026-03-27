@@ -6,6 +6,7 @@ declare const Deno: { env: { get(key: string): string | undefined } }
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 // @ts-ignore Deno
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { fetchUserIdsWithUpcomingConfirmedFika } from '../_shared/upcoming-confirmed-fika.ts'
 
 const SENDBLUE_URL = 'https://api.sendblue.co/api/send-message'
 const SIMPLE_OFFER_MESSAGE =
@@ -193,11 +194,14 @@ serve(async (req: Request) => {
       .eq('state', 'match_offered')
     const offeredSet = new Set((alreadyOffered ?? []).map((r: { match_id: string }) => r.match_id))
 
+    const blockedFromNewIntro = await fetchUserIdsWithUpcomingConfirmedFika(supabase)
+
     let sent = 0
     let skipped_no_recent_inbound = 0
     let sent_outside_24h = 0
     let skipped_outside_24h_cap = 0
     let skipped_not_in_requested = 0
+    let skipped_upcoming_confirmed_fika = 0
     for (const match of matches ?? []) {
       if (requestedIds.length > 0 && !requestedIds.includes(match.id)) {
         skipped_not_in_requested++
@@ -210,6 +214,10 @@ serve(async (req: Request) => {
       const conversationThread = (hooks[0] as string) ?? 'What you both have in common.'
 
       for (const userId of [match.user_a, match.user_b]) {
+        if (blockedFromNewIntro.has(userId)) {
+          skipped_upcoming_confirmed_fika++
+          continue
+        }
         const otherId = userId === match.user_a ? match.user_b : match.user_a
         const { data: otherProfile } = await supabase
           .from('profiles')
@@ -286,6 +294,7 @@ serve(async (req: Request) => {
         skipped_no_recent_inbound,
         skipped_outside_24h_cap,
         skipped_not_in_requested,
+        skipped_upcoming_confirmed_fika,
       })
     )
   } catch (e) {
