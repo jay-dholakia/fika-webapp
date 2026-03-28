@@ -86,9 +86,6 @@ export default function HowItWorksPage() {
 
       <div className="app-card app-how-it-works-page">
         <h2 className="app-how-it-works-title">How it works</h2>
-        <p style={{ color: 'var(--color-textSecondary)', fontSize: '1rem', marginBottom: '1.5rem' }}>
-          From signup to your Fika—here&apos;s how it works end to end.
-        </p>
 
       <section className="app-how-it-works-section" aria-labelledby="getting-started-heading">
         <h2 id="getting-started-heading" className="app-how-it-works-section-title">Getting started</h2>
@@ -102,10 +99,10 @@ export default function HowItWorksPage() {
               )}
             </span>
             <div className="app-how-it-works-step-content">
-              <span className="app-how-it-works-when">Complete the intro questionnaire</span>
+              <span className="app-how-it-works-when">Fill out your intro (5 min)</span>
               <span className="app-how-it-works-what">
-                Answer a few questions so we can introduce you to people nearby who are similar enough to connect and
-                different enough to stay interesting. Takes about 5 minutes.
+                Answer a few questions so we can find someone nearby you&apos;ll actually want to meet — similar enough to
+                connect, different enough to keep things interesting.
               </span>
               {!questionnaireComplete && !onboardingLoading && (
                 <p style={{ margin: '0.5rem 0 0 0' }}>
@@ -125,18 +122,17 @@ export default function HowItWorksPage() {
               )}
             </span>
             <div className="app-how-it-works-step-content">
-              <span className="app-how-it-works-when">We text you when there&apos;s a good intro</span>
+              <span className="app-how-it-works-when">We text you when there&apos;s a strong match</span>
               <span className="app-how-it-works-what">
                 {marketActive === false ? (
                   <>
                     We&apos;re not actively growing Fika in your area just yet, but we hope to be soon. When that changes,
-                    we&apos;ll reach out. The steps below are how it works once we&apos;re live in your market. Know someone
-                    who&apos;d enjoy this? Invite them below.
+                    we&apos;ll reach out. Know someone who&apos;d enjoy this? Invite them below.
                   </>
                 ) : (
                   <>
-                    There&apos;s no fixed schedule—we text you when we have a fit. We&apos;re matching in {cityLabel}. The
-                    section below walks through what happens next. Know someone who&apos;d enjoy this? Invite them below.
+                    There&apos;s no feed to scroll or profiles to browse. When we find someone worth meeting, we&apos;ll reach
+                    out directly. We&apos;re matching in {cityLabel}. Know someone who&apos;d enjoy this? Invite them below.
                   </>
                 )}
               </span>
@@ -178,46 +174,40 @@ export default function HowItWorksPage() {
         </ol>
       </section>
 
-      <section className="app-how-it-works-section" aria-labelledby="intro-flow-heading">
-        <h2 id="intro-flow-heading" className="app-how-it-works-section-title">How intros work</h2>
+      <section className="app-how-it-works-section" aria-labelledby="how-it-plays-out-heading">
+        <h2 id="how-it-plays-out-heading" className="app-how-it-works-section-title">How it plays out</h2>
         <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.9375rem', marginBottom: '1rem' }}>
-          From when we have a match to when you&apos;re at the table—here&apos;s the sequence.
+          When we find a match, here&apos;s what happens:
         </p>
-        <ol className="app-how-it-works-timeline" aria-label="How intros work">
+        <ol className="app-how-it-works-timeline" aria-label="How a match plays out">
           <li className="app-how-it-works-step">
             <span className="app-how-it-works-step-marker" aria-hidden><span className="app-how-it-works-num">1</span></span>
             <div className="app-how-it-works-step-content">
-              <span className="app-how-it-works-when">Get set up</span>
+              <span className="app-how-it-works-when">You get an intro</span>
               <span className="app-how-it-works-what">
-                Your intake and profile shape who we introduce you to: people nearby, close enough in vibe to click, far
-                enough apart to keep the conversation interesting.
+                We text you a quick snapshot of the person — who they are, where they&apos;re based, and what you have in
+                common. If you&apos;re both up for it, we move forward.
               </span>
             </div>
           </li>
           <li className="app-how-it-works-step">
             <span className="app-how-it-works-step-marker" aria-hidden><span className="app-how-it-works-num">2</span></span>
             <div className="app-how-it-works-step-content">
-              <span className="app-how-it-works-when">Get your Fika intro</span>
+              <span className="app-how-it-works-when">We line it up</span>
               <span className="app-how-it-works-what">
-                We reach out by SMS with a snapshot for each of you. If you&apos;re both up for it, we move forward from
-                there.
+                We suggest a time and a spot nearby based on both of your locations and availability. You lock it in with a
+                quick reply — no back-and-forth.
               </span>
             </div>
           </li>
           <li className="app-how-it-works-step">
             <span className="app-how-it-works-step-marker" aria-hidden><span className="app-how-it-works-num">3</span></span>
             <div className="app-how-it-works-step-content">
-              <span className="app-how-it-works-when">Lock time and place</span>
+              <span className="app-how-it-works-when">You meet</span>
               <span className="app-how-it-works-what">
-                We suggest a slot and a spot using your availability and neighborhoods—you lock it in with a quick reply.
+                You show up, grab a coffee, and have the conversation. No pressure, no expectations — just a real
+                interaction.
               </span>
-            </div>
-          </li>
-          <li className="app-how-it-works-step">
-            <span className="app-how-it-works-step-marker" aria-hidden><span className="app-how-it-works-num">4</span></span>
-            <div className="app-how-it-works-step-content">
-              <span className="app-how-it-works-when">Meet up</span>
-              <span className="app-how-it-works-what">Head to the meetup and have the conversation—that&apos;s the whole point.</span>
             </div>
           </li>
         </ol>
@@ -239,13 +229,18 @@ export default function HowItWorksPage() {
             <h2 id="welcome-id-verify-heading" className="app-how-it-works-section-title" style={{ marginTop: 0 }}>
               Get ID verified
             </h2>
-            <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem', marginBottom: '1rem' }}>
-              Add a blue check next to your name so matches know you&apos;ve confirmed your identity. Takes about a minute.
-            </p>
+            <div style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem', marginBottom: '1rem' }}>
+              <p style={{ margin: '0 0 0.75rem 0' }}>Know who you&apos;re meeting before you show up.</p>
+              <p style={{ margin: '0 0 0.75rem 0' }}>
+                A verified profile makes it easier for others to say yes—and helps you feel confident doing the same.
+              </p>
+              <p style={{ margin: 0 }}>Takes about a minute.</p>
+            </div>
             <PersonaIdVerification
               userId={userId}
               idVerifiedAt={profile?.id_verified_at ?? null}
               onVerified={refetch}
+              hint="Verified profiles get a check next to their name so both sides know the identity is confirmed."
             />
           </section>
         )}

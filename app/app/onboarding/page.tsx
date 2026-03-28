@@ -65,6 +65,8 @@ function isLocationErrorMessage(msg: string | null | undefined): boolean {
 
 type AnswersState = Record<string, string | string[] | number | { city: string; lat: number; lng: number }>
 
+type ResolvedLocation = { city: string; lat: number; lng: number }
+
 /** Prefill answers from existing profile + intake (logged-in flow). */
 function getInitialAnswers(
   profile: ProfileRow | null,
@@ -190,7 +192,6 @@ function AppOnboardingContent() {
   const [error, setError] = useState<string | null>(null)
   const [locationStatus, setLocationStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
   const [zipCode, setZipCode] = useState('')
-  const [zipLoading, setZipLoading] = useState(false)
   const [geoLoading, setGeoLoading] = useState(false)
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null)
@@ -303,8 +304,19 @@ function AppOnboardingContent() {
         if (raw === undefined || raw === '' || (Array.isArray(raw) && raw.length === 0))
           return `Please answer: ${s.question}`
         if (s.id === 'location') {
-          if (typeof raw !== 'object' || !raw || !('city' in raw)) return `Please set your location.`
-          if (locationStatus !== 'done' && !(raw as { city?: string }).city) return `Please set your location.`
+          const loc = raw as { city?: string } | undefined
+          const hasResolved =
+            typeof raw === 'object' &&
+            raw !== null &&
+            'city' in raw &&
+            typeof loc?.city === 'string' &&
+            loc.city.trim() !== ''
+          const zipDigits = zipCode.replace(/\D/g, '')
+          const zipOk = zipDigits.length === 5 || zipDigits.length === 9
+          if (!hasResolved) {
+            if (zipDigits.length > 0 && !zipOk) return 'Enter a valid US zip code (5 or 9 digits).'
+            if (!zipOk) return 'Please set your location. Enter your zip code or use your current location.'
+          }
         }
         if (s.type === 'date' && typeof raw === 'string') {
           if (!parseDate(raw)) return 'Please enter a valid date.'
@@ -344,11 +356,12 @@ function AppOnboardingContent() {
     return null
   }
 
-  async function saveAllProfileFields() {
+  async function saveAllProfileFields(locationOverride?: { city: string; lat: number; lng: number }) {
     if (!sessionUserId) return
     const supabase = getSupabase()
     if (!supabase) return
-    const loc = answers.location as { city: string; lat: number; lng: number } | undefined
+    const loc =
+      locationOverride ?? (answers.location as { city: string; lat: number; lng: number } | undefined)
     const birthdateIso = typeof answers.birthdate === 'string' ? parseDate(answers.birthdate) : null
     const updates: Record<string, unknown> = {
       id: sessionUserId,
@@ -417,6 +430,43 @@ function AppOnboardingContent() {
     }
   }
 
+  /** Use existing `answers.location` or geocode `zipCode` (call after client-side validation). */
+  async function resolveLocationIfNeeded(): Promise<{ ok: true; location: ResolvedLocation } | { ok: false; error: string }> {
+    const raw = answers.location as ResolvedLocation | undefined
+    if (
+      raw &&
+      typeof raw.city === 'string' &&
+      raw.city.trim() &&
+      typeof raw.lat === 'number' &&
+      typeof raw.lng === 'number'
+    ) {
+      return { ok: true, location: { city: raw.city.trim(), lat: raw.lat, lng: raw.lng } }
+    }
+
+    const zip = zipCode.trim().replace(/\D/g, '')
+    if (zip.length !== 5 && zip.length !== 9) {
+      if (zip.length > 0) return { ok: false, error: 'Enter a valid US zip code (5 or 9 digits).' }
+      return { ok: false, error: 'Please set your location. Enter your zip code or use your current location.' }
+    }
+
+    try {
+      const res = await fetch(`/api/geocode?zip=${encodeURIComponent(zip)}`)
+      const data = (await res.json()) as { city?: string; lat?: number; lng?: number; error?: string }
+      if (!res.ok || data.error) {
+        return { ok: false, error: data.error ?? "We couldn't find that zip code. Try again." }
+      }
+      if (data.lat != null && data.lng != null && data.city) {
+        const location: ResolvedLocation = { city: data.city, lat: data.lat, lng: data.lng }
+        setLocationStatus('done')
+        setZipCode('')
+        return { ok: true, location }
+      }
+      return { ok: false, error: "We couldn't find that zip code. Try again." }
+    } catch {
+      return { ok: false, error: "We couldn't look up that zip code. Try again." }
+    }
+  }
+
   async function handleSubmit() {
     setError(null)
     setAvatarPhotoError(null)
@@ -428,6 +478,14 @@ function AppOnboardingContent() {
     }
     setSaving(true)
     try {
+      const locRes = await resolveLocationIfNeeded()
+      if (!locRes.ok) {
+        setError(locRes.error)
+        submitRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        return
+      }
+      setAnswers((a) => ({ ...a, location: locRes.location }))
+
       if (tokenMode && token) {
         if (!avatarFile) {
           setError('Please upload a profile photo.')
@@ -445,6 +503,7 @@ function AppOnboardingContent() {
         const { url: avatarUrl, avatar_path: avatarPath } = (await avatarRes.json()) as { url?: string; avatar_path?: string }
         const payload = buildOnboardingSessionPayload({
           ...answers,
+          location: locRes.location,
           avatar_url: avatarUrl ?? '',
           avatar_path: avatarPath ?? '',
         })
@@ -460,7 +519,7 @@ function AppOnboardingContent() {
         setShowGoogleSignIn(true)
         return
       }
-      await saveAllProfileFields()
+      await saveAllProfileFields(locRes.location)
       await saveAllIntakeResponses()
       if (avatarFile) {
         const supabase = getSupabase()
@@ -500,32 +559,6 @@ function AppOnboardingContent() {
     // After Google + merge, auth callback opens the concierge SMS thread (no draft text).
     const redirectTo = `${origin}/auth/exchange?next=/app/how-it-works&sms_token=${encodeURIComponent(smsToken)}`
     await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo } })
-  }
-
-  async function handleZipSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    const zip = zipCode.trim().replace(/\s+/g, '')
-    if (!zip) return
-    setError(null)
-    setZipLoading(true)
-    try {
-      const res = await fetch(`/api/geocode?zip=${encodeURIComponent(zip)}`)
-      const data = (await res.json()) as { city?: string; lat?: number; lng?: number; error?: string }
-      if (!res.ok || data.error) {
-        setError(data.error ?? "We couldn't find that zip code. Try again.")
-        return
-      }
-      if (data.lat != null && data.lng != null && data.city) {
-        setAnswers((a) => ({ ...a, location: { city: data.city!, lat: data.lat!, lng: data.lng! } }))
-        setLocationStatus('done')
-      } else {
-        setError("We couldn't find that zip code. Try again.")
-      }
-    } catch {
-      setError("We couldn't look up that zip code. Try again.")
-    } finally {
-      setZipLoading(false)
-    }
   }
 
   function handleUseCurrentLocation() {
@@ -817,7 +850,7 @@ function AppOnboardingContent() {
                 <span className="onboarding-location-set-city">{(value as { city: string }).city}</span>
               </div>
             ) : null}
-            <form className="onboarding-location-zip" onSubmit={handleZipSubmit}>
+            <div className="onboarding-location-zip">
               <label htmlFor="onboarding-location-zip-input" className="onboarding-location-zip-label">Enter your zip code</label>
               <div className="onboarding-location-zip-row">
                 <input
@@ -829,13 +862,13 @@ function AppOnboardingContent() {
                   className="auth-input onboarding-location-zip-input"
                   value={zipCode}
                   onChange={(e) => setZipCode(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                  disabled={saving || zipLoading || geoLoading}
+                  disabled={saving || geoLoading}
                 />
                 <button
                   type="button"
                   className="onboarding-location-gps-btn"
                   onClick={handleUseCurrentLocation}
-                  disabled={saving || zipLoading || geoLoading}
+                  disabled={saving || geoLoading}
                   aria-label="Use current location"
                   title="Use current location"
                 >
@@ -850,15 +883,8 @@ function AppOnboardingContent() {
                     </span>
                   )}
                 </button>
-                <button
-                  type="submit"
-                  className={`btn onboarding-location-zip-btn ${zipCode.trim() ? 'onboarding-location-zip-btn--active' : ''}`}
-                  disabled={saving || zipLoading || geoLoading || !zipCode.trim()}
-                >
-                  {zipLoading ? 'Looking up…' : 'Use Zip'}
-                </button>
               </div>
-            </form>
+            </div>
           </div>
         )}
         {step.type === 'multi_select' && step.options && (

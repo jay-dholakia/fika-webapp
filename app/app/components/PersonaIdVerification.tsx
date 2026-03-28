@@ -25,12 +25,17 @@ type PersonaConstructor = new (opts: {
 
 const PERSONA_SCRIPT_SRC = 'https://cdn.withpersona.com/dist/persona-v5.5.0.js'
 
+const DEFAULT_HINT =
+  "Verifying adds a blue check on your name so matches know you've confirmed your identity with Persona."
+
 type PersonaIdVerificationProps = {
   userId: string
   idVerifiedAt: string | null
   onVerified: () => void | Promise<void>
   /** Primary = blue CTA; muted = gray (secondary). */
   buttonVariant?: 'primary' | 'muted'
+  /** Override footer hint under the button; pass `null` to hide. */
+  hint?: string | null
 }
 
 export function PersonaIdVerification({
@@ -38,6 +43,7 @@ export function PersonaIdVerification({
   idVerifiedAt,
   onVerified,
   buttonVariant = 'primary',
+  hint,
 }: PersonaIdVerificationProps) {
   const [scriptReady, setScriptReady] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -206,9 +212,11 @@ export function PersonaIdVerification({
           </p>
         )}
         {error && <p className="onboarding-error" role="alert" style={{ marginTop: '0.5rem' }}>{error}</p>}
-        <p className="profile-persona-hint" style={{ marginTop: '0.5rem', fontSize: '0.9rem', color: 'var(--color-textSecondary)' }}>
-          Verifying adds a blue check on your name so matches know you&apos;ve confirmed your identity with Persona.
-        </p>
+        {hint !== null && (
+          <p className="profile-persona-hint" style={{ marginTop: '0.5rem', fontSize: '0.9rem', color: 'var(--color-textSecondary)' }}>
+            {hint ?? DEFAULT_HINT}
+          </p>
+        )}
       </div>
     </>
   )

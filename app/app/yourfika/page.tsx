@@ -362,10 +362,13 @@ function AppHomeContent() {
           </p>
         ) : isInactiveMarket ? (
           <>
-            <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem', marginBottom: '1rem' }}>
-              We&apos;re not actively growing Fika in your area just yet, but we hope to be soon. When that changes, we&apos;ll reach out. Know someone who&apos;d want in? Invite them below.
-            </p>
-            <div className="app-how-it-works-invite-row" style={{ marginTop: '0.5rem' }}>
+            <div style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem' }}>
+              <p style={{ margin: '0 0 0.75rem 0' }}>We&apos;re getting Fika going in your area.</p>
+              <p style={{ margin: 0 }}>
+                It unlocks once enough people nearby join—inviting a few friends helps get it there faster.
+              </p>
+            </div>
+            <div className="app-how-it-works-invite-row" style={{ marginTop: '1rem' }}>
               <button
                 type="button"
                 className="app-waitlist-share-btn"
@@ -399,28 +402,38 @@ function AppHomeContent() {
           </>
         ) : (
           <>
-            <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem', marginBottom: '1rem' }}>
-              You&apos;re in. We&apos;ll text you when we have a good Fika intro for you. Scheduling happens over SMS—we&apos;ll propose a time and place you can confirm by text.
-            </p>
-            <p style={{ fontSize: '0.95rem' }}>
-              Keep your profile current so we can reach out when we find a good Fika intro for you.
-            </p>
+            <div style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem' }}>
+              <p style={{ margin: '0 0 0.5rem 0' }}>You&apos;re in.</p>
+              <p style={{ margin: '0 0 0.75rem 0' }}>
+                We&apos;ll reach out when there&apos;s a strong Fika intro for you.
+              </p>
+              <p style={{ margin: 0 }}>
+                We&apos;re actively looking—nothing you need to do in the meantime.
+              </p>
+            </div>
             {error && <p className="onboarding-error" style={{ marginTop: '0.75rem' }}>{error}</p>}
           </>
         )}
 
         <div style={{ marginTop: '1.75rem', paddingTop: '1.25rem', borderTop: '1px solid var(--color-border, rgba(0,0,0,0.08))' }}>
           <h3 className="app-subsection-title" style={{ fontSize: '1.1rem', margin: '0 0 0.75rem', fontWeight: 600 }}>
-            Your intro
+            {isInactiveMarket ? 'Your Fika Intro' : 'Your Fika intro'}
           </h3>
           {introsLoading ? (
             <p className="app-empty" style={{ padding: '0.5rem 0' }}>Loading…</p>
           ) : intros.length === 0 ? (
-            <p className="app-empty" style={{ padding: '0.5rem 0', margin: 0 }}>
-              When we find a good Fika intro for you, it&apos;ll show up here.
-            </p>
+            isInactiveMarket ? (
+              <p className="app-empty" style={{ padding: '0.5rem 0', margin: 0, color: 'var(--color-textSecondary)', fontSize: '0.95rem' }}>
+                Your intro will show up here once your area is live.
+              </p>
+            ) : (
+              <div className="app-empty" style={{ padding: '0.5rem 0', margin: 0, color: 'var(--color-textSecondary)', fontSize: '0.95rem' }}>
+                <p style={{ margin: '0 0 0.5rem 0' }}>No intro yet.</p>
+                <p style={{ margin: 0 }}>When we find the right person, their details will show up here.</p>
+              </div>
+            )
           ) : (
-            <div className="app-intro-list" aria-label="Your intro">
+            <div className="app-intro-list" aria-label={isInactiveMarket ? 'Your Fika Intro' : 'Your Fika intro'}>
               {intros.map((intro) => (
                 <div key={intro.id} className="app-intro-card">
                   <button
