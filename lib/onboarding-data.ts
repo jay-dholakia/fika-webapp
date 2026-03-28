@@ -108,22 +108,22 @@ export const PROFILE_STEPS: ProfileStep[] = [
 ]
 
 // INTAKE (Final): Block 1 Life context → Block 2 Interests → Block 3 Topics → Block 4 Perspective → Block 5 Matching.
-// Block 1: optional background (roots) → life chapter → everyday anchor → work.
+// Block 1: background (roots) → life chapter → everyday anchor → work.
 // Block 2: interests → curiosity.
 export const INTAKE_STEPS: ProfileStep[] = [
-  // Block 1 — Background (optional): where you're from — not current location
+  // Block 1 — Background: where you're from — not current location
   {
     id: 'q_home_country',
     question: 'Home country',
-    body: "Optional. Where you're from — not necessarily where you live now.",
+    body: "Where you're from",
     type: 'select',
     required: false,
     options: COUNTRY_NAMES_FOR_SELECT,
   },
   {
     id: 'q_home_state',
-    question: 'Home state (U.S.)',
-    body: 'Optional. Only if your home country is the United States.',
+    question: 'Home state',
+    body: 'State where you grew up.',
     type: 'select',
     required: false,
     options: US_STATE_NAMES,
@@ -131,7 +131,7 @@ export const INTAKE_STEPS: ProfileStep[] = [
   {
     id: 'q_hometown',
     question: 'Hometown',
-    body: 'Optional. City or region you grew up in.',
+    body: 'City or region you grew up in.',
     type: 'text',
     required: false,
     placeholder: 'e.g. Columbus, Ohio',
@@ -139,7 +139,6 @@ export const INTAKE_STEPS: ProfileStep[] = [
   {
     id: 'q_ethnicity',
     question: 'Ethnicity',
-    body: 'Optional. Helps us understand our community.',
     type: 'select',
     required: false,
     options: ETHNICITY_OPTIONS,
@@ -147,7 +146,6 @@ export const INTAKE_STEPS: ProfileStep[] = [
   {
     id: 'q_relationship_status',
     question: "What's your relationship status?",
-    body: 'Optional.',
     type: 'select',
     required: false,
     options: RELATIONSHIP_STATUS_OPTIONS,

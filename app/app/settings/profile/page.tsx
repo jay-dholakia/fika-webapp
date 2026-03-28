@@ -295,7 +295,7 @@ export default function SettingsProfilePage() {
           disabled={saving}
           aria-label={step.question}
         >
-          <option value="">Skip (optional)</option>
+          <option value="">Skip</option>
           {step.options.map((opt) => (
             <option key={opt} value={opt}>
               {opt}
