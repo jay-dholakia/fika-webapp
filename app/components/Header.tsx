@@ -2,17 +2,25 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import { getSupabase } from '@/lib/supabase'
 import type { User } from '@supabase/supabase-js'
 
-const navLinks: { href: string; label: string; cta?: boolean; when?: 'always' | 'guest' }[] = [
+const navLinks: {
+  href: string
+  label: string
+  cta?: boolean
+  when?: 'always' | 'guest'
+  pathMatch?: string
+}[] = [
   { href: '#how', label: 'How it works', when: 'always' },
+  { href: '/thoughts', label: 'Thoughts', when: 'always', pathMatch: '/thoughts' },
   { href: '/login', label: 'Login', when: 'guest' },
 ]
 
 export default function Header() {
   const router = useRouter()
+  const pathname = usePathname()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [user, setUser] = useState<User | null>(null)
 
@@ -45,11 +53,13 @@ export default function Header() {
         <nav className="nav" aria-label="Main">
           {navLinks
             .filter((l) => l.when === 'always' || (l.when === 'guest' && !user))
-            .map(({ href, label, cta }) => (
+            .map(({ href, label, cta, pathMatch }) => (
             <Link
               key={href}
               href={href}
-              className={cta ? 'nav-cta' : ''}
+              className={[cta ? 'nav-cta' : '', pathMatch && pathname === pathMatch ? 'nav-link-active' : '']
+                .filter(Boolean)
+                .join(' ')}
               onClick={closeMenu}
             >
               {label}
@@ -89,11 +99,13 @@ export default function Header() {
         <nav className="nav-mobile-inner" aria-label="Mobile">
           {navLinks
             .filter((l) => l.when === 'always' || (l.when === 'guest' && !user))
-            .map(({ href, label, cta }) => (
+            .map(({ href, label, cta, pathMatch }) => (
             <Link
               key={href}
               href={href}
-              className={cta ? 'nav-mobile-cta' : ''}
+              className={[cta ? 'nav-mobile-cta' : '', pathMatch && pathname === pathMatch ? 'nav-link-active' : '']
+                .filter(Boolean)
+                .join(' ')}
               onClick={closeMenu}
             >
               {label}
