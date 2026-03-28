@@ -1,6 +1,7 @@
+import Link from 'next/link'
 import Header from '../components/Header'
 import Footer from '../components/Footer'
-import { fetchThoughtsFromNotion } from '@/lib/notion-thoughts'
+import { fetchPublishedThoughts } from '@/lib/notion-thoughts'
 
 export const metadata = {
   title: 'Thoughts — Fika',
@@ -15,8 +16,12 @@ function formatDisplayDate(iso: string): string {
   return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
+function thoughtHref(slug: string): string {
+  return `/thoughts/${encodeURIComponent(slug)}`
+}
+
 export default async function ThoughtsPage() {
-  const { items, error, configMissing } = await fetchThoughtsFromNotion()
+  const { items, error, configMissing } = await fetchPublishedThoughts()
 
   return (
     <>
@@ -43,23 +48,18 @@ export default async function ThoughtsPage() {
             <ul className="thoughts-list" aria-label="Thoughts">
               {items.map((item) => (
                 <li key={item.id}>
-                  <a
-                    href={item.href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="thoughts-card"
-                  >
+                  <Link href={thoughtHref(item.slug)} className="thoughts-card">
                     <div className="thoughts-card-body">
                       <h2 className="thoughts-card-title">{item.title}</h2>
-                      {item.publishedAt ? (
-                        <time className="thoughts-card-date" dateTime={item.publishedAt}>
-                          {formatDisplayDate(item.publishedAt)}
+                      {item.date ? (
+                        <time className="thoughts-card-date" dateTime={item.date}>
+                          {formatDisplayDate(item.date)}
                         </time>
                       ) : null}
-                      {item.summary ? <p className="thoughts-card-summary">{item.summary}</p> : null}
+                      {item.excerpt ? <p className="thoughts-card-summary">{item.excerpt}</p> : null}
                     </div>
-                    <span className="thoughts-card-cta">Open in Notion →</span>
-                  </a>
+                    <span className="thoughts-card-cta">Read</span>
+                  </Link>
                 </li>
               ))}
             </ul>
