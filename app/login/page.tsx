@@ -31,7 +31,7 @@ function LoginContent() {
           </Link>
           <nav className="nav" aria-label="Main">
             <Link href="/">Home</Link>
-            <Link href="#cta" className="nav-cta">Get started</Link>
+            <Link href="/#cta" className="nav-cta">Get started</Link>
           </nav>
         </div>
       </header>

@@ -188,7 +188,7 @@ export default function LocationGate() {
         <p className="location-gate-result-body">
           Join the waitlist for updates when we can offer Fika intros in your area.
         </p>
-        <a href="#cta" className="btn btn-primary">
+        <a href="/#cta" className="btn btn-primary">
           Join the waitlist
         </a>
       </div>

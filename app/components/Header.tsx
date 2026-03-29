@@ -13,7 +13,7 @@ const navLinks: {
   when?: 'always' | 'guest'
   pathMatch?: string
 }[] = [
-  { href: '#how', label: 'How it works', when: 'always' },
+  { href: '/#how', label: 'How it works', when: 'always' },
   { href: '/thoughts', label: 'Thoughts', when: 'always', pathMatch: '/thoughts' },
   { href: '/login', label: 'Login', when: 'guest' },
 ]
@@ -74,7 +74,7 @@ export default function Header() {
             </>
           ) : (
             <>
-              <Link href="#cta" className="nav-cta" onClick={closeMenu}>Sign up</Link>
+              <Link href="/#cta" className="nav-cta" onClick={closeMenu}>Sign up</Link>
             </>
           )}
         </nav>
@@ -120,7 +120,7 @@ export default function Header() {
             </>
           ) : (
             <>
-              <Link href="#cta" className="nav-mobile-cta" onClick={closeMenu}>Sign up</Link>
+              <Link href="/#cta" className="nav-mobile-cta" onClick={closeMenu}>Sign up</Link>
             </>
           )}
         </nav>

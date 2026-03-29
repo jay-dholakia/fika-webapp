@@ -1,4 +1,5 @@
 import Header from './components/Header'
+import LandingHashScroll from './components/LandingHashScroll'
 import Footer from './components/Footer'
 import ScrollReveal from './components/ScrollReveal'
 import FaqAccordion from './components/FaqAccordion'
@@ -10,6 +11,7 @@ export default function Home() {
   return (
     <>
       <Header />
+      <LandingHashScroll />
 
       <ScrollReveal>
         <main>
@@ -57,7 +59,7 @@ export default function Home() {
             </p>
             <p className="section-body section-body-follow">
               <a
-                href={CONCIERGE_NUMBER ? `sms:${CONCIERGE_NUMBER}?body=${encodeURIComponent("Hi! Help set me up for Fika.")}` : '#cta'}
+                href={CONCIERGE_NUMBER ? `sms:${CONCIERGE_NUMBER}?body=${encodeURIComponent("Hi! Help set me up for Fika.")}` : '/#cta'}
                 className="btn btn-primary"
               >
                 Sign up
