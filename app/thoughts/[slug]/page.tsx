@@ -29,10 +29,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const raw = decodeURIComponent(params.slug)
   const result = await fetchThoughtBySlug(raw)
   if (!result.ok) {
-    return { title: 'Thought — Fika' }
+    return { title: 'On Conversation — Fika' }
   }
   return {
-    title: `${result.post.title} — Thoughts — Fika`,
+    title: `${result.post.title} — On Conversation — Fika`,
     description: result.post.excerpt ?? result.post.title,
   }
 }
@@ -50,11 +50,11 @@ export default async function ThoughtPostPage({ params }: Props) {
           <div className="thoughts-page-inner">
             <p className="thoughts-page-error" role="alert">
               {result.error === 'config'
-                ? 'Thoughts are not configured.'
+                ? 'On Conversation is not configured.'
                 : result.message ?? 'Something went wrong loading this post.'}
             </p>
             <Link href="/thoughts" className="thoughts-back-link">
-              ← Back to Thoughts
+              ← Back to On Conversation
             </Link>
           </div>
         </main>
@@ -72,7 +72,7 @@ export default async function ThoughtPostPage({ params }: Props) {
         <article className="thoughts-page-inner thoughts-article">
           <nav className="thoughts-breadcrumb" aria-label="Breadcrumb">
             <Link href="/thoughts" className="thoughts-back-link">
-              Thoughts
+              On Conversation
             </Link>
             <span className="thoughts-breadcrumb-sep" aria-hidden>
               /
