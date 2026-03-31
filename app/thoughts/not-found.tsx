@@ -13,7 +13,7 @@ export default function ThoughtsNotFound() {
             This thought doesn&apos;t exist or isn&apos;t published anymore.
           </p>
           <Link href="/thoughts" className="thoughts-back-link thoughts-back-link-block">
-            ← Back to On Conversation
+            ← Back to Blog
           </Link>
         </div>
       </main>

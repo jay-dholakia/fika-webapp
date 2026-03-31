@@ -14,7 +14,7 @@ const navLinks: {
   pathMatch?: string
 }[] = [
   { href: '/#how', label: 'How it works', when: 'always' },
-  { href: '/thoughts', label: 'On Conversation', when: 'always', pathMatch: '/thoughts' },
+  { href: '/thoughts', label: 'Blog', when: 'always', pathMatch: '/thoughts' },
   { href: '/login', label: 'Login', when: 'guest' },
 ]
 

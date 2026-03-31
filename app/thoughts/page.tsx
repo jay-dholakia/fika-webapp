@@ -4,7 +4,7 @@ import Footer from '../components/Footer'
 import { fetchPublishedThoughts } from '@/lib/notion-thoughts'
 
 export const metadata = {
-  title: 'On Conversation — Fika',
+  title: 'Blog — Fika',
   description: 'Writing about conversation, chance encounters, and the moments that bring people closer.',
 }
 
@@ -28,7 +28,7 @@ export default async function ThoughtsPage() {
       <Header />
       <main className="thoughts-page">
         <div className="thoughts-page-inner">
-          <h1 className="thoughts-page-title">On Conversation</h1>
+          <h1 className="thoughts-page-title">Blog</h1>
           <p className="thoughts-page-lead">
             Writing about conversation, chance encounters, and the moments that bring people closer.
           </p>
@@ -45,7 +45,7 @@ export default async function ThoughtsPage() {
           ) : items.length === 0 ? (
             <p className="thoughts-page-muted">Nothing published here yet. Check back soon.</p>
           ) : (
-            <ul className="thoughts-list" aria-label="On Conversation">
+            <ul className="thoughts-list" aria-label="Blog">
               {items.map((item) => (
                 <li key={item.id}>
                   <Link href={thoughtHref(item.slug)} className="thoughts-card">
