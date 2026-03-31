@@ -10,7 +10,7 @@ import { fetchUserIdsWithUpcomingConfirmedFika } from '../_shared/upcoming-confi
 
 const SENDBLUE_URL = 'https://api.sendblue.co/api/send-message'
 const SIMPLE_OFFER_MESSAGE =
-  "We found someone we think you should meet.\n\nWant us to set it up?\n\nReply YES or PASS."
+  "We found someone we think you should meet.\n\nReact heart or thumbs up if you want us to set it up.\nOr reply YES or PASS."
 
 function buildIntroBioMessage(params: {
   otherFirstName: string
@@ -20,7 +20,7 @@ function buildIntroBioMessage(params: {
   const bio = params.otherBio.trim()
   if (!bio || bio === 'Looking forward to a good conversation.') return null
   const city = params.otherCity?.trim()
-  const lead = city ? `A little more about ${params.otherFirstName} in ${city}:` : `A little more about ${params.otherFirstName}:`
+  const lead = city ? `A little more about ${params.otherFirstName}, based in ${city}:` : `A little more about ${params.otherFirstName}:`
   return `${lead}\n\n${bio}`
 }
 
@@ -30,7 +30,7 @@ function buildIntroWhyMessage(params: {
   conversationThread: string
 }): string {
   const context = formatMatchIntroSharedContext(params.sharedInterests, params.conversationThread)
-  return `Why we thought ${params.otherFirstName} could be a fit:\n\n${context}\n\nIf you're interested, reply YES or PASS.`
+  return `${context}\n\nIf you're into it, react heart or thumbs up.\nOr reply YES or PASS.`
 }
 
 async function sendSendblueMessage(params: {
@@ -123,9 +123,8 @@ function buildMatchOfferMessage(params: {
     `We found someone we think you should meet.\n\n` +
     `${whoLine}\n\n` +
     `${contextBlock}\n\n` +
-    `Could be a good conversation.\n\n` +
-    `Want the intro?\n` +
-    `Reply YES or PASS.`
+    `If you're into it, react heart or thumbs up.\n` +
+    `Or reply YES or PASS.`
   )
 }
 
@@ -350,7 +349,7 @@ serve(async (req: Request) => {
               apiKeyId,
               apiSecret,
               phone,
-              content: `${otherFirstName}'s photo:`,
+              content: `${otherFirstName}'s photo.`,
               mediaUrl: otherAvatarUrl,
             })
             if (!photoRes.ok) {
@@ -388,7 +387,7 @@ serve(async (req: Request) => {
               })
             }
           }
-          // Follow-up: another short nudge on why this intro could work.
+          // Follow-up: short context for why this intro could work.
           await new Promise((r) => setTimeout(r, 1000))
           const whyBody = buildIntroWhyMessage({
             otherFirstName,

@@ -24,9 +24,9 @@ export const SMS_STATES = {
 } as const
 
 const READY_FOR_INTRO_VARIANTS = [
-  "You're all set — we'll reach out when we find a good Fika intro for you.",
-  "You're all set. As soon as we have a good Fika intro for you, we'll text you.",
-  "Thanks for checking in. We'll message you when we find a good Fika intro for you.",
+  "You're in. We'll text you when there's a strong Fika intro for you.",
+  "You're in. As soon as we find a strong intro, we'll text you.",
+  "You're in. We'll reach out when we find someone worth meeting.",
 ]
 
 function pickReadyForIntroMessage(): string {
@@ -210,8 +210,8 @@ export function messageEntryFirstTimeMessages(
   appBase: string = 'https://letsfika.vercel.app'
 ): string[] {
   const base = appBase.trim().replace(/\/$/, '') || 'https://letsfika.vercel.app'
-  const msg1 = `You're in. We'll text you when we have a good Fika intro for you.`
-  const msg2 = `To edit your profile or learn more, use the link I'll send next.`
+  const msg1 = `You're in.`
+  const msg2 = `We'll text you when there's a strong Fika intro for you.`
   const msg3Link = `${base}/app`
   return [msg1, msg2, msg3Link]
 }
@@ -222,15 +222,15 @@ export function messageEntryFirstTimeMessagesInactiveMarket(
   _cityLabel?: string | null
 ): string[] {
   const base = appBase.trim().replace(/\/$/, '') || 'https://letsfika.vercel.app'
-  const msg1 = `You're in. We're not actively growing Fika in your area just yet, but we hope to be soon. When that changes, we'll reach out.`
-  const msg2 = `To edit your profile or learn more, use the link I'll send next.`
+  const msg1 = `You're in.`
+  const msg2 = `We're getting Fika going in your area. When it opens up, we'll reach out.`
   const msg3Link = `${base}/app`
   return [msg1, msg2, msg3Link]
 }
 
 /** Reply when user in an inactive market texts in. */
 export function messageInactiveMarketReply(_placeLabel: string): string {
-  return `We're not actively growing Fika in your area just yet, but we hope to be soon. When that changes, we'll reach out.`
+  return `We're getting Fika going in your area. When it opens up, we'll reach out.`
 }
 
 export function messageEntry(): string {
@@ -264,7 +264,7 @@ export function messageFikaUserInitiatedCommitment(): string {
 
 /** Body before availability link (link sent as separate message). */
 export function messageFikaUserInitiatedLinkBody(_availabilityUrl: string): string {
-  return `We'll reach out when we find a good Fika intro for you.\n\nWhen it's time to meet, we'll text you a proposed time and place to confirm by reply.`
+  return `We'll text you when there's a strong Fika intro for you.\n\nWhen it's time to meet, we'll send a time and place by text.`
 }
 
 /** Generic concierge reply when user texts in. */
@@ -274,12 +274,12 @@ export function messageTextFikaToGetLink(): string {
 
 /** Reminder to set availability when a match is in progress. Text only; send availability link as separate message. */
 export function messageAvailabilityReminder(_availabilityUrl: string): string {
-  return `Quick reminder: when we have a time and place for your Fika, we'll text it to you—reply Yes or No to confirm.\n\nYou can also use the link I'll send next for your account.`
+  return `Quick reminder: when we have a time and place for your Fika, we'll text it to you.\n\nReply YES or NO to confirm.`
 }
 
 /** Availability received — scheduling next. */
 export function messageAvailabilityLockAllSet(): string {
-  return `You're all set.\n\nWe'll text you with a proposed time and place when your intro is ready to schedule.`
+  return `You're all set.\n\nWe'll text you when it's time to line it up.`
 }
 
 /** Availability not submitted in time for this intro round. */
@@ -289,7 +289,7 @@ export function messageAvailabilityLockNotSubmitted(): string {
 
 /** When user is known but hasn't completed onboarding/intake. Text only; send onboardingUrl as a separate message after this. */
 export function messageOnboardingRequired(_onboardingUrl: string): string {
-  return `Hey, we've got you in the system — just need a few more details before we can match you.\n\nFinish up using the link I'll send next.\n\nAfter that, we'll reach out when we find a good Fika intro for you.`
+  return `You're almost set.\n\nWe just need a few more details before we can match you.`
 }
 
 export function messageWeeklyOptIn(): string {
@@ -313,7 +313,7 @@ export function messageWeeklyPoolAwaitingOptInNudge(): string {
 
 /** Legacy name: weekly blast disabled. */
 export function messageWeeklyPoolYoureInAvailability(): string {
-  return `You're in.\n\nWe'll text you a proposed time and place when we're scheduling your intro.\n\nUse the link I'll send next for your profile.`
+  return `You're in.\n\nWhen it's time to schedule your intro, we'll text you a time and place.`
 }
 
 /** Legacy: between rounds / window closed — neutral copy. */
@@ -374,20 +374,18 @@ export function messageMatchOffer(params: {
     `We found someone we think you should meet.\n\n` +
     `${whoLine}\n\n` +
     `${contextBlock}\n\n` +
-    `Could be a good conversation.\n\n` +
-    `Want the intro?\n` +
-    `Reply YES or PASS.`
+    `If you're into it, reply YES or PASS.`
   )
 }
 
 /** Phase 1 (new protocol): simple simultaneous offer, no profile details yet. */
 export function messageStrongIntroOffer(): string {
-  return `We found a strong Fika intro for you — want us to set it up?\n\nReply Yes or Pass.`
+  return `We found someone we think you should meet.\n\nReply YES or PASS.`
 }
 
 /** User text didn’t match Yes / Pass / Help while the intro is still open. */
 export function messageMatchOfferedUnrecognized(): string {
-  return `Reply YES to confirm, or PASS to skip this match. Reply Help for more.`
+  return `React heart or thumbs up if you want us to set it up.\nOr reply YES or PASS.`
 }
 
 /** Phase 2 teaser after both users say YES. */
@@ -396,7 +394,7 @@ export function messageTeaserPreview(params: {
   otherBio: string
 }): string {
   const { otherFirstName, otherBio } = params
-  return `Nice — quick preview:\n\nYou'd be meeting ${otherFirstName}.\n${otherBio}`
+  return `Quick preview:\n\nYou'd be meeting ${otherFirstName}.\n${otherBio}`
 }
 
 /** Nudge when state is still AWAITING_AVAILABILITY (legacy state name; scheduling is proposal-first). */
@@ -446,11 +444,11 @@ export function messageYoureAllSet(params: {
 }): string {
   const { otherFirstName, dateLine, venueLine } = params
   const name = otherFirstName.trim() || 'your intro'
-  return `Your Fika is set with ${name} ☕️\n\n${dateLine}\n${venueLine}\n\nWe'll send a reminder the day of.\nYou'll be able to message each other through this thread a few hours before your Fika.`
+  return `Your Fika is set with ${name} ☕️\n\n${dateLine}\n${venueLine}\n\nWe'll remind you the day of.`
 }
 
 export function messageDayOfReminder(time: string, venueName: string, neighborhood: string, starterQuestion?: string): string {
-  let text = `Your Fika is today at ${time} at ${venueName} (${neighborhood}). We'll text you closer to the time with more details — and you can update your intro if you're running late.\n\nHope you both have a great conversation!`
+  let text = `Your Fika is today at ${time}. ☕\n\n${venueName} (${neighborhood})\n\nIf you're running late, text here and we'll pass it along.`
   if (starterQuestion) {
     text += `\n\nA question you might enjoy:\n${starterQuestion}`
   }
@@ -463,7 +461,7 @@ export function messageOptInConfirmation(): string {
 
 /** When user replies YES (legacy): may send app link. Text only; send availabilityUrl as a separate message after this. */
 export function messageOptInSetAvailability(_availabilityUrl: string): string {
-  return `We found a good Fika intro for you.\n\nWe'll text you a proposed time and place next—reply Yes or No to confirm.\n\nYou can also open your Fika with the link I'll send next.`
+  return `Love it.\n\nIf they're in too, I'll line it up and text you both a time and place.`
 }
 
 export function messageSkipped(): string {
@@ -471,17 +469,17 @@ export function messageSkipped(): string {
 }
 
 export function messagePassConfirmation(): string {
-  return `Got it — we'll keep looking for another good Fika intro for you.`
+  return `Got it.\n\nWe'll keep looking for someone who feels like a better fit.`
 }
 
 /** First person said YES — waiting for the other to confirm. */
 export function messageYesWaitingForOther(): string {
-  return `Awesome — I’ve sent this to them. As soon as they say yes, we’ll lock it in for you both.`
+  return `Love it.\n\nIf they're in too, I'll line it up and text you both a time and place.`
 }
 
 /** Notify the person who said YES when the other passed or intro didn't get confirmed. */
 export function messageMatchPassed(): string {
-  return `This intro didn’t get confirmed.\n\nWe’ll reach out again when we find another good Fika intro for you.`
+  return `This one didn't come together.\n\nWe'll reach out when we find another good intro.`
 }
 
 /** Legacy name: window closed — neutral copy. */
@@ -491,39 +489,39 @@ export function messageOptInWindowClosed(_nextMondayPhrase: string = 'next Monda
 
 /** Notify the user who said YES when the other didn't respond before the intro expired. */
 export function messageMatchExpiredOtherNoResponse(): string {
-  return `This intro didn’t get confirmed.\n\nWe’ll reach out again when we find another good Fika intro for you.`
+  return `This one didn't come together.\n\nWe'll reach out when we find another good intro.`
 }
 
 /** Notify the user who didn't respond before the intro expired. */
 export function messageMatchExpiredYouNoResponse(_nextMondayPhrase: string = 'next Monday'): string {
-  return `This intro didn’t get confirmed.\n\nWe’ll reach out again when we find another good Fika intro for you.`
+  return `This one didn't come together.\n\nWe'll reach out when we find another good intro.`
 }
 
 /** When someone declines the proposed time/venue (after both said YES to intro). */
 export function messageProposalDeclined(): string {
-  return `No problem — we'll reach out when we find another good Fika intro for you.`
+  return `No problem.\n\nWe'll reach out when we find another good intro.`
 }
 
 /** When we've offered 2 times and still no match (max retries reached). */
 export function messageProposalMaxRetries(): string {
-  return `We couldn't find a time that works for both — we'll reach out when we find another good Fika intro for you.`
+  return `We couldn't find a time that works for both.\n\nWe'll reach out when we find another good intro.`
 }
 
 /** Notify the other person when their match declines the proposed time. */
 export function messageProposalDeclinedToOther(): string {
-  return `They couldn't do this time — we'll reach out when we have another intro for you.`
+  return `They couldn't do this time.\n\nWe'll reach out when we have another intro for you.`
 }
 
 /** Re-propose a new time to the person who declined (attempt 2). */
 export function messageReProposalToDecliner(params: { meetingDateLabel: string; time: string; venueName: string; neighborhood: string }): string {
   const { meetingDateLabel, time, venueName, neighborhood } = params
-  return `Perfect — how about ${meetingDateLabel} at ${time} at ${venueName} (${neighborhood}) near both of you?\n\nReply Yes or No.`
+  return `No worries.\n\nHow about ${meetingDateLabel} at ${time} at ${venueName} (${neighborhood})?\n\nReply YES or NO.`
 }
 
 /** Notify the other person we're trying a different time. */
 export function messageReProposalToOther(params: { meetingDateLabel: string; time: string; venueName: string; neighborhood: string }): string {
   const { meetingDateLabel, time, venueName, neighborhood } = params
-  return `No worries — would ${meetingDateLabel} at ${time} at ${venueName} (${neighborhood}) near both of you work?\n\nReply Yes or No.`
+  return `No worries.\n\nHow about ${meetingDateLabel} at ${time} at ${venueName} (${neighborhood})?\n\nReply YES or NO.`
 }
 
 export type ProposalConfirmFields = {
@@ -536,13 +534,13 @@ export type ProposalConfirmFields = {
 /** Same proposal for both parties (symmetric time confirmation). */
 export function messageProposalToConfirmSymmetric(params: ProposalConfirmFields): string {
   const { meetingDateLabel, time, venueName, neighborhood } = params
-  return `Awesome — we're lining up ${meetingDateLabel} at ${time} at ${venueName} (${neighborhood}) near both of you. Does that work?\n\nReply YES or NO.`
+  return `Looks like this could work:\n\n${meetingDateLabel} at ${time}\n${venueName} (${neighborhood})\n\nDoes that work for you?\nReply YES or NO.`
 }
 
 /** User who said YES first — the other person just completed the pair. */
 export function messageProposalToConfirmFirstYes(params: ProposalConfirmFields & { otherFirstName: string }): string {
   const { otherFirstName, meetingDateLabel, time, venueName, neighborhood } = params
-  return `${otherFirstName} confirmed your Fika. You're all set — here's a time and place that could work:\n\n${meetingDateLabel} at ${time} at ${venueName} (${neighborhood}). Does that work?\n\nReply YES or NO.`
+  return `${otherFirstName} is in.\n\n${meetingDateLabel} at ${time}\n${venueName} (${neighborhood})\n\nDoes that work for you?\nReply YES or NO.`
 }
 
 /** User who said YES second — they just triggered the proposal. */
@@ -580,7 +578,7 @@ export function messageRelayToOther(senderFirstName: string, text: string): stri
 /** Day-of reminder (e.g. 3 hours before). otherFirstName = match's first name. */
 export function messageThreeHourReminder(time: string, venueName: string, neighborhood: string, otherFirstName?: string | null): string {
   const name = otherFirstName?.trim() || 'your intro'
-  return `Your Fika is in about 3 hours: ${time} at ${venueName} (${neighborhood}).\nText here to coordinate directly with ${name}. Relay closes 2 hours after your scheduled time.`
+  return `Your Fika is in about 3 hours.\n\n${time}\n${venueName} (${neighborhood})\n\nYou can text here to coordinate with ${name} if needed.`
 }
 
 /** Relay-closed + follow-up prompt copy. */
@@ -620,7 +618,7 @@ export function messageRelayCouldNotDeliver(): string {
 
 /** STOP: we'll stop texting; account still on web. Text only; send webappUrl as a separate message after this. */
 export function messageSmsOptOut(_webappUrl: string, _conciergeNumber: string): string {
-  return `We'll stop texting you.\n\nYour Fika account is still available online — I'll send the link next.\n\nYou can manage or delete your account there, and text this number anytime if you'd like to rejoin.`
+  return `We'll stop texting you.\n\nIf you ever want back in, just text us here.`
 }
 
 /** When they text back after opting out. */
@@ -630,7 +628,7 @@ export function messageSmsOptBackIn(): string {
 
 /** Confirmed Fika upcoming: reminder. Text only; send webappUrl as a separate message after this. */
 export function messageConfirmedUpcoming(day: string, time: string, venueName: string, neighborhood: string, _webappUrl: string): string {
-  return `Your Fika is coming up — ${day} at ${time} at ${venueName} (${neighborhood}). ☕\n\nIf you can't make it, reply Cancel and we'll let your intro know. I'll send you the link to manage your account next.`
+  return `Your Fika is coming up.\n\n${day} at ${time}\n${venueName} (${neighborhood})\n\nIf you can't make it, reply Cancel.`
 }
 
 /** HELP while user has a confirmed upcoming Fika (deterministic; no AI). */
@@ -641,7 +639,7 @@ export function messageSmsHelpConfirmedUpcoming(params: {
   neighborhood: string
 }): string {
   const { day, time, venueName, neighborhood } = params
-  return `You're set for ${day} at ${time} at ${venueName} (${neighborhood}). ☕\n\nWe can't move this Fika's time by text. If you can't make it, reply Cancel.\n\nAbout 3 hours before start through ~2 hours after, you can text your intro on this number to coordinate (running late, parking, etc.).\n\nOr open your account at letsfika.co`
+  return `You're set for ${day} at ${time} at ${venueName} (${neighborhood}).\n\nIf you can't make it, reply Cancel.\n\nCloser to the time, you can text your intro in this thread.`
 }
 
 /** Short ack for thanks / ok / 👍 on upcoming Fika thread. */
@@ -651,19 +649,19 @@ export function messageGratitudeAckUpcoming(): string {
 
 /** Rate limit hit for AI concierge replies. */
 export function messageSmsAiRateLimited(): string {
-  return `I can only send a few tips per day in text. If you can't make this Fika, reply Cancel — or open letsfika.co. See you soon!`
+  return `I can only send a few tips per day here.\n\nIf you can't make this Fika, reply Cancel.`
 }
 
 /** When OpenAI is off or fails; no state change. */
 export function messageConciergeAiFallbackShort(appBase: string): string {
-  const base = appBase.replace(/\/$/, '')
-  return `Thanks for texting! I can’t go deep here. Reply Help or Cancel — or open ${base}`
+  const _base = appBase.replace(/\/$/, '')
+  return `Thanks for texting.\n\nReply Help or Cancel and I'll keep it simple here.`
 }
 
 /** User asked to reschedule; SMS no longer supports changing time. */
 export function messageRescheduleNotSupported(appBase: string): string {
-  const base = appBase.replace(/\/$/, '')
-  return `We can't change this Fika's time by text. If you can't make it, reply Cancel — we'll let your intro know.\n\n${base}`
+  const _base = appBase.replace(/\/$/, '')
+  return `We can't change this Fika's time by text.\n\nIf you can't make it, reply Cancel.`
 }
 
 /** CANCEL acknowledged. */
@@ -673,12 +671,12 @@ export function messageCancelAck(): string {
 
 /** Canceller: cancel + optional retry (no rescheduling). */
 export function messageCancelRetryInitiator(): string {
-  return `Can't make your Fika?\n\nWe'll let them know.\n\nWant us to try this intro again another time?\nReply YES or NO.`
+  return `Got it.\n\nWe'll let them know.\n\nWant us to try this intro again another time?\nReply YES or NO.`
 }
 
 /** Other participant after someone cancelled a confirmed Fika. */
 export function messageCancelRetryOtherUser(): string {
-  return `Your Fika won't work at the original time.\n\nWant to try this intro again another time?\nReply YES or NO.`
+  return `Your Fika won't happen at the original time.\n\nWant us to try this intro again another time?\nReply YES or NO.`
 }
 
 export function messageCancelRetryBothYes(): string {
@@ -703,7 +701,7 @@ export function messageCancelAlreadyInCancelRetryFlow(): string {
 
 /** HELP: one static reply (no state-based routing). */
 export function messageSmsHelp(): string {
-  return `Visit letsfika.co for how it works. Reply Yes or Pass to match prompts when you get them.`
+  return `Reply YES or PASS when we send an intro.\n\nIf you need anything else, text us here.`
 }
 
 // ---------- Broadened keywords (normalize then match) ----------
