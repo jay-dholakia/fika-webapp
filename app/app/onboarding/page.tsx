@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, Suspense, useRef } from 'react'
+import { useState, useEffect, Suspense, useRef, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { getSupabase } from '@/lib/supabase'
@@ -48,6 +48,46 @@ const SECTION_3_STEPS = INTAKE_STEPS.filter((s) => SECTION_3_IDS.includes(s.id))
 const CONFIRM_STEP = INTAKE_STEPS.find((s) => s.id === 'confirm_intent')!
 const LOCATION_STEP = PROFILE_STEPS.find((s) => s.id === 'location')!
 const PROFILE_STEPS_BEFORE_LOCATION = PROFILE_STEPS.filter((s) => s.id !== 'location')
+const AVATAR_STEP = {
+  id: 'avatar_upload',
+  question: 'Profile photo',
+  body:
+    'Upload a clear photo of your face. This helps others feel comfortable meeting you. We check that the image shows one clear face before accepting it.',
+  type: 'avatar_upload',
+  required: true,
+} as const
+const ONBOARDING_STEPS = [
+  ...PROFILE_STEPS_BEFORE_LOCATION,
+  ...ABOUT_YOU_EXTRA_STEPS,
+  LOCATION_STEP,
+  ...BACKGROUND_STEPS,
+  ...LIFE_CONTEXT_STEPS,
+  ...SECTION_3_STEPS,
+  AVATAR_STEP,
+  CONFIRM_STEP,
+] as const
+
+type OnboardingRenderableStep = ProfileStep | typeof AVATAR_STEP
+
+function getStepSectionLabel(stepId: string): string {
+  if (
+    PROFILE_STEPS_BEFORE_LOCATION.some((step) => step.id === stepId) ||
+    ABOUT_YOU_EXTRA_STEPS.some((step) => step.id === stepId) ||
+    stepId === LOCATION_STEP.id
+  ) {
+    return 'About you'
+  }
+  if (BACKGROUND_STEPS.some((step) => step.id === stepId) || LIFE_CONTEXT_STEPS.some((step) => step.id === stepId)) {
+    return 'Life & context'
+  }
+  if (SECTION_3_STEPS.some((step) => step.id === stepId)) {
+    return 'Conversation & matching'
+  }
+  if (stepId === AVATAR_STEP.id || stepId === CONFIRM_STEP.id) {
+    return 'Confirm & finish'
+  }
+  return 'Onboarding'
+}
 
 /** Outline the avatar zone when the message is about the photo / upload (not e.g. zip lookup). */
 function isAvatarZoneErrorMessage(msg: string | null | undefined): boolean {
@@ -198,8 +238,20 @@ function AppOnboardingContent() {
   const [avatarFaceChecking, setAvatarFaceChecking] = useState(false)
   const [avatarPhotoError, setAvatarPhotoError] = useState<string | null>(null)
   const [languageQuery, setLanguageQuery] = useState('')
-  const submitRef = useRef<HTMLButtonElement>(null)
+  const [currentStepId, setCurrentStepId] = useState<string | null>(null)
+  const submitRef = useRef<HTMLDivElement>(null)
   const lastMultiSelectRef = useRef<{ stepId: string; opt: string; t: number }>({ stepId: '', opt: '', t: 0 })
+
+  const visibleSteps = useMemo(
+    () =>
+      ONBOARDING_STEPS.filter((step) => step.id !== 'q_home_state' || answers.q_home_country === HOME_COUNTRY_UNITED_STATES),
+    [answers.q_home_country]
+  )
+
+  const currentStepIndex = Math.max(0, visibleSteps.findIndex((step) => step.id === currentStepId))
+  const currentStep = visibleSteps[currentStepIndex] ?? visibleSteps[0]
+  const totalSteps = visibleSteps.length
+  const progressPercent = totalSteps > 0 ? ((currentStepIndex + 1) / totalSteps) * 100 : 0
 
   useEffect(() => {
     authLog('onboarding:mount')
@@ -297,6 +349,62 @@ function AppOnboardingContent() {
       })
   }, [sessionUserId])
 
+  useEffect(() => {
+    if (visibleSteps.length === 0) return
+    if (!currentStepId || !visibleSteps.some((step) => step.id === currentStepId)) {
+      setCurrentStepId(visibleSteps[0].id)
+    }
+  }, [currentStepId, visibleSteps])
+
+  function getStepError(step: OnboardingRenderableStep): string | null {
+    if (step.id === 'avatar_upload') {
+      if (!avatarFile && !(typeof answers.avatar_url === 'string' && answers.avatar_url)) {
+        return 'Please upload a profile photo.'
+      }
+      return null
+    }
+
+    const raw = answers[step.id]
+    const isEmpty = raw === undefined || raw === '' || (Array.isArray(raw) && raw.length === 0)
+    if (step.required !== false && isEmpty) {
+      return `Please answer: ${step.question}`
+    }
+    if (step.required === false && isEmpty) {
+      return null
+    }
+    if (step.id === 'location') {
+      const loc = raw as { city?: string } | undefined
+      const hasResolved =
+        typeof raw === 'object' &&
+        raw !== null &&
+        'city' in raw &&
+        typeof loc?.city === 'string' &&
+        loc.city.trim() !== ''
+      const zipDigits = zipCode.replace(/\D/g, '')
+      const zipOk = zipDigits.length === 5 || zipDigits.length === 9
+      if (!hasResolved) {
+        if (zipDigits.length > 0 && !zipOk) return 'Enter a valid US zip code (5 or 9 digits).'
+        if (!zipOk) return 'Please set your location. Enter your zip code or use your current location.'
+      }
+    }
+    if (step.type === 'date' && typeof raw === 'string') {
+      if (!parseDate(raw)) return 'Please enter a valid date.'
+      if (step.minAge && !is18Plus(raw)) return 'You must be 18 or older to use Fika.'
+    }
+    if (step.type === 'multi_select' && step.maxSelections) {
+      const arr = Array.isArray(raw) ? raw : []
+      if (arr.length > step.maxSelections) return `Please choose at most ${step.maxSelections} for: ${step.question}`
+    }
+    if (step.type === 'multi_select' && step.minSelections) {
+      const arr = Array.isArray(raw) ? raw : []
+      if (arr.length < step.minSelections) return `Please choose at least ${step.minSelections} for: ${step.question}`
+    }
+    if (step.id === 'confirm_intent' && raw !== "I'm in") {
+      return "Please confirm you're in by selecting \"I'm in\"."
+    }
+    return null
+  }
+
   function validateAll(): string | null {
     for (const s of PROFILE_STEPS) {
       const raw = answers[s.id]
@@ -354,6 +462,48 @@ function AppOnboardingContent() {
     if (!avatarFile) return 'Please upload a profile photo.'
     if (confirmRaw !== "I'm in") return "Please confirm you're in by selecting \"I'm in\"."
     return null
+  }
+
+  async function handleNextStep() {
+    if (!currentStep) return
+    setError(null)
+    setAvatarPhotoError(null)
+
+    const stepError = getStepError(currentStep)
+    if (stepError) {
+      setError(stepError)
+      submitRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      return
+    }
+
+    if (currentStep.id === 'location') {
+      const locRes = await resolveLocationIfNeeded()
+      if (!locRes.ok) {
+        setError(locRes.error)
+        submitRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        return
+      }
+      setAnswers((a) => ({ ...a, location: locRes.location }))
+    }
+
+    const nextStep = visibleSteps[currentStepIndex + 1]
+    if (nextStep) {
+      setCurrentStepId(nextStep.id)
+      try {
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+      } catch {}
+    }
+  }
+
+  function handleBackStep() {
+    setError(null)
+    setAvatarPhotoError(null)
+    const prevStep = visibleSteps[currentStepIndex - 1]
+    if (!prevStep) return
+    setCurrentStepId(prevStep.id)
+    try {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    } catch {}
   }
 
   async function saveAllProfileFields(locationOverride?: { city: string; lat: number; lng: number }) {
@@ -673,13 +823,10 @@ function AppOnboardingContent() {
     )
   }
 
-  authLog('onboarding:render', { show: 'single-page-form' })
+  authLog('onboarding:render', { show: 'step-form', currentStepId: currentStep?.id ?? null })
 
-  function renderField(step: ProfileStep) {
+  function renderField(step: OnboardingRenderableStep) {
     const value = answers[step.id]
-    if (step.id === 'q_home_state' && answers.q_home_country !== HOME_COUNTRY_UNITED_STATES) {
-      return null
-    }
     return (
       <div key={step.id} className="onboarding-field-wrap">
         <h3 className="onboarding-question">{step.question}</h3>
@@ -698,6 +845,60 @@ function AppOnboardingContent() {
             )}
           </div>
         )}
+        {step.type === 'avatar_upload' && (
+          <>
+            {avatarFaceChecking ? (
+              <p className="onboarding-body" style={{ fontSize: '0.9rem', marginTop: '-0.25rem' }}>
+                Verifying photo…
+              </p>
+            ) : null}
+            <div
+              className={`onboarding-avatar-zone ${avatarFile || answers.avatar_url ? 'has-file' : ''} ${avatarPhotoError || isAvatarZoneErrorMessage(error) ? 'onboarding-avatar-zone--error' : ''}`}
+            >
+              {avatarPreviewUrl || (typeof answers.avatar_url === 'string' && answers.avatar_url) ? (
+                <img
+                  src={avatarPreviewUrl ?? (answers.avatar_url as string)}
+                  alt="Preview"
+                  className="onboarding-avatar-preview"
+                />
+              ) : null}
+              <input
+                id="onboarding-avatar"
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                className="onboarding-avatar-input"
+                disabled={saving || avatarFaceChecking}
+                onChange={async (e) => {
+                  const f = e.target.files?.[0]
+                  const input = e.currentTarget
+                  if (!f) return
+                  setError(null)
+                  setAvatarPhotoError(null)
+                  setAvatarFaceChecking(true)
+                  try {
+                    const result = await checkProfilePhotoSingleFace(f)
+                    if (!result.ok) {
+                      setAvatarPhotoError(result.message)
+                      input.value = ''
+                      return
+                    }
+                    setAvatarPreviewUrl((prev) => {
+                      if (prev?.startsWith('blob:')) URL.revokeObjectURL(prev)
+                      return URL.createObjectURL(f)
+                    })
+                    setAvatarFile(f)
+                    if (tokenMode) setAnswers((a) => ({ ...a, avatar_url: '' }))
+                  } finally {
+                    setAvatarFaceChecking(false)
+                  }
+                }}
+              />
+              <label htmlFor="onboarding-avatar" className="onboarding-avatar-label">
+                {avatarFaceChecking ? 'Checking…' : avatarFile || answers.avatar_url ? 'Change photo' : 'Choose photo'}
+              </label>
+            </div>
+          </>
+        )}
         {step.type === 'select' && step.options && (
           <select
             id={`onboarding-${step.id}`}
@@ -713,6 +914,11 @@ function AppOnboardingContent() {
                 }
                 return next
               })
+              if (e.target.value && step.required !== false) {
+                setTimeout(() => {
+                  void handleNextStep()
+                }, 0)
+              }
             }}
             disabled={saving}
             aria-label={step.question}
@@ -830,7 +1036,12 @@ function AppOnboardingContent() {
                 key={opt}
                 type="button"
                 className={`onboarding-chip ${value === opt ? 'selected' : ''}`}
-                onClick={() => setAnswers((a) => ({ ...a, [step.id]: opt }))}
+                onClick={() => {
+                  setAnswers((a) => ({ ...a, [step.id]: opt }))
+                  setTimeout(() => {
+                    void handleNextStep()
+                  }, 0)
+                }}
                 disabled={saving}
               >
                 {opt}
@@ -993,163 +1204,60 @@ function AppOnboardingContent() {
 
   return (
     <div className="onboarding-wrap">
+      <section className="onboarding-section onboarding-section-card onboarding-welcome-card" aria-label="Welcome">
+        <h2 className="onboarding-section-title">Welcome to Fika ☕</h2>
+        <p className="onboarding-welcome-body">
+          Answer a few quick questions so we can get to know you. We&apos;ll use your responses to introduce you to people nearby for a Fika.
+        </p>
+      </section>
+      <div className="onboarding-progress" aria-hidden>
+        <div className="onboarding-progress-inner" style={{ width: `${progressPercent}%` }} />
+      </div>
       <div className="onboarding-single-page">
-        <section className="onboarding-section onboarding-section-card onboarding-welcome-card" aria-label="Welcome">
-          <h2 className="onboarding-section-title">Welcome to Fika ☕</h2>
-          <p className="onboarding-welcome-body">
-            Answer a few quick questions so we can get to know you. We&apos;ll use your responses to introduce you to people nearby for a Fika.
-          </p>
-        </section>
-        <section className="onboarding-section onboarding-section-card">
-          <h2 className="onboarding-section-title">About you</h2>
-          {PROFILE_STEPS_BEFORE_LOCATION.map(renderField)}
-          {ABOUT_YOU_EXTRA_STEPS.map(renderField)}
-          {renderField(LOCATION_STEP)}
-        </section>
-
-        <section className="onboarding-section onboarding-section-card">
-          <h2 className="onboarding-section-title">Life & context</h2>
-          <h3
-            className="onboarding-section-title"
-            style={{ fontSize: '1.05rem', marginTop: '0.25rem', marginBottom: '0.5rem' }}
-          >
-            Background
-          </h3>
-          {BACKGROUND_STEPS.map(renderField)}
-          <h3
-            className="onboarding-section-title"
-            style={{ fontSize: '1.05rem', marginTop: '1.25rem', marginBottom: '0.5rem' }}
-          >
-            Life context
-          </h3>
-          {LIFE_CONTEXT_STEPS.map(renderField)}
-        </section>
-
-        <section className="onboarding-section onboarding-section-card">
-          <h2 className="onboarding-section-title">Conversation & matching</h2>
-          {SECTION_3_STEPS.map(renderField)}
-        </section>
-
-        <section className="onboarding-section onboarding-section-card onboarding-section-confirm">
-          <h2 className="onboarding-section-title">Confirm & finish</h2>
-          <div className="onboarding-field-wrap">
-            <label className="onboarding-question" htmlFor="onboarding-avatar">Profile photo</label>
-            <p className="onboarding-body">
-              Upload a clear photo of your face. This helps others feel comfortable meeting you. We check that the
-              image shows one clear face before accepting it.
-            </p>
-            {avatarFaceChecking ? (
-              <p className="onboarding-body" style={{ fontSize: '0.9rem', marginTop: '-0.25rem' }}>
-                Verifying photo…
-              </p>
-            ) : null}
-            <div
-              className={`onboarding-avatar-zone ${avatarFile || answers.avatar_url ? 'has-file' : ''} ${avatarPhotoError || isAvatarZoneErrorMessage(error) ? 'onboarding-avatar-zone--error' : ''}`}
-            >
-              {avatarPreviewUrl || (typeof answers.avatar_url === 'string' && answers.avatar_url) ? (
-                <img
-                  src={avatarPreviewUrl ?? (answers.avatar_url as string)}
-                  alt="Preview"
-                  className="onboarding-avatar-preview"
-                />
-              ) : null}
-              <input
-                id="onboarding-avatar"
-                type="file"
-                accept="image/jpeg,image/png,image/webp,image/gif"
-                className="onboarding-avatar-input"
-                disabled={saving || avatarFaceChecking}
-                onChange={async (e) => {
-                  const f = e.target.files?.[0]
-                  const input = e.currentTarget
-                  if (!f) return
-                  setError(null)
-                  setAvatarPhotoError(null)
-                  setAvatarFaceChecking(true)
-                  try {
-                    const result = await checkProfilePhotoSingleFace(f)
-                    if (!result.ok) {
-                      setAvatarPhotoError(result.message)
-                      input.value = ''
-                      return
-                    }
-                    setAvatarPreviewUrl((prev) => {
-                      if (prev?.startsWith('blob:')) URL.revokeObjectURL(prev)
-                      return URL.createObjectURL(f)
-                    })
-                    setAvatarFile(f)
-                    if (tokenMode) setAnswers((a) => ({ ...a, avatar_url: '' }))
-                  } finally {
-                    setAvatarFaceChecking(false)
-                  }
-                }}
-              />
-              <label htmlFor="onboarding-avatar" className="onboarding-avatar-label">
-                {avatarFaceChecking ? 'Checking…' : avatarFile || answers.avatar_url ? 'Change photo' : 'Choose photo'}
-              </label>
-            </div>
-            {avatarPhotoError || (error && !isLocationErrorMessage(error)) ? (
-              <div className="onboarding-confirm-errors" role="alert">
-                {avatarPhotoError ? (
-                  <p className="onboarding-avatar-photo-error">{avatarPhotoError}</p>
-                ) : null}
-                {error && error !== avatarPhotoError && !isLocationErrorMessage(error) ? (
-                  <p className="onboarding-avatar-photo-error">{error}</p>
-                ) : null}
-              </div>
-            ) : null}
+        <section className="onboarding-section onboarding-section-card onboarding-step onboarding-step-enter">
+          <div className="onboarding-step-meta">
+            <p className="onboarding-step-label">{currentStep ? getStepSectionLabel(currentStep.id) : 'Onboarding'}</p>
+            <p className="onboarding-step-count">Step {currentStepIndex + 1} of {totalSteps}</p>
           </div>
-          <div className="onboarding-field-wrap onboarding-consent-card">
-            <h3 className="onboarding-question">{CONFIRM_STEP.question}</h3>
-            {CONFIRM_STEP.body && (
-              <div className="onboarding-body">
-                {CONFIRM_STEP.body.split(/\n\n+/).map((p, i) => (
-                  <p key={i}>{p}</p>
-                ))}
-                <p className="onboarding-body-links">
-                  By continuing, you agree to our{' '}
-                  <Link href="/terms" target="_blank" rel="noopener noreferrer">Terms of Service</Link>
-                  {' '}and{' '}
-                  <Link href="/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</Link>.
-                </p>
-              </div>
-            )}
-            <div className="onboarding-confirm-pill-wrap">
+
+          {currentStep ? renderField(currentStep) : null}
+
+          {error ? (
+            <div className="onboarding-confirm-errors" role="alert">
+              <p className="onboarding-avatar-photo-error">{error}</p>
+            </div>
+          ) : null}
+
+          <div ref={submitRef} className="onboarding-actions">
+            {currentStepIndex > 0 ? (
+              <button type="button" className="btn btn-secondary" onClick={handleBackStep} disabled={saving || avatarFaceChecking}>
+                Back
+              </button>
+            ) : null}
+            {currentStepIndex < totalSteps - 1 ? (
+              <button type="button" className="btn btn-primary" onClick={() => void handleNextStep()} disabled={saving || avatarFaceChecking}>
+                Next
+              </button>
+            ) : (
               <button
                 type="button"
-                className={`onboarding-chip ${answers.confirm_intent === "I'm in" ? 'selected' : ''}`}
-                onClick={() => setAnswers((a) => ({ ...a, confirm_intent: "I'm in" }))}
-                disabled={saving}
+                className="btn btn-primary"
+                onClick={handleSubmit}
+                disabled={saving || avatarFaceChecking}
               >
-                I&apos;m in
+                {saving ? (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+                    <span className="spinner" aria-hidden="true" />
+                    Saving…
+                  </span>
+                ) : (
+                  'Submit'
+                )}
               </button>
-            </div>
-          </div>
-
-          <button
-            ref={submitRef}
-            type="button"
-            className="btn btn-primary"
-            onClick={handleSubmit}
-            disabled={saving || avatarFaceChecking}
-          >
-            {saving ? (
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
-                <span className="spinner" aria-hidden="true" />
-                Saving…
-              </span>
-            ) : (
-              'Submit'
             )}
-          </button>
+          </div>
         </section>
       </div>
-
-      {error && isLocationErrorMessage(error) ? (
-        <p className="onboarding-error" role="alert">
-          {error}
-        </p>
-      ) : null}
     </div>
   )
 }

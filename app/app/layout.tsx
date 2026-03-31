@@ -7,7 +7,7 @@ import { getSupabase } from '@/lib/supabase'
 import { useOnboardingStatus } from '@/lib/use-onboarding'
 import { authLog } from '@/lib/auth-log'
 
-const JAY_PHONE = '+19496789729'
+const CONCIERGE_NUMBER = process.env.NEXT_PUBLIC_SENDBLUE_CONCIERGE_NUMBER?.trim() || null
 
 function AppLayoutLoading() {
   return (
@@ -106,10 +106,11 @@ function AppLayoutInner({
     router.replace('/')
   }
 
-  function buildJaySmsHref() {
+  function buildConciergeSmsHref() {
     const name = profile?.first_name?.trim() || 'xxx'
-    const body = `Hey Jay! I'm ${name}. Here's my feedback/question:`
-    return `sms:${JAY_PHONE}?body=${encodeURIComponent(body)}`
+    if (!CONCIERGE_NUMBER) return undefined
+    const body = `Hey! I'm ${name}. I have a question for the concierge:`
+    return `sms:${CONCIERGE_NUMBER}?body=${encodeURIComponent(body)}`
   }
 
   if (!sessionChecked || loading) {
@@ -234,7 +235,7 @@ function AppLayoutInner({
           <Link href="/app/how-it-works" className={pathname === '/app/how-it-works' ? 'app-sidebar-link active' : 'app-sidebar-link'} onClick={() => setMobileMenuOpen(false)}>
             Welcome to Fika
           </Link>
-          <a href={buildJaySmsHref()} className="app-sidebar-link" onClick={() => setMobileMenuOpen(false)}>
+          <a href={buildConciergeSmsHref()} className="app-sidebar-link" onClick={() => setMobileMenuOpen(false)}>
             Text Us
           </a>
         </nav>
@@ -252,9 +253,9 @@ function AppLayoutInner({
       </main>
       <div className="app-feedback-corner">
         <a
-          href={buildJaySmsHref()}
+          href={buildConciergeSmsHref()}
           className="app-feedback-pill"
-          aria-label="Text Jay with feedback"
+          aria-label="Text concierge with feedback"
         >
           <span className="app-feedback-pill-icon" aria-hidden>
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
