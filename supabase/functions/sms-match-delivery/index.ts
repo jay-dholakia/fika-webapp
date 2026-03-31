@@ -12,11 +12,48 @@ const SENDBLUE_URL = 'https://api.sendblue.co/api/send-message'
 const SIMPLE_OFFER_MESSAGE =
   "We found someone we think you should meet.\n\nWant us to set it up?\n\nReply YES or PASS."
 
-/** Same public origin as other SMS (e.g. lib/sms-agent letsfika.co) — Edge Functions don’t use Vercel’s APP_CANONICAL_URL. */
-const PUBLIC_APP_ORIGIN = 'https://letsfika.co'
+function buildIntroBioMessage(params: {
+  otherFirstName: string
+  otherBio: string
+  otherCity: string | null
+}): string | null {
+  const bio = params.otherBio.trim()
+  if (!bio || bio === 'Looking forward to a good conversation.') return null
+  const city = params.otherCity?.trim()
+  const lead = city ? `A little more about ${params.otherFirstName} in ${city}:` : `A little more about ${params.otherFirstName}:`
+  return `${lead}\n\n${bio}`
+}
 
-function buildYourFikaPortalUrlMessage(): string {
-  return `More details in your Fika account:\n${PUBLIC_APP_ORIGIN}/app/yourfika`
+function buildIntroWhyMessage(params: {
+  otherFirstName: string
+  sharedInterests: string[]
+  conversationThread: string
+}): string {
+  const context = formatMatchIntroSharedContext(params.sharedInterests, params.conversationThread)
+  return `Why we thought ${params.otherFirstName} could be a fit:\n\n${context}\n\nIf you're interested, reply YES or PASS.`
+}
+
+async function sendSendblueMessage(params: {
+  apiKeyId: string
+  apiSecret: string
+  phone: string
+  content: string
+  mediaUrl?: string | null
+}): Promise<Response> {
+  const { apiKeyId, apiSecret, phone, content, mediaUrl } = params
+  return fetch(SENDBLUE_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'sb-api-key-id': apiKeyId,
+      'sb-api-secret-key': apiSecret,
+    },
+    body: JSON.stringify({
+      number: phone,
+      content,
+      ...(mediaUrl?.trim() ? { media_url: mediaUrl.trim() } : {}),
+    }),
+  })
 }
 
 const MS_24_H = 24 * 60 * 60 * 1000
@@ -253,7 +290,7 @@ serve(async (req: Request) => {
         const otherId = userId === match.user_a ? match.user_b : match.user_a
         const { data: otherProfile } = await supabase
           .from('profiles')
-          .select('first_name, birthdate, bio_text, city')
+          .select('first_name, birthdate, bio_text, city, avatar_url')
           .eq('id', otherId)
           .single()
         const { data: myProfile } = await supabase
@@ -285,17 +322,11 @@ serve(async (req: Request) => {
               sharedInterests: sharedInterests.slice(0, 3),
               conversationThread,
             })
-        const res = await fetch(SENDBLUE_URL, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'sb-api-key-id': apiKeyId,
-            'sb-api-secret-key': apiSecret,
-          },
-          body: JSON.stringify({
-            number: phone,
-            content: message,
-          }),
+        const res = await sendSendblueMessage({
+          apiKeyId,
+          apiSecret,
+          phone,
+          content: message,
         })
         if (res.ok) {
           sent++
@@ -312,24 +343,67 @@ serve(async (req: Request) => {
                 }
               : {},
           })
-          // Follow-up: Your Fika URL so they can see details in the app (same cadence as webhook teaser+link).
+          const otherAvatarUrl = (otherProfile?.avatar_url as string | null | undefined)?.trim() ?? null
+          if (otherAvatarUrl) {
+            await new Promise((r) => setTimeout(r, 1000))
+            const photoRes = await sendSendblueMessage({
+              apiKeyId,
+              apiSecret,
+              phone,
+              content: `${otherFirstName}'s photo:`,
+              mediaUrl: otherAvatarUrl,
+            })
+            if (!photoRes.ok) {
+              const errText = await photoRes.text().catch(() => '')
+              console.error('[sms-match-delivery] intro photo send failed', {
+                userId,
+                otherId,
+                matchId: match.id,
+                status: photoRes.status,
+                errText,
+              })
+            }
+          }
+          const bioBody = buildIntroBioMessage({
+            otherFirstName,
+            otherBio,
+            otherCity: (otherProfile?.city as string | null) ?? null,
+          })
+          if (bioBody) {
+            await new Promise((r) => setTimeout(r, 1000))
+            const bioRes = await sendSendblueMessage({
+              apiKeyId,
+              apiSecret,
+              phone,
+              content: bioBody,
+            })
+            if (!bioRes.ok) {
+              const errText = await bioRes.text().catch(() => '')
+              console.error('[sms-match-delivery] intro bio send failed', {
+                userId,
+                otherId,
+                matchId: match.id,
+                status: bioRes.status,
+                errText,
+              })
+            }
+          }
+          // Follow-up: another short nudge on why this intro could work.
           await new Promise((r) => setTimeout(r, 1000))
-          const portalBody = buildYourFikaPortalUrlMessage()
-          const urlRes = await fetch(SENDBLUE_URL, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'sb-api-key-id': apiKeyId,
-              'sb-api-secret-key': apiSecret,
-            },
-            body: JSON.stringify({
-              number: phone,
-              content: portalBody,
-            }),
+          const whyBody = buildIntroWhyMessage({
+            otherFirstName,
+            sharedInterests: sharedInterests.slice(0, 3),
+            conversationThread,
+          })
+          const urlRes = await sendSendblueMessage({
+            apiKeyId,
+            apiSecret,
+            phone,
+            content: whyBody,
           })
           if (!urlRes.ok) {
             const errText = await urlRes.text().catch(() => '')
-            console.error('[sms-match-delivery] yourfika portal url send failed', {
+            console.error('[sms-match-delivery] intro why send failed', {
               userId,
               matchId: match.id,
               status: urlRes.status,

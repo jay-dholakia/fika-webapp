@@ -340,6 +340,87 @@ function verifyWebhookSignature(rawBody: string, signatureHeader: string | null,
   }
 }
 
+type ReactionDecision = 'yes' | 'pass' | null
+
+function normalizeReactionDecisionToken(value: string | null | undefined): ReactionDecision {
+  if (!value) return null
+  const v = value.toLowerCase().trim().replace(/[_\s-]+/g, ' ')
+  if (
+    v === 'love' ||
+    v === 'loved' ||
+    v === 'heart' ||
+    v === 'hearted' ||
+    v === 'like' ||
+    v === 'liked' ||
+    v === 'thumbs up' ||
+    v === 'thumbsup'
+  ) {
+    return 'yes'
+  }
+  if (
+    v === 'dislike' ||
+    v === 'disliked' ||
+    v === 'thumbs down' ||
+    v === 'thumbsdown'
+  ) {
+    return 'pass'
+  }
+  return null
+}
+
+function inferReactionDecisionFromContent(content: string): ReactionDecision {
+  const c = content.toLowerCase().trim()
+  if (!c || c.includes('removed a')) return null
+  if (
+    c.startsWith('loved ') ||
+    c.startsWith('liked ') ||
+    c.startsWith('hearted ') ||
+    c.includes(' reacted with a heart') ||
+    c.includes(' reacted with heart') ||
+    c.includes(' reacted with thumbs up')
+  ) {
+    return 'yes'
+  }
+  if (
+    c.startsWith('disliked ') ||
+    c.includes(' reacted with thumbs down')
+  ) {
+    return 'pass'
+  }
+  return null
+}
+
+function getReactionDecision(body: Record<string, unknown>, content: string): ReactionDecision {
+  const direct = normalizeReactionDecisionToken(
+    typeof body.reaction === 'string'
+      ? body.reaction
+      : typeof body.reaction_type === 'string'
+        ? body.reaction_type
+        : typeof body.tapback === 'string'
+          ? body.tapback
+          : null
+  )
+  if (direct) return direct
+  return inferReactionDecisionFromContent(content)
+}
+
+function getReactionTargetHandle(body: Record<string, unknown>): string | null {
+  const candidates = [
+    body.associated_message_handle,
+    body.associatedMessageHandle,
+    body.target_message_handle,
+    body.targetMessageHandle,
+    body.parent_message_handle,
+    body.parentMessageHandle,
+    body.referenced_message_handle,
+    body.referencedMessageHandle,
+  ]
+  for (const v of candidates) {
+    if (typeof v === 'string' && v.trim()) return v.trim()
+  }
+  return null
+}
+
 export async function POST(request: Request) {
   if (!isSendblueConfigured()) {
     return NextResponse.json({ error: 'Sendblue not configured' }, { status: 503 })
@@ -364,6 +445,20 @@ export async function POST(request: Request) {
     sendblue_number?: string
     message_handle?: string
     messageHandle?: string
+    message_type?: string
+    messageType?: string
+    service?: string
+    reaction?: string
+    reaction_type?: string
+    tapback?: string
+    associated_message_handle?: string
+    associatedMessageHandle?: string
+    target_message_handle?: string
+    targetMessageHandle?: string
+    parent_message_handle?: string
+    parentMessageHandle?: string
+    referenced_message_handle?: string
+    referencedMessageHandle?: string
   }
   try {
     body = JSON.parse(rawBody)
@@ -374,12 +469,22 @@ export async function POST(request: Request) {
   const fromNumber = body.from_number ?? body.fromNumber ?? ''
   const toNumber = body.to_number ?? body.toNumber ?? body.sendblue_number ?? ''
   const messageHandle = body.message_handle ?? body.messageHandle ?? ''
+  const reactionDecision = getReactionDecision(body as unknown as Record<string, unknown>, content)
+  const reactionTargetHandle = getReactionTargetHandle(body as unknown as Record<string, unknown>)
 
   // Debug logging (visible in Vercel Functions logs)
   const fromLast4 = fromNumber.replace(/\D/g, '').slice(-4)
-  console.log('[sendblue-webhook] received', { from: `***${fromLast4}`, toNumber: toNumber ? '***' + toNumber.replace(/\D/g, '').slice(-4) : '', contentLength: content.length })
+  console.log('[sendblue-webhook] received', {
+    from: `***${fromLast4}`,
+    toNumber: toNumber ? '***' + toNumber.replace(/\D/g, '').slice(-4) : '',
+    contentLength: content.length,
+    messageType: body.message_type ?? body.messageType ?? '',
+    service: body.service ?? '',
+    reactionDecision,
+    hasReactionTargetHandle: Boolean(reactionTargetHandle),
+  })
 
-  if (!fromNumber || !content) {
+  if (!fromNumber || (!content && !reactionDecision)) {
     return NextResponse.json({ error: 'Missing from_number or content' }, { status: 400 })
   }
 
@@ -1095,10 +1200,12 @@ export async function POST(request: Request) {
   let matchState = matchStateRow?.state
   let matchId = matchStateRow?.match_id
   let matchPayload = (matchStateRow?.payload as Record<string, unknown>) ?? {}
+  const isMatchYesSignal = isMatchYesKeyword(content) || keyword === 'YES' || reactionDecision === 'yes'
+  const isMatchPassSignal = isMatchPassKeyword(content) || keyword === 'PASS' || reactionDecision === 'pass'
 
   // Recovery path: if a user replies YES/PASS but match state row is missing,
   // resolve their latest active match so we still treat the reply as a match response.
-  if (!matchId && (isMatchYesKeyword(content) || keyword === 'YES' || isMatchPassKeyword(content) || keyword === 'PASS')) {
+  if (!matchId && (isMatchYesSignal || isMatchPassSignal)) {
     const { data: recentMatches } = await supabase
       .from('match_candidates')
       .select('id, week_anchor_monday, created_at')
@@ -1145,7 +1252,7 @@ export async function POST(request: Request) {
   const appBase = getAppBase()
 
   if (matchState === SMS_STATES.MATCH_OFFERED && matchId) {
-    if (isMatchYesKeyword(content) || keyword === 'YES') {
+    if (isMatchYesSignal) {
       const { data: otherOpt } = await supabase
         .from('opt_ins')
         .select('decision')
@@ -1509,7 +1616,7 @@ export async function POST(request: Request) {
           })
         }
       }
-    } else if (isMatchPassKeyword(content) || keyword === 'PASS') {
+    } else if (isMatchPassSignal) {
       const { error: passUpsertError } = await supabase.from('opt_ins').upsert(
         { match_id: matchId, user_id: userId, decision: PASS_DECISION },
         { onConflict: 'match_id,user_id' }
