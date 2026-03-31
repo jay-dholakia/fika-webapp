@@ -6,7 +6,8 @@ import Link from 'next/link'
 import { getSupabase } from '@/lib/supabase'
 import { useOnboardingStatus } from '@/lib/use-onboarding'
 import { authLog } from '@/lib/auth-log'
-import { FeedbackBubble } from '@/app/app/components/FeedbackBubble'
+
+const JAY_PHONE = '+19496789729'
 
 function AppLayoutLoading() {
   return (
@@ -27,7 +28,6 @@ function AppLayoutInner({
   const [userId, setUserId] = useState<string | null>(null)
   const [sessionChecked, setSessionChecked] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [feedbackOpen, setFeedbackOpen] = useState(false)
   const { loading, isComplete, profile } = useOnboardingStatus(userId ?? undefined)
 
   useEffect(() => {
@@ -106,6 +106,12 @@ function AppLayoutInner({
     router.replace('/')
   }
 
+  function buildJaySmsHref() {
+    const name = profile?.first_name?.trim() || 'xxx'
+    const body = `Hey Jay! I'm ${name}. Here's my feedback/question:`
+    return `sms:${JAY_PHONE}?body=${encodeURIComponent(body)}`
+  }
+
   if (!sessionChecked || loading) {
     authLog('app-layout:render', { show: 'Loading', sessionChecked, loading, hasUserId: !!userId })
     return (
@@ -168,18 +174,71 @@ function AppLayoutInner({
             fika
           </Link>
         </div>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.75rem',
+            padding: '0 0 1rem 0',
+            marginBottom: '0.5rem',
+            borderBottom: '1px solid var(--color-border)',
+          }}
+        >
+          {profile?.avatar_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={profile.avatar_url}
+              alt=""
+              aria-hidden="true"
+              style={{
+                width: '2.25rem',
+                height: '2.25rem',
+                borderRadius: '999px',
+                objectFit: 'cover',
+                flexShrink: 0,
+              }}
+            />
+          ) : (
+            <div
+              aria-hidden="true"
+              style={{
+                width: '2.25rem',
+                height: '2.25rem',
+                borderRadius: '999px',
+                background: 'var(--color-border)',
+                flexShrink: 0,
+              }}
+            />
+          )}
+          <div style={{ minWidth: 0 }}>
+            <p style={{ margin: 0, fontSize: '0.8125rem', color: 'var(--color-textSecondary)' }}>Signed in as</p>
+            <p
+              style={{
+                margin: 0,
+                fontSize: '0.95rem',
+                fontWeight: 600,
+                color: 'var(--color-text)',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {profile?.first_name?.trim() || 'Fika member'}
+            </p>
+          </div>
+        </div>
         <nav className="app-sidebar-nav">
-          <Link href="/app/how-it-works" className={pathname === '/app/how-it-works' ? 'app-sidebar-link active' : 'app-sidebar-link'} onClick={() => setMobileMenuOpen(false)}>
-            Welcome to Fika
-          </Link>
-          <Link href="/app/yourfika" className={pathname === '/app/yourfika' || pathname?.startsWith('/app/onboarding') ? 'app-sidebar-link active' : 'app-sidebar-link'} onClick={() => setMobileMenuOpen(false)}>
-            Your Fika
-          </Link>
-        </nav>
-        <div className="app-sidebar-footer">
           <Link href="/app/settings/profile" className={pathname === '/app/settings/profile' ? 'app-sidebar-link active' : 'app-sidebar-link'} onClick={() => setMobileMenuOpen(false)}>
             Edit profile
           </Link>
+          <Link href="/app/how-it-works" className={pathname === '/app/how-it-works' ? 'app-sidebar-link active' : 'app-sidebar-link'} onClick={() => setMobileMenuOpen(false)}>
+            Welcome to Fika
+          </Link>
+          <a href={buildJaySmsHref()} className="app-sidebar-link" onClick={() => setMobileMenuOpen(false)}>
+            Text Us
+          </a>
+        </nav>
+        <div className="app-sidebar-footer">
           <Link href="/app/settings/how-it-works" className={pathname === '/app/settings/how-it-works' ? 'app-sidebar-link active' : 'app-sidebar-link'} onClick={() => setMobileMenuOpen(false)}>
             FAQ
           </Link>
@@ -192,23 +251,18 @@ function AppLayoutInner({
         {children}
       </main>
       <div className="app-feedback-corner">
-        <FeedbackBubble isOpen={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
-        {!feedbackOpen && (
-          <button
-            type="button"
-            className="app-feedback-pill"
-            onClick={() => setFeedbackOpen(true)}
-            aria-label="Send feedback"
-            aria-expanded={false}
-          >
-            <span className="app-feedback-pill-icon" aria-hidden>
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-              </svg>
-            </span>
-            <span className="app-feedback-pill-label">Feedback</span>
-          </button>
-        )}
+        <a
+          href={buildJaySmsHref()}
+          className="app-feedback-pill"
+          aria-label="Text Jay with feedback"
+        >
+          <span className="app-feedback-pill-icon" aria-hidden>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            </svg>
+          </span>
+          <span className="app-feedback-pill-label">Feedback</span>
+        </a>
       </div>
     </div>
   )
