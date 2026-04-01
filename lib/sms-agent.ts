@@ -581,13 +581,21 @@ export function formatMatchRevealSentence(params: {
     .filter((topic, index, list) => list.indexOf(topic) === index)
     .slice(0, 3)
   const copyDimensionOrder = topCopyDimensions.filter((value, index, list) => list.indexOf(value) === index)
+  const useCuriosityClause = copyDimensionOrder.includes('q_curiosity') && curiosityTeaser.length > 0
+  const useConversationClause = topicTeaser.length > 0
 
-  const primaryTopicList =
-    copyDimensionOrder.includes('q_curiosity') && curiosityTeaser.length > 0
-      ? curiosityTeaser
-      : topicTeaser.length > 0
-        ? topicTeaser
-        : curiosityTeaser
+  const introClauses: string[] = []
+  if (interestTeaser.length > 0) {
+    const interests =
+      interestTeaser.length === 1 ? interestTeaser[0]! : `${interestTeaser[0]} + ${interestTeaser[1]}`
+    introClauses.push(`You're both into ${interests}`)
+  }
+  if (useCuriosityClause) {
+    introClauses.push(`both curious about ${formatTopicList(curiosityTeaser)}`)
+  }
+  if (useConversationClause) {
+    introClauses.push(`both like talking about ${formatTopicList(topicTeaser)}`)
+  }
 
   const extraClauses: string[] = []
   if (copyDimensionOrder.includes('q_life_chapter') && cleanedLifeChapter.length > 0) {
@@ -595,7 +603,7 @@ export function formatMatchRevealSentence(params: {
       cleanedLifeChapter.length === 1
         ? cleanedLifeChapter[0]!
         : `${cleanedLifeChapter[0]} and ${cleanedLifeChapter[1]}`
-    extraClauses.push(`You both seem to be in a similar chapter right now: ${lifeText}.`)
+    extraClauses.push(`You both seem to be in a similar chapter right now: ${lifeText.replace(/\bmy\b/gi, 'your').replace(/\bour\b/gi, 'your')}.`)
   }
   if (copyDimensionOrder.includes('q_everyday_anchor') && cleanedEverydayAnchor.length > 0 && extraClauses.length === 0) {
     const anchorText =
@@ -605,22 +613,25 @@ export function formatMatchRevealSentence(params: {
     extraClauses.push(`Day to day, you're both anchored by ${anchorText}.`)
   }
 
-  if (interestTeaser.length > 0 && primaryTopicList.length > 0) {
-    const interests =
-      interestTeaser.length === 1 ? interestTeaser[0]! : `${interestTeaser[0]} + ${interestTeaser[1]}`
-    const topics = formatTopicList(primaryTopicList)
-    return [`Meet ${otherFirstName}. You're both into ${interests}, and both like talking about ${topics}.`, ...extraClauses]
-      .join(' ')
-      .trim()
+  if (introClauses.length > 0) {
+    const introLine =
+      introClauses.length === 1
+        ? introClauses[0]!
+        : introClauses.length === 2
+          ? `${introClauses[0]}, and ${introClauses[1]}`
+          : `${introClauses[0]}, ${introClauses[1]}, and ${introClauses[2]}`
+    return [`Meet ${otherFirstName}. ${introLine}.`, ...extraClauses].join(' ').trim()
   }
   if (interestTeaser.length > 0) {
     const interests =
       interestTeaser.length === 1 ? interestTeaser[0]! : `${interestTeaser[0]} + ${interestTeaser[1]}`
     return [`Meet ${otherFirstName}. You're both into ${interests}.`, ...extraClauses].join(' ').trim()
   }
-  if (primaryTopicList.length > 0) {
-    const topics = formatTopicList(primaryTopicList)
-    return [`Meet ${otherFirstName}. You both like talking about ${topics}.`, ...extraClauses].join(' ').trim()
+  if (useCuriosityClause) {
+    return [`Meet ${otherFirstName}. You're both curious about ${formatTopicList(curiosityTeaser)}.`, ...extraClauses].join(' ').trim()
+  }
+  if (useConversationClause) {
+    return [`Meet ${otherFirstName}. You both like talking about ${formatTopicList(topicTeaser)}.`, ...extraClauses].join(' ').trim()
   }
   return `Meet ${otherFirstName}.`
 }
