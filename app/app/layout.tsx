@@ -144,7 +144,7 @@ function AppLayoutInner({
   return (
     <div className="app-shell">
       <header className="app-mobile-header" aria-label="Mobile menu">
-        <Link href="/app/yourfika" className="app-sidebar-logo" onClick={() => setMobileMenuOpen(false)}>
+        <Link href="/app/how-it-works" className="app-sidebar-logo" onClick={() => setMobileMenuOpen(false)}>
           fika
         </Link>
         <button
@@ -171,7 +171,7 @@ function AppLayoutInner({
         aria-label="App navigation"
       >
         <div className="app-sidebar-header app-sidebar-header-desktop">
-          <Link href="/app/yourfika" className="app-sidebar-logo" onClick={() => setMobileMenuOpen(false)}>
+          <Link href="/app/how-it-works" className="app-sidebar-logo" onClick={() => setMobileMenuOpen(false)}>
             fika
           </Link>
         </div>

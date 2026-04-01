@@ -60,7 +60,7 @@ export default function Home() {
             <p className="section-body section-body-follow">
               <a
                 href={CONCIERGE_NUMBER ? `sms:${CONCIERGE_NUMBER}?body=${encodeURIComponent("Hi! Help set me up for Fika.")}` : '/#cta'}
-                className="btn btn-primary"
+                className="btn btn-primary home-mobile-cta"
               >
                 Sign up
               </a>
@@ -127,7 +127,7 @@ export default function Home() {
             {CONCIERGE_NUMBER ? (
               <a
                 href={`sms:${CONCIERGE_NUMBER}?body=${encodeURIComponent("Hi! Help set me up for Fika.")}`}
-                className="btn btn-primary btn-block"
+                className="btn btn-primary btn-block home-mobile-cta"
               >
                 Text us
               </a>

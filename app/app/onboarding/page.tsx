@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense, useRef, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import { GoogleIcon } from '@/app/app/components/GoogleIcon'
 import { getSupabase } from '@/lib/supabase'
 import { useOnboardingStatus } from '@/lib/use-onboarding'
 import { authLog } from '@/lib/auth-log'
@@ -87,6 +88,39 @@ function getStepSectionLabel(stepId: string): string {
     return 'Confirm & finish'
   }
   return 'Onboarding'
+}
+
+function getVisibleStepsForAnswers(answers: AnswersState): OnboardingRenderableStep[] {
+  return ONBOARDING_STEPS.filter((step) => step.id !== 'q_home_state' || answers.q_home_country === HOME_COUNTRY_UNITED_STATES)
+}
+
+function hasStepAnswer(step: OnboardingRenderableStep, answers: AnswersState): boolean {
+  if (step.id === 'avatar_upload') {
+    return typeof answers.avatar_url === 'string' && answers.avatar_url.trim() !== ''
+  }
+  const raw = answers[step.id]
+  if (step.id === 'location') {
+    return (
+      typeof raw === 'object' &&
+      raw !== null &&
+      'city' in raw &&
+      typeof (raw as { city?: string }).city === 'string' &&
+      ((raw as { city?: string }).city?.trim() ?? '') !== ''
+    )
+  }
+  if (step.type === 'multi_select') {
+    return Array.isArray(raw) && raw.length > 0
+  }
+  return typeof raw === 'string' ? raw.trim() !== '' : raw != null
+}
+
+function getResumeStepId(answers: AnswersState): string {
+  const visibleSteps = getVisibleStepsForAnswers(answers)
+  const firstUnanswered = visibleSteps.find((step) => {
+    if (step.required === false) return false
+    return !hasStepAnswer(step, answers)
+  })
+  return firstUnanswered?.id ?? visibleSteps[visibleSteps.length - 1]?.id ?? ONBOARDING_STEPS[0].id
 }
 
 /** Outline the avatar zone when the message is about the photo / upload (not e.g. zip lookup). */
@@ -242,16 +276,13 @@ function AppOnboardingContent() {
   const submitRef = useRef<HTMLDivElement>(null)
   const lastMultiSelectRef = useRef<{ stepId: string; opt: string; t: number }>({ stepId: '', opt: '', t: 0 })
 
-  const visibleSteps = useMemo(
-    () =>
-      ONBOARDING_STEPS.filter((step) => step.id !== 'q_home_state' || answers.q_home_country === HOME_COUNTRY_UNITED_STATES),
-    [answers.q_home_country]
-  )
+  const visibleSteps = useMemo(() => getVisibleStepsForAnswers(answers), [answers])
 
   const currentStepIndex = Math.max(0, visibleSteps.findIndex((step) => step.id === currentStepId))
   const currentStep = visibleSteps[currentStepIndex] ?? visibleSteps[0]
   const totalSteps = visibleSteps.length
   const progressPercent = totalSteps > 0 ? ((currentStepIndex + 1) / totalSteps) * 100 : 0
+  const isFirstStep = currentStepIndex === 0
 
   useEffect(() => {
     authLog('onboarding:mount')
@@ -288,7 +319,9 @@ function AppOnboardingContent() {
       })
       .then((data) => {
         if (cancelled || !data?.payload) return
-        setAnswers(payloadToAnswers(data.payload as Record<string, unknown>))
+        const nextAnswers = payloadToAnswers(data.payload as Record<string, unknown>)
+        setAnswers(nextAnswers)
+        setCurrentStepId(getResumeStepId(nextAnswers))
         const payload = data.payload as Record<string, unknown>
         if (payload?.city && typeof payload?.lat === 'number' && typeof payload?.lng === 'number') {
           setLocationStatus('done')
@@ -321,8 +354,19 @@ function AppOnboardingContent() {
   }, [tokenMode, sessionUserId, router])
 
   useEffect(() => {
+    if (!showGoogleSignIn) return
+    try {
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+    } catch {
+      window.scrollTo(0, 0)
+    }
+  }, [showGoogleSignIn])
+
+  useEffect(() => {
     if (statusLoading || isComplete || sessionUserId == null || tokenMode) return
-    setAnswers(getInitialAnswers(profile ?? null, intake ?? null))
+    const nextAnswers = getInitialAnswers(profile ?? null, intake ?? null)
+    setAnswers(nextAnswers)
+    setCurrentStepId(getResumeStepId(nextAnswers))
     if (profile?.city) setLocationStatus('done')
   }, [statusLoading, isComplete, sessionUserId, profile, intake])
 
@@ -495,6 +539,20 @@ function AppOnboardingContent() {
     }
   }
 
+  function advanceToNextStep(stepId: string, nextAnswers: AnswersState) {
+    setError(null)
+    setAvatarPhotoError(null)
+    const nextVisibleSteps = getVisibleStepsForAnswers(nextAnswers)
+    const stepIndex = nextVisibleSteps.findIndex((step) => step.id === stepId)
+    const nextStep = stepIndex >= 0 ? nextVisibleSteps[stepIndex + 1] : null
+    if (nextStep) {
+      setCurrentStepId(nextStep.id)
+      try {
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+      } catch {}
+    }
+  }
+
   function handleBackStep() {
     setError(null)
     setAvatarPhotoError(null)
@@ -608,7 +666,7 @@ function AppOnboardingContent() {
       if (data.lat != null && data.lng != null && data.city) {
         const location: ResolvedLocation = { city: data.city, lat: data.lat, lng: data.lng }
         setLocationStatus('done')
-        setZipCode('')
+        setZipCode(zip)
         return { ok: true, location }
       }
       return { ok: false, error: "We couldn't find that zip code. Try again." }
@@ -735,14 +793,14 @@ function AppOnboardingContent() {
               data.address?.county ||
               'Unknown'
             const region = data.address?.state || data.address?.region
+            const postalCode = typeof data.address?.postcode === 'string' ? data.address.postcode.replace(/\D/g, '').slice(0, 10) : ''
             const cityStr = region ? `${city}, ${region}` : city
             setAnswers((a) => ({ ...a, location: { city: cityStr, lat, lng } }))
             setLocationStatus('done')
-            setZipCode('')
+            if (postalCode) setZipCode(postalCode)
           } catch {
             setAnswers((a) => ({ ...a, location: { city: 'Unknown', lat, lng } }))
             setLocationStatus('done')
-            setZipCode('')
           } finally {
             setGeoLoading(false)
           }
@@ -795,8 +853,14 @@ function AppOnboardingContent() {
         <p className="onboarding-body" style={{ marginTop: '0.5rem' }}>
           Sign in with Google to finalize your account and start matching.
         </p>
-        <button type="button" className="btn btn-primary" onClick={() => handleSignInWithGoogle(token)} style={{ marginTop: '1.5rem' }}>
-          Sign in with Google
+        <button
+          type="button"
+          className="btn-google"
+          onClick={() => handleSignInWithGoogle(token)}
+          style={{ marginTop: '1.5rem', maxWidth: '22rem' }}
+        >
+          <GoogleIcon className="auth-google-icon" />
+          <span>Sign in with Google</span>
         </button>
       </div>
     )
@@ -907,17 +971,13 @@ function AppOnboardingContent() {
             value={(value as string) ?? ''}
             onChange={(e) => {
               const v = e.target.value
-              setAnswers((a) => {
-                const next: AnswersState = { ...a, [step.id]: v }
-                if (step.id === 'q_home_country' && v !== HOME_COUNTRY_UNITED_STATES) {
-                  next.q_home_state = ''
-                }
-                return next
-              })
-              if (e.target.value && step.required !== false) {
-                setTimeout(() => {
-                  void handleNextStep()
-                }, 0)
+              const nextAnswers: AnswersState = { ...answers, [step.id]: v }
+              if (step.id === 'q_home_country' && v !== HOME_COUNTRY_UNITED_STATES) {
+                nextAnswers.q_home_state = ''
+              }
+              setAnswers(nextAnswers)
+              if (v && step.required !== false) {
+                advanceToNextStep(step.id, nextAnswers)
               }
             }}
             disabled={saving}
@@ -1037,10 +1097,9 @@ function AppOnboardingContent() {
                 type="button"
                 className={`onboarding-chip ${value === opt ? 'selected' : ''}`}
                 onClick={() => {
-                  setAnswers((a) => ({ ...a, [step.id]: opt }))
-                  setTimeout(() => {
-                    void handleNextStep()
-                  }, 0)
+                  const nextAnswers: AnswersState = { ...answers, [step.id]: opt }
+                  setAnswers(nextAnswers)
+                  advanceToNextStep(step.id, nextAnswers)
                 }}
                 disabled={saving}
               >
@@ -1204,20 +1263,22 @@ function AppOnboardingContent() {
 
   return (
     <div className="onboarding-wrap">
-      <section className="onboarding-section onboarding-section-card onboarding-welcome-card" aria-label="Welcome">
-        <h2 className="onboarding-section-title">Welcome to Fika ☕</h2>
-        <p className="onboarding-welcome-body">
-          Answer a few quick questions so we can get to know you. We&apos;ll use your responses to introduce you to people nearby for a Fika.
-        </p>
-      </section>
       <div className="onboarding-progress" aria-hidden>
         <div className="onboarding-progress-inner" style={{ width: `${progressPercent}%` }} />
       </div>
+      <p className="onboarding-progress-copy">{Math.round(progressPercent)}% complete</p>
+      {isFirstStep ? (
+        <section className="onboarding-section onboarding-section-card onboarding-welcome-card" aria-label="Welcome">
+          <h2 className="onboarding-section-title">Welcome to Fika ☕</h2>
+          <p className="onboarding-welcome-body">
+            Answer a few quick questions so we can get to know you. We&apos;ll use your responses to introduce you to people nearby for a Fika.
+          </p>
+        </section>
+      ) : null}
       <div className="onboarding-single-page">
         <section className="onboarding-section onboarding-section-card onboarding-step onboarding-step-enter">
           <div className="onboarding-step-meta">
             <p className="onboarding-step-label">{currentStep ? getStepSectionLabel(currentStep.id) : 'Onboarding'}</p>
-            <p className="onboarding-step-count">Step {currentStepIndex + 1} of {totalSteps}</p>
           </div>
 
           {currentStep ? renderField(currentStep) : null}
@@ -1230,18 +1291,18 @@ function AppOnboardingContent() {
 
           <div ref={submitRef} className="onboarding-actions">
             {currentStepIndex > 0 ? (
-              <button type="button" className="btn btn-secondary" onClick={handleBackStep} disabled={saving || avatarFaceChecking}>
+              <button type="button" className="onboarding-nav-link" onClick={handleBackStep} disabled={saving || avatarFaceChecking}>
                 Back
               </button>
             ) : null}
             {currentStepIndex < totalSteps - 1 ? (
-              <button type="button" className="btn btn-primary" onClick={() => void handleNextStep()} disabled={saving || avatarFaceChecking}>
+              <button type="button" className="onboarding-nav-link onboarding-nav-link-primary" onClick={() => void handleNextStep()} disabled={saving || avatarFaceChecking}>
                 Next
               </button>
             ) : (
               <button
                 type="button"
-                className="btn btn-primary"
+                className="onboarding-nav-link onboarding-nav-link-primary"
                 onClick={handleSubmit}
                 disabled={saving || avatarFaceChecking}
               >
