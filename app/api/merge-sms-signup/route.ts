@@ -15,6 +15,7 @@ import { getMarketFromCityOrLatLngWithDb } from '@/lib/markets'
 import { getActiveMarketSlugs } from '@/lib/admin-markets'
 import { getMarketBySlug } from '@/lib/markets'
 import { computeAndStoreIntakeEmbedding } from '@/lib/intake-embed-server'
+import { SMS_PACING_MS, sleepForSmsPacing } from '@/lib/sms-pacing'
 
 async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   let timeoutId: ReturnType<typeof setTimeout> | null = null
@@ -182,7 +183,7 @@ export async function POST(request: Request) {
       let lastHandle: string | undefined
       for (let i = 0; i < messages.length; i++) {
         const sent = await withTimeout(
-          sendMessage(session.phone, messages[i], { fromNumber: 'concierge' }),
+          sendMessage(session.phone, messages[i].content, { fromNumber: 'concierge' }),
           6000,
           'sendMessage(first_time_entry_merge)'
         ).catch((e) => {
@@ -194,13 +195,13 @@ export async function POST(request: Request) {
           user_id: user.id,
           direction: 'outbound',
           peer_phone: session.phone,
-          content_snippet: messages[i],
+          content_snippet: messages[i].content,
           context: 'first_time_entry_merge',
           message_handle: sent?.message_handle ?? null,
           week_anchor_monday: weekAnchorMonday,
         })
         if (i < messages.length - 1) {
-          await new Promise((r) => setTimeout(r, 1000))
+          await sleepForSmsPacing(messages[i].delayAfterMs ?? SMS_PACING_MS.quickAck)
         }
       }
       if (lastHandle) {

@@ -2,6 +2,8 @@
  * Phone-first signup: no name/email over SMS. Send link to profile builder; they finalize with Google.
  */
 
+import { SMS_PACING_MS } from '@/lib/sms-pacing'
+
 export type SmsSignupSequenceMessage = {
   content: string
   mediaUrl?: string | null
@@ -11,25 +13,25 @@ export type SmsSignupSequenceMessage = {
 /** New-user phone-first signup sequence. Link is sent as the last message. */
 export function messageSmsSignupLinkSentSequence(link: string, sampleImageUrl?: string | null): SmsSignupSequenceMessage[] {
   const steps: SmsSignupSequenceMessage[] = [
-    { content: 'Hey hey! Welcome to Fika.', delayAfterMs: 1000 },
+    { content: 'Hey hey! Welcome to Fika.', delayAfterMs: SMS_PACING_MS.quickAck },
     {
       content:
         "I'm your AI concierge. I'll introduce you to people nearby who you'd have a good conversation with.",
-      delayAfterMs: 2500,
+      delayAfterMs: SMS_PACING_MS.reflective,
     },
-    { content: 'You’ll get intros like this:', delayAfterMs: 2000 },
+    { content: 'You’ll get intros like this:', delayAfterMs: SMS_PACING_MS.context },
   ]
   if (sampleImageUrl?.trim()) {
-    steps.push({ content: ' ', mediaUrl: sampleImageUrl.trim(), delayAfterMs: 3000 })
+    steps.push({ content: ' ', mediaUrl: sampleImageUrl.trim(), delayAfterMs: SMS_PACING_MS.media })
   }
   steps.push(
-    { content: 'Meet Jay. He’s 32, into fitness + startups.', delayAfterMs: 2000 },
+    { content: 'Meet Jay. He’s 32, into fitness + startups.', delayAfterMs: SMS_PACING_MS.context },
     {
-      content: 'You’re both free Wednesday evening. Want to grab coffee at Village Well Books?',
-      delayAfterMs: 3000,
+      content: 'You both have weekday evenings open — want to meet this week?',
+      delayAfterMs: SMS_PACING_MS.reflective,
     },
-    { content: 'Just 👍 if you’re in. If he 👍 too, it’s locked.', delayAfterMs: 2000 },
-    { content: 'To get started, tell me a bit more about you here:', delayAfterMs: 1500 },
+    { content: 'Send me a 👍 if you’re in. If he’s in too, we’ll suggest a time to meet up.', delayAfterMs: SMS_PACING_MS.context },
+    { content: 'To get started, tell me a bit more about you here:', delayAfterMs: SMS_PACING_MS.beat },
     { content: link }
   )
   return steps

@@ -6,14 +6,12 @@ import Link from 'next/link'
 import { getSupabase } from '@/lib/supabase'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { authLog } from '@/lib/auth-log'
-import { getMissingIntakeStepIds, getOrderedMissingIntakeSteps } from '@/lib/onboarding'
 import { getAvailabilitySlotLabel } from '@/lib/availability-slots'
 import { getMarketBySlug, getMarketFromCity } from '@/lib/markets'
 import { useOnboardingStatus } from '@/lib/use-onboarding'
 import { formatIntakeAnswer, ageFromBirthdate } from '@/lib/intro-detail'
 import { IntroDetailModal, type IntroMatch } from '@/app/app/components/IntroDetailModal'
 import { VerifiedBadge } from '@/app/app/components/VerifiedBadge'
-import { NewQuestionsFlow } from '@/app/app/components/NewQuestionsFlow'
 import type { IntakeResponseItem } from '@/lib/db-types'
 
 function AppHomeContent() {
@@ -29,7 +27,6 @@ function AppHomeContent() {
   const [marketLabel, setMarketLabel] = useState<string | null>(null)
   const [marketActive, setMarketActive] = useState<boolean | null>(null)
   const [shareCopied, setShareCopied] = useState(false)
-  const [fillingMissingMode, setFillingMissingMode] = useState(false)
   const [showJustCompletedThankYou, setShowJustCompletedThankYou] = useState(false)
 
   useEffect(() => {
@@ -51,9 +48,6 @@ function AppHomeContent() {
     ? `Join me on Fika in ${cityLabelForShare} — real conversations over coffee with people nearby.`
     : `Join me on Fika — real conversations over coffee with people nearby.`
   const showQuestionnaireCard = !onboardingLoading && !onboardingComplete
-  const missingIntakeSteps = onboardingComplete && intake ? getMissingIntakeStepIds(intake) : []
-  const showNewQuestionsCard = !onboardingLoading && onboardingComplete && missingIntakeSteps.length > 0 && !fillingMissingMode
-  const orderedMissingSteps = intake ? getOrderedMissingIntakeSteps(intake) : []
 
   function copyShareToClipboard(url: string, text: string) {
     const combined = `${text}\n\n${url}`
@@ -508,51 +502,6 @@ function AppHomeContent() {
             Start questionnaire
           </Link>
         </div>
-      )}
-
-      {showNewQuestionsCard && (
-        <div className="app-card app-new-questions-card">
-          <h2>New intro questions added</h2>
-          <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem', marginBottom: '1rem' }}>
-            We&apos;ve added a few new questions to help match you better. Complete them so your intro stays up to date.
-          </p>
-          <button
-            type="button"
-            className="btn btn-primary btn-block auth-submit"
-            style={{ display: 'block', textAlign: 'center' }}
-            onClick={() => setFillingMissingMode(true)}
-          >
-            Complete new questions
-          </button>
-        </div>
-      )}
-
-      {fillingMissingMode && userId && intake && orderedMissingSteps.length > 0 && (
-        <NewQuestionsFlow
-          orderedSteps={orderedMissingSteps}
-          intake={intake}
-          userId={userId}
-          onComplete={async () => {
-            setFillingMissingMode(false)
-            try {
-              const supabase = getSupabase()
-              const { data: { session } } = await supabase?.auth.getSession() ?? { data: { session: null } }
-              if (session?.access_token) {
-                await fetch('/api/complete-intake', {
-                  method: 'POST',
-                  headers: {
-                    Authorization: `Bearer ${session.access_token}`,
-                    'Content-Type': 'application/json',
-                  },
-                  body: JSON.stringify({ embedOnly: true }),
-                })
-              }
-            } catch {
-              // non-fatal: embedding can be retried from settings or admin
-            }
-            refetch()
-          }}
-        />
       )}
 
       {modalIntro != null && (

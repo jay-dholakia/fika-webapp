@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useOnboardingStatus } from '@/lib/use-onboarding'
 import { getSupabase } from '@/lib/supabase'
 import { PersonaIdVerification } from '@/app/app/components/PersonaIdVerification'
+import { NewQuestionsSection } from '@/app/app/components/NewQuestionsSection'
 import { getMarketBySlug, getMarketFromCity } from '@/lib/markets'
 
 const SHARE_URL = 'https://letsfika.vercel.app'
@@ -245,6 +246,14 @@ export default function HowItWorksPage() {
           </section>
         )}
     </div>
+
+      <NewQuestionsSection
+        userId={userId}
+        intake={intake}
+        onboardingLoading={onboardingLoading}
+        onboardingComplete={questionnaireComplete}
+        refetch={refetch}
+      />
     </>
   )
 }

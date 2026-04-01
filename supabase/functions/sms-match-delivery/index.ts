@@ -9,28 +9,166 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { fetchUserIdsWithUpcomingConfirmedFika } from '../_shared/upcoming-confirmed-fika.ts'
 
 const SENDBLUE_URL = 'https://api.sendblue.co/api/send-message'
-const SIMPLE_OFFER_MESSAGE =
-  "We found someone we think you should meet.\n\nReact heart or thumbs up if you want us to set it up.\nOr reply YES or PASS."
+const SMS_PACING_MS = {
+  quickAck: 1200,
+  beat: 1800,
+  context: 2200,
+  reflective: 2600,
+  media: 2000,
+} as const
 
-function buildIntroBioMessage(params: {
-  otherFirstName: string
-  otherBio: string
-  otherCity: string | null
-}): string | null {
-  const bio = params.otherBio.trim()
-  if (!bio || bio === 'Looking forward to a good conversation.') return null
-  const city = params.otherCity?.trim()
-  const lead = city ? `A little more about ${params.otherFirstName}, based in ${city}:` : `A little more about ${params.otherFirstName}:`
-  return `${lead}\n\n${bio}`
+type OfferSequenceMessage = {
+  content: string
+  mediaUrl?: string | null
+  delayAfterMs?: number
 }
 
-function buildIntroWhyMessage(params: {
+type MatchUserLocation = {
+  city?: string | null
+  lat?: number | null
+  lng?: number | null
+}
+
+function formatInterestTeaser(sharedInterests: string[]): string | null {
+  const cleaned = sharedInterests.map((s) => String(s).trim()).filter(Boolean).slice(0, 2)
+  if (cleaned.length === 0) return null
+  if (cleaned.length === 1) return cleaned[0]
+  return `${cleaned[0]} + ${cleaned[1]}`
+}
+
+function normalizeConversationTopic(topic: string): string | null {
+  const trimmed = topic.trim().replace(/\.$/, '')
+  if (!trimmed) return null
+  return trimmed.charAt(0).toLowerCase() + trimmed.slice(1)
+}
+
+function buildSharedContextSentence(params: {
   otherFirstName: string
   sharedInterests: string[]
-  conversationThread: string
+  conversationHooks: string[]
 }): string {
-  const context = formatMatchIntroSharedContext(params.sharedInterests, params.conversationThread)
-  return `${context}\n\nIf you're into it, react heart or thumbs up.\nOr reply YES or PASS.`
+  const interestTeaser = formatInterestTeaser(params.sharedInterests)
+  const topicTeaser = params.conversationHooks
+    .map((topic) => normalizeConversationTopic(topic))
+    .filter((topic): topic is string => Boolean(topic))
+    .slice(0, 3)
+
+  if (interestTeaser && topicTeaser.length > 0) {
+    const topicText =
+      topicTeaser.length === 1
+        ? topicTeaser[0]
+        : topicTeaser.length === 2
+          ? `${topicTeaser[0]} and ${topicTeaser[1]}`
+          : `${topicTeaser[0]}, ${topicTeaser[1]}, and ${topicTeaser[2]}`
+    return `Meet ${params.otherFirstName}. You’re both into ${interestTeaser}, and both like talking about ${topicText}.`
+  }
+  if (interestTeaser) {
+    return `Meet ${params.otherFirstName}. You’re both into ${interestTeaser}.`
+  }
+  if (topicTeaser.length > 0) {
+    const topicText =
+      topicTeaser.length === 1
+        ? topicTeaser[0]
+        : topicTeaser.length === 2
+          ? `${topicTeaser[0]} and ${topicTeaser[1]}`
+          : `${topicTeaser[0]}, ${topicTeaser[1]}, and ${topicTeaser[2]}`
+    return `Meet ${params.otherFirstName}. You both like talking about ${topicText}.`
+  }
+  return `Meet ${params.otherFirstName}.`
+}
+
+function hasValidLatLng(user: MatchUserLocation): boolean {
+  const lat = typeof user.lat === 'number' ? user.lat : Number.NaN
+  const lng = typeof user.lng === 'number' ? user.lng : Number.NaN
+  return Number.isFinite(lat) && Number.isFinite(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180
+}
+
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371
+  const dLat = ((lat2 - lat1) * Math.PI) / 180
+  const dLng = ((lng2 - lng1) * Math.PI) / 180
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLng / 2) *
+      Math.sin(dLng / 2)
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+  return R * c
+}
+
+async function pickIntroVenuePreview(
+  supabase: any,
+  userA: MatchUserLocation,
+  userB: MatchUserLocation
+): Promise<{ id: string; name: string; neighborhood: string | null; city: string } | null> {
+  if (!hasValidLatLng(userA) || !hasValidLatLng(userB)) return null
+  const { data: venues } = await supabase
+    .from('venues')
+    .select('id, name, neighborhood, city, lat, lng')
+    .eq('google_permanently_closed', false)
+    .not('lat', 'is', null)
+    .not('lng', 'is', null)
+
+  const venueRows = Array.isArray(venues) ? venues : []
+  let best: { id: string; name: string; neighborhood: string | null; city: string; score: number } | null = null
+  for (const venue of venueRows) {
+    const lat = typeof venue.lat === 'number' ? venue.lat : Number(venue.lat)
+    const lng = typeof venue.lng === 'number' ? venue.lng : Number(venue.lng)
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue
+    const distA = haversineKm(Number(userA.lat), Number(userA.lng), lat, lng)
+    const distB = haversineKm(Number(userB.lat), Number(userB.lng), lat, lng)
+    const score = Math.max(distA, distB)
+    if (!best || score < best.score) {
+      best = {
+        id: venue.id as string,
+        name: venue.name as string,
+        neighborhood: (venue.neighborhood as string | null) ?? null,
+        city: venue.city as string,
+        score,
+      }
+    }
+  }
+  if (!best) return null
+  return {
+    id: best.id,
+    name: best.name,
+    neighborhood: best.neighborhood,
+    city: best.city,
+  }
+}
+
+function buildSampleOfferSequence(params: {
+  otherFirstName: string
+  sharedInterests: string[]
+  conversationHooks: string[]
+  venuePreview?: { name: string; neighborhood: string | null; city: string } | null
+  introCardUrl?: string | null
+}): OfferSequenceMessage[] {
+  const firstLine = buildSharedContextSentence({
+    otherFirstName: params.otherFirstName,
+    sharedInterests: params.sharedInterests,
+    conversationHooks: params.conversationHooks,
+  })
+  const venueName = params.venuePreview?.name?.trim()
+  const venueArea = params.venuePreview?.neighborhood?.trim() || params.venuePreview?.city?.trim() || ''
+  const venueLine = venueName
+    ? `It looks like ${venueArea ? `${venueName} in ${venueArea}` : venueName} is a good middle spot.`
+    : null
+
+  const steps: OfferSequenceMessage[] = []
+  if (params.introCardUrl?.trim()) {
+    steps.push({ content: ' ', mediaUrl: params.introCardUrl.trim(), delayAfterMs: SMS_PACING_MS.media })
+  }
+  steps.push({ content: firstLine, delayAfterMs: SMS_PACING_MS.beat })
+  if (venueLine) {
+    steps.push({ content: venueLine, delayAfterMs: SMS_PACING_MS.beat })
+  }
+  steps.push(
+    { content: 'Want to meet this week?', delayAfterMs: SMS_PACING_MS.context },
+    { content: 'Send me a 👍 if you’re in. Or reply PASS.' }
+  )
+  return steps
 }
 
 async function sendSendblueMessage(params: {
@@ -80,52 +218,20 @@ function ageFromBirthdate(birthdate: string | null): number | null {
   return age >= 0 ? age : null
 }
 
-function formatMatchIntroSharedContext(sharedInterests: string[], conversationThread: string): string {
-  const cleaned = sharedInterests.map((s: string) => String(s).trim()).filter(Boolean).slice(0, 6)
-  const thread = conversationThread.trim()
-  if (cleaned.length === 0) {
-    return thread || "You're both pointed in a similar direction — we think it could be a rich conversation."
-  }
-  let interestPart: string
-  if (cleaned.length === 1) interestPart = cleaned[0]!
-  else if (cleaned.length === 2) interestPart = `${cleaned[0]} & ${cleaned[1]}`
-  else interestPart = `${cleaned.slice(0, -1).join(', ')}, & ${cleaned[cleaned.length - 1]}`
-  let line = `You both care about ${interestPart}.`
-  if (thread) {
-    const t = thread.length > 220 ? `${thread.slice(0, 217)}…` : thread
-    line += ` ${t}`
-  }
-  return line
-}
-
-function buildMatchOfferMessage(params: {
-  otherFirstName: string
-  otherAge: number | null
-  otherCity: string | null
-  otherBio: string
-  sharedInterests: string[]
-  conversationThread: string
-}): string {
-  const { otherFirstName, otherAge, otherCity, sharedInterests, conversationThread } = params
-  const cityTrim = otherCity?.trim() ?? ''
-  const whoLine =
-    otherAge != null && cityTrim
-      ? `${otherFirstName}, ${otherAge} — ${cityTrim}`
-      : otherAge != null
-        ? `${otherFirstName}, ${otherAge}`
-        : cityTrim
-          ? `${otherFirstName} — ${cityTrim}`
-          : otherFirstName
-
-  const contextBlock = formatMatchIntroSharedContext(sharedInterests, conversationThread)
-
-  return (
-    `We found someone we think you should meet.\n\n` +
-    `${whoLine}\n\n` +
-    `${contextBlock}\n\n` +
-    `If you're into it, react heart or thumbs up.\n` +
-    `Or reply YES or PASS.`
-  )
+function buildIntroCardUrl(params: {
+  appBase: string
+  avatarUrl: string | null
+  firstName: string | null
+  age: number | null
+}): string | null {
+  const avatarUrl = params.avatarUrl?.trim()
+  if (!avatarUrl) return null
+  const base = params.appBase.trim().replace(/\/$/, '') || 'https://letsfika.vercel.app'
+  const url = new URL('/api/intro-card', base)
+  url.searchParams.set('avatar', avatarUrl)
+  if (params.firstName?.trim()) url.searchParams.set('name', params.firstName.trim())
+  if (params.age != null) url.searchParams.set('age', String(params.age))
+  return url.toString()
 }
 
 async function hasInboundWithin24h(supabase: any, phone: string): Promise<boolean> {
@@ -239,7 +345,7 @@ serve(async (req: Request) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
     const weekAnchorMonday = getCurrentWeekAnchorMonday()
-    const v2SimpleOffer = Deno.env.get('SMS_PROTOCOL_V2_SIMPLE_OFFER') === 'true'
+    const appBase = (Deno.env.get('APP_CANONICAL_URL') ?? '').trim().replace(/\/$/, '') || 'https://letsfika.vercel.app'
     const body = await req.json().catch(() => ({}))
     const requestedIds = Array.isArray(body?.match_ids)
       ? (body.match_ids as unknown[]).filter((x) => typeof x === 'string' && x.trim().length > 0) as string[]
@@ -278,9 +384,16 @@ serve(async (req: Request) => {
       if (offeredSet.has(match.id)) continue
       const reasons = (match.reasons as Record<string, unknown>) ?? {}
       const sharedInterests = (reasons.shared_interests as string[]) ?? []
-      const hooks = (reasons.conversation_hooks as string[]) ?? []
-      const conversationThread = (hooks[0] as string) ?? 'What you both have in common.'
-
+      const conversationHooks = (reasons.conversation_hooks as string[]) ?? []
+      const { data: profileRows } = await supabase
+        .from('profiles')
+        .select('id, city, lat, lng')
+        .in('id', [match.user_a, match.user_b])
+      const userALocation = (profileRows ?? []).find((row: { id: string }) => row.id === match.user_a) ?? null
+      const userBLocation = (profileRows ?? []).find((row: { id: string }) => row.id === match.user_b) ?? null
+      const introVenuePreview = userALocation && userBLocation
+        ? await pickIntroVenuePreview(supabase, userALocation, userBLocation)
+        : null
       for (const userId of [match.user_a, match.user_b]) {
         if (blockedFromNewIntro.has(userId)) {
           skipped_upcoming_confirmed_fika++
@@ -308,106 +421,60 @@ serve(async (req: Request) => {
         }
         const otherFirstName = otherProfile?.first_name?.trim() ?? 'Someone'
         const otherAge = ageFromBirthdate(otherProfile?.birthdate ?? null)
-        const otherBio = (otherProfile?.bio_text as string)?.trim()
-          ? (otherProfile.bio_text as string).slice(0, 120) + ((otherProfile.bio_text as string).length > 120 ? '…' : '')
-          : 'Looking forward to a good conversation.'
-        const message = v2SimpleOffer
-          ? SIMPLE_OFFER_MESSAGE
-          : buildMatchOfferMessage({
-              otherFirstName,
-              otherAge,
-              otherCity: (otherProfile?.city as string | null) ?? null,
-              otherBio,
-              sharedInterests: sharedInterests.slice(0, 3),
-              conversationThread,
-            })
-        const res = await sendSendblueMessage({
-          apiKeyId,
-          apiSecret,
-          phone,
-          content: message,
+        const otherAvatarUrl = (otherProfile?.avatar_url as string | null | undefined)?.trim() ?? null
+        const otherIntroCardUrl = buildIntroCardUrl({
+          appBase,
+          avatarUrl: otherAvatarUrl,
+          firstName: otherFirstName,
+          age: otherAge,
         })
-        if (res.ok) {
-          sent++
-          if (isOutside24h) sent_outside_24h++
-          await setMatchOfferedState({
-            supabase,
-            userId,
-            weekAnchorMonday,
-            matchId: match.id,
-            payload: v2SimpleOffer
-              ? {
-                  protocol_version: 'v2',
-                  phase: 'offer',
-                }
-              : {},
-          })
-          const otherAvatarUrl = (otherProfile?.avatar_url as string | null | undefined)?.trim() ?? null
-          if (otherAvatarUrl) {
-            await new Promise((r) => setTimeout(r, 1000))
-            const photoRes = await sendSendblueMessage({
-              apiKeyId,
-              apiSecret,
-              phone,
-              content: `${otherFirstName}'s photo.`,
-              mediaUrl: otherAvatarUrl,
-            })
-            if (!photoRes.ok) {
-              const errText = await photoRes.text().catch(() => '')
-              console.error('[sms-match-delivery] intro photo send failed', {
-                userId,
-                otherId,
-                matchId: match.id,
-                status: photoRes.status,
-                errText,
-              })
-            }
-          }
-          const bioBody = buildIntroBioMessage({
-            otherFirstName,
-            otherBio,
-            otherCity: (otherProfile?.city as string | null) ?? null,
-          })
-          if (bioBody) {
-            await new Promise((r) => setTimeout(r, 1000))
-            const bioRes = await sendSendblueMessage({
-              apiKeyId,
-              apiSecret,
-              phone,
-              content: bioBody,
-            })
-            if (!bioRes.ok) {
-              const errText = await bioRes.text().catch(() => '')
-              console.error('[sms-match-delivery] intro bio send failed', {
-                userId,
-                otherId,
-                matchId: match.id,
-                status: bioRes.status,
-                errText,
-              })
-            }
-          }
-          // Follow-up: short context for why this intro could work.
-          await new Promise((r) => setTimeout(r, 1000))
-          const whyBody = buildIntroWhyMessage({
-            otherFirstName,
-            sharedInterests: sharedInterests.slice(0, 3),
-            conversationThread,
-          })
-          const urlRes = await sendSendblueMessage({
+        const offerSequence = buildSampleOfferSequence({
+          otherFirstName,
+          sharedInterests: sharedInterests.slice(0, 3),
+          conversationHooks,
+          venuePreview: introVenuePreview,
+          introCardUrl: otherIntroCardUrl,
+        })
+        let sequenceStarted = false
+        for (let i = 0; i < offerSequence.length; i++) {
+          const step = offerSequence[i]
+          const res = await sendSendblueMessage({
             apiKeyId,
             apiSecret,
             phone,
-            content: whyBody,
+            content: step.content,
+            mediaUrl: step.mediaUrl ?? null,
           })
-          if (!urlRes.ok) {
-            const errText = await urlRes.text().catch(() => '')
-            console.error('[sms-match-delivery] intro why send failed', {
+          if (!res.ok) {
+            const errText = await res.text().catch(() => '')
+            console.error('[sms-match-delivery] sample offer send failed', {
               userId,
+              otherId,
               matchId: match.id,
-              status: urlRes.status,
+              stepIndex: i,
+              status: res.status,
               errText,
             })
+            break
+          }
+          if (!sequenceStarted) {
+            sequenceStarted = true
+            sent++
+            if (isOutside24h) sent_outside_24h++
+            await setMatchOfferedState({
+              supabase,
+              userId,
+              weekAnchorMonday,
+              matchId: match.id,
+              payload: {
+                protocol_version: 'v2',
+                phase: 'offer',
+                ...(introVenuePreview?.id ? { intro_preview_venue_id: introVenuePreview.id } : {}),
+              },
+            })
+          }
+          if (i < offerSequence.length - 1) {
+            await new Promise((r) => setTimeout(r, step.delayAfterMs ?? SMS_PACING_MS.quickAck))
           }
         }
       }

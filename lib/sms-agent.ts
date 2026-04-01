@@ -7,6 +7,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { haversineKm } from '@/lib/distance'
 import { searchNearbyCafesGooglePlaces, upsertVenueFromGooglePlace } from '@/lib/google-places-venues'
 import { DEFAULT_RADIUS_KM } from '@/lib/intake-radius'
+import { SMS_PACING_MS } from '@/lib/sms-pacing'
 
 export const SMS_STATES = {
   GLOBAL_READY: 'global_ready',
@@ -203,30 +204,50 @@ export function messageSaveAsContactHint(): string {
   return 'Save this number as Fika ☕ so you never miss an intro.'
 }
 
+export type TimedSmsMessage = {
+  content: string
+  delayAfterMs?: number
+}
+
 /** First-time sequence after signup (active market). `isAfterDeadline` kept for API compatibility. */
 export function messageEntryFirstTimeMessages(
   _isAfterDeadline: boolean,
   _nextMondayPhrase: string = 'next Monday',
   appBase: string = 'https://letsfika.vercel.app'
-): string[] {
+): TimedSmsMessage[] {
   const base = appBase.trim().replace(/\/$/, '') || 'https://letsfika.vercel.app'
-  const msg1 = `You're in.`
-  const msg2 = `We'll text you when there's a strong Fika intro for you.`
-  const msg3Link = `${base}/app`
-  return [msg1, msg2, msg3Link]
+  return [
+    { content: 'You’re in 🤝', delayAfterMs: SMS_PACING_MS.quickAck },
+    {
+      content: 'We’re lining up your first intro now — we’ll text you as soon as there’s a strong match.',
+      delayAfterMs: SMS_PACING_MS.reflective,
+    },
+    {
+      content: 'Know a few people nearby who’d be into this? The more people who join, the faster intros start.',
+      delayAfterMs: SMS_PACING_MS.context,
+    },
+    { content: `Update your profile anytime:\n${base}/app` },
+  ]
 }
 
 /** First-time entry when user's market is inactive. Returns 4 messages (URL standalone). */
 export function messageEntryFirstTimeMessagesInactiveMarket(
   appBase: string = 'https://letsfika.vercel.app',
   _cityLabel?: string | null
-): string[] {
+): TimedSmsMessage[] {
   const base = appBase.trim().replace(/\/$/, '') || 'https://letsfika.vercel.app'
-  const msg1 = `You're in.`
-  const msg2 = `We're getting Fika going in your area. When it opens up, we'll reach out.`
-  const msg3 = `Until then, you can edit your profile and learn more here:`
-  const msg4Link = `${base}/app`
-  return [msg1, msg2, msg3, msg4Link]
+  return [
+    { content: 'You’re in 🤝', delayAfterMs: SMS_PACING_MS.quickAck },
+    {
+      content: 'We’re building up Fika in your area — once there are a few strong matches, we’ll send your first intro.',
+      delayAfterMs: SMS_PACING_MS.reflective,
+    },
+    {
+      content: 'Know a few people nearby who’d be into this? The more people who join, the faster intros start.',
+      delayAfterMs: SMS_PACING_MS.context,
+    },
+    { content: `Update your profile anytime:\n${base}/app` },
+  ]
 }
 
 /** Reply when user in an inactive market texts in. */
@@ -386,7 +407,7 @@ export function messageStrongIntroOffer(): string {
 
 /** User text didn’t match Yes / Pass / Help while the intro is still open. */
 export function messageMatchOfferedUnrecognized(): string {
-  return `React heart or thumbs up if you want us to set it up.\nOr reply YES or PASS.`
+  return `Send me a 👍 if you want us to set it up.\nOr reply YES or PASS.`
 }
 
 /** Phase 2 teaser after both users say YES. */
@@ -396,6 +417,24 @@ export function messageTeaserPreview(params: {
 }): string {
   const { otherFirstName, otherBio } = params
   return `Quick preview:\n\nYou'd be meeting ${otherFirstName}.\n${otherBio}`
+}
+
+export function messageMutualYesContext(params: {
+  sharedInterests: string[]
+  conversationThread: string
+  venueName: string
+  neighborhood?: string | null
+  broadAvailabilityLabel?: string | null
+}): string {
+  const { sharedInterests, conversationThread, venueName, neighborhood, broadAvailabilityLabel } = params
+  const context = formatMatchIntroSharedContext(sharedInterests, conversationThread)
+  const venueLine = neighborhood?.trim()
+    ? `A likely spot for this one would be ${venueName} in ${neighborhood}.`
+    : `A likely spot for this one would be ${venueName}.`
+  const availabilityLine = broadAvailabilityLabel?.trim()
+    ? `You both have ${broadAvailabilityLabel.toLowerCase()} open. I'll suggest a time now.`
+    : `You both seem free at similar times this week. I'll suggest a time now.`
+  return `${context}\n\n${venueLine}\n${availabilityLine}`
 }
 
 /** Nudge when state is still AWAITING_AVAILABILITY (legacy state name; scheduling is proposal-first). */
@@ -515,14 +554,14 @@ export function messageProposalDeclinedToOther(): string {
 
 /** Re-propose a new time to the person who declined (attempt 2). */
 export function messageReProposalToDecliner(params: { meetingDateLabel: string; time: string; venueName: string; neighborhood: string }): string {
-  const { meetingDateLabel, time, venueName, neighborhood } = params
-  return `No worries.\n\nHow about ${meetingDateLabel} at ${time} at ${venueName} (${neighborhood})?\n\nReply YES or NO.`
+  const { meetingDateLabel, time } = params
+  return `No worries.\n\nHow about ${meetingDateLabel} at ${time}?\n\nReply YES or NO.`
 }
 
 /** Notify the other person we're trying a different time. */
 export function messageReProposalToOther(params: { meetingDateLabel: string; time: string; venueName: string; neighborhood: string }): string {
-  const { meetingDateLabel, time, venueName, neighborhood } = params
-  return `No worries.\n\nHow about ${meetingDateLabel} at ${time} at ${venueName} (${neighborhood})?\n\nReply YES or NO.`
+  const { meetingDateLabel, time } = params
+  return `No worries.\n\nHow about ${meetingDateLabel} at ${time}?\n\nReply YES or NO.`
 }
 
 export type ProposalConfirmFields = {
@@ -534,14 +573,14 @@ export type ProposalConfirmFields = {
 
 /** Same proposal for both parties (symmetric time confirmation). */
 export function messageProposalToConfirmSymmetric(params: ProposalConfirmFields): string {
-  const { meetingDateLabel, time, venueName, neighborhood } = params
-  return `Looks like this could work:\n\n${meetingDateLabel} at ${time}\n${venueName} (${neighborhood})\n\nDoes that work for you?\nReply YES or NO.`
+  const { meetingDateLabel, time } = params
+  return `Looks like this could work:\n\n${meetingDateLabel} at ${time}\n\nDoes that work for you?\nReply YES or NO.`
 }
 
 /** User who said YES first — the other person just completed the pair. */
 export function messageProposalToConfirmFirstYes(params: ProposalConfirmFields & { otherFirstName: string }): string {
-  const { otherFirstName, meetingDateLabel, time, venueName, neighborhood } = params
-  return `${otherFirstName} is in.\n\n${meetingDateLabel} at ${time}\n${venueName} (${neighborhood})\n\nDoes that work for you?\nReply YES or NO.`
+  const { otherFirstName, meetingDateLabel, time } = params
+  return `${otherFirstName} is in.\n\n${meetingDateLabel} at ${time}\n\nDoes that work for you?\nReply YES or NO.`
 }
 
 /** User who said YES second — they just triggered the proposal. */
@@ -732,7 +771,7 @@ export function isSkipKeyword(content: string): boolean {
 /** Match offer: YES. */
 export function isMatchYesKeyword(content: string): boolean {
   const k = normalizeKeyword(content)
-  return ['yes', 'yep', 'sure', 'sounds good', 'lets do it', "let's do it", 'ok', 'okay'].includes(k)
+  return ['yes', 'yep', 'sure', 'sounds good', 'lets do it', "let's do it", 'ok', 'okay', '👍'].includes(k)
 }
 
 /** Match offer: PASS. */

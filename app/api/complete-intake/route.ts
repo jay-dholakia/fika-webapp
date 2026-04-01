@@ -8,6 +8,7 @@ import { getCurrentWeekAnchorMonday, isPastOptInDeadline } from '@/lib/onboardin
 import { getActiveMarketSlugs } from '@/lib/admin-markets'
 import { getMarketBySlug } from '@/lib/markets'
 import { computeAndStoreIntakeEmbedding } from '@/lib/intake-embed-server'
+import { SMS_PACING_MS, sleepForSmsPacing } from '@/lib/sms-pacing'
 
 export async function POST(request: Request) {
   const authHeader = request.headers.get('Authorization')
@@ -85,19 +86,19 @@ export async function POST(request: Request) {
               )
           let lastHandle: string | undefined
           for (let i = 0; i < messages.length; i++) {
-            const sent = await sendMessage(profile.phone, messages[i], { fromNumber: 'concierge' })
+            const sent = await sendMessage(profile.phone, messages[i].content, { fromNumber: 'concierge' })
             if (sent.message_handle) lastHandle = sent.message_handle
             await insertMessageLedger(serviceSupabase, {
               user_id: user.id,
               direction: 'outbound',
               peer_phone: profile.phone,
-              content_snippet: messages[i],
+              content_snippet: messages[i].content,
               context: 'first_time_entry',
               message_handle: sent.message_handle ?? null,
               week_anchor_monday: weekAnchorMonday,
             })
             if (i < messages.length - 1) {
-              await new Promise((r) => setTimeout(r, 1000))
+              await sleepForSmsPacing(messages[i].delayAfterMs ?? SMS_PACING_MS.quickAck)
             }
           }
           if (lastHandle) {

@@ -75,6 +75,7 @@ import {
   messageInactiveMarketReply,
   messageAvailabilityLockAllSet,
   messageTeaserPreview,
+  messageMutualYesContext,
   messageAwaitingAvailabilityReady,
   messageMatchOfferedUnrecognized,
 } from '@/lib/sms-agent'
@@ -113,6 +114,7 @@ import {
   outcomeFromDecisions,
 } from '@/lib/cancel-retry-flow'
 import { completeCancelRetryMatch } from '@/lib/cancel-retry-notify'
+import { SMS_PACING_MS, sleepForSmsPacing } from '@/lib/sms-pacing'
 
 const CONCIERGE_RAW = (process.env.SENDBLUE_CONCIERGE_NUMBER || '').replace(/\D/g, '')
 /** Normalize to 10 digits for US numbers (strip leading 1) so 13102102404 and 3102102404 match. */
@@ -123,6 +125,32 @@ const CONCIERGE = CONCIERGE_RAW.length === 11 && CONCIERGE_RAW.startsWith('1')
 function getAppBase(): string {
   const base = (process.env.APP_CANONICAL_URL ?? '').trim().replace(/\/$/, '')
   return base || 'https://letsfika.vercel.app'
+}
+
+function ageFromBirthdateLabel(birthdate: string | null | undefined): string | null {
+  if (!birthdate) return null
+  const date = new Date(birthdate)
+  if (Number.isNaN(date.getTime())) return null
+  const today = new Date()
+  let age = today.getFullYear() - date.getFullYear()
+  const m = today.getMonth() - date.getMonth()
+  if (m < 0 || (m === 0 && today.getDate() < date.getDate())) age--
+  return age >= 0 ? String(age) : null
+}
+
+function buildIntroCardUrl(params: {
+  appBase: string
+  avatarUrl?: string | null
+  firstName?: string | null
+  age?: string | null
+}): string | null {
+  const avatarUrl = params.avatarUrl?.trim()
+  if (!avatarUrl) return null
+  const url = new URL('/api/intro-card', params.appBase)
+  url.searchParams.set('avatar', avatarUrl)
+  if (params.firstName?.trim()) url.searchParams.set('name', params.firstName.trim())
+  if (params.age?.trim()) url.searchParams.set('age', params.age.trim())
+  return url.toString()
 }
 
 async function buildYoureAllSetLines(
@@ -250,6 +278,26 @@ function defaultTypicalKeys(): TypicalTimeKey[] {
     'weekend_afternoon',
     'weekend_evening',
   ]
+}
+
+function preferredBroadAvailabilityLabel(selectionsA: string[], selectionsB: string[]): string | null {
+  const union = Array.from(new Set([...selectionsA, ...selectionsB]))
+  const overlap = selectionsA.filter((opt) => selectionsB.includes(opt))
+  const ordered = [
+    'Weekday evenings',
+    'Weekday afternoons',
+    'Weekday mornings',
+    'Weekend afternoons',
+    'Weekend mornings',
+    'Weekend evenings',
+  ]
+  for (const label of ordered) {
+    if (overlap.includes(label)) return label
+  }
+  for (const label of ordered) {
+    if (union.includes(label)) return label
+  }
+  return null
 }
 
 const TIMES_BY_KEY: Record<TypicalTimeKey, Array<{ hour: number; min: number }>> = {
@@ -647,7 +695,7 @@ export async function POST(request: Request) {
     if (existing?.token) {
       const link = `${appBase}/signup?token=${existing.token}`
       await sendConciergeAndLog(fromNumber, messageSmsSignupLinkAlreadySent(link), 'signup_link_already_sent')
-      await new Promise((r) => setTimeout(r, 1000))
+      await sleepForSmsPacing(SMS_PACING_MS.quickAck)
       await sendConciergeAndLog(fromNumber, link, 'signup_link_already_sent_url')
       return NextResponse.json({ ok: true })
     }
@@ -669,7 +717,7 @@ export async function POST(request: Request) {
         mediaUrl: signupMessages[i].mediaUrl ?? null,
       })
       if (i < signupMessages.length - 1) {
-        await new Promise((r) => setTimeout(r, signupMessages[i].delayAfterMs ?? 1000))
+        await sleepForSmsPacing(signupMessages[i].delayAfterMs ?? SMS_PACING_MS.quickAck)
       }
     }
     return NextResponse.json({ ok: true })
@@ -685,7 +733,7 @@ export async function POST(request: Request) {
     await supabase.from('profiles').update({ sms_opted_out_at: new Date().toISOString() }).eq('id', userId)
     const webappUrl = getAppBase()
     await sendConciergeAndLog(fromNumber, messageSmsOptOut(webappUrl, formatConciergeNumber(CONCIERGE)), 'opt_out', { userId })
-    await new Promise((r) => setTimeout(r, 1000))
+    await sleepForSmsPacing(SMS_PACING_MS.quickAck)
     await sendConciergeAndLog(fromNumber, webappUrl, 'opt_out_url', { userId })
     return NextResponse.json({ ok: true })
   }
@@ -1028,7 +1076,7 @@ export async function POST(request: Request) {
         'confirmed_upcoming_help',
         { userId, matchId: upcomingMatch.id }
       )
-      await new Promise((r) => setTimeout(r, 1000))
+      await sleepForSmsPacing(SMS_PACING_MS.quickAck)
       await sendConciergeAndLog(fromNumber, webappUrlUp, 'confirmed_upcoming_help_url', { userId })
       return NextResponse.json({ ok: true })
     }
@@ -1179,7 +1227,7 @@ export async function POST(request: Request) {
         : DEFAULT_APP_BASE
       const onboardingUrl = `${appBase}/app/onboarding`
       await sendConciergeAndLog(fromNumber, messageOnboardingRequired(onboardingUrl), 'onboarding_required', { userId })
-      await new Promise((r) => setTimeout(r, 1000))
+      await sleepForSmsPacing(SMS_PACING_MS.quickAck)
       await sendConciergeAndLog(fromNumber, onboardingUrl, 'onboarding_required_url', { userId })
       return NextResponse.json({ ok: true })
     }
@@ -1307,6 +1355,10 @@ export async function POST(request: Request) {
         })
       } else {
         if (protocolV2Enabled) {
+          const reasons = (match.reasons as Record<string, unknown>) ?? {}
+          const sharedInterests = (reasons.shared_interests as string[]) ?? []
+          const hooks = (reasons.conversation_hooks as string[]) ?? []
+          const conversationThread = (hooks[0] as string) ?? ''
           const { data: pair } = await supabase
             .from('match_candidates')
             .select('user_a, user_b')
@@ -1315,16 +1367,16 @@ export async function POST(request: Request) {
           const otherId = pair ? (pair.user_a === userId ? pair.user_b : pair.user_a) : null
           const { data: currentProfile } = await supabase
             .from('profiles')
-            .select('first_name')
+            .select('first_name, birthdate, avatar_url')
             .eq('id', userId)
             .maybeSingle()
           const { data: otherProfile } = otherId
             ? await supabase
                 .from('profiles')
-                .select('phone, first_name, bio_text')
+                .select('phone, first_name, birthdate, bio_text, avatar_url')
                 .eq('id', otherId)
                 .maybeSingle()
-            : { data: null as { phone?: string | null; first_name?: string | null; bio_text?: string | null } | null }
+            : { data: null as { phone?: string | null; first_name?: string | null; birthdate?: string | null; bio_text?: string | null; avatar_url?: string | null } | null }
           const currentName = currentProfile?.first_name?.trim() ?? 'Someone'
           const otherName = otherProfile?.first_name?.trim() ?? 'Someone'
           const trimmedOtherBio = (otherProfile?.bio_text as string | undefined)?.trim()
@@ -1332,21 +1384,15 @@ export async function POST(request: Request) {
             ? trimmedOtherBio.slice(0, 120)
             : 'Looking forward to a good conversation.'
 
-          // Current user teaser + link
+          // Current user teaser
           await sendConciergeAndLog(
             fromNumber,
             messageTeaserPreview({ otherFirstName: otherName, otherBio }),
             'v2_teaser_preview',
             { userId, weekAnchorMonday, matchId }
           )
-          await new Promise((r) => setTimeout(r, 1000))
-          await sendConciergeAndLog(fromNumber, `${appBase}/app/yourfika`, 'v2_teaser_yourfika_url', {
-            userId,
-            weekAnchorMonday,
-            matchId,
-          })
 
-          // Other user teaser + link (only if we have phone)
+          // Other user teaser (only if we have phone)
           if (otherProfile?.phone) {
             const { data: myBioProfile } = await supabase
               .from('profiles')
@@ -1363,14 +1409,6 @@ export async function POST(request: Request) {
               'v2_teaser_preview_other',
               { userId: otherId ?? undefined, weekAnchorMonday, matchId }
             )
-            await new Promise((r) => setTimeout(r, 1000))
-            await sendConciergeAndLog(
-              otherProfile.phone,
-              `${appBase}/app/yourfika`,
-              'v2_teaser_yourfika_url_other',
-              { userId: otherId ?? undefined, weekAnchorMonday, matchId }
-            )
-            await new Promise((r) => setTimeout(r, 1000))
           }
 
           // Proposal-first scheduling: after both YES, propose a concrete time+place.
@@ -1385,6 +1423,10 @@ export async function POST(request: Request) {
             supabase.from('intake_responses_v5').select('responses').eq('user_id', match.user_a).maybeSingle(),
             supabase.from('intake_responses_v5').select('responses').eq('user_id', match.user_b).maybeSingle(),
           ])
+          const broadAvailabilityLabel = preferredBroadAvailabilityLabel(
+            getTypicalFikaSelectionsFromResponses(intakeA?.data?.responses ?? null),
+            getTypicalFikaSelectionsFromResponses(intakeB?.data?.responses ?? null)
+          )
           const radiusA = getIntakeRadiusKm(intakeA?.data?.responses ?? null)
           const radiusB = getIntakeRadiusKm(intakeB?.data?.responses ?? null)
           const matchTzV2 = await fetchMatchMarketTimezone(supabase, match.user_a, match.user_b)
@@ -1430,8 +1472,37 @@ export async function POST(request: Request) {
             neighborhood: venue.neighborhood ?? venue.city,
           }
 
-          // Second person to say YES (this inbound) gets the "Awesome — we're lining up…" message;
-          // first YES-er gets copy that names the other person and avoids duplicate "Awesome."
+          await sleepForSmsPacing(SMS_PACING_MS.beat)
+          await sendConciergeAndLog(
+            fromNumber,
+            messageMutualYesContext({
+              sharedInterests: sharedInterests.slice(0, 3),
+              conversationThread,
+              venueName: proposalFields.venueName,
+              neighborhood: proposalFields.neighborhood,
+              broadAvailabilityLabel,
+            }),
+            'v2_mutual_yes_context',
+            { userId, weekAnchorMonday, matchId }
+          )
+
+          if (otherId && otherProfile?.phone) {
+            await sleepForSmsPacing(SMS_PACING_MS.beat)
+            await sendConciergeAndLog(
+              otherProfile.phone,
+              messageMutualYesContext({
+                sharedInterests: sharedInterests.slice(0, 3),
+                conversationThread,
+                venueName: proposalFields.venueName,
+                neighborhood: proposalFields.neighborhood,
+                broadAvailabilityLabel,
+              }),
+              'v2_mutual_yes_context_other',
+              { userId: otherId ?? undefined, weekAnchorMonday, matchId }
+            )
+          }
+
+          await sleepForSmsPacing(SMS_PACING_MS.context)
           await sendConciergeAndLog(
             fromNumber,
             messageProposalToConfirmSecondYes(proposalFields),
@@ -1440,6 +1511,7 @@ export async function POST(request: Request) {
           )
 
           if (otherId && otherProfile?.phone) {
+            await sleepForSmsPacing(SMS_PACING_MS.context)
             await sendConciergeAndLog(
               otherProfile.phone,
               messageProposalToConfirmFirstYes({
