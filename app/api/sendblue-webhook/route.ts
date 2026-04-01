@@ -1317,14 +1317,7 @@ export async function POST(request: Request) {
       weekAnchorMonday,
       matchId,
     })
-    await setPerMatchSmsState({
-      userId,
-      weekAnchorMonday,
-      matchId,
-      state: SMS_STATES.MATCH_CLOSED,
-      payload: { ...matchPayload, late_reply_after_close: true },
-      lastSendblueMessageHandle: messageHandle,
-    })
+    await supabase.from('sms_conversation_states').delete().eq('id', matchStateRow!.id)
     return NextResponse.json({ ok: true })
   }
 

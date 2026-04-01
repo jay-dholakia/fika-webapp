@@ -420,21 +420,81 @@ export function formatMatchRevealSentence(params: {
   conversationHooks: string[]
 }): string {
   const { otherFirstName, sharedInterests, conversationHooks } = params
+  const formatTopicList = (topics: string[]): string => {
+    if (topics.length === 0) return ''
+    if (topics.length === 1) return topics[0]!
+    if (topics.length === 2) return `${topics[0]} and ${topics[1]}`
+    return `${topics[0]}, ${topics[1]}, and ${topics[2]}`
+  }
+
+  const sanitizeInterest = (value: string): string => {
+    const normalized = value.trim().replace(/\.$/, '')
+    const lower = normalized.toLowerCase()
+    if (/(books|shows|podcasts|games|music|movies)/.test(lower) && normalized.includes(',')) {
+      return normalized
+        .split(',')
+        .map((part) => part.trim().toLowerCase())
+        .filter(Boolean)
+        .slice(0, 2)
+        .join(' + ')
+    }
+    return normalized
+  }
+
   const normalizeRevealTopic = (topic: string): string => {
     const normalized = topic.trim().replace(/\.$/, '')
     const lower = normalized.toLowerCase()
 
-    if (lower === "what we're working on" || lower === 'what we are working on') {
+    if (
+      lower.startsWith("what we're working on") ||
+      lower.startsWith('what we are working on') ||
+      lower.startsWith("what you're working on") ||
+      lower.startsWith('what you are working on')
+    ) {
       return 'work and projects'
     }
-    if (lower === "what you're working on" || lower === 'what you are working on') {
-      return 'work and projects'
+    if (
+      lower.startsWith("stuff we're into lately") ||
+      lower.startsWith('stuff we are into lately') ||
+      lower.startsWith("things we're into lately") ||
+      lower.startsWith('things we are into lately') ||
+      lower.startsWith("what we're into lately") ||
+      lower.startsWith('what we are into lately') ||
+      lower.startsWith("stuff you're into lately") ||
+      lower.startsWith('stuff you are into lately')
+    ) {
+      return ''
+    }
+
+    const parentheticalMatch = normalized.match(/\(([^)]+)\)/)
+    const lowerWithoutParens = lower.replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s{2,}/g, ' ').trim()
+    if (
+      parentheticalMatch &&
+      (
+        lowerWithoutParens.startsWith("stuff we're into lately") ||
+        lowerWithoutParens.startsWith('stuff we are into lately') ||
+        lowerWithoutParens.startsWith("things we're into lately") ||
+        lowerWithoutParens.startsWith('things we are into lately') ||
+        lowerWithoutParens.startsWith("what we're into lately") ||
+        lowerWithoutParens.startsWith('what we are into lately')
+      )
+    ) {
+      return ''
     }
 
     return normalized
+      .replace(/\s*\((work or projects|projects or work)\)\s*/gi, '')
+      .replace(/\bwhat we're\b/gi, "what you're")
+      .replace(/\bwhat we are\b/gi, "what you're")
+      .replace(/\bstuff we're\b/gi, "the things you're")
+      .replace(/\bstuff we are\b/gi, "the things you're")
+      .replace(/\bthings we're\b/gi, "the things you're")
+      .replace(/\bthings we are\b/gi, "the things you're")
+      .replace(/\s{2,}/g, ' ')
+      .trim()
   }
 
-  const cleanedInterests = sharedInterests.map((s) => String(s).trim()).filter(Boolean)
+  const cleanedInterests = sharedInterests.map((s) => sanitizeInterest(String(s))).filter(Boolean)
   const cleanedHooks = conversationHooks.map((topic) => normalizeRevealTopic(String(topic))).filter(Boolean)
   let interestTeaser = cleanedInterests.slice(0, 2)
   let remainingHooks = [...cleanedHooks]
@@ -445,27 +505,25 @@ export function formatMatchRevealSentence(params: {
     const examples = exampleMatch?.[1]
       ?.split(',')
       .map((part) => part.trim())
-      .filter(Boolean) ?? []
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => sanitizeInterest(part.toLowerCase())) ?? []
 
     if (examples.length > 0) {
-      interestTeaser = examples.slice(0, 2)
+      interestTeaser = examples
       remainingHooks = cleanedHooks.filter((hook) => hook !== hookWithExamples)
     }
   }
 
   const topicTeaser = remainingHooks
     .map((topic) => topic.charAt(0).toLowerCase() + topic.slice(1))
+    .filter((topic, index, list) => list.indexOf(topic) === index)
     .slice(0, 3)
 
   if (interestTeaser.length > 0 && topicTeaser.length > 0) {
     const interests =
       interestTeaser.length === 1 ? interestTeaser[0]! : `${interestTeaser[0]} + ${interestTeaser[1]}`
-    const topics =
-      topicTeaser.length === 1
-        ? topicTeaser[0]!
-        : topicTeaser.length === 2
-          ? `${topicTeaser[0]} and ${topicTeaser[1]}`
-          : `${topicTeaser[0]}, ${topicTeaser[1]}, and ${topicTeaser[2]}`
+    const topics = formatTopicList(topicTeaser)
     return `Meet ${otherFirstName}. You're both into ${interests}, and both like talking about ${topics}.`
   }
   if (interestTeaser.length > 0) {
@@ -474,12 +532,7 @@ export function formatMatchRevealSentence(params: {
     return `Meet ${otherFirstName}. You're both into ${interests}.`
   }
   if (topicTeaser.length > 0) {
-    const topics =
-      topicTeaser.length === 1
-        ? topicTeaser[0]!
-        : topicTeaser.length === 2
-          ? `${topicTeaser[0]} and ${topicTeaser[1]}`
-          : `${topicTeaser[0]}, ${topicTeaser[1]}, and ${topicTeaser[2]}`
+    const topics = formatTopicList(topicTeaser)
     return `Meet ${otherFirstName}. You both like talking about ${topics}.`
   }
   return `Meet ${otherFirstName}.`
