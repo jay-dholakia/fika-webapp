@@ -420,6 +420,11 @@ export function formatMatchRevealSentence(params: {
   conversationHooks: string[]
 }): string {
   const { otherFirstName, sharedInterests, conversationHooks } = params
+  const normalizeSmartPunctuation = (value: string): string =>
+    value
+      .replace(/[\u2018\u2019\u2032]/g, "'")
+      .replace(/[\u201C\u201D]/g, '"')
+
   const formatTopicList = (topics: string[]): string => {
     if (topics.length === 0) return ''
     if (topics.length === 1) return topics[0]!
@@ -428,7 +433,7 @@ export function formatMatchRevealSentence(params: {
   }
 
   const sanitizeInterest = (value: string): string => {
-    const normalized = value.trim().replace(/\.$/, '')
+    const normalized = normalizeSmartPunctuation(value).trim().replace(/\.$/, '')
     const lower = normalized.toLowerCase()
     if (/(books|shows|podcasts|games|music|movies)/.test(lower) && normalized.includes(',')) {
       return normalized
@@ -442,7 +447,7 @@ export function formatMatchRevealSentence(params: {
   }
 
   const normalizeRevealTopic = (topic: string): string => {
-    const normalized = topic.trim().replace(/\.$/, '')
+    const normalized = normalizeSmartPunctuation(topic).trim().replace(/\.$/, '')
     const lower = normalized.toLowerCase()
 
     if (
