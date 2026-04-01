@@ -29,52 +29,10 @@ type MatchUserLocation = {
   lng?: number | null
 }
 
-function formatInterestTeaser(sharedInterests: string[]): string | null {
-  const cleaned = sharedInterests.map((s) => String(s).trim()).filter(Boolean).slice(0, 2)
-  if (cleaned.length === 0) return null
-  if (cleaned.length === 1) return cleaned[0]
-  return `${cleaned[0]} + ${cleaned[1]}`
-}
-
-function normalizeConversationTopic(topic: string): string | null {
-  const trimmed = topic.trim().replace(/\.$/, '')
-  if (!trimmed) return null
-  return trimmed.charAt(0).toLowerCase() + trimmed.slice(1)
-}
-
-function buildSharedContextSentence(params: {
-  otherFirstName: string
-  sharedInterests: string[]
-  conversationHooks: string[]
-}): string {
-  const interestTeaser = formatInterestTeaser(params.sharedInterests)
-  const topicTeaser = params.conversationHooks
-    .map((topic) => normalizeConversationTopic(topic))
-    .filter((topic): topic is string => Boolean(topic))
-    .slice(0, 3)
-
-  if (interestTeaser && topicTeaser.length > 0) {
-    const topicText =
-      topicTeaser.length === 1
-        ? topicTeaser[0]
-        : topicTeaser.length === 2
-          ? `${topicTeaser[0]} and ${topicTeaser[1]}`
-          : `${topicTeaser[0]}, ${topicTeaser[1]}, and ${topicTeaser[2]}`
-    return `Meet ${params.otherFirstName}. You’re both into ${interestTeaser}, and both like talking about ${topicText}.`
-  }
-  if (interestTeaser) {
-    return `Meet ${params.otherFirstName}. You’re both into ${interestTeaser}.`
-  }
-  if (topicTeaser.length > 0) {
-    const topicText =
-      topicTeaser.length === 1
-        ? topicTeaser[0]
-        : topicTeaser.length === 2
-          ? `${topicTeaser[0]} and ${topicTeaser[1]}`
-          : `${topicTeaser[0]}, ${topicTeaser[1]}, and ${topicTeaser[2]}`
-    return `Meet ${params.otherFirstName}. You both like talking about ${topicText}.`
-  }
-  return `Meet ${params.otherFirstName}.`
+function buildRevealPrompt(firstName: string | null | undefined): string {
+  const trimmed = firstName?.trim()
+  if (trimmed) return `Hey ${trimmed} - we found a good Fika intro for you. Want to see it? Send me a 👍.`
+  return 'We found a good Fika intro for you. Want to see it? Send me a 👍.'
 }
 
 function hasValidLatLng(user: MatchUserLocation): boolean {
@@ -139,36 +97,9 @@ async function pickIntroVenuePreview(
 }
 
 function buildSampleOfferSequence(params: {
-  otherFirstName: string
-  sharedInterests: string[]
-  conversationHooks: string[]
-  venuePreview?: { name: string; neighborhood: string | null; city: string } | null
-  introCardUrl?: string | null
+  firstName?: string | null
 }): OfferSequenceMessage[] {
-  const firstLine = buildSharedContextSentence({
-    otherFirstName: params.otherFirstName,
-    sharedInterests: params.sharedInterests,
-    conversationHooks: params.conversationHooks,
-  })
-  const venueName = params.venuePreview?.name?.trim()
-  const venueArea = params.venuePreview?.neighborhood?.trim() || params.venuePreview?.city?.trim() || ''
-  const venueLine = venueName
-    ? `It looks like ${venueArea ? `${venueName} in ${venueArea}` : venueName} is a good middle spot.`
-    : null
-
-  const steps: OfferSequenceMessage[] = []
-  if (params.introCardUrl?.trim()) {
-    steps.push({ content: ' ', mediaUrl: params.introCardUrl.trim(), delayAfterMs: SMS_PACING_MS.media })
-  }
-  steps.push({ content: firstLine, delayAfterMs: SMS_PACING_MS.beat })
-  if (venueLine) {
-    steps.push({ content: venueLine, delayAfterMs: SMS_PACING_MS.beat })
-  }
-  steps.push(
-    { content: 'Want to meet this week?', delayAfterMs: SMS_PACING_MS.context },
-    { content: 'Send me a 👍 if you’re in. Or reply PASS.' }
-  )
-  return steps
+  return [{ content: buildRevealPrompt(params.firstName), delayAfterMs: SMS_PACING_MS.quickAck }]
 }
 
 async function sendSendblueMessage(params: {
@@ -205,33 +136,6 @@ function getCurrentWeekAnchorMonday(): string {
   const monday = new Date(d)
   monday.setUTCDate(diff)
   return monday.toISOString().slice(0, 10)
-}
-
-function ageFromBirthdate(birthdate: string | null): number | null {
-  if (!birthdate) return null
-  const date = new Date(birthdate)
-  if (isNaN(date.getTime())) return null
-  const today = new Date()
-  let age = today.getFullYear() - date.getFullYear()
-  const m = today.getMonth() - date.getMonth()
-  if (m < 0 || (m === 0 && today.getDate() < date.getDate())) age--
-  return age >= 0 ? age : null
-}
-
-function buildIntroCardUrl(params: {
-  appBase: string
-  avatarUrl: string | null
-  firstName: string | null
-  age: number | null
-}): string | null {
-  const avatarUrl = params.avatarUrl?.trim()
-  if (!avatarUrl) return null
-  const base = params.appBase.trim().replace(/\/$/, '') || 'https://letsfika.vercel.app'
-  const url = new URL('/api/intro-card', base)
-  url.searchParams.set('avatar', avatarUrl)
-  if (params.firstName?.trim()) url.searchParams.set('name', params.firstName.trim())
-  if (params.age != null) url.searchParams.set('age', String(params.age))
-  return url.toString()
 }
 
 async function hasInboundWithin24h(supabase: any, phone: string): Promise<boolean> {
@@ -345,7 +249,6 @@ serve(async (req: Request) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
     const weekAnchorMonday = getCurrentWeekAnchorMonday()
-    const appBase = (Deno.env.get('APP_CANONICAL_URL') ?? '').trim().replace(/\/$/, '') || 'https://letsfika.vercel.app'
     const body = await req.json().catch(() => ({}))
     const requestedIds = Array.isArray(body?.match_ids)
       ? (body.match_ids as unknown[]).filter((x) => typeof x === 'string' && x.trim().length > 0) as string[]
@@ -382,9 +285,6 @@ serve(async (req: Request) => {
         continue
       }
       if (offeredSet.has(match.id)) continue
-      const reasons = (match.reasons as Record<string, unknown>) ?? {}
-      const sharedInterests = (reasons.shared_interests as string[]) ?? []
-      const conversationHooks = (reasons.conversation_hooks as string[]) ?? []
       const { data: profileRows } = await supabase
         .from('profiles')
         .select('id, city, lat, lng')
@@ -400,14 +300,9 @@ serve(async (req: Request) => {
           continue
         }
         const otherId = userId === match.user_a ? match.user_b : match.user_a
-        const { data: otherProfile } = await supabase
-          .from('profiles')
-          .select('first_name, birthdate, bio_text, city, avatar_url')
-          .eq('id', otherId)
-          .single()
         const { data: myProfile } = await supabase
           .from('profiles')
-          .select('phone')
+          .select('phone, first_name')
           .eq('id', userId)
           .single()
         if (!myProfile?.phone?.trim()) continue
@@ -419,21 +314,8 @@ serve(async (req: Request) => {
           skipped_outside_24h_cap++
           continue
         }
-        const otherFirstName = otherProfile?.first_name?.trim() ?? 'Someone'
-        const otherAge = ageFromBirthdate(otherProfile?.birthdate ?? null)
-        const otherAvatarUrl = (otherProfile?.avatar_url as string | null | undefined)?.trim() ?? null
-        const otherIntroCardUrl = buildIntroCardUrl({
-          appBase,
-          avatarUrl: otherAvatarUrl,
-          firstName: otherFirstName,
-          age: otherAge,
-        })
         const offerSequence = buildSampleOfferSequence({
-          otherFirstName,
-          sharedInterests: sharedInterests.slice(0, 3),
-          conversationHooks,
-          venuePreview: introVenuePreview,
-          introCardUrl: otherIntroCardUrl,
+          firstName: myProfile.first_name as string | null | undefined,
         })
         let sequenceStarted = false
         for (let i = 0; i < offerSequence.length; i++) {
@@ -468,7 +350,7 @@ serve(async (req: Request) => {
               matchId: match.id,
               payload: {
                 protocol_version: 'v2',
-                phase: 'offer',
+                phase: 'reveal_pending',
                 ...(introVenuePreview?.id ? { intro_preview_venue_id: introVenuePreview.id } : {}),
               },
             })

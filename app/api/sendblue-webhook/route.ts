@@ -74,7 +74,7 @@ import {
   pickVenueForMatch,
   messageInactiveMarketReply,
   messageAvailabilityLockAllSet,
-  messageTeaserPreview,
+  formatMatchRevealSentence,
   messageMutualYesContext,
   messageAwaitingAvailabilityReady,
   messageMatchOfferedUnrecognized,
@@ -1307,6 +1307,116 @@ export async function POST(request: Request) {
   const appBase = getAppBase()
 
   if (matchState === SMS_STATES.MATCH_OFFERED && matchId) {
+    const offerPhase = (matchPayload.phase as string | undefined) ?? 'revealed'
+    if (offerPhase === 'reveal_pending') {
+      if (isMatchYesSignal) {
+        const { data: match } = await supabase
+          .from('match_candidates')
+          .select('id, reasons')
+          .eq('id', matchId)
+          .maybeSingle()
+        if (!match) {
+          await sendConciergeAndLog(
+            fromNumber,
+            "That match is no longer available. We'll send you another soon.",
+            'match_no_longer_available',
+            { userId, weekAnchorMonday, matchId }
+          )
+          return NextResponse.json({ ok: true })
+        }
+        const reasons = (match.reasons as Record<string, unknown>) ?? {}
+        const sharedInterests = (reasons.shared_interests as string[]) ?? []
+        const conversationHooks = (reasons.conversation_hooks as string[]) ?? []
+        const { data: pair } = await supabase
+          .from('match_candidates')
+          .select('user_a, user_b')
+          .eq('id', matchId)
+          .maybeSingle()
+        const otherId = pair ? (pair.user_a === userId ? pair.user_b : pair.user_a) : null
+        const { data: otherProfile } = otherId
+          ? await supabase
+              .from('profiles')
+              .select('first_name, birthdate, avatar_url')
+              .eq('id', otherId)
+              .maybeSingle()
+          : { data: null as { first_name?: string | null; birthdate?: string | null; avatar_url?: string | null } | null }
+        const otherName = otherProfile?.first_name?.trim() ?? 'Someone'
+        const introCardUrl = buildIntroCardUrl({
+          appBase,
+          avatarUrl: otherProfile?.avatar_url ?? null,
+          firstName: otherName,
+          age: ageFromBirthdateLabel(otherProfile?.birthdate ?? null),
+        })
+        const previewVenueId = typeof matchPayload.intro_preview_venue_id === 'string'
+          ? matchPayload.intro_preview_venue_id
+          : null
+        const { data: previewVenue } = previewVenueId
+          ? await supabase
+              .from('venues')
+              .select('name, neighborhood, city')
+              .eq('id', previewVenueId)
+              .maybeSingle()
+          : { data: null as { name?: string | null; neighborhood?: string | null; city?: string | null } | null }
+        if (introCardUrl) {
+          await sendConciergeAndLog(fromNumber, ' ', 'v2_reveal_image', {
+            userId,
+            weekAnchorMonday,
+            matchId,
+            mediaUrl: introCardUrl,
+          })
+          await sleepForSmsPacing(SMS_PACING_MS.media)
+        }
+        await sendConciergeAndLog(
+          fromNumber,
+          formatMatchRevealSentence({
+            otherFirstName: otherName,
+            sharedInterests: sharedInterests.slice(0, 3),
+            conversationHooks,
+          }),
+          'v2_reveal_context',
+          { userId, weekAnchorMonday, matchId }
+        )
+        if (previewVenue?.name?.trim()) {
+          await sleepForSmsPacing(SMS_PACING_MS.beat)
+          const venueArea = previewVenue.neighborhood?.trim() || previewVenue.city?.trim() || ''
+          await sendConciergeAndLog(
+            fromNumber,
+            `It looks like ${venueArea ? `${previewVenue.name} in ${venueArea}` : previewVenue.name} is a good middle spot.`,
+            'v2_reveal_venue',
+            { userId, weekAnchorMonday, matchId }
+          )
+        }
+        await sleepForSmsPacing(SMS_PACING_MS.context)
+        await sendConciergeAndLog(fromNumber, 'Want to meet this week?', 'v2_reveal_prompt', {
+          userId,
+          weekAnchorMonday,
+          matchId,
+        })
+        await sleepForSmsPacing(SMS_PACING_MS.quickAck)
+        await sendConciergeAndLog(fromNumber, "Send me a 👍 if you're in. Or reply PASS.", 'v2_reveal_cta', {
+          userId,
+          weekAnchorMonday,
+          matchId,
+        })
+        await setPerMatchSmsState({
+          userId,
+          weekAnchorMonday,
+          matchId,
+          state: SMS_STATES.MATCH_OFFERED,
+          payload: { ...matchPayload, phase: 'revealed' },
+          lastSendblueMessageHandle: messageHandle,
+        })
+      } else {
+        await sendConciergeAndLog(
+          fromNumber,
+          messageMatchOfferedUnrecognized('reveal_pending'),
+          'match_offer_reveal_pending_nudge',
+          { userId, weekAnchorMonday, matchId }
+        )
+      }
+      return NextResponse.json({ ok: true })
+    }
+
     if (isMatchYesSignal) {
       const { data: otherOpt } = await supabase
         .from('opt_ins')
@@ -1367,49 +1477,18 @@ export async function POST(request: Request) {
           const otherId = pair ? (pair.user_a === userId ? pair.user_b : pair.user_a) : null
           const { data: currentProfile } = await supabase
             .from('profiles')
-            .select('first_name, birthdate, avatar_url')
+            .select('first_name')
             .eq('id', userId)
             .maybeSingle()
           const { data: otherProfile } = otherId
             ? await supabase
                 .from('profiles')
-                .select('phone, first_name, birthdate, bio_text, avatar_url')
+                .select('phone, first_name')
                 .eq('id', otherId)
                 .maybeSingle()
-            : { data: null as { phone?: string | null; first_name?: string | null; birthdate?: string | null; bio_text?: string | null; avatar_url?: string | null } | null }
+            : { data: null as { phone?: string | null; first_name?: string | null } | null }
           const currentName = currentProfile?.first_name?.trim() ?? 'Someone'
           const otherName = otherProfile?.first_name?.trim() ?? 'Someone'
-          const trimmedOtherBio = (otherProfile?.bio_text as string | undefined)?.trim()
-          const otherBio = trimmedOtherBio
-            ? trimmedOtherBio.slice(0, 120)
-            : 'Looking forward to a good conversation.'
-
-          // Current user teaser
-          await sendConciergeAndLog(
-            fromNumber,
-            messageTeaserPreview({ otherFirstName: otherName, otherBio }),
-            'v2_teaser_preview',
-            { userId, weekAnchorMonday, matchId }
-          )
-
-          // Other user teaser (only if we have phone)
-          if (otherProfile?.phone) {
-            const { data: myBioProfile } = await supabase
-              .from('profiles')
-              .select('bio_text')
-              .eq('id', userId)
-              .maybeSingle()
-            const trimmedMyBio = (myBioProfile?.bio_text as string | undefined)?.trim()
-            const myBio = trimmedMyBio
-              ? trimmedMyBio.slice(0, 120)
-              : 'Looking forward to a good conversation.'
-            await sendConciergeAndLog(
-              otherProfile.phone,
-              messageTeaserPreview({ otherFirstName: currentName, otherBio: myBio }),
-              'v2_teaser_preview_other',
-              { userId: otherId ?? undefined, weekAnchorMonday, matchId }
-            )
-          }
 
           // Proposal-first scheduling: after both YES, propose a concrete time+place.
           // Slot pool comes from intake q_typical_fika_times (intersection → union → full grid fallback).

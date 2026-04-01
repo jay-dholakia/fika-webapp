@@ -1,6 +1,7 @@
 import { ImageResponse } from 'next/og'
 import { NextResponse } from 'next/server'
 import React from 'react'
+import sharp from 'sharp'
 
 export const runtime = 'nodejs'
 
@@ -12,14 +13,6 @@ function getNameLabel(raw: string | null): string {
 function getAgeLabel(raw: string | null): string | null {
   const age = (raw ?? '').trim()
   return /^\d{1,3}$/.test(age) ? age : null
-}
-
-function guessMimeType(url: string, header: string | null): string {
-  if (header?.startsWith('image/')) return header
-  if (url.endsWith('.png')) return 'image/png'
-  if (url.endsWith('.webp')) return 'image/webp'
-  if (url.endsWith('.gif')) return 'image/gif'
-  return 'image/jpeg'
 }
 
 export async function GET(request: Request) {
@@ -38,8 +31,11 @@ export async function GET(request: Request) {
   }
 
   const avatarBytes = await avatarRes.arrayBuffer()
-  const mimeType = guessMimeType(avatar, avatarRes.headers.get('content-type'))
-  const avatarDataUrl = `data:${mimeType};base64,${Buffer.from(avatarBytes).toString('base64')}`
+  const normalizedAvatar = await sharp(Buffer.from(avatarBytes))
+    .rotate()
+    .jpeg({ quality: 92 })
+    .toBuffer()
+  const avatarDataUrl = `data:image/jpeg;base64,${normalizedAvatar.toString('base64')}`
   const title = age ? `${name}, ${age}` : name
 
   return new ImageResponse(

@@ -405,9 +405,61 @@ export function messageStrongIntroOffer(): string {
   return `We found someone we think you should meet.\n\nReply YES or PASS.`
 }
 
-/** User text didn’t match Yes / Pass / Help while the intro is still open. */
-export function messageMatchOfferedUnrecognized(): string {
-  return `Send me a 👍 if you want us to set it up.\nOr reply YES or PASS.`
+export function messageMatchRevealPrompt(firstName?: string | null): string {
+  const name = firstName?.trim()
+  if (name) {
+    return `Hey ${name} - we found a good Fika intro for you. Want to see it? Send me a 👍.`
+  }
+  return `We found a good Fika intro for you. Want to see it? Send me a 👍.`
+}
+
+export function formatMatchRevealSentence(params: {
+  otherFirstName: string
+  sharedInterests: string[]
+  conversationHooks: string[]
+}): string {
+  const { otherFirstName, sharedInterests, conversationHooks } = params
+  const interestTeaser = sharedInterests.map((s) => String(s).trim()).filter(Boolean).slice(0, 2)
+  const topicTeaser = conversationHooks
+    .map((topic) => String(topic).trim().replace(/\.$/, ''))
+    .filter(Boolean)
+    .map((topic) => topic.charAt(0).toLowerCase() + topic.slice(1))
+    .slice(0, 3)
+
+  if (interestTeaser.length > 0 && topicTeaser.length > 0) {
+    const interests =
+      interestTeaser.length === 1 ? interestTeaser[0]! : `${interestTeaser[0]} + ${interestTeaser[1]}`
+    const topics =
+      topicTeaser.length === 1
+        ? topicTeaser[0]!
+        : topicTeaser.length === 2
+          ? `${topicTeaser[0]} and ${topicTeaser[1]}`
+          : `${topicTeaser[0]}, ${topicTeaser[1]}, and ${topicTeaser[2]}`
+    return `Meet ${otherFirstName}. You're both into ${interests}, and both like talking about ${topics}.`
+  }
+  if (interestTeaser.length > 0) {
+    const interests =
+      interestTeaser.length === 1 ? interestTeaser[0]! : `${interestTeaser[0]} + ${interestTeaser[1]}`
+    return `Meet ${otherFirstName}. You're both into ${interests}.`
+  }
+  if (topicTeaser.length > 0) {
+    const topics =
+      topicTeaser.length === 1
+        ? topicTeaser[0]!
+        : topicTeaser.length === 2
+          ? `${topicTeaser[0]} and ${topicTeaser[1]}`
+          : `${topicTeaser[0]}, ${topicTeaser[1]}, and ${topicTeaser[2]}`
+    return `Meet ${otherFirstName}. You both like talking about ${topics}.`
+  }
+  return `Meet ${otherFirstName}.`
+}
+
+/** User text didn’t match the current intro phase. */
+export function messageMatchOfferedUnrecognized(phase: 'reveal_pending' | 'revealed' = 'revealed'): string {
+  if (phase === 'reveal_pending') {
+    return `Send me a 👍 if you want to see the intro.`
+  }
+  return `Send me a 👍 if you're in. Or reply PASS.`
 }
 
 /** Phase 2 teaser after both users say YES. */
@@ -574,13 +626,13 @@ export type ProposalConfirmFields = {
 /** Same proposal for both parties (symmetric time confirmation). */
 export function messageProposalToConfirmSymmetric(params: ProposalConfirmFields): string {
   const { meetingDateLabel, time } = params
-  return `Looks like this could work:\n\n${meetingDateLabel} at ${time}\n\nDoes that work for you?\nReply YES or NO.`
+  return `Looks like this could work:\n\n${meetingDateLabel} at ${time}\n\nSend me a 👍 if that works, or reply NO.`
 }
 
 /** User who said YES first — the other person just completed the pair. */
 export function messageProposalToConfirmFirstYes(params: ProposalConfirmFields & { otherFirstName: string }): string {
   const { otherFirstName, meetingDateLabel, time } = params
-  return `${otherFirstName} is in.\n\n${meetingDateLabel} at ${time}\n\nDoes that work for you?\nReply YES or NO.`
+  return `${otherFirstName} is in.\n\n${meetingDateLabel} at ${time}\n\nSend me a 👍 if that works, or reply NO.`
 }
 
 /** User who said YES second — they just triggered the proposal. */
