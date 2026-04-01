@@ -14,6 +14,7 @@ export const SMS_STATES = {
   AWAITING_OPT_IN: 'awaiting_opt_in',
   OPTED_IN: 'opted_in',
   MATCH_OFFERED: 'match_offered',
+  MATCH_CLOSED: 'match_closed',
   YES_WAITING: 'yes_waiting',
   AWAITING_AVAILABILITY: 'awaiting_availability',
   AWAITING_SECOND_CONFIRM: 'awaiting_second_confirm',
@@ -602,6 +603,10 @@ export function messageYesWaitingForOther(): string {
 /** Notify the person who said YES when the other passed or intro didn't get confirmed. */
 export function messageMatchPassed(): string {
   return `This one didn't come together.\n\nWe'll reach out when we find another good intro.`
+}
+
+export function messageIntroNoLongerAvailable(): string {
+  return `That intro is no longer available, but we'll send another intro soon.`
 }
 
 /** Legacy name: window closed — neutral copy. */

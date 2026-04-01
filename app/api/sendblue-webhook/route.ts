@@ -27,6 +27,7 @@ import {
   messagePassConfirmation,
   messageYesWaitingForOther,
   messageMatchPassed,
+  messageIntroNoLongerAvailable,
   messageProposalDeclined,
   messageProposalDeclinedToOther,
   messageProposalMaxRetries,
@@ -656,6 +657,13 @@ export async function POST(request: Request) {
       return { ok: false as const, error: retryUpdateError }
     }
     return { ok: true as const }
+  }
+
+  function shouldNotifyOtherUserOfPass(state: string | null | undefined, payload: Record<string, unknown> | null | undefined): boolean {
+    if (!state) return false
+    if (state !== SMS_STATES.MATCH_OFFERED) return true
+    const phase = (payload?.phase as string | undefined) ?? 'revealed'
+    return phase !== 'reveal_pending'
   }
 
   try {
@@ -1303,6 +1311,23 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true })
   }
 
+  if (matchState === SMS_STATES.MATCH_CLOSED && matchId && (isMatchYesSignal || isMatchPassSignal)) {
+    await sendConciergeAndLog(fromNumber, messageIntroNoLongerAvailable(), 'match_closed_late_reply', {
+      userId,
+      weekAnchorMonday,
+      matchId,
+    })
+    await setPerMatchSmsState({
+      userId,
+      weekAnchorMonday,
+      matchId,
+      state: SMS_STATES.MATCH_CLOSED,
+      payload: { ...matchPayload, late_reply_after_close: true },
+      lastSendblueMessageHandle: messageHandle,
+    })
+    return NextResponse.json({ ok: true })
+  }
+
   const protocolV2Enabled = process.env.SMS_PROTOCOL_V2_ENABLED === 'true'
   const appBase = getAppBase()
 
@@ -1795,14 +1820,32 @@ export async function POST(request: Request) {
         )
       }
       if (otherId) {
+        const { data: otherStateRow } = await supabase
+          .from('sms_conversation_states')
+          .select('state, payload')
+          .eq('user_id', otherId)
+          .eq('match_id', matchId)
+          .maybeSingle()
         const { data: otherOpt } = await supabase.from('opt_ins').select('decision').eq('match_id', matchId).eq('user_id', otherId).maybeSingle()
-        if (isOptInDecision(otherOpt?.decision)) {
+        if (
+          isOptInDecision(otherOpt?.decision) ||
+          shouldNotifyOtherUserOfPass(otherStateRow?.state, (otherStateRow?.payload as Record<string, unknown> | undefined) ?? {})
+        ) {
           const { data: otherProf } = await supabase.from('profiles').select('phone').eq('id', otherId).maybeSingle()
           if (otherProf?.phone) {
             await sendConciergeAndLog(otherProf.phone, messageMatchPassed(), 'match_passed_to_other', { userId: otherId, weekAnchorMonday, matchId })
           }
         }
-        await supabase.from('sms_conversation_states').delete().eq('user_id', otherId).eq('week_anchor_monday', weekAnchorMonday).eq('match_id', matchId)
+        await setPerMatchSmsState({
+          userId: otherId,
+          weekAnchorMonday,
+          matchId,
+          state: SMS_STATES.MATCH_CLOSED,
+          payload: {
+            closed_reason: 'other_user_passed',
+            closed_at: new Date().toISOString(),
+          },
+        })
       }
       await supabase.from('sms_conversation_states').delete().eq('id', matchStateRow!.id)
     } else {
@@ -2072,13 +2115,22 @@ export async function POST(request: Request) {
         .maybeSingle()
       const otherId = matchRow ? (matchRow.user_a === userId ? matchRow.user_b : matchRow.user_a) : null
       if (otherId) {
+        const { data: otherStateRow } = await supabase
+          .from('sms_conversation_states')
+          .select('state, payload')
+          .eq('user_id', otherId)
+          .eq('match_id', matchId)
+          .maybeSingle()
         const { data: otherOpt } = await supabase
           .from('opt_ins')
           .select('decision')
           .eq('match_id', matchId)
           .eq('user_id', otherId)
           .maybeSingle()
-        if (isOptInDecision(otherOpt?.decision)) {
+        if (
+          isOptInDecision(otherOpt?.decision) ||
+          shouldNotifyOtherUserOfPass(otherStateRow?.state, (otherStateRow?.payload as Record<string, unknown> | undefined) ?? {})
+        ) {
           const { data: otherProf } = await supabase
             .from('profiles')
             .select('phone')
@@ -2092,12 +2144,16 @@ export async function POST(request: Request) {
             })
           }
         }
-        await supabase
-          .from('sms_conversation_states')
-          .delete()
-          .eq('user_id', otherId)
-          .eq('week_anchor_monday', weekAnchorMonday)
-          .eq('match_id', matchId)
+        await setPerMatchSmsState({
+          userId: otherId,
+          weekAnchorMonday,
+          matchId,
+          state: SMS_STATES.MATCH_CLOSED,
+          payload: {
+            closed_reason: 'other_user_passed',
+            closed_at: new Date().toISOString(),
+          },
+        })
       }
       await supabase.from('match_candidates').update({
         scheduling_status: 'expired',
