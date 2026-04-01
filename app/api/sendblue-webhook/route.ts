@@ -669,7 +669,7 @@ export async function POST(request: Request) {
         mediaUrl: signupMessages[i].mediaUrl ?? null,
       })
       if (i < signupMessages.length - 1) {
-        await new Promise((r) => setTimeout(r, 1000))
+        await new Promise((r) => setTimeout(r, signupMessages[i].delayAfterMs ?? 1000))
       }
     }
     return NextResponse.json({ ok: true })
