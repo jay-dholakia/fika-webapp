@@ -93,7 +93,7 @@ import {
 import { localDateTimeInTzToUtcMs } from '@/lib/wall-time-to-utc'
 import type { ProfileRow, IntakeResponsesV5Row } from '@/lib/db-types'
 import {
-  messageSmsSignupLinkSent,
+  messageSmsSignupLinkSentSequence,
   messageSmsSignupLinkAlreadySent,
 } from '@/lib/sms-signup'
 import { insertMessageLedger } from '@/lib/message-ledger'
@@ -503,9 +503,9 @@ export async function POST(request: Request) {
     toPhone: string,
     content: string,
     context: string,
-    opts?: { userId?: string | null; weekAnchorMonday?: string; matchId?: string }
+    opts?: { userId?: string | null; weekAnchorMonday?: string; matchId?: string; mediaUrl?: string | null }
   ) {
-    const result = await sendConcierge(toPhone, content)
+    const result = await sendConcierge(toPhone, content, opts?.mediaUrl)
     if (!result.ok) {
       console.error('[sendblue-webhook] sendConcierge failed', {
         context,
@@ -635,6 +635,7 @@ export async function POST(request: Request) {
     const appBase = (process.env.APP_CANONICAL_URL ?? '').trim()
       ? process.env.APP_CANONICAL_URL!.trim().replace(/\/$/, '')
       : DEFAULT_SIGNUP_BASE
+    const signupSampleImageUrl = `${appBase}/images/jay-intro-overlay-literal-edited.png`
     const { data: existing } = await supabase
       .from('onboarding_sessions')
       .select('token')
@@ -662,9 +663,15 @@ export async function POST(request: Request) {
       return smsFail('onboarding_sessions_insert_failed', { message: insertErr.message })
     }
     const link = `${appBase}/signup?token=${token}`
-    await sendConciergeAndLog(fromNumber, messageSmsSignupLinkSent(link), 'signup_link_sent')
-    await new Promise((r) => setTimeout(r, 1000))
-    await sendConciergeAndLog(fromNumber, link, 'signup_link_sent_url')
+    const signupMessages = messageSmsSignupLinkSentSequence(link, signupSampleImageUrl)
+    for (let i = 0; i < signupMessages.length; i++) {
+      await sendConciergeAndLog(fromNumber, signupMessages[i].content, i === signupMessages.length - 1 ? 'signup_link_sent_url' : 'signup_link_sent', {
+        mediaUrl: signupMessages[i].mediaUrl ?? null,
+      })
+      if (i < signupMessages.length - 1) {
+        await new Promise((r) => setTimeout(r, 1000))
+      }
+    }
     return NextResponse.json({ ok: true })
   }
 

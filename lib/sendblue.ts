@@ -32,7 +32,8 @@ export function getConfig(): SendblueConfig | null {
 export async function sendSendblueMessage(
   to: string,
   content: string,
-  fromConcierge: boolean
+  fromConcierge: boolean,
+  mediaUrl?: string | null
 ): Promise<{ ok: boolean; error?: string; message_handle?: string }> {
   const config = getConfig()
   if (!config) {
@@ -54,6 +55,7 @@ export async function sendSendblueMessage(
         from_number: fromNumber,
         number: to,
         content,
+        ...(mediaUrl?.trim() ? { media_url: mediaUrl.trim() } : {}),
       }),
     })
     const text = await res.text()
@@ -74,8 +76,8 @@ export async function sendSendblueMessage(
   }
 }
 
-export function sendConcierge(to: string, content: string) {
-  return sendSendblueMessage(to, content, true)
+export function sendConcierge(to: string, content: string, mediaUrl?: string | null) {
+  return sendSendblueMessage(to, content, true, mediaUrl)
 }
 
 export function sendMatch(to: string, content: string) {
@@ -90,9 +92,9 @@ export function isSendblueConfigured(): boolean {
 export async function sendMessage(
   to: string,
   content: string,
-  opts?: { fromNumber: 'concierge' | 'match' }
+  opts?: { fromNumber: 'concierge' | 'match'; mediaUrl?: string | null }
 ): Promise<{ success: boolean; error?: string; message_handle?: string }> {
-  const result = await sendSendblueMessage(to, content, opts?.fromNumber !== 'match')
+  const result = await sendSendblueMessage(to, content, opts?.fromNumber !== 'match', opts?.mediaUrl)
   return { success: result.ok, error: result.error, message_handle: result.message_handle }
 }
 
