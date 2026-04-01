@@ -418,8 +418,21 @@ export function formatMatchRevealSentence(params: {
   otherFirstName: string
   sharedInterests: string[]
   conversationHooks: string[]
+  sectionScores?: Record<string, number>
+  curiosityOverlap?: string[]
+  lifeChapterOverlap?: string[]
+  everydayAnchorOverlap?: string[]
+  topCopyDimensions?: string[]
 }): string {
-  const { otherFirstName, sharedInterests, conversationHooks } = params
+  const {
+    otherFirstName,
+    sharedInterests,
+    conversationHooks,
+    curiosityOverlap = [],
+    lifeChapterOverlap = [],
+    everydayAnchorOverlap = [],
+    topCopyDimensions = [],
+  } = params
   const normalizeSmartPunctuation = (value: string): string =>
     value
       .replace(/[\u2018\u2019\u2032]/g, "'")
@@ -444,6 +457,42 @@ export function formatMatchRevealSentence(params: {
         .join(' + ')
     }
     return normalized
+  }
+
+  const normalizeCuriosityTopic = (value: string): string => {
+    const normalized = normalizeSmartPunctuation(value).trim().replace(/\.$/, '')
+    const lower = normalized.toLowerCase()
+    if (lower === 'take a pottery class') return 'pottery'
+    if (lower === 'learn how to paint') return 'painting'
+    if (lower === 'learn an instrument') return 'music'
+    if (lower === 'take a dance class') return 'dance'
+    if (lower === 'take a cooking class') return 'cooking'
+    if (lower === 'start learning a new language') return 'languages'
+    if (lower === 'join a storytelling workshop') return 'storytelling'
+    if (lower === 'take a photography course') return 'photography'
+    if (lower === 'start a fitness program') return 'fitness'
+    if (lower === 'join a local sports league') return 'sports'
+    if (lower === 'take a coding course') return 'coding'
+    if (lower === 'take an ai course') return 'AI'
+    if (lower === 'take a philosophy class') return 'philosophy'
+    if (lower === 'take an improv class') return 'improv'
+    if (lower === 'take a human behavior course') return 'human behavior'
+    if (lower === 'join a public speaking group') return 'public speaking'
+    if (lower === 'take a course on how to build a business') return 'building a business'
+    if (lower === 'take a class on personal finance') return 'personal finance'
+    return normalized
+  }
+
+  const normalizeLifeChapter = (value: string): string => {
+    const normalized = normalizeSmartPunctuation(value).trim().replace(/\.$/, '')
+    if (/^i'm /i.test(normalized)) return normalized.replace(/^i'm /i, '').trim()
+    if (/^i am /i.test(normalized)) return normalized.replace(/^i am /i, '').trim()
+    return normalized
+  }
+
+  const normalizeEverydayAnchor = (value: string): string => {
+    const normalized = normalizeSmartPunctuation(value).trim().replace(/\.$/, '')
+    return normalized.charAt(0).toLowerCase() + normalized.slice(1)
   }
 
   const normalizeRevealTopic = (topic: string): string => {
@@ -501,6 +550,9 @@ export function formatMatchRevealSentence(params: {
 
   const cleanedInterests = sharedInterests.map((s) => sanitizeInterest(String(s))).filter(Boolean)
   const cleanedHooks = conversationHooks.map((topic) => normalizeRevealTopic(String(topic))).filter(Boolean)
+  const cleanedCuriosity = curiosityOverlap.map((item) => normalizeCuriosityTopic(String(item))).filter(Boolean)
+  const cleanedLifeChapter = lifeChapterOverlap.map((item) => normalizeLifeChapter(String(item))).filter(Boolean)
+  const cleanedEverydayAnchor = everydayAnchorOverlap.map((item) => normalizeEverydayAnchor(String(item))).filter(Boolean)
   let interestTeaser = cleanedInterests.slice(0, 2)
   let remainingHooks = [...cleanedHooks]
 
@@ -524,21 +576,51 @@ export function formatMatchRevealSentence(params: {
     .map((topic) => topic.charAt(0).toLowerCase() + topic.slice(1))
     .filter((topic, index, list) => list.indexOf(topic) === index)
     .slice(0, 3)
+  const curiosityTeaser = cleanedCuriosity
+    .map((topic) => topic.charAt(0).toLowerCase() + topic.slice(1))
+    .filter((topic, index, list) => list.indexOf(topic) === index)
+    .slice(0, 3)
+  const copyDimensionOrder = topCopyDimensions.filter((value, index, list) => list.indexOf(value) === index)
 
-  if (interestTeaser.length > 0 && topicTeaser.length > 0) {
+  const primaryTopicList =
+    copyDimensionOrder.includes('q_curiosity') && curiosityTeaser.length > 0
+      ? curiosityTeaser
+      : topicTeaser.length > 0
+        ? topicTeaser
+        : curiosityTeaser
+
+  const extraClauses: string[] = []
+  if (copyDimensionOrder.includes('q_life_chapter') && cleanedLifeChapter.length > 0) {
+    const lifeText =
+      cleanedLifeChapter.length === 1
+        ? cleanedLifeChapter[0]!
+        : `${cleanedLifeChapter[0]} and ${cleanedLifeChapter[1]}`
+    extraClauses.push(`You both seem to be in a similar chapter right now: ${lifeText}.`)
+  }
+  if (copyDimensionOrder.includes('q_everyday_anchor') && cleanedEverydayAnchor.length > 0 && extraClauses.length === 0) {
+    const anchorText =
+      cleanedEverydayAnchor.length === 1
+        ? cleanedEverydayAnchor[0]!
+        : `${cleanedEverydayAnchor[0]} and ${cleanedEverydayAnchor[1]}`
+    extraClauses.push(`Day to day, you're both anchored by ${anchorText}.`)
+  }
+
+  if (interestTeaser.length > 0 && primaryTopicList.length > 0) {
     const interests =
       interestTeaser.length === 1 ? interestTeaser[0]! : `${interestTeaser[0]} + ${interestTeaser[1]}`
-    const topics = formatTopicList(topicTeaser)
-    return `Meet ${otherFirstName}. You're both into ${interests}, and both like talking about ${topics}.`
+    const topics = formatTopicList(primaryTopicList)
+    return [`Meet ${otherFirstName}. You're both into ${interests}, and both like talking about ${topics}.`, ...extraClauses]
+      .join(' ')
+      .trim()
   }
   if (interestTeaser.length > 0) {
     const interests =
       interestTeaser.length === 1 ? interestTeaser[0]! : `${interestTeaser[0]} + ${interestTeaser[1]}`
-    return `Meet ${otherFirstName}. You're both into ${interests}.`
+    return [`Meet ${otherFirstName}. You're both into ${interests}.`, ...extraClauses].join(' ').trim()
   }
-  if (topicTeaser.length > 0) {
-    const topics = formatTopicList(topicTeaser)
-    return `Meet ${otherFirstName}. You both like talking about ${topics}.`
+  if (primaryTopicList.length > 0) {
+    const topics = formatTopicList(primaryTopicList)
+    return [`Meet ${otherFirstName}. You both like talking about ${topics}.`, ...extraClauses].join(' ').trim()
   }
   return `Meet ${otherFirstName}.`
 }

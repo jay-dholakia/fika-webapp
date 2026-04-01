@@ -70,6 +70,10 @@ type SimPair = {
   hopingB: string | null
   overlapGreatFika: string[]
   overlapInterests: string[]
+  overlapCuriosity: string[]
+  overlapLifeChapter: string[]
+  overlapEverydayAnchor: string[]
+  topCopyDimensions: string[]
   compareRows: Array<{ label: string; a: string; b: string }>
   sectionScores: Record<string, number>
 }
@@ -246,9 +250,22 @@ export default function AdminSignupsPage() {
             userBId: p.userBId,
             score: p.score,
             reasons: {
-              sectionScores: p.sectionScores,
-              shared_interests: p.overlapInterests.slice(0, 3),
-              conversation_hooks: p.overlapGreatFika.slice(0, 2),
+              raw: {
+                sectionScores: p.sectionScores,
+                shared_interests: p.overlapInterests.slice(0, 3),
+                conversation_hooks: p.overlapGreatFika.slice(0, 2),
+                curiosity_overlap: p.overlapCuriosity.slice(0, 3),
+                life_chapter_overlap: p.overlapLifeChapter.slice(0, 2),
+                everyday_anchor_overlap: p.overlapEverydayAnchor.slice(0, 2),
+              },
+              copy: {
+                top_copy_dimensions: p.topCopyDimensions.slice(0, 3),
+                shared_interests: p.overlapInterests.slice(0, 3),
+                shared_topics: [...p.overlapCuriosity.slice(0, 3), ...p.overlapGreatFika.slice(0, 2)].slice(0, 4),
+                shared_fika_style: p.overlapGreatFika.slice(0, 2),
+                shared_life_context: p.overlapLifeChapter.slice(0, 2),
+                shared_everyday_anchor: p.overlapEverydayAnchor.slice(0, 2),
+              },
             },
           })),
         }),

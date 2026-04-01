@@ -1343,8 +1343,14 @@ export async function POST(request: Request) {
           return NextResponse.json({ ok: true })
         }
         const reasons = (match.reasons as Record<string, unknown>) ?? {}
-        const sharedInterests = (reasons.shared_interests as string[]) ?? []
-        const conversationHooks = (reasons.conversation_hooks as string[]) ?? []
+        const rawReasons = ((reasons.raw as Record<string, unknown> | undefined) ?? reasons)
+        const copyReasons = ((reasons.copy as Record<string, unknown> | undefined) ?? reasons)
+        const sharedInterests = (copyReasons.shared_interests as string[]) ?? (rawReasons.shared_interests as string[]) ?? []
+        const conversationHooks = (rawReasons.conversation_hooks as string[]) ?? []
+        const curiosityOverlap = (rawReasons.curiosity_overlap as string[]) ?? []
+        const lifeChapterOverlap = (rawReasons.life_chapter_overlap as string[]) ?? []
+        const everydayAnchorOverlap = (rawReasons.everyday_anchor_overlap as string[]) ?? []
+        const topCopyDimensions = (copyReasons.top_copy_dimensions as string[]) ?? []
         const { data: pair } = await supabase
           .from('match_candidates')
           .select('user_a, user_b')
@@ -1390,6 +1396,11 @@ export async function POST(request: Request) {
             otherFirstName: otherName,
             sharedInterests: sharedInterests.slice(0, 3),
             conversationHooks,
+            sectionScores: (rawReasons.sectionScores as Record<string, number> | undefined) ?? undefined,
+            curiosityOverlap,
+            lifeChapterOverlap,
+            everydayAnchorOverlap,
+            topCopyDimensions,
           }),
           'v2_reveal_context',
           { userId, weekAnchorMonday, matchId }
@@ -1484,8 +1495,10 @@ export async function POST(request: Request) {
       } else {
         if (protocolV2Enabled) {
           const reasons = (match.reasons as Record<string, unknown>) ?? {}
-          const sharedInterests = (reasons.shared_interests as string[]) ?? []
-          const hooks = (reasons.conversation_hooks as string[]) ?? []
+          const rawReasons = ((reasons.raw as Record<string, unknown> | undefined) ?? reasons)
+          const copyReasons = ((reasons.copy as Record<string, unknown> | undefined) ?? reasons)
+          const sharedInterests = (copyReasons.shared_interests as string[]) ?? (rawReasons.shared_interests as string[]) ?? []
+          const hooks = (rawReasons.conversation_hooks as string[]) ?? []
           const conversationThread = (hooks[0] as string) ?? ''
           const { data: pair } = await supabase
             .from('match_candidates')

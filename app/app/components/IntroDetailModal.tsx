@@ -228,13 +228,15 @@ export function IntroDetailModal({
   const age = detail ? ageFromBirthdate(detail.profile.birthdate) : null
 
   // Normalize reasons (backend may send snake_case)
+  const rawReasons = ((intro.reasons as { raw?: Record<string, unknown> } | null)?.raw ?? intro.reasons ?? null) as Record<string, unknown> | null
+  const copyReasons = ((intro.reasons as { copy?: Record<string, unknown> } | null)?.copy ?? intro.reasons ?? null) as Record<string, unknown> | null
   const conversationHooks = intro.reasons?.conversationHooks?.length
     ? intro.reasons.conversationHooks
-    : intro.reasons?.conversation_hooks ?? []
+    : ((rawReasons?.conversation_hooks as string[] | undefined) ?? intro.reasons?.conversation_hooks ?? [])
   const sharedInterestsFromReasons =
     intro.reasons?.sharedInterests?.length
       ? intro.reasons.sharedInterests
-      : intro.reasons?.shared_interests ?? []
+      : ((copyReasons?.shared_interests as string[] | undefined) ?? intro.reasons?.shared_interests ?? [])
 
   // If no shared_interests array, try to parse "You both enjoy X and Y" from hooks
   const parsedInterests: string[] = []

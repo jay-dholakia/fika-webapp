@@ -50,6 +50,13 @@ type SelectedPairInput = {
   reasons?: Record<string, unknown>
 }
 
+type CopyDimensionKey =
+  | 'q_interests'
+  | 'q_curiosity'
+  | 'q_what_makes_great_fika'
+  | 'q_life_chapter'
+  | 'q_everyday_anchor'
+
 function ageFromBirthdate(birthdate: string | null | undefined): number | null {
   if (!birthdate || typeof birthdate !== 'string') return null
   const date = new Date(birthdate.trim())
@@ -86,6 +93,21 @@ function getMulti(intake: IntakeRow, questionId: string): string[] {
   if (Array.isArray(v)) return v.map((x) => String(x))
   if (typeof v === 'string' && v.trim()) return [v]
   return []
+}
+
+function rankCopyDimensions(sectionScores: Record<string, number>): CopyDimensionKey[] {
+  const copySafe: CopyDimensionKey[] = [
+    'q_interests',
+    'q_curiosity',
+    'q_what_makes_great_fika',
+    'q_life_chapter',
+    'q_everyday_anchor',
+  ]
+  return [...copySafe].sort((a, b) => {
+    const scoreDiff = (sectionScores[b] ?? 0) - (sectionScores[a] ?? 0)
+    if (scoreDiff !== 0) return scoreDiff
+    return copySafe.indexOf(a) - copySafe.indexOf(b)
+  })
 }
 
 function asDisplay(value: unknown): string {
@@ -661,6 +683,10 @@ export async function POST(request: Request) {
     hopingB: string | null
     overlapGreatFika: string[]
     overlapInterests: string[]
+    overlapCuriosity: string[]
+    overlapLifeChapter: string[]
+    overlapEverydayAnchor: string[]
+    topCopyDimensions: CopyDimensionKey[]
     compareRows: CompareRow[]
     sectionScores: Record<string, number>
   }> = []
@@ -691,6 +717,15 @@ export async function POST(request: Request) {
       const overlapInterests = getMulti(a.intake, 'q_interests').filter((x) =>
         getMulti(b.intake, 'q_interests').includes(x)
       )
+      const overlapCuriosity = getMulti(a.intake, 'q_curiosity').filter((x) =>
+        getMulti(b.intake, 'q_curiosity').includes(x)
+      )
+      const overlapLifeChapter = getMulti(a.intake, 'q_life_chapter').filter((x) =>
+        getMulti(b.intake, 'q_life_chapter').includes(x)
+      )
+      const overlapEverydayAnchor = getMulti(a.intake, 'q_everyday_anchor').filter((x) =>
+        getMulti(b.intake, 'q_everyday_anchor').includes(x)
+      )
       const compareRows = buildComparisonRows(a, b)
       pairs.push({
         userAId: a.profile.id,
@@ -710,6 +745,10 @@ export async function POST(request: Request) {
         hopingB,
         overlapGreatFika,
         overlapInterests,
+        overlapCuriosity,
+        overlapLifeChapter,
+        overlapEverydayAnchor,
+        topCopyDimensions: rankCopyDimensions(scored.sectionScores),
         compareRows,
         sectionScores: scored.sectionScores,
       })
