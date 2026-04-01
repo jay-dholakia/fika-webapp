@@ -1393,7 +1393,7 @@ export async function POST(request: Request) {
           matchId,
         })
         await sleepForSmsPacing(SMS_PACING_MS.quickAck)
-        await sendConciergeAndLog(fromNumber, "Send me a 👍 if you're in. Or reply PASS.", 'v2_reveal_cta', {
+        await sendConciergeAndLog(fromNumber, "Send me a 👍 if you'd like to meet. Or reply PASS if this person doesn't feel like the right fit.", 'v2_reveal_cta', {
           userId,
           weekAnchorMonday,
           matchId,

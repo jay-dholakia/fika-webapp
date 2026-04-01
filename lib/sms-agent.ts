@@ -419,10 +419,40 @@ export function formatMatchRevealSentence(params: {
   conversationHooks: string[]
 }): string {
   const { otherFirstName, sharedInterests, conversationHooks } = params
-  const interestTeaser = sharedInterests.map((s) => String(s).trim()).filter(Boolean).slice(0, 2)
-  const topicTeaser = conversationHooks
-    .map((topic) => String(topic).trim().replace(/\.$/, ''))
-    .filter(Boolean)
+  const normalizeRevealTopic = (topic: string): string => {
+    const normalized = topic.trim().replace(/\.$/, '')
+    const lower = normalized.toLowerCase()
+
+    if (lower === "what we're working on" || lower === 'what we are working on') {
+      return 'work and projects'
+    }
+    if (lower === "what you're working on" || lower === 'what you are working on') {
+      return 'work and projects'
+    }
+
+    return normalized
+  }
+
+  const cleanedInterests = sharedInterests.map((s) => String(s).trim()).filter(Boolean)
+  const cleanedHooks = conversationHooks.map((topic) => normalizeRevealTopic(String(topic))).filter(Boolean)
+  let interestTeaser = cleanedInterests.slice(0, 2)
+  let remainingHooks = [...cleanedHooks]
+
+  if (interestTeaser.length === 0) {
+    const hookWithExamples = cleanedHooks.find((hook) => /\(([^)]+)\)/.test(hook))
+    const exampleMatch = hookWithExamples?.match(/\(([^)]+)\)/)
+    const examples = exampleMatch?.[1]
+      ?.split(',')
+      .map((part) => part.trim())
+      .filter(Boolean) ?? []
+
+    if (examples.length > 0) {
+      interestTeaser = examples.slice(0, 2)
+      remainingHooks = cleanedHooks.filter((hook) => hook !== hookWithExamples)
+    }
+  }
+
+  const topicTeaser = remainingHooks
     .map((topic) => topic.charAt(0).toLowerCase() + topic.slice(1))
     .slice(0, 3)
 
@@ -459,7 +489,7 @@ export function messageMatchOfferedUnrecognized(phase: 'reveal_pending' | 'revea
   if (phase === 'reveal_pending') {
     return `Send me a 👍 if you want to see the intro.`
   }
-  return `Send me a 👍 if you're in. Or reply PASS.`
+  return `Send me a 👍 if you'd like to meet. Or reply PASS if this person doesn't feel like the right fit.`
 }
 
 /** Phase 2 teaser after both users say YES. */
@@ -491,7 +521,7 @@ export function messageMutualYesContext(params: {
 
 /** Nudge when state is still AWAITING_AVAILABILITY (legacy state name; scheduling is proposal-first). */
 export function messageAwaitingAvailabilityReady(): string {
-  return `You're almost set.\n\nWhen we send a time and place, reply Yes to confirm or No if it doesn't work. Reply Help anytime.`
+  return `You're almost set.\n\nWhen we send a time and place, send me a 👍 if it works for you, or reply NO if you'd like a different time. Reply Help anytime.`
 }
 
 /** Tuesday intro with full plan (one proposed time + venue). Reply YES by 9 PM tonight. */
@@ -626,13 +656,13 @@ export type ProposalConfirmFields = {
 /** Same proposal for both parties (symmetric time confirmation). */
 export function messageProposalToConfirmSymmetric(params: ProposalConfirmFields): string {
   const { meetingDateLabel, time } = params
-  return `Looks like this could work:\n\n${meetingDateLabel} at ${time}\n\nSend me a 👍 if that works, or reply NO.`
+  return `Looks like this could work:\n\n${meetingDateLabel} at ${time}\n\nSend me a 👍 if this time works for you. Reply NO if you'd like a different time.`
 }
 
 /** User who said YES first — the other person just completed the pair. */
 export function messageProposalToConfirmFirstYes(params: ProposalConfirmFields & { otherFirstName: string }): string {
   const { otherFirstName, meetingDateLabel, time } = params
-  return `${otherFirstName} is in.\n\n${meetingDateLabel} at ${time}\n\nSend me a 👍 if that works, or reply NO.`
+  return `${otherFirstName} is in.\n\n${meetingDateLabel} at ${time}\n\nSend me a 👍 if this time works for you. Reply NO if you'd like a different time.`
 }
 
 /** User who said YES second — they just triggered the proposal. */
