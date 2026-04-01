@@ -539,20 +539,6 @@ function AppOnboardingContent() {
     }
   }
 
-  function advanceToNextStep(stepId: string, nextAnswers: AnswersState) {
-    setError(null)
-    setAvatarPhotoError(null)
-    const nextVisibleSteps = getVisibleStepsForAnswers(nextAnswers)
-    const stepIndex = nextVisibleSteps.findIndex((step) => step.id === stepId)
-    const nextStep = stepIndex >= 0 ? nextVisibleSteps[stepIndex + 1] : null
-    if (nextStep) {
-      setCurrentStepId(nextStep.id)
-      try {
-        window.scrollTo({ top: 0, behavior: 'smooth' })
-      } catch {}
-    }
-  }
-
   function handleBackStep() {
     setError(null)
     setAvatarPhotoError(null)
@@ -976,9 +962,8 @@ function AppOnboardingContent() {
                 nextAnswers.q_home_state = ''
               }
               setAnswers(nextAnswers)
-              if (v && step.required !== false) {
-                advanceToNextStep(step.id, nextAnswers)
-              }
+              setError(null)
+              setAvatarPhotoError(null)
             }}
             disabled={saving}
             aria-label={step.question}
@@ -1099,7 +1084,8 @@ function AppOnboardingContent() {
                 onClick={() => {
                   const nextAnswers: AnswersState = { ...answers, [step.id]: opt }
                   setAnswers(nextAnswers)
-                  advanceToNextStep(step.id, nextAnswers)
+                  setError(null)
+                  setAvatarPhotoError(null)
                 }}
                 disabled={saving}
               >

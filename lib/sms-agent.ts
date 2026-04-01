@@ -216,7 +216,7 @@ export function messageEntryFirstTimeMessages(
   return [msg1, msg2, msg3Link]
 }
 
-/** First-time entry when user's market is inactive. Returns 3 messages (URL standalone). */
+/** First-time entry when user's market is inactive. Returns 4 messages (URL standalone). */
 export function messageEntryFirstTimeMessagesInactiveMarket(
   appBase: string = 'https://letsfika.vercel.app',
   _cityLabel?: string | null
@@ -224,8 +224,9 @@ export function messageEntryFirstTimeMessagesInactiveMarket(
   const base = appBase.trim().replace(/\/$/, '') || 'https://letsfika.vercel.app'
   const msg1 = `You're in.`
   const msg2 = `We're getting Fika going in your area. When it opens up, we'll reach out.`
-  const msg3Link = `${base}/app`
-  return [msg1, msg2, msg3Link]
+  const msg3 = `Until then, you can edit your profile and learn more here:`
+  const msg4Link = `${base}/app`
+  return [msg1, msg2, msg3, msg4Link]
 }
 
 /** Reply when user in an inactive market texts in. */
