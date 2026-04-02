@@ -167,13 +167,14 @@ function buildVenueMapsUrl(params: {
   const lat = typeof params.lat === 'number' ? params.lat : Number(params.lat)
   const lng = typeof params.lng === 'number' ? params.lng : Number(params.lng)
 
+  const businessQuery = [name, address || city].filter(Boolean).join(', ').trim()
+  if (businessQuery) {
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(businessQuery)}`
+  }
   if (Number.isFinite(lat) && Number.isFinite(lng)) {
     return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${lat},${lng}`)}`
   }
-
-  const query = [name, address || city].filter(Boolean).join(', ').trim()
-  if (!query) return null
-  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`
+  return null
 }
 
 async function buildYoureAllSetLines(
