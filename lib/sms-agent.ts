@@ -573,11 +573,11 @@ export function formatMatchRevealSentence(params: {
   }
 
   const topicTeaser = remainingHooks
-    .map((topic) => topic.charAt(0).toLowerCase() + topic.slice(1))
+    .map((topic) => /^[A-Z0-9]{2,}$/.test(topic) ? topic : topic.charAt(0).toLowerCase() + topic.slice(1))
     .filter((topic, index, list) => list.indexOf(topic) === index)
     .slice(0, 3)
   const curiosityTeaser = cleanedCuriosity
-    .map((topic) => topic.charAt(0).toLowerCase() + topic.slice(1))
+    .map((topic) => /^[A-Z0-9]{2,}$/.test(topic) ? topic : topic.charAt(0).toLowerCase() + topic.slice(1))
     .filter((topic, index, list) => list.indexOf(topic) === index)
     .slice(0, 3)
   const copyDimensionOrder = topCopyDimensions.filter((value, index, list) => list.indexOf(value) === index)
@@ -588,13 +588,13 @@ export function formatMatchRevealSentence(params: {
   if (interestTeaser.length > 0) {
     const interests =
       interestTeaser.length === 1 ? interestTeaser[0]! : `${interestTeaser[0]} + ${interestTeaser[1]}`
-    introClauses.push(`You're both into ${interests}`)
+    introClauses.push(`You're both into ${interests}.`)
   }
   if (useCuriosityClause) {
-    introClauses.push(`both curious about ${formatTopicList(curiosityTeaser)}`)
+    introClauses.push(`You're both curious about ${formatTopicList(curiosityTeaser)}.`)
   }
   if (useConversationClause) {
-    introClauses.push(`both like talking about ${formatTopicList(topicTeaser)}`)
+    introClauses.push(`You both like talking about ${formatTopicList(topicTeaser)}.`)
   }
 
   const extraClauses: string[] = []
@@ -614,13 +614,7 @@ export function formatMatchRevealSentence(params: {
   }
 
   if (introClauses.length > 0) {
-    const introLine =
-      introClauses.length === 1
-        ? introClauses[0]!
-        : introClauses.length === 2
-          ? `${introClauses[0]}, and ${introClauses[1]}`
-          : `${introClauses[0]}, ${introClauses[1]}, and ${introClauses[2]}`
-    return [`Meet ${otherFirstName}. ${introLine}.`, ...extraClauses].join(' ').trim()
+    return [`Meet ${otherFirstName}.`, ...introClauses, ...extraClauses].join(' ').trim()
   }
   if (interestTeaser.length > 0) {
     const interests =

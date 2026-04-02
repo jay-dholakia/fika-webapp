@@ -154,6 +154,28 @@ function buildIntroCardUrl(params: {
   return url.toString()
 }
 
+function buildVenueMapsUrl(params: {
+  name?: string | null
+  address?: string | null
+  city?: string | null
+  lat?: number | null
+  lng?: number | null
+}): string | null {
+  const name = params.name?.trim() ?? ''
+  const address = params.address?.trim() ?? ''
+  const city = params.city?.trim() ?? ''
+  const lat = typeof params.lat === 'number' ? params.lat : Number(params.lat)
+  const lng = typeof params.lng === 'number' ? params.lng : Number(params.lng)
+
+  if (Number.isFinite(lat) && Number.isFinite(lng)) {
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${lat},${lng}`)}`
+  }
+
+  const query = [name, address || city].filter(Boolean).join(', ').trim()
+  if (!query) return null
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`
+}
+
 async function buildYoureAllSetLines(
   supabase: SupabaseClient,
   params: {
@@ -1377,10 +1399,10 @@ export async function POST(request: Request) {
         const { data: previewVenue } = previewVenueId
           ? await supabase
               .from('venues')
-              .select('name, neighborhood, city')
+              .select('name, neighborhood, city, address, lat, lng')
               .eq('id', previewVenueId)
               .maybeSingle()
-          : { data: null as { name?: string | null; neighborhood?: string | null; city?: string | null } | null }
+          : { data: null as { name?: string | null; neighborhood?: string | null; city?: string | null; address?: string | null; lat?: number | null; lng?: number | null } | null }
         if (introCardUrl) {
           await sendConciergeAndLog(fromNumber, ' ', 'v2_reveal_image', {
             userId,
@@ -1407,10 +1429,16 @@ export async function POST(request: Request) {
         )
         if (previewVenue?.name?.trim()) {
           await sleepForSmsPacing(SMS_PACING_MS.beat)
-          const venueArea = previewVenue.neighborhood?.trim() || previewVenue.city?.trim() || ''
+          const mapsUrl = buildVenueMapsUrl({
+            name: previewVenue.name,
+            address: previewVenue.address ?? null,
+            city: previewVenue.city ?? null,
+            lat: previewVenue.lat ?? null,
+            lng: previewVenue.lng ?? null,
+          })
           await sendConciergeAndLog(
             fromNumber,
-            `It looks like ${venueArea ? `${previewVenue.name} in ${venueArea}` : previewVenue.name} is a good middle spot.`,
+            `${previewVenue.name} looks like a good middle spot${mapsUrl ? `: ${mapsUrl}` : '.'}`,
             'v2_reveal_venue',
             { userId, weekAnchorMonday, matchId }
           )
