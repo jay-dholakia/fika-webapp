@@ -10,6 +10,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const isMarkets = pathname === '/admin' || pathname === '/admin/'
   const isMap = pathname?.startsWith('/admin/map')
   const isFikas = pathname?.startsWith('/admin/fikas')
+  const isEvents = pathname?.startsWith('/admin/events')
   const isSignups = pathname?.startsWith('/admin/signups')
   const isSmsControl = pathname?.startsWith('/admin/sms-control')
 
@@ -21,10 +22,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { href: '/admin', label: 'Cities', active: isMarkets },
     { href: '/admin/map', label: 'Geo map', active: isMap },
     { href: '/admin/fikas', label: 'Fikas', active: isFikas },
+    { href: '/admin/events', label: 'Events', active: isEvents },
     { href: '/admin/signups', label: 'People', active: isSignups },
     { href: '/admin/sms-control', label: 'SMS control', active: isSmsControl },
     { href: '/app/yourfika', label: 'Back to app', active: false },
-  ]), [isMarkets, isMap, isFikas, isSignups, isSmsControl])
+  ]), [isMarkets, isMap, isFikas, isEvents, isSignups, isSmsControl])
 
   return (
     <div className="admin-layout">
