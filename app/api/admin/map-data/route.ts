@@ -68,8 +68,26 @@ export async function GET(request: Request) {
     .select('slug, label, active')
     .order('slug')
 
+  const { data: venueCatalog } = await supabase
+    .from('venues')
+    .select('id, name, neighborhood, city, address, lat, lng, google_permanently_closed')
+    .eq('google_permanently_closed', false)
+    .not('lat', 'is', null)
+    .not('lng', 'is', null)
+    .order('name')
+
+  const venues = (venueCatalog ?? []).map((v) => ({
+    id: v.id as string,
+    name: (v as { name?: string }).name ?? '',
+    neighborhood: (v as { neighborhood?: string | null }).neighborhood ?? null,
+    city: (v as { city?: string }).city ?? '',
+    address: (v as { address?: string | null }).address ?? null,
+    lat: Number((v as { lat?: unknown }).lat),
+    lng: Number((v as { lng?: unknown }).lng),
+  })).filter((v) => Number.isFinite(v.lat) && Number.isFinite(v.lng))
+
   if (!includeFikas) {
-    return NextResponse.json({ points, polygons, markets: markets ?? [], fikas: [] })
+    return NextResponse.json({ points, polygons, markets: markets ?? [], fikas: [], venues })
   }
 
   const { data: matchRows } = await supabase
@@ -105,7 +123,7 @@ export async function GET(request: Request) {
     if (b) userIds.add(b)
   }
 
-  const { data: venues } = venueIds.size
+  const { data: fikaVenueRows } = venueIds.size
     ? await supabase
         .from('venues')
         .select('id, name, neighborhood, city, lat, lng')
@@ -113,7 +131,7 @@ export async function GET(request: Request) {
     : { data: [] as any[] }
 
   const venueById = new Map<string, any>()
-  for (const v of (venues ?? []) as any[]) {
+  for (const v of (fikaVenueRows ?? []) as any[]) {
     venueById.set(v.id as string, v)
   }
 
@@ -200,5 +218,5 @@ export async function GET(request: Request) {
     })
   }
 
-  return NextResponse.json({ points, polygons, markets: markets ?? [], fikas })
+  return NextResponse.json({ points, polygons, markets: markets ?? [], fikas, venues })
 }

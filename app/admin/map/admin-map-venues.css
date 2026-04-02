@@ -1,0 +1,5 @@
+/* Coffee emoji markers for curated venues — Leaflet divIcon default is a white titled box */
+.admin-map-venue-coffee.leaflet-marker-icon {
+  background: transparent !important;
+  border: none !important;
+}

@@ -1,13 +1,24 @@
 'use client'
 
 import './leaflet-flat-patch'
+import './admin-map-venues.css'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import L from 'leaflet'
 import type { FeatureGroup as LeafletFeatureGroup } from 'leaflet'
 import { getSupabase } from '@/lib/supabase'
 
 import 'leaflet-draw'
-import { CircleMarker, MapContainer, Pane, Polygon, Popup, TileLayer, useMap } from 'react-leaflet'
+import { CircleMarker, MapContainer, Marker, Pane, Polygon, Popup, TileLayer, useMap } from 'react-leaflet'
+
+/** Curated DB venues on the admin geo map (same pool as SMS venue picker). */
+const VENUE_COFFEE_ICON = L.divIcon({
+  className: 'admin-map-venue-coffee',
+  html:
+    '<span style="font-size:21px;line-height:1;display:flex;align-items:center;justify-content:center;width:26px;height:26px;filter:drop-shadow(0 1px 2px rgba(0,0,0,.45))" aria-hidden="true">☕</span>',
+  iconSize: [26, 26],
+  iconAnchor: [13, 13],
+  popupAnchor: [0, -12],
+})
 
 function adminMapLog(...args: unknown[]) {
   try {
@@ -45,6 +56,16 @@ interface FikaMarker {
   userA: { id: string; firstName: string | null; phone: string | null } | null
   userB: { id: string; firstName: string | null; phone: string | null } | null
   market: string | null
+}
+
+interface VenueMapRow {
+  id: string
+  name: string
+  neighborhood: string | null
+  city: string
+  address: string | null
+  lat: number
+  lng: number
 }
 
 interface MapPolygon {
@@ -297,6 +318,7 @@ export default function AdminMapClient() {
     polygons: MapPolygon[]
     markets: MarketRow[]
     fikas: FikaMarker[]
+    venues: VenueMapRow[]
   } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -305,6 +327,7 @@ export default function AdminMapClient() {
   const [showUsers, setShowUsers] = useState(true)
   const [showScheduledFikas, setShowScheduledFikas] = useState(true)
   const [showConfirmedFikas, setShowConfirmedFikas] = useState(true)
+  const [showVenueCatalog, setShowVenueCatalog] = useState(true)
   const [hasEdited, setHasEdited] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -342,7 +365,13 @@ export default function AdminMapClient() {
     if (res.status === 403) throw new Error("Your account doesn't have admin access.")
     if (!res.ok) throw new Error('Failed to load map data')
     const json = await res.json()
-    return { points: json.points ?? [], polygons: json.polygons ?? [], markets: json.markets ?? [], fikas: json.fikas ?? [] }
+    return {
+      points: json.points ?? [],
+      polygons: json.polygons ?? [],
+      markets: json.markets ?? [],
+      fikas: json.fikas ?? [],
+      venues: json.venues ?? [],
+    }
   }, [])
 
   useEffect(() => {
@@ -435,7 +464,7 @@ export default function AdminMapClient() {
     <div className="admin-card">
       <h1 className="admin-title">Fika geo map</h1>
       <p className="admin-description" style={{ marginBottom: '1rem' }}>
-        Overlay users, scheduled fikas, and confirmed fikas on the geo map. Use the checkboxes to toggle what you see.
+        Overlay users, scheduled fikas, confirmed fikas, and curated venues from the database (☕). Use the checkboxes to toggle layers.
       </p>
       <div style={{ marginBottom: '0.75rem' }}>
         <DailyGrowthChart
@@ -526,7 +555,17 @@ export default function AdminMapClient() {
           <input type="checkbox" checked={showConfirmedFikas} onChange={(e) => setShowConfirmedFikas(e.target.checked)} />
           Show confirmed fikas
         </label>
+        <label
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
+          title="All venues with lat/lng, not marked permanently closed in Google cache"
+        >
+          <input type="checkbox" checked={showVenueCatalog} onChange={(e) => setShowVenueCatalog(e.target.checked)} />
+          Show venue database ☕
+        </label>
       </div>
+      <p className="admin-description" style={{ margin: '0 0 0.75rem 0', fontSize: '0.85rem', color: 'var(--color-textSecondary, #666)' }}>
+        Coffee markers are every row in <code>venues</code> with coordinates (same set the matcher can use). Market filter does not hide venues.
+      </p>
       {saveError && (
         <p className="admin-error" style={{ marginBottom: '0.75rem' }} role="alert">
           {saveError}
@@ -541,6 +580,7 @@ export default function AdminMapClient() {
         >
           <Pane name="polygons" style={{ zIndex: 400 }} />
           <Pane name="markers" style={{ zIndex: 650 }} />
+          <Pane name="venueMarkers" style={{ zIndex: 660 }} />
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -664,6 +704,27 @@ export default function AdminMapClient() {
               </CircleMarker>
             )
           })}
+
+          {showVenueCatalog &&
+            data.venues.map((v) => (
+              <Marker key={v.id} position={[v.lat, v.lng]} icon={VENUE_COFFEE_ICON} pane="venueMarkers" zIndexOffset={400}>
+                <Popup>
+                  <div style={{ minWidth: 200 }}>
+                    <p style={{ margin: 0, fontWeight: 700 }}>Venue · {v.name}</p>
+                    <p style={{ margin: '4px 0 0 0', fontSize: 12, color: '#666' }}>
+                      {v.neighborhood ? `${v.neighborhood} · ` : ''}
+                      {v.city || '—'}
+                    </p>
+                    {v.address ? (
+                      <p style={{ margin: '4px 0 0 0', fontSize: 12, color: '#666' }}>{v.address}</p>
+                    ) : null}
+                    <p style={{ margin: '6px 0 0 0', fontSize: 11, color: '#888', fontFamily: 'monospace' }}>
+                      {v.id.slice(0, 8)}…
+                    </p>
+                  </div>
+                </Popup>
+              </Marker>
+            ))}
         </MapContainer>
       </div>
     </div>
