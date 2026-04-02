@@ -30,7 +30,7 @@ export function messageSmsSignupLinkSentSequence(link: string, sampleImageUrl?: 
     { content: 'Hey hey! Welcome to Fika.', delayAfterMs: SMS_PACING_MS.quickAck },
     {
       content:
-        "I'm your AI concierge. I'll introduce you to people nearby who you'd have a good conversation with.",
+        "I'm your Fika concierge, I'll introduce you to someone nearby I think you'll get along with — and set up the time to meet for coffee.",
       delayAfterMs: SMS_PACING_MS.reflective,
     },
     { content: 'You’ll get intros like this:', delayAfterMs: SMS_PACING_MS.context },
@@ -42,8 +42,7 @@ export function messageSmsSignupLinkSentSequence(link: string, sampleImageUrl?: 
     { content: sampleSignupIntroRevealBody(), delayAfterMs: SMS_PACING_MS.context },
     { content: 'Want to meet this week?', delayAfterMs: SMS_PACING_MS.reflective },
     {
-      content:
-        "Send me a 👍 if you'd like to meet. Or reply PASS if this person doesn't feel like the right fit.",
+      content: "Send me a 👍 if you're in. If he's in too, we'll suggest a time to meet up.",
       delayAfterMs: SMS_PACING_MS.context,
     },
     { content: 'To get started, tell me a bit more about you here:', delayAfterMs: SMS_PACING_MS.beat },
