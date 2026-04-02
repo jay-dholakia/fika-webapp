@@ -33,7 +33,25 @@ type ApiResponse = {
     source: string | null
     q: string | null
     limit: number
+    focusId?: string | null
   }
+}
+
+const EVENT_ROW_PREFIX = 'admin-event-row-'
+
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value.trim())
+}
+
+/** `?event=<uuid>` or `#event-<uuid>` or `#<uuid>` */
+function getFocusEventIdFromUrl(): string | null {
+  if (typeof window === 'undefined') return null
+  const fromQuery = new URLSearchParams(window.location.search).get('event')?.trim()
+  if (fromQuery && isUuid(fromQuery)) return fromQuery
+  const raw = window.location.hash.replace(/^#/, '').trim()
+  if (!raw) return null
+  const id = raw.toLowerCase().startsWith('event-') ? raw.slice(6) : raw
+  return isUuid(id) ? id : null
 }
 
 type EventEditDraft = {
@@ -90,6 +108,7 @@ export default function AdminEventsPage() {
   const [newVenue, setNewVenue] = useState('')
   const [newUrl, setNewUrl] = useState('')
   const [newNotes, setNewNotes] = useState('')
+  const [hashTick, setHashTick] = useState(0)
 
   const sourceOptions = useMemo(() => {
     const set = new Set<string>()
@@ -114,6 +133,8 @@ export default function AdminEventsPage() {
       if (status) params.set('status', status)
       if (source) params.set('source', source)
       if (q.trim()) params.set('q', q.trim())
+      const focusId = getFocusEventIdFromUrl()
+      if (focusId) params.set('id', focusId)
       const res = await fetch(`/api/admin/events?${params.toString()}`, {
         credentials: 'include',
         headers: await getAuthHeaders(),
@@ -138,6 +159,26 @@ export default function AdminEventsPage() {
     void load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => {
+    const onHashChange = () => setHashTick((t) => t + 1)
+    window.addEventListener('hashchange', onHashChange)
+    return () => window.removeEventListener('hashchange', onHashChange)
+  }, [])
+
+  useEffect(() => {
+    if (loading || !data?.events?.length) return
+    const focusId = getFocusEventIdFromUrl()
+    if (!focusId || !data.events.some((row) => row.id === focusId)) return
+    const scrollTimer = window.setTimeout(() => {
+      const el = document.getElementById(`${EVENT_ROW_PREFIX}${focusId}`)
+      if (!el) return
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      el.classList.add('admin-event-row--focused')
+      window.setTimeout(() => el.classList.remove('admin-event-row--focused'), 2800)
+    }, 0)
+    return () => window.clearTimeout(scrollTimer)
+  }, [data, loading, hashTick])
 
   async function updateEvent(eventId: string, patch: Record<string, unknown>) {
     setSavingId(eventId)
@@ -246,6 +287,7 @@ export default function AdminEventsPage() {
         <h1 className="admin-title">Events</h1>
         <p className="admin-description">
           Human-reviewed event queue for SMS recommendations. Only approved events should be surfaced to users.
+          Deep link: add <code>?event={'<uuid>'}</code> or <code>#event-{'<uuid>'}</code> to scroll to a row.
         </p>
 
         <div style={{ display: 'grid', gap: '0.75rem', marginBottom: '1rem' }}>
@@ -325,7 +367,7 @@ export default function AdminEventsPage() {
               </thead>
               <tbody>
                 {(data?.events ?? []).map((row) => (
-                  <tr key={row.id}>
+                  <tr key={row.id} id={`${EVENT_ROW_PREFIX}${row.id}`}>
                     <td>{row.status}</td>
                     <td>
                       {editingId === row.id ? (

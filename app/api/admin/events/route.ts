@@ -39,6 +39,10 @@ function normalizeStatus(value: string | null): 'draft' | 'approved' | 'rejected
   return ['draft', 'approved', 'rejected', 'expired'].includes(value) ? (value as 'draft' | 'approved' | 'rejected' | 'expired') : null
 }
 
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value.trim())
+}
+
 export async function GET(request: Request) {
   try {
     const context = await getAdminContext(request)
@@ -48,6 +52,8 @@ export async function GET(request: Request) {
     const status = normalizeStatus(searchParams.get('status'))
     const source = searchParams.get('source')?.trim() || null
     const q = searchParams.get('q')?.trim() || null
+    const focusIdRaw = searchParams.get('id')?.trim() ?? null
+    const focusId = focusIdRaw && isUuid(focusIdRaw) ? focusIdRaw : null
     const limit = Math.min(500, Math.max(20, Number(searchParams.get('limit') ?? '200') || 200))
 
     let query = context.supabase
@@ -69,14 +75,29 @@ export async function GET(request: Request) {
     const { data, error } = await query
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
+    let events = (data ?? []) as Record<string, unknown>[]
+    if (focusId) {
+      const already = events.some((row) => (row as { id?: string }).id === focusId)
+      if (!already) {
+        const { data: focusRow, error: focusErr } = await context.supabase
+          .from('events')
+          .select('*')
+          .eq('id', focusId)
+          .maybeSingle()
+        if (focusErr) return NextResponse.json({ error: focusErr.message }, { status: 500 })
+        if (focusRow) events = [focusRow as Record<string, unknown>, ...events]
+      }
+    }
+
     return NextResponse.json({
-      events: data ?? [],
+      events,
       summary: {
-        returned: (data ?? []).length,
+        returned: events.length,
         status,
         source,
         q,
         limit,
+        focusId,
       },
     })
   } catch (error) {

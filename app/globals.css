@@ -4264,6 +4264,12 @@ a {
 .admin-table tbody tr:hover {
   background: var(--color-bg-soft);
 }
+.admin-event-row--focused {
+  outline: 2px solid var(--color-accent, #3b82f6);
+  outline-offset: -2px;
+  background: var(--color-bg-soft);
+  transition: background 0.25s ease, outline-color 0.25s ease;
+}
 .admin-table-num {
   text-align: right;
   font-variant-numeric: tabular-nums;
