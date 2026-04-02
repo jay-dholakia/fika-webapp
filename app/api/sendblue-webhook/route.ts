@@ -1347,7 +1347,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true })
   }
 
-  if (!matchId && isEventKeyword(content)) {
+  if (state === SMS_STATES.GLOBAL_READY && !matchId && isEventKeyword(content)) {
     const category = parseEventCategoryFromKeyword(content)
     if (!category) {
       await sendConciergeAndLog(fromNumber, messageEventKeywordPrompt(), 'events_prompt', {
