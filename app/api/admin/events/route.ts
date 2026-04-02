@@ -110,7 +110,9 @@ export async function POST(request: Request) {
       neighborhood: typeof body.neighborhood === 'string' ? body.neighborhood.trim() || null : null,
       event_url: typeof body.event_url === 'string' ? body.event_url.trim() || null : null,
       category: typeof body.category === 'string' ? body.category.trim() || null : null,
-      tags: Array.isArray(body.tags) ? body.tags.filter((x): x is string => typeof x === 'string' && x.trim().length > 0) : [],
+      tags: Array.isArray(body.tags)
+        ? (body.tags as unknown[]).filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
+        : [],
       parsed_payload: body.parsed_payload && typeof body.parsed_payload === 'object' ? body.parsed_payload : {},
       confidence: typeof body.confidence === 'number' ? body.confidence : null,
       status: normalizeStatus(typeof body.status === 'string' ? body.status : null) ?? 'draft',

@@ -74,9 +74,8 @@ export async function PATCH(
     }
 
     if ('tags' in body) {
-      update.tags = Array.isArray(body.tags)
-        ? body.tags.filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
-        : []
+      const tags = Array.isArray(body.tags) ? (body.tags as unknown[]) : []
+      update.tags = tags.filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
     }
 
     if ('parsed_payload' in body && body.parsed_payload && typeof body.parsed_payload === 'object') {
