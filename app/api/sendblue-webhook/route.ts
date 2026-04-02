@@ -177,6 +177,12 @@ function buildVenueMapsUrl(params: {
   return null
 }
 
+function buildVenuePreviewUrl(appBase: string, venueId: string | null | undefined): string | null {
+  const id = venueId?.trim()
+  if (!id) return null
+  return new URL(`/v/${encodeURIComponent(id)}`, appBase).toString()
+}
+
 async function buildYoureAllSetLines(
   supabase: SupabaseClient,
   params: {
@@ -1430,13 +1436,7 @@ export async function POST(request: Request) {
         )
         if (previewVenue?.name?.trim()) {
           await sleepForSmsPacing(SMS_PACING_MS.beat)
-          const mapsUrl = buildVenueMapsUrl({
-            name: previewVenue.name,
-            address: previewVenue.address ?? null,
-            city: previewVenue.city ?? null,
-            lat: previewVenue.lat ?? null,
-            lng: previewVenue.lng ?? null,
-          })
+          const mapsUrl = buildVenuePreviewUrl(appBase, previewVenueId)
           await sendConciergeAndLog(
             fromNumber,
             `${previewVenue.name} looks like a good middle spot${mapsUrl ? `: ${mapsUrl}` : '.'}`,
