@@ -107,9 +107,8 @@ function AppLayoutInner({
   }
 
   function buildConciergeSmsHref() {
-    const name = profile?.first_name?.trim() || 'xxx'
     if (!CONCIERGE_NUMBER) return undefined
-    const body = `Hey! I'm ${name}. I have a question for the concierge:`
+    const body = 'Hey'
     return `sms:${CONCIERGE_NUMBER}?body=${encodeURIComponent(body)}`
   }
 
