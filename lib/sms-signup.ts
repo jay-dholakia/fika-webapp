@@ -2,7 +2,21 @@
  * Phone-first signup: no name/email over SMS. Send link to profile builder; they finalize with Google.
  */
 
+import { formatMatchRevealSentence } from '@/lib/sms-agent'
 import { SMS_PACING_MS } from '@/lib/sms-pacing'
+
+/** Same shape as post–intro-card reveal copy (sendblue v2_reveal_context). Keeps the sample aligned with real intros. */
+function sampleSignupIntroRevealBody(): string {
+  return formatMatchRevealSentence({
+    otherFirstName: 'Jay',
+    sharedInterests: ['fitness', 'startups'],
+    conversationHooks: [],
+    curiosityOverlap: ['side projects', 'live music'],
+    lifeChapterOverlap: ['doubling down on health and taking up a new hobby'],
+    everydayAnchorOverlap: [],
+    topCopyDimensions: ['q_interests', 'q_curiosity', 'q_life_chapter'],
+  })
+}
 
 export type SmsSignupSequenceMessage = {
   content: string
@@ -25,12 +39,13 @@ export function messageSmsSignupLinkSentSequence(link: string, sampleImageUrl?: 
     steps.push({ content: ' ', mediaUrl: sampleImageUrl.trim(), delayAfterMs: SMS_PACING_MS.media })
   }
   steps.push(
-    { content: 'Meet Jay. He’s 32, into fitness + startups.', delayAfterMs: SMS_PACING_MS.context },
+    { content: sampleSignupIntroRevealBody(), delayAfterMs: SMS_PACING_MS.context },
+    { content: 'Want to meet this week?', delayAfterMs: SMS_PACING_MS.reflective },
     {
-      content: 'You both have weekday evenings open — want to meet this week?',
-      delayAfterMs: SMS_PACING_MS.reflective,
+      content:
+        "Send me a 👍 if you'd like to meet. Or reply PASS if this person doesn't feel like the right fit.",
+      delayAfterMs: SMS_PACING_MS.context,
     },
-    { content: 'Send me a 👍 if you’re in. If he’s in too, we’ll suggest a time to meet up.', delayAfterMs: SMS_PACING_MS.context },
     { content: 'To get started, tell me a bit more about you here:', delayAfterMs: SMS_PACING_MS.beat },
     { content: link }
   )
