@@ -1,11 +1,11 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase-server'
 import { isAdminByUserId } from '@/lib/admin-markets'
 
 export const dynamic = 'force-dynamic'
 
-async function getAdminContext(request: Request): Promise<{ userId: string; supabase: ReturnType<typeof createClient> } | null> {
+async function getAdminContext(request: Request): Promise<{ userId: string; supabase: SupabaseClient } | null> {
   const supabaseAuth = await createServerSupabase()
   if (!supabaseAuth) return null
 
