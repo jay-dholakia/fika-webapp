@@ -15,10 +15,14 @@ const FRAUNCES_GSTATIC = {
 
 const INTRO_CARD_NAME_FIKA_PX = 56
 
+const FONT_FETCH_INIT: RequestInit = {
+  headers: { 'User-Agent': 'Mozilla/5.0 (compatible; FikaIntroCard/1.0)' },
+}
+
 async function loadFrauncesForOg() {
   const [res600, res700] = await Promise.all([
-    fetch(FRAUNCES_GSTATIC.w600),
-    fetch(FRAUNCES_GSTATIC.w700),
+    fetch(FRAUNCES_GSTATIC.w600, FONT_FETCH_INIT),
+    fetch(FRAUNCES_GSTATIC.w700, FONT_FETCH_INIT),
   ])
   if (!res600.ok || !res700.ok) {
     throw new Error('Failed to load Fraunces font files')
@@ -139,6 +143,9 @@ export async function GET(request: Request) {
       width: 768,
       height: 1024,
       fonts,
+      headers: {
+        'Cache-Control': 'private, no-cache, no-store, must-revalidate',
+      },
     }
   )
 }
