@@ -747,7 +747,7 @@ export function messageYesWaitingForOther(): string {
 
 /** Notify the person who said YES when the other passed or intro didn't get confirmed. */
 export function messageMatchPassed(): string {
-  return `This one didn't come together.\n\nWe'll reach out when we find another good intro.`
+  return `This one didn't come together — we'll send another intro soon.`
 }
 
 export function messageIntroNoLongerAvailable(): string {

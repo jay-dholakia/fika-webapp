@@ -1862,25 +1862,27 @@ export async function POST(request: Request) {
           .eq('match_id', matchId)
           .maybeSingle()
         const { data: otherOpt } = await supabase.from('opt_ins').select('decision').eq('match_id', matchId).eq('user_id', otherId).maybeSingle()
-        if (
+        const shouldNotifyOther =
           isOptInDecision(otherOpt?.decision) ||
           shouldNotifyOtherUserOfPass(otherStateRow?.state, (otherStateRow?.payload as Record<string, unknown> | undefined) ?? {})
-        ) {
+        if (shouldNotifyOther) {
           const { data: otherProf } = await supabase.from('profiles').select('phone').eq('id', otherId).maybeSingle()
           if (otherProf?.phone) {
             await sendConciergeAndLog(otherProf.phone, messageMatchPassed(), 'match_passed_to_other', { userId: otherId, weekAnchorMonday, matchId })
           }
+          await supabase.from('sms_conversation_states').delete().eq('user_id', otherId).eq('match_id', matchId)
+        } else {
+          await setPerMatchSmsState({
+            userId: otherId,
+            weekAnchorMonday,
+            matchId,
+            state: SMS_STATES.MATCH_CLOSED,
+            payload: {
+              closed_reason: 'other_user_passed',
+              closed_at: new Date().toISOString(),
+            },
+          })
         }
-        await setPerMatchSmsState({
-          userId: otherId,
-          weekAnchorMonday,
-          matchId,
-          state: SMS_STATES.MATCH_CLOSED,
-          payload: {
-            closed_reason: 'other_user_passed',
-            closed_at: new Date().toISOString(),
-          },
-        })
       }
       await supabase.from('sms_conversation_states').delete().eq('id', matchStateRow!.id)
     } else {
@@ -2162,10 +2164,10 @@ export async function POST(request: Request) {
           .eq('match_id', matchId)
           .eq('user_id', otherId)
           .maybeSingle()
-        if (
+        const shouldNotifyOther =
           isOptInDecision(otherOpt?.decision) ||
           shouldNotifyOtherUserOfPass(otherStateRow?.state, (otherStateRow?.payload as Record<string, unknown> | undefined) ?? {})
-        ) {
+        if (shouldNotifyOther) {
           const { data: otherProf } = await supabase
             .from('profiles')
             .select('phone')
@@ -2178,17 +2180,19 @@ export async function POST(request: Request) {
               matchId,
             })
           }
+          await supabase.from('sms_conversation_states').delete().eq('user_id', otherId).eq('match_id', matchId)
+        } else {
+          await setPerMatchSmsState({
+            userId: otherId,
+            weekAnchorMonday,
+            matchId,
+            state: SMS_STATES.MATCH_CLOSED,
+            payload: {
+              closed_reason: 'other_user_passed',
+              closed_at: new Date().toISOString(),
+            },
+          })
         }
-        await setPerMatchSmsState({
-          userId: otherId,
-          weekAnchorMonday,
-          matchId,
-          state: SMS_STATES.MATCH_CLOSED,
-          payload: {
-            closed_reason: 'other_user_passed',
-            closed_at: new Date().toISOString(),
-          },
-        })
       }
       await supabase.from('match_candidates').update({
         scheduling_status: 'expired',
