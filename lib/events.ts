@@ -149,7 +149,7 @@ export async function listApprovedUpcomingEvents(params: {
   const { data, error } = await query
   if (error) throw error
 
-  const rows = (data ?? []) as ApprovedEventRow[]
+  const rows = (data ?? []) as unknown as ApprovedEventRow[]
   return rows.slice(0, limit)
 }
 
