@@ -55,7 +55,7 @@ export const PROFILE_STEPS: ProfileStep[] = [
     type: 'date',
     required: true,
     minAge: 18,
-    placeholder: 'MM/DD/YYYY',
+    placeholder: 'Month, day, and year',
   },
   {
     id: 'gender',

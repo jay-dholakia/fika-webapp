@@ -190,8 +190,31 @@ function getInitialAnswers(
   return answers
 }
 
+/** Normalize to YYYY-MM-DD; rejects impossible calendar dates. */
 function parseDate(s: string): string | null {
-  const d = new Date(s)
+  const t = (s ?? '').trim()
+  if (!t) return null
+  const iso = t.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (iso) {
+    const y = Number(iso[1])
+    const mo = Number(iso[2])
+    const d = Number(iso[3])
+    if (mo < 1 || mo > 12 || d < 1 || d > 31) return null
+    const dt = new Date(y, mo - 1, d)
+    if (dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) return null
+    return `${iso[1]}-${iso[2]}-${iso[3]}`
+  }
+  const us = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
+  if (us) {
+    const mo = Number(us[1])
+    const d = Number(us[2])
+    const y = Number(us[3])
+    if (mo < 1 || mo > 12 || d < 1 || d > 31 || y < 1000) return null
+    const dt = new Date(y, mo - 1, d)
+    if (dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) return null
+    return `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+  }
+  const d = new Date(t)
   if (Number.isNaN(d.getTime())) return null
   return d.toISOString().slice(0, 10)
 }
@@ -215,10 +238,12 @@ function birthPartsFromRaw(raw: string): BirthParts {
   const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})$/)
   if (iso) return { yyyy: iso[1], mm: iso[2], dd: iso[3] }
 
-  // Common display format (MM/DD/YYYY) or pasted digits
+  // Pasted digit run (up to 8); pad so <select> values match 01–12 / 01–31
   const digits = s.replace(/\D/g, '').slice(0, 8)
-  const mm = digits.slice(0, 2)
-  const dd = digits.slice(2, 4)
+  let mm = digits.slice(0, 2)
+  let dd = digits.slice(2, 4)
+  if (mm.length === 1) mm = `0${mm}`
+  if (dd.length === 1) dd = `0${dd}`
   const yyyy = digits.slice(4, 8)
   return { mm, dd, yyyy }
 }
@@ -230,6 +255,31 @@ function birthPartsToRawDisplay(p: BirthParts): string {
   if (!mm && !dd && !yyyy) return ''
   // Keep the familiar MM/DD/YYYY shape for autosave + existing parsing.
   return `${mm}${mm ? '/' : ''}${dd}${dd ? '/' : ''}${yyyy}`.replace(/\/{2,}/g, '/')
+}
+
+const BIRTH_MONTH_OPTIONS: { value: string; label: string }[] = [
+  { value: '01', label: 'January' },
+  { value: '02', label: 'February' },
+  { value: '03', label: 'March' },
+  { value: '04', label: 'April' },
+  { value: '05', label: 'May' },
+  { value: '06', label: 'June' },
+  { value: '07', label: 'July' },
+  { value: '08', label: 'August' },
+  { value: '09', label: 'September' },
+  { value: '10', label: 'October' },
+  { value: '11', label: 'November' },
+  { value: '12', label: 'December' },
+]
+
+const BIRTH_DAY_OPTIONS = Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, '0'))
+
+function birthYearSelectOptions(): string[] {
+  const maxY = new Date().getFullYear() - 18
+  const minY = 1900
+  const ys: string[] = []
+  for (let y = maxY; y >= minY; y--) ys.push(String(y))
+  return ys
 }
 
 /** Format raw input as MM/DD/YYYY with slashes inserted automatically (digits only, max 8). Shows trailing slash after each complete segment so the next keystroke goes after it. */
@@ -254,12 +304,18 @@ function normalizeBirthdatePaste(raw: string): string {
   return formatBirthdateInput(raw)
 }
 
-function is18Plus(dateStr: string): boolean {
-  const d = new Date(dateStr)
+/** `isoYmd` must be YYYY-MM-DD from parseDate. */
+function is18Plus(isoYmd: string): boolean {
+  const m = isoYmd.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!m) return false
+  const y = Number(m[1])
+  const mo = Number(m[2])
+  const d = Number(m[3])
+  const birth = new Date(y, mo - 1, d)
   const today = new Date()
-  let age = today.getFullYear() - d.getFullYear()
-  const m = today.getMonth() - d.getMonth()
-  if (m < 0 || (m === 0 && today.getDate() < d.getDate())) age--
+  let age = today.getFullYear() - birth.getFullYear()
+  const monthDiff = today.getMonth() - birth.getMonth()
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) age--
   return age >= 18
 }
 
@@ -448,8 +504,9 @@ function AppOnboardingContent() {
       }
     }
     if (step.type === 'date' && typeof raw === 'string') {
-      if (!parseDate(raw)) return 'Please enter a valid date.'
-      if (step.minAge && !is18Plus(raw)) return 'You must be 18 or older to use Fika.'
+      const iso = parseDate(raw)
+      if (!iso) return 'Please enter a valid date.'
+      if (step.minAge && !is18Plus(iso)) return 'You must be 18 or older to use Fika.'
     }
     if ((step.type === 'multi_select' || step.type === 'searchable_multi') && step.maxSelections) {
       const arr = Array.isArray(raw) ? raw : []
@@ -487,8 +544,9 @@ function AppOnboardingContent() {
           }
         }
         if (s.type === 'date' && typeof raw === 'string') {
-          if (!parseDate(raw)) return 'Please enter a valid date.'
-          if (s.minAge && !is18Plus(raw)) return 'You must be 18 or older to use Fika.'
+          const iso = parseDate(raw)
+          if (!iso) return 'Please enter a valid date.'
+          if (s.minAge && !is18Plus(iso)) return 'You must be 18 or older to use Fika.'
         }
         if ((s.type === 'multi_select' || s.type === 'searchable_multi') && s.maxSelections) {
           const arr = Array.isArray(raw) ? raw : []
@@ -1008,18 +1066,17 @@ function AppOnboardingContent() {
           />
         )}
         {step.type === 'date' && step.id === 'birthdate' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1.4fr', gap: '0.75rem' }}>
-            <input
+          <div
+            className="onboarding-birthdate-grid"
+            style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.25fr) minmax(0, 0.9fr) minmax(0, 1fr)', gap: '0.75rem' }}
+          >
+            <select
               id="onboarding-birthdate-mm"
               name="birthdate-mm"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              type="text"
               className="auth-input"
-              placeholder="MM"
               value={birthParts.mm}
               onChange={(e) => {
-                const mm = e.target.value.replace(/\D/g, '').slice(0, 2)
+                const mm = e.target.value
                 setBirthParts((p) => {
                   const next = { ...p, mm }
                   setAnswers((a) => ({ ...a, birthdate: birthPartsToRawDisplay(next) }))
@@ -1029,18 +1086,21 @@ function AppOnboardingContent() {
               disabled={saving}
               autoComplete="bday-month"
               aria-label="Birth month"
-            />
-            <input
+            >
+              <option value="">Month</option>
+              {BIRTH_MONTH_OPTIONS.map(({ value, label }) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+            <select
               id="onboarding-birthdate-dd"
               name="birthdate-dd"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              type="text"
               className="auth-input"
-              placeholder="DD"
               value={birthParts.dd}
               onChange={(e) => {
-                const dd = e.target.value.replace(/\D/g, '').slice(0, 2)
+                const dd = e.target.value
                 setBirthParts((p) => {
                   const next = { ...p, dd }
                   setAnswers((a) => ({ ...a, birthdate: birthPartsToRawDisplay(next) }))
@@ -1050,18 +1110,21 @@ function AppOnboardingContent() {
               disabled={saving}
               autoComplete="bday-day"
               aria-label="Birth day"
-            />
-            <input
+            >
+              <option value="">Day</option>
+              {BIRTH_DAY_OPTIONS.map((d) => (
+                <option key={d} value={d}>
+                  {Number(d)}
+                </option>
+              ))}
+            </select>
+            <select
               id="onboarding-birthdate-yyyy"
               name="birthdate-yyyy"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              type="text"
               className="auth-input"
-              placeholder="YYYY"
               value={birthParts.yyyy}
               onChange={(e) => {
-                const yyyy = e.target.value.replace(/\D/g, '').slice(0, 4)
+                const yyyy = e.target.value
                 setBirthParts((p) => {
                   const next = { ...p, yyyy }
                   setAnswers((a) => ({ ...a, birthdate: birthPartsToRawDisplay(next) }))
@@ -1071,7 +1134,14 @@ function AppOnboardingContent() {
               disabled={saving}
               autoComplete="bday-year"
               aria-label="Birth year"
-            />
+            >
+              <option value="">Year</option>
+              {birthYearSelectOptions().map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))}
+            </select>
           </div>
         )}
         {step.type === 'date' && step.id !== 'birthdate' && (

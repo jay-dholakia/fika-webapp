@@ -1901,6 +1901,9 @@ a {
   max-width: 100%;
   min-width: 0;
 }
+.onboarding-birthdate-grid .auth-input {
+  width: 100%;
+}
 .onboarding-wrap input[type="date"].auth-input {
   /* Shorter on mobile so the date box doesn't stretch full width */
   max-width: 12rem;
