@@ -134,7 +134,4 @@ const WORK_ROLE_PRIORITY: string[] = [
   'Flight attendant',
 ]
 
-/** Chips shown before the user types (subset of `WORK_ROLE_OPTIONS`). */
-export const WORK_ROLE_FEATURED: string[] = WORK_ROLE_PRIORITY.slice(0, 44)
-
 export const WORK_ROLE_OPTIONS: string[] = mergeUniqueCaseInsensitive(WORK_ROLE_PRIORITY, PROFESSION_OPTIONS)

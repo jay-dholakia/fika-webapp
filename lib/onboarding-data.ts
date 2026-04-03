@@ -10,7 +10,7 @@ import tvStreamingTitles from '@/lib/data/tv-streaming-shows.json'
 import { ETHNICITY_OPTIONS } from '@/lib/ethnicity-options'
 import { RELATIONSHIP_STATUS_OPTIONS } from '@/lib/relationship-status-options'
 import { US_STATE_NAMES } from '@/lib/us-states-list'
-import { WORK_ROLE_FEATURED, WORK_ROLE_OPTIONS } from '@/lib/work-role-options'
+import { WORK_ROLE_OPTIONS } from '@/lib/work-role-options'
 
 export type StepType =
   | 'text'
@@ -225,13 +225,12 @@ export const INTAKE_STEPS: ProfileStep[] = [
   {
     id: 'q_work',
     question: 'What do you do for work?',
-    body: "Pick the closest match from the list, or type your own.\n\nIf you're not in paid work right now, that's welcome too: unemployed, between jobs, stay-at-home parent, full-time caregiving at home, a career break, sabbatical, in school, retired—or anything that fits you.",
+    body: 'Type to search or enter your own',
     type: 'searchable_single',
     required: false,
-    featuredOptions: WORK_ROLE_FEATURED,
     options: [...WORK_ROLE_OPTIONS],
     customAnswerMaxLength: 100,
-    placeholder: 'Type to search roles or enter your own',
+    placeholder: 'Type to search or enter your own',
   },
   // Block 2 — Interests: interests → curiosity → recs
   {
