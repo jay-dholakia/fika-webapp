@@ -855,7 +855,7 @@ function AppOnboardingContent() {
       <div className="onboarding-wrap">
         <h2 className="onboarding-question">You&apos;re all set</h2>
         <p className="onboarding-body" style={{ marginTop: '0.5rem' }}>
-          Sign in with Google to finalize your account and start matching.
+          Complete onboarding with Google sign-in
         </p>
         <button
           type="button"
@@ -1291,10 +1291,26 @@ function AppOnboardingContent() {
       <p className="onboarding-progress-copy">{Math.round(progressPercent)}% complete</p>
       {isFirstStep ? (
         <section className="onboarding-section onboarding-section-card onboarding-welcome-card" aria-label="Welcome">
-          <h2 className="onboarding-section-title">Welcome to Fika ☕</h2>
-          <p className="onboarding-welcome-body">
-            Answer a few quick questions so we can get to know you. We&apos;ll use your responses to introduce you to people nearby for a Fika.
+          <div className="onboarding-welcome-header">
+            <h2 className="onboarding-section-title">Welcome to Fika ☕</h2>
+            <p className="onboarding-welcome-estimate" role="status">
+              <span className="onboarding-welcome-estimate-value">~5 min</span>
+              <span className="onboarding-welcome-estimate-label">estimated to complete this questionnaire</span>
+            </p>
+          </div>
+          <p className="onboarding-welcome-lead">
+            A short questionnaire helps us get to know you so we can suggest coffee chats with people nearby.
           </p>
+          <dl className="onboarding-welcome-dl">
+            <div className="onboarding-welcome-dl-row">
+              <dt>What you&apos;ll do</dt>
+              <dd>Answer quick questions about you, your interests, and how you like to meet.</dd>
+            </div>
+            <div className="onboarding-welcome-dl-row">
+              <dt>What we&apos;ll do</dt>
+              <dd>Use your answers only to make thoughtful intros. Optional steps are labeled along the way.</dd>
+            </div>
+          </dl>
         </section>
       ) : null}
       <div className="onboarding-single-page">
