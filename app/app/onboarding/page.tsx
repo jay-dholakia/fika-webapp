@@ -986,7 +986,7 @@ function AppOnboardingContent() {
             disabled={saving}
             aria-label={step.question}
           >
-            <option value="">Skip</option>
+            <option value="">(Optional)</option>
             {step.options.map((opt) => (
               <option key={opt} value={opt}>
                 {opt}

@@ -2701,7 +2701,7 @@ a {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem 1rem;
-  padding: 0.65rem 0;
+  padding: 0.45rem 0;
   border-bottom: 1px solid var(--color-border);
   align-items: baseline;
 }
@@ -2744,34 +2744,34 @@ a {
 .app-how-it-works-title {
   font-family: var(--font-heading);
   font-size: 1.5rem;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.35rem;
 }
 .app-welcome-card {
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem;
 }
 .app-welcome-card-title {
   font-family: var(--font-heading);
-  font-size: 1.5rem;
-  margin: 0 0 0.75rem 0;
+  font-size: 1.35rem;
+  margin: 0 0 0.45rem 0;
 }
 .app-welcome-card-text {
   color: var(--color-textSecondary);
-  font-size: 1rem;
-  line-height: 1.5;
+  font-size: 0.9375rem;
+  line-height: 1.45;
   margin: 0;
 }
 .app-how-it-works-section {
-  margin-bottom: 2rem;
+  margin-bottom: 1.35rem;
 }
 .app-how-it-works-section-title {
   font-family: var(--font-heading);
-  font-size: 1.125rem;
-  margin-bottom: 0.75rem;
+  font-size: 1.05rem;
+  margin-bottom: 0.5rem;
   color: var(--color-text);
 }
 .app-how-it-works-page .app-how-it-works-step {
   align-items: flex-start;
-  gap: 0.75rem 1rem;
+  gap: 0.65rem 1rem;
 }
 .app-how-it-works-step-marker {
   flex-shrink: 0;
@@ -2799,7 +2799,7 @@ a {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.2rem;
 }
 .app-how-it-works-page .app-how-it-works-when {
   min-width: 0;
@@ -2813,7 +2813,7 @@ a {
   font-weight: 500;
 }
 .app-how-it-works-250-block {
-  margin-top: 1rem;
+  margin-top: 0.65rem;
 }
 .app-how-it-works-250-block .app-counter-text {
   margin: 0 0 0.5rem;

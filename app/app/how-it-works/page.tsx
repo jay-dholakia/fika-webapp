@@ -73,14 +73,9 @@ export default function HowItWorksPage() {
         <h1 className="app-welcome-card-title">Welcome to Fika!</h1>
         <p className="app-welcome-card-text">
           {marketActive === false ? (
-            <>
-              You&apos;re in. We&apos;re not actively growing Fika in your area just yet, but we hope to be soon. When that
-              changes, we&apos;ll reach out.
-            </>
+            <>You&apos;re in. We&apos;re not matching in your area yet—we&apos;ll let you know when we are.</>
           ) : (
-            <>
-              You&apos;re in. We&apos;ll text you when we have a good Fika intro for you.
-            </>
+            <>You&apos;re in. We&apos;ll text you when we have a match.</>
           )}
         </p>
       </div>
@@ -100,10 +95,10 @@ export default function HowItWorksPage() {
               )}
             </span>
             <div className="app-how-it-works-step-content">
-              <span className="app-how-it-works-when">Fill out your intro (5 min)</span>
+              <span className="app-how-it-works-when">Complete your intro (~5 min)</span>
               <span className="app-how-it-works-what">
-                Answer a few questions so we can find someone nearby you&apos;ll actually want to meet — similar enough to
-                connect, different enough to keep things interesting.
+                Short questionnaire so we can match you nearby—enough in common to click, enough difference to stay
+                interesting.
               </span>
               {!questionnaireComplete && !onboardingLoading && (
                 <p style={{ margin: '0.5rem 0 0 0' }}>
@@ -123,17 +118,14 @@ export default function HowItWorksPage() {
               )}
             </span>
             <div className="app-how-it-works-step-content">
-              <span className="app-how-it-works-when">We text you when there&apos;s a strong match</span>
+              <span className="app-how-it-works-when">We text you when there&apos;s a match</span>
               <span className="app-how-it-works-what">
                 {marketActive === false ? (
-                  <>
-                    We&apos;re not actively growing Fika in your area just yet, but we hope to be soon. When that changes,
-                    we&apos;ll reach out. Know someone who&apos;d enjoy this? Invite them below.
-                  </>
+                  <>We&apos;re not growing here yet; we&apos;ll reach out when we are. Know someone who&apos;d like this?</>
                 ) : (
                   <>
-                    There&apos;s no feed to scroll or profiles to browse. When we find someone worth meeting, we&apos;ll reach
-                    out directly. We&apos;re matching in {cityLabel}. Know someone who&apos;d enjoy this? Invite them below.
+                    No feed to browse—we text when there&apos;s someone for you in {cityLabel}. Know someone who&apos;d like
+                    this?
                   </>
                 )}
               </span>
@@ -177,8 +169,8 @@ export default function HowItWorksPage() {
 
       <section className="app-how-it-works-section" aria-labelledby="how-it-plays-out-heading">
         <h2 id="how-it-plays-out-heading" className="app-how-it-works-section-title">How it plays out</h2>
-        <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.9375rem', marginBottom: '1rem' }}>
-          When we find a match, here&apos;s what happens:
+        <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.9375rem', marginBottom: '0.75rem' }}>
+          When we find a match:
         </p>
         <ol className="app-how-it-works-timeline" aria-label="How a match plays out">
           <li className="app-how-it-works-step">
@@ -186,8 +178,8 @@ export default function HowItWorksPage() {
             <div className="app-how-it-works-step-content">
               <span className="app-how-it-works-when">You get an intro</span>
               <span className="app-how-it-works-what">
-                We text you a quick snapshot of the person — who they are, where they&apos;re based, and what you have in
-                common. If you&apos;re both up for it, we move forward.
+                Text with a quick snapshot—who they are, where they&apos;re based, what you share. If you&apos;re both in, we
+                move ahead.
               </span>
             </div>
           </li>
@@ -196,8 +188,7 @@ export default function HowItWorksPage() {
             <div className="app-how-it-works-step-content">
               <span className="app-how-it-works-when">We line it up</span>
               <span className="app-how-it-works-what">
-                We suggest a time and a spot nearby based on both of your locations and availability. You lock it in with a
-                quick reply — no back-and-forth.
+                We propose a time and a nearby spot from both your locations and availability—you confirm by text.
               </span>
             </div>
           </li>
@@ -206,15 +197,14 @@ export default function HowItWorksPage() {
             <div className="app-how-it-works-step-content">
               <span className="app-how-it-works-when">You meet</span>
               <span className="app-how-it-works-what">
-                You show up, grab a coffee, and have the conversation. No pressure, no expectations — just a real
-                interaction.
+                Show up for coffee and a real conversation—low pressure, no script.
               </span>
             </div>
           </li>
         </ol>
       </section>
 
-      <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.9rem', marginTop: '1.5rem', marginBottom: 0 }}>
+      <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.9rem', marginTop: '1rem', marginBottom: 0 }}>
         <Link href="/app/settings/how-it-works">FAQ &amp; more answers</Link>
       </p>
 
@@ -224,25 +214,16 @@ export default function HowItWorksPage() {
         !profile?.id_verified_at && (
           <section
             className="app-card app-welcome-id-verify"
-            style={{ marginTop: '1.25rem' }}
+            style={{ marginTop: '1rem' }}
             aria-labelledby="welcome-id-verify-heading"
           >
             <h2 id="welcome-id-verify-heading" className="app-how-it-works-section-title" style={{ marginTop: 0 }}>
               Get ID verified
             </h2>
-            <div style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem', marginBottom: '1rem' }}>
-              <p style={{ margin: '0 0 0.75rem 0' }}>Know who you&apos;re meeting before you show up.</p>
-              <p style={{ margin: '0 0 0.75rem 0' }}>
-                A verified profile makes it easier for others to say yes—and helps you feel confident doing the same.
-              </p>
-              <p style={{ margin: 0 }}>Takes about a minute.</p>
-            </div>
-            <PersonaIdVerification
-              userId={userId}
-              idVerifiedAt={profile?.id_verified_at ?? null}
-              onVerified={refetch}
-              hint="Verified profiles get a check next to their name so both sides know the identity is confirmed."
-            />
+            <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.9375rem', margin: '0 0 0.75rem 0' }}>
+              A blue check helps people say yes with confidence. About a minute with Persona.
+            </p>
+            <PersonaIdVerification userId={userId} idVerifiedAt={profile?.id_verified_at ?? null} onVerified={refetch} />
           </section>
         )}
     </div>

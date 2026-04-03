@@ -1,5 +1,6 @@
 /**
- * Writes lib/data/music-artists.json (500), colleges.json (500), sports-teams.json (500).
+ * Writes lib/data/music-artists.json (500; intl seeds + multi-country iTunes + US fill),
+ * colleges.json (500), sports-teams.json (500).
  * Run: node scripts/fetch-fandom-intake-lists.mjs
  */
 import fs from 'fs'
@@ -10,10 +11,230 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const root = path.join(__dirname, '..')
 const dataDir = path.join(root, 'lib', 'data')
 
+const ARTIST_CAP = 500
+
+async function searchItunesArtists(term, country, limit = 200) {
+  const url = `https://itunes.apple.com/search?term=${encodeURIComponent(term)}&entity=musicArtist&limit=${limit}&country=${country}`
+  const res = await fetch(url)
+  if (!res.ok) return []
+  const data = await res.json()
+  return (data.results || []).map((r) => (r.artistName || '').trim()).filter(Boolean)
+}
+
+function pushUniqueArtists(names, seen, batch) {
+  for (const raw of batch) {
+    const n = (raw || '').trim()
+    if (!n) continue
+    const k = n.toLowerCase()
+    if (seen.has(k)) continue
+    seen.add(k)
+    names.push(n)
+    if (names.length >= ARTIST_CAP) return true
+  }
+  return false
+}
+
+/** Global / regional stars first so the picker is not US-only. */
+const INTERNATIONAL_ARTIST_SEEDS = [
+  // Latin & Iberia
+  'Bad Bunny',
+  'Rosalía',
+  'J Balvin',
+  'KAROL G',
+  'Romeo Santos',
+  'Shakira',
+  'Maluma',
+  'Peso Pluma',
+  'Feid',
+  'Anuel AA',
+  'Ozuna',
+  'Myke Towers',
+  'Rauw Alejandro',
+  'Daddy Yankee',
+  'Marc Anthony',
+  'Juanes',
+  'Mon Laferte',
+  'Natalia Lafourcade',
+  'Vicente Fernández',
+  'Luis Miguel',
+  'Caetano Veloso',
+  'Gilberto Gil',
+  'Anitta',
+  'Seu Jorge',
+  'Ivete Sangalo',
+  'Los Ángeles Azules',
+  'Grupo Firme',
+  'Bizarrap',
+  'Tini',
+  'Aitana',
+  'Pablo Alborán',
+  'Alejandro Sanz',
+  'Manuel Turizo',
+  'Christian Nodal',
+  'Eladio Carrión',
+  'Young Miko',
+  'C. Tangana',
+  'Quevedo',
+  'Saiko',
+  'Duki',
+  'Trueno',
+  'Nicki Nicole',
+  // K-pop, J-pop, C-pop, wider Asia
+  'BTS',
+  'BLACKPINK',
+  'Stray Kids',
+  'TWICE',
+  'NewJeans',
+  'SEVENTEEN',
+  '(G)I-DLE',
+  'aespa',
+  'ENHYPEN',
+  'TOMORROW X TOGETHER',
+  'LE SSERAFIM',
+  'IVE',
+  'IU',
+  'YOASOBI',
+  'Kenshi Yonezu',
+  'ONE OK ROCK',
+  'LiSA',
+  'Utada Hikaru',
+  'Official HIGE DANdism',
+  'King Gnu',
+  'Mrs. GREEN APPLE',
+  'Jay Chou',
+  'JJ Lin',
+  'G.E.M.',
+  'Jolin Tsai',
+  'Mayday',
+  // Europe (non-US-centric)
+  'Stromae',
+  'Angèle',
+  'Christine and the Queens',
+  'Måneskin',
+  'Rammstein',
+  'David Guetta',
+  'DJ Snake',
+  'Aya Nakamura',
+  'Zaho de Sagazan',
+  'Lomepal',
+  'Orelsan',
+  'Meduza',
+  'Calvin Harris',
+  'Ed Sheeran',
+  'Adele',
+  'Dua Lipa',
+  'Harry Styles',
+  'Coldplay',
+  'Sam Smith',
+  'Ellie Goulding',
+  'Zara Larsson',
+  'Tove Lo',
+  'AURORA',
+  'ABBA',
+  'Avicii',
+  'Swedish House Mafia',
+  'Martin Garrix',
+  'Tiësto',
+  'Armin van Buuren',
+  'Andrea Bocelli',
+  'Luciano Pavarotti',
+  'Lara Fabian',
+  // Africa & Caribbean
+  'Burna Boy',
+  'Wizkid',
+  'Davido',
+  'Tems',
+  'Rema',
+  'Ayra Starr',
+  'Asake',
+  'Tiwa Savage',
+  'Diamond Platnumz',
+  'Angelique Kidjo',
+  "Youssou N'Dour",
+  'Fela Kuti',
+  'Bob Marley',
+  'Sean Paul',
+  'Shaggy',
+  'Koffee',
+  // South Asia & Middle East
+  'A.R. Rahman',
+  'Arijit Singh',
+  'Shreya Ghoshal',
+  'Diljit Dosanjh',
+  'AP Dhillon',
+  'Badshah',
+  'Neha Kakkar',
+  'Amr Diab',
+  'Fairuz',
+  'Nancy Ajram',
+  'Khaled',
+  // Oceania & Canada (global exports)
+  'Tame Impala',
+  'Kylie Minogue',
+  'Sia',
+  'Keith Urban',
+  'The Weeknd',
+  'Drake',
+  'Celine Dion',
+]
+
 async function fetchArtists() {
   const seen = new Set()
   const names = []
-  const terms = [
+
+  pushUniqueArtists(names, seen, INTERNATIONAL_ARTIST_SEEDS)
+
+  /** [search term, iTunes country code] — pulls regional charts. */
+  const internationalSearches = [
+    ['reggaeton', 'mx'],
+    ['reggaeton', 'co'],
+    ['urbano latino', 'ar'],
+    ['sertanejo', 'br'],
+    ['funk', 'br'],
+    ['kpop', 'kr'],
+    ['k-pop', 'kr'],
+    ['trot', 'kr'],
+    ['jpop', 'jp'],
+    ['anisong', 'jp'],
+    ['mandopop', 'tw'],
+    ['cantopop', 'hk'],
+    ['bollywood', 'in'],
+    ['punjabi', 'in'],
+    ['afrobeats', 'ng'],
+    ['amapiano', 'za'],
+    ['coupe decale', 'ci'],
+    ['rai', 'dz'],
+    ['arabic pop', 'eg'],
+    ['french rap', 'fr'],
+    ['schlager', 'de'],
+    ['italian pop', 'it'],
+    ['reggaeton', 'es'],
+    ['dembow', 'do'],
+    ['salsa', 'cu'],
+    ['bachata', 'do'],
+    ['cumbia', 'co'],
+    ['norteño', 'mx'],
+    ['britpop', 'gb'],
+    ['uk rap', 'gb'],
+    ['drill', 'gb'],
+    ['australian hip hop', 'au'],
+    ['nederlandse pop', 'nl'],
+    ['turkish pop', 'tr'],
+    ['russian pop', 'ru'],
+    ['polish hip hop', 'pl'],
+    ['swedish pop', 'se'],
+    ['reggaeton', 'cl'],
+    ['peruvian cumbia', 'pe'],
+  ]
+
+  for (const [term, country] of internationalSearches) {
+    if (names.length >= ARTIST_CAP) break
+    const batch = await searchItunesArtists(term, country)
+    if (pushUniqueArtists(names, seen, batch)) break
+    await new Promise((r) => setTimeout(r, 200))
+  }
+
+  const usTerms = [
     'pop',
     'rock',
     'hip hop',
@@ -43,23 +264,14 @@ async function fetchArtists() {
     'house',
     'techno',
   ]
-  for (const term of terms) {
-    if (names.length >= 500) break
-    const url = `https://itunes.apple.com/search?term=${encodeURIComponent(term)}&entity=musicArtist&limit=200`
-    const res = await fetch(url)
-    if (!res.ok) continue
-    const data = await res.json()
-    for (const r of data.results || []) {
-      const n = (r.artistName || '').trim()
-      if (n && !seen.has(n.toLowerCase())) {
-        seen.add(n.toLowerCase())
-        names.push(n)
-        if (names.length >= 500) break
-      }
-    }
-    await new Promise((r) => setTimeout(r, 250))
+  for (const term of usTerms) {
+    if (names.length >= ARTIST_CAP) break
+    const batch = await searchItunesArtists(term, 'us')
+    if (pushUniqueArtists(names, seen, batch)) break
+    await new Promise((r) => setTimeout(r, 200))
   }
-  return names.slice(0, 500)
+
+  return names.slice(0, ARTIST_CAP)
 }
 
 async function fetchColleges() {
@@ -303,6 +515,201 @@ function buildSportsTeams() {
     'Japan National Team',
     'South Korea National Team',
     'Nigeria National Team',
+  ]
+  /** Additional international clubs & nations (deduped with soccer + rest at merge). */
+  const soccerIntlMore = [
+    // Premier League & UK
+    'Aston Villa',
+    'Bournemouth',
+    'Brentford',
+    'Brighton & Hove Albion',
+    'Burnley',
+    'Crystal Palace',
+    'Everton',
+    'Fulham',
+    'Leeds United',
+    'Leicester City',
+    'Newcastle United',
+    'Nottingham Forest',
+    'West Ham United',
+    'Wolverhampton Wanderers',
+    'Ipswich Town',
+    'Southampton',
+    'West Bromwich Albion',
+    // La Liga
+    'Sevilla FC',
+    'Valencia CF',
+    'Villarreal CF',
+    'Athletic Club',
+    'Real Sociedad',
+    'Real Betis',
+    'Girona FC',
+    'CA Osasuna',
+    'RCD Mallorca',
+    'RC Celta de Vigo',
+    'RCD Espanyol',
+    'Getafe CF',
+    'UD Las Palmas',
+    'Rayo Vallecano',
+    'Deportivo Alavés',
+    // Serie A
+    'AS Roma',
+    'SS Lazio',
+    'ACF Fiorentina',
+    'Atalanta BC',
+    'Torino FC',
+    'Bologna FC',
+    'Udinese Calcio',
+    'US Sassuolo',
+    'Genoa CFC',
+    'Parma Calcio',
+    'Hellas Verona',
+    'US Lecce',
+    'Cagliari Calcio',
+    'AC Monza',
+    // Bundesliga
+    'RB Leipzig',
+    'Bayer 04 Leverkusen',
+    'Eintracht Frankfurt',
+    'VfL Wolfsburg',
+    'Borussia Mönchengladbach',
+    'SC Freiburg',
+    '1. FC Union Berlin',
+    'TSG Hoffenheim',
+    'VfB Stuttgart',
+    'SV Werder Bremen',
+    '1. FSV Mainz 05',
+    'FC Augsburg',
+    '1. FC Heidenheim',
+    'FC St. Pauli',
+    // Ligue 1
+    'Olympique de Marseille',
+    'Olympique Lyonnais',
+    'AS Monaco',
+    'Lille OSC',
+    'OGC Nice',
+    'RC Lens',
+    'Stade Rennais FC',
+    'RC Strasbourg Alsace',
+    'Toulouse FC',
+    'FC Nantes',
+    'Montpellier HSC',
+    'Stade de Reims',
+    'Stade Brestois',
+    'Le Havre AC',
+    // Netherlands, Portugal, Belgium, Turkey
+    'PSV Eindhoven',
+    'Feyenoord Rotterdam',
+    'Sporting CP',
+    'SC Braga',
+    'Heart of Midlothian',
+    'Hibernian FC',
+    'Club Brugge KV',
+    'RSC Anderlecht',
+    'Galatasaray SK',
+    'Fenerbahçe SK',
+    'Beşiktaş JK',
+    'Trabzonspor',
+    // Greece, Eastern Europe
+    'Olympiacos FC',
+    'Panathinaikos FC',
+    'AEK Athens',
+    'FC Shakhtar Donetsk',
+    'FC Dynamo Kyiv',
+    'GNK Dinamo Zagreb',
+    'Red Star Belgrade',
+    'SK Slavia Prague',
+    'FC Viktoria Plzeň',
+    'Legia Warsaw',
+    // Middle East & Asia
+    'Al Hilal SFC',
+    'Al Nassr FC',
+    'Al Ittihad FC',
+    'Al Ahli Saudi FC',
+    'Urawa Red Diamonds',
+    'Kashima Antlers',
+    'Yokohama F. Marinos',
+    'Kawasaki Frontale',
+    'Ulsan HD FC',
+    'Jeonbuk Hyundai Motors',
+    'Persepolis FC',
+    // Liga MX & CONCACAF
+    'Cruz Azul',
+    'Tigres UANL',
+    'CF Monterrey',
+    'Pumas UNAM',
+    'Deportivo Toluca FC',
+    'Santos Laguna',
+    'CF Pachuca',
+    'Club León',
+    'Club Atlas',
+    'Querétaro FC',
+    'Costa Rica National Team',
+    'Jamaica National Team',
+    // South America clubs
+    'Racing Club',
+    'Club Atlético Independiente',
+    'San Lorenzo de Almagro',
+    'Estudiantes de La Plata',
+    'Colo-Colo',
+    'Universidad de Chile',
+    'Peñarol',
+    'Club Nacional de Football',
+    'Millonarios FC',
+    'Atlético Nacional',
+    'Fluminense FC',
+    'Santos FC',
+    'São Paulo FC',
+    'Grêmio FBPA',
+    'Atlético Mineiro',
+    'Sport Club Internacional',
+    'Botafogo FR',
+    'CR Vasco da Gama',
+    'Club Olimpia',
+    'Cerro Porteño',
+    // Africa
+    'Al Ahly SC',
+    'Zamalek SC',
+    'Kaizer Chiefs FC',
+    'Orlando Pirates FC',
+    'Raja Club Athletic',
+    'Wydad Athletic Club',
+    'Mamelodi Sundowns FC',
+    // More national teams
+    'Portugal National Team',
+    'Italy National Team',
+    'Netherlands National Team',
+    'Belgium National Team',
+    'Uruguay National Team',
+    'Colombia National Team',
+    'Croatia National Team',
+    'Morocco National Team',
+    'Senegal National Team',
+    'Egypt National Team',
+    'Australia National Team',
+    'Sweden National Team',
+    'Norway National Team',
+    'Denmark National Team',
+    'Poland National Team',
+    'Switzerland National Team',
+    'Austria National Team',
+    'Wales National Team',
+    'Scotland National Team',
+    'Republic of Ireland National Team',
+    'Ghana National Team',
+    'Ivory Coast National Team',
+    'Cameroon National Team',
+    'Algeria National Team',
+    'South Africa National Team',
+    'Peru National Team',
+    'Chile National Team',
+    'Ecuador National Team',
+    'Paraguay National Team',
+    'Venezuela National Team',
+    'India National Team',
+    'Iran National Team',
+    'Saudi Arabia National Team',
+    'Qatar National Team',
   ]
   const cfb = [
     'Alabama Crimson Tide',
@@ -636,7 +1043,7 @@ function buildSportsTeams() {
     'Pepperdine Waves',
     'San Diego Toreros',
   ]
-  const merged = [...nfl, ...nba, ...mlb, ...nhl, ...mls, ...wnba, ...soccer, ...cfb]
+  const merged = [...nfl, ...nba, ...mlb, ...nhl, ...mls, ...wnba, ...soccer, ...soccerIntlMore, ...cfb]
   const seen = new Set()
   const out = []
   for (const t of merged) {

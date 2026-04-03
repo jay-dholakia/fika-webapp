@@ -236,7 +236,7 @@ export function NewQuestionsFlow({ orderedSteps, intake, userId, onComplete }: N
           disabled={saving}
           aria-label={step.question}
         >
-          <option value="">Skip</option>
+          <option value="">(Optional)</option>
           {step.options.map((opt) => (
             <option key={opt} value={opt}>
               {opt}

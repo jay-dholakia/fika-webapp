@@ -23,7 +23,12 @@ export function SearchableSinglePicker({ step, value, onChange, disabled }: Sear
   const qTrim = query.trim()
   const maxLen = step.customAnswerMaxLength ?? 100
   const qLower = qTrim.toLowerCase()
-  const visibleOptions = qTrim ? step.options.filter((opt) => opt.toLowerCase().includes(qLower)).slice(0, 100) : []
+  const featured = step.featuredOptions?.length ? step.featuredOptions : null
+  const visibleOptions = qTrim
+    ? step.options.filter((opt) => opt.toLowerCase().includes(qLower)).slice(0, 100)
+    : featured
+      ? featured
+      : []
 
   const pick = (opt: string) => {
     onChange(opt)

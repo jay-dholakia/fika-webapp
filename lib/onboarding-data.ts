@@ -10,6 +10,7 @@ import tvStreamingTitles from '@/lib/data/tv-streaming-shows.json'
 import { ETHNICITY_OPTIONS } from '@/lib/ethnicity-options'
 import { RELATIONSHIP_STATUS_OPTIONS } from '@/lib/relationship-status-options'
 import { US_STATE_NAMES } from '@/lib/us-states-list'
+import { WORK_ROLE_FEATURED, WORK_ROLE_OPTIONS } from '@/lib/work-role-options'
 
 export type StepType =
   | 'text'
@@ -34,6 +35,8 @@ export type ProfileStep = {
   minSelections?: number
   /** Max length for user-typed entries (searchable_multi / searchable_single). */
   customAnswerMaxLength?: number
+  /** searchable_single: option chips shown before the user types (full list still used when searching). */
+  featuredOptions?: string[]
 }
 
 // PROFILE: name, demographics, location
@@ -147,8 +150,7 @@ export const INTAKE_STEPS: ProfileStep[] = [
   },
   {
     id: 'q_college',
-    question: 'College or university',
-    body: 'School you attended (undergrad is fine). Type to search, pick from the list, or use your own. Skip if you prefer.',
+    question: 'Where did you go to school? (optional)',
     type: 'searchable_single',
     required: false,
     customAnswerMaxLength: 100,
@@ -223,10 +225,13 @@ export const INTAKE_STEPS: ProfileStep[] = [
   {
     id: 'q_work',
     question: 'What do you do for work?',
-    body: 'A short phrase is perfect (e.g. "Graphic Designer", "Barista", "Taking a break to raise kids", "Currently unemployed").',
-    type: 'text',
+    body: "Pick the closest match from the list, or type your own.\n\nIf you're not in paid work right now, that's welcome too: unemployed, between jobs, stay-at-home parent, full-time caregiving at home, a career break, sabbatical, in school, retired—or anything that fits you.",
+    type: 'searchable_single',
     required: false,
-    placeholder: 'Short description (optional)',
+    featuredOptions: WORK_ROLE_FEATURED,
+    options: [...WORK_ROLE_OPTIONS],
+    customAnswerMaxLength: 100,
+    placeholder: 'Type to search roles or enter your own',
   },
   // Block 2 — Interests: interests → curiosity → recs
   {
@@ -415,7 +420,7 @@ export const INTAKE_STEPS: ProfileStep[] = [
   },
   {
     id: 'q_typical_fika_times',
-    question: 'When are you usually free for a Fika?',
+    question: 'When are you most likely to be free for a Fika?',
     body: 'Select all that typically work — we use this to suggest times that fit both people.',
     type: 'multi_select',
     required: true,

@@ -25,16 +25,13 @@ type PersonaConstructor = new (opts: {
 
 const PERSONA_SCRIPT_SRC = 'https://cdn.withpersona.com/dist/persona-v5.5.0.js'
 
-const DEFAULT_HINT =
-  "Verifying adds a blue check on your name so matches know you've confirmed your identity with Persona."
-
 type PersonaIdVerificationProps = {
   userId: string
   idVerifiedAt: string | null
   onVerified: () => void | Promise<void>
   /** Primary = blue CTA; muted = gray (secondary). */
   buttonVariant?: 'primary' | 'muted'
-  /** Override footer hint under the button; pass `null` to hide. */
+  /** Optional line under the button (e.g. on pages without intro copy above). Omit to hide. */
   hint?: string | null
 }
 
@@ -135,6 +132,38 @@ export function PersonaIdVerification({
     if (idVerifiedAt) destroyClient()
   }, [idVerifiedAt, destroyClient])
 
+  /** Next.js Script onLoad often does not run when the file is already cached or deduped (SPA nav); Persona is still on window. */
+  useEffect(() => {
+    if (!configured || idVerifiedAt) return
+    const hasPersona = () => {
+      const w = typeof window !== 'undefined' ? (window as unknown as { Persona?: { Client?: unknown } }) : null
+      return Boolean(w?.Persona?.Client)
+    }
+    if (hasPersona()) {
+      setScriptReady(true)
+      setLoadError(null)
+      return
+    }
+    let attempts = 0
+    const maxAttempts = 80
+    const t = window.setInterval(() => {
+      attempts += 1
+      if (hasPersona()) {
+        setScriptReady(true)
+        setLoadError(null)
+        window.clearInterval(t)
+      } else if (attempts >= maxAttempts) {
+        window.clearInterval(t)
+      }
+    }, 100)
+    return () => window.clearInterval(t)
+  }, [configured, idVerifiedAt])
+
+  const markScriptReady = useCallback(() => {
+    setScriptReady(true)
+    setLoadError(null)
+  }, [])
+
   if (!configured) {
     return (
       <p className="profile-persona-unconfigured" style={{ color: 'var(--color-textSecondary)', fontSize: '0.9rem' }}>
@@ -172,10 +201,8 @@ export function PersonaIdVerification({
       <Script
         src={PERSONA_SCRIPT_SRC}
         strategy="afterInteractive"
-        onLoad={() => {
-          setScriptReady(true)
-          setLoadError(null)
-        }}
+        onLoad={markScriptReady}
+        onReady={markScriptReady}
         onError={() => {
           setLoadError('Could not load Persona. Check your network or try again.')
         }}
@@ -212,11 +239,11 @@ export function PersonaIdVerification({
           </p>
         )}
         {error && <p className="onboarding-error" role="alert" style={{ marginTop: '0.5rem' }}>{error}</p>}
-        {hint !== null && (
+        {hint != null && hint !== '' ? (
           <p className="profile-persona-hint" style={{ marginTop: '0.5rem', fontSize: '0.9rem', color: 'var(--color-textSecondary)' }}>
-            {hint ?? DEFAULT_HINT}
+            {hint}
           </p>
-        )}
+        ) : null}
       </div>
     </>
   )
