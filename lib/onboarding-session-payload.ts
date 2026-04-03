@@ -19,7 +19,14 @@ export function buildOnboardingSessionPayload(answers: AnswersState): Record<str
     if (s.id === 'q_home_state' && answers.q_home_country !== HOME_COUNTRY_UNITED_STATES) {
       raw = ''
     }
-    let value: string | string[] | number = raw === undefined || (typeof raw === 'object' && raw !== null && 'city' in raw) ? (s.type === 'multi_select' ? [] : '') : (raw as string | string[] | number)
+    const emptyMulti = s.type === 'multi_select' || s.type === 'searchable_multi'
+    const emptyVal =
+      raw === undefined || (typeof raw === 'object' && raw !== null && 'city' in raw)
+        ? emptyMulti
+          ? []
+          : ''
+        : (raw as string | string[] | number)
+    let value: string | string[] | number = emptyVal as string | string[] | number
     const isEmpty = value === '' || (Array.isArray(value) && value.length === 0)
     if (s.required !== true && isEmpty) value = 'N/A'
     return {

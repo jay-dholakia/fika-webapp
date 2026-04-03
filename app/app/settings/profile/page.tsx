@@ -19,6 +19,8 @@ import { getMarketFromCityOrLatLngWithDb } from '@/lib/markets'
 import { SmsConciergeCta } from '@/app/app/components/SmsConciergeCta'
 import { PersonaIdVerification } from '@/app/app/components/PersonaIdVerification'
 import { VerifiedBadge } from '@/app/app/components/VerifiedBadge'
+import { SearchableMultiPicker } from '@/app/app/components/SearchableMultiPicker'
+import { SearchableSinglePicker } from '@/app/app/components/SearchableSinglePicker'
 
 function parseDate(s: string): string | null {
   const d = new Date(s)
@@ -44,6 +46,7 @@ const BACKGROUND_INTAKE_IDS = new Set([
   'q_home_country',
   'q_home_state',
   'q_hometown',
+  'q_college',
   'q_ethnicity',
   'q_relationship_status',
 ])
@@ -123,11 +126,25 @@ export default function SettingsProfilePage() {
       if (step.id === 'q_home_state' && answers.q_home_country !== HOME_COUNTRY_UNITED_STATES) {
         answer = ''
       }
-      const normalized =
+      const multiType = step.type === 'multi_select' || step.type === 'searchable_multi'
+      let normalized: string | string[] | number
+      if (
         step.id === 'q12_first_conversation' &&
         (answer == null || (typeof answer === 'string' && !String(answer).trim()))
-          ? 'N/A'
-          : (answer ?? '')
+      ) {
+        normalized = 'N/A'
+      } else if (multiType) {
+        normalized = Array.isArray(answer)
+          ? answer
+          : answer == null || answer === ''
+            ? []
+            : typeof answer === 'object'
+              ? []
+              : [String(answer)]
+      } else {
+        normalized =
+          typeof answer === 'string' || typeof answer === 'number' ? (answer ?? '') : answer == null ? '' : ''
+      }
       const newItem: IntakeResponseItem = {
         question_id: step.id,
         question_text: step.question,
@@ -391,6 +408,26 @@ export default function SettingsProfilePage() {
           )}
         </div>
       )
+    if (step.type === 'searchable_single' && step.options) {
+      return (
+        <SearchableSinglePicker
+          step={step as ProfileStep & { type: 'searchable_single'; options: string[] }}
+          value={value}
+          disabled={saving}
+          onChange={(next) => setAnswers((a) => ({ ...a, [step.id]: next }))}
+        />
+      )
+    }
+    if (step.type === 'searchable_multi' && step.options) {
+      return (
+        <SearchableMultiPicker
+          step={step as ProfileStep & { type: 'searchable_multi'; options: string[] }}
+          value={value}
+          disabled={saving}
+          onChange={(next) => setAnswers((a) => ({ ...a, [step.id]: next }))}
+        />
+      )
+    }
     if (step.type === 'multi_select' && step.options) {
       const arr = (Array.isArray(value) ? value : []) as string[]
       const atMax = step.maxSelections != null && arr.length >= step.maxSelections

@@ -16,12 +16,21 @@ import {
 import { buildOnboardingSessionPayload, payloadToAnswers } from '@/lib/onboarding-session-payload'
 import { getMarketFromCityOrLatLngWithDb } from '@/lib/markets'
 import { checkProfilePhotoSingleFace } from '@/lib/avatar-face-check'
+import { SearchableMultiPicker } from '@/app/app/components/SearchableMultiPicker'
+import { SearchableSinglePicker } from '@/app/app/components/SearchableSinglePicker'
 import type { IntakeResponseItem } from '@/lib/db-types'
 import type { ProfileRow } from '@/lib/db-types'
 import type { IntakeResponsesV5Row } from '@/lib/db-types'
 
 const ABOUT_YOU_EXTRA_IDS = ['q_hoping_for']
-const BACKGROUND_STEP_IDS = ['q_home_country', 'q_home_state', 'q_hometown', 'q_ethnicity', 'q_relationship_status'] as const
+const BACKGROUND_STEP_IDS = [
+  'q_home_country',
+  'q_home_state',
+  'q_hometown',
+  'q_college',
+  'q_ethnicity',
+  'q_relationship_status',
+] as const
 const SECTION_2_IDS = [
   ...BACKGROUND_STEP_IDS,
   'q_life_chapter',
@@ -29,6 +38,10 @@ const SECTION_2_IDS = [
   'q_work',
   'q_interests',
   'q_curiosity',
+  'q_tv_streaming_shows',
+  'q_podcasts',
+  'q_favorite_artists',
+  'q_favorite_teams',
 ]
 const SECTION_3_IDS = [
   'q_topics',
@@ -39,7 +52,6 @@ const SECTION_3_IDS = [
   'q_what_makes_great_fika',
   'q_radius',
   'q_typical_fika_times',
-  'q_favorite_coffee_shop',
 ]
 const ABOUT_YOU_EXTRA_STEPS = INTAKE_STEPS.filter((s) => ABOUT_YOU_EXTRA_IDS.includes(s.id))
 const SECTION_2_STEPS = INTAKE_STEPS.filter((s) => SECTION_2_IDS.includes(s.id))
@@ -108,8 +120,11 @@ function hasStepAnswer(step: OnboardingRenderableStep, answers: AnswersState): b
       ((raw as { city?: string }).city?.trim() ?? '') !== ''
     )
   }
-  if (step.type === 'multi_select') {
+  if (step.type === 'multi_select' || step.type === 'searchable_multi') {
     return Array.isArray(raw) && raw.length > 0
+  }
+  if (step.type === 'searchable_single') {
+    return typeof raw === 'string' && raw.trim() !== ''
   }
   return typeof raw === 'string' ? raw.trim() !== '' : raw != null
 }
@@ -159,8 +174,9 @@ function getInitialAnswers(
   const responses = intake?.responses ?? []
   for (const s of INTAKE_STEPS) {
     const r = responses.find((x: IntakeResponseItem) => x.question_id === s.id)
-    let val: string | string[] | number = r ? (r.answer as string | string[] | number) : (s.type === 'multi_select' ? [] : '')
-    if (s.type === 'multi_select' && typeof val === 'string') val = [val]
+    const emptyMulti = s.type === 'multi_select' || s.type === 'searchable_multi'
+    let val: string | string[] | number = r ? (r.answer as string | string[] | number) : emptyMulti ? [] : ''
+    if (emptyMulti && typeof val === 'string') val = [val]
     answers[s.id] = val
   }
   answers.gender_preference = profile?.gender_preference ?? ''
@@ -435,11 +451,11 @@ function AppOnboardingContent() {
       if (!parseDate(raw)) return 'Please enter a valid date.'
       if (step.minAge && !is18Plus(raw)) return 'You must be 18 or older to use Fika.'
     }
-    if (step.type === 'multi_select' && step.maxSelections) {
+    if ((step.type === 'multi_select' || step.type === 'searchable_multi') && step.maxSelections) {
       const arr = Array.isArray(raw) ? raw : []
       if (arr.length > step.maxSelections) return `Please choose at most ${step.maxSelections} for: ${step.question}`
     }
-    if (step.type === 'multi_select' && step.minSelections) {
+    if ((step.type === 'multi_select' || step.type === 'searchable_multi') && step.minSelections) {
       const arr = Array.isArray(raw) ? raw : []
       if (arr.length < step.minSelections) return `Please choose at least ${step.minSelections} for: ${step.question}`
     }
@@ -474,11 +490,11 @@ function AppOnboardingContent() {
           if (!parseDate(raw)) return 'Please enter a valid date.'
           if (s.minAge && !is18Plus(raw)) return 'You must be 18 or older to use Fika.'
         }
-        if (s.type === 'multi_select' && s.maxSelections) {
+        if ((s.type === 'multi_select' || s.type === 'searchable_multi') && s.maxSelections) {
           const arr = Array.isArray(raw) ? raw : []
           if (arr.length > s.maxSelections) return `Please choose at most ${s.maxSelections} for: ${s.question}`
         }
-        if (s.type === 'multi_select' && s.minSelections) {
+        if ((s.type === 'multi_select' || s.type === 'searchable_multi') && s.minSelections) {
           const arr = Array.isArray(raw) ? raw : []
           if (arr.length < s.minSelections) return `Please choose at least ${s.minSelections} for: ${s.question}`
         }
@@ -488,11 +504,11 @@ function AppOnboardingContent() {
       const raw = answers[s.id]
       if (s.required !== false && (raw === undefined || raw === '' || (Array.isArray(raw) && raw.length === 0)))
         return `Please answer: ${s.question}`
-      if (s.type === 'multi_select' && s.maxSelections) {
+      if ((s.type === 'multi_select' || s.type === 'searchable_multi') && s.maxSelections) {
         const arr = Array.isArray(raw) ? raw : []
         if (arr.length > s.maxSelections) return `Please choose at most ${s.maxSelections}.`
       }
-      if (s.type === 'multi_select' && s.minSelections) {
+      if ((s.type === 'multi_select' || s.type === 'searchable_multi') && s.minSelections) {
         const arr = Array.isArray(raw) ? raw : []
         if (arr.length < s.minSelections) return `Please choose at least ${s.minSelections} for: ${s.question}`
       }
@@ -589,7 +605,9 @@ function AppOnboardingContent() {
       if (s.id === 'q_home_state' && answers.q_home_country !== HOME_COUNTRY_UNITED_STATES) {
         raw = ''
       }
-      let value: string | string[] | number = raw === undefined || (typeof raw === 'object' && 'city' in (raw as object)) ? (s.type === 'multi_select' ? [] : '') : (raw as string | string[] | number)
+      const emptyMultiSave = s.type === 'multi_select' || s.type === 'searchable_multi'
+      let value: string | string[] | number =
+        raw === undefined || (typeof raw === 'object' && 'city' in (raw as object)) ? (emptyMultiSave ? [] : '') : (raw as string | string[] | number)
       const isEmpty = value === '' || (Array.isArray(value) && value.length === 0)
       if (s.required !== true && isEmpty) value = 'N/A'
       return {
@@ -1242,6 +1260,24 @@ function AppOnboardingContent() {
               )
             })()}
           </div>
+        )}
+        {step.type === 'searchable_multi' && step.options && (
+          <SearchableMultiPicker
+            key={step.id}
+            step={step as ProfileStep & { type: 'searchable_multi'; options: string[] }}
+            value={value}
+            disabled={saving}
+            onChange={(next) => setAnswers((a) => ({ ...a, [step.id]: next }))}
+          />
+        )}
+        {step.type === 'searchable_single' && step.options && (
+          <SearchableSinglePicker
+            key={step.id}
+            step={step as ProfileStep & { type: 'searchable_single'; options: string[] }}
+            value={value}
+            disabled={saving}
+            onChange={(next) => setAnswers((a) => ({ ...a, [step.id]: next }))}
+          />
         )}
       </div>
     )

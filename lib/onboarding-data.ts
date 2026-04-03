@@ -1,7 +1,12 @@
 // LA Beta onboarding: Profile + Intake (Final). No maxes on multi_select.
-// Types: text | date | chips_single | location_permission | multi_select | select
+// Types: text | date | chips_single | location_permission | multi_select | searchable_multi | searchable_single | select
 
 import { COUNTRY_NAMES_FOR_SELECT } from '@/lib/countries-list'
+import collegeNames from '@/lib/data/colleges.json'
+import musicArtistNames from '@/lib/data/music-artists.json'
+import podcastTitles from '@/lib/data/podcasts.json'
+import sportsTeamNames from '@/lib/data/sports-teams.json'
+import tvStreamingTitles from '@/lib/data/tv-streaming-shows.json'
 import { ETHNICITY_OPTIONS } from '@/lib/ethnicity-options'
 import { RELATIONSHIP_STATUS_OPTIONS } from '@/lib/relationship-status-options'
 import { US_STATE_NAMES } from '@/lib/us-states-list'
@@ -12,6 +17,8 @@ export type StepType =
   | 'chips_single'
   | 'location_permission'
   | 'multi_select'
+  | 'searchable_multi'
+  | 'searchable_single'
   | 'select'
 
 export type ProfileStep = {
@@ -25,6 +32,8 @@ export type ProfileStep = {
   minAge?: number
   maxSelections?: number
   minSelections?: number
+  /** Max length for user-typed entries (searchable_multi / searchable_single). */
+  customAnswerMaxLength?: number
 }
 
 // PROFILE: name, demographics, location
@@ -135,6 +144,15 @@ export const INTAKE_STEPS: ProfileStep[] = [
     type: 'text',
     required: false,
     placeholder: 'e.g. Columbus, Ohio',
+  },
+  {
+    id: 'q_college',
+    question: 'College or university',
+    body: 'School you attended (undergrad is fine). Type to search, pick from the list, or use your own. Skip if you prefer.',
+    type: 'searchable_single',
+    required: false,
+    customAnswerMaxLength: 100,
+    options: [...collegeNames],
   },
   {
     id: 'q_ethnicity',
@@ -278,6 +296,46 @@ export const INTAKE_STEPS: ProfileStep[] = [
     ],
   },
   {
+    id: 'q_tv_streaming_shows',
+    question: 'Shows you’re into',
+    body: 'Type to search our list, tap to add, or use your own title anytime. Pick up to eight.',
+    type: 'searchable_multi',
+    required: false,
+    maxSelections: 8,
+    customAnswerMaxLength: 100,
+    options: [...tvStreamingTitles],
+  },
+  {
+    id: 'q_podcasts',
+    question: 'Podcasts you listen to',
+    body: 'Type to search our list, tap to add, or use your own title anytime. Pick up to eight.',
+    type: 'searchable_multi',
+    required: false,
+    maxSelections: 8,
+    customAnswerMaxLength: 100,
+    options: [...podcastTitles],
+  },
+  {
+    id: 'q_favorite_artists',
+    question: 'Musical artists or bands you’re into',
+    body: 'Type to search our list, tap to add, or use your own anytime. Pick up to eight.',
+    type: 'searchable_multi',
+    required: false,
+    maxSelections: 8,
+    customAnswerMaxLength: 100,
+    options: [...musicArtistNames],
+  },
+  {
+    id: 'q_favorite_teams',
+    question: 'Sports teams you follow',
+    body: 'Type to search our list, tap to add, or use your own anytime. Pick up to eight.',
+    type: 'searchable_multi',
+    required: false,
+    maxSelections: 8,
+    customAnswerMaxLength: 100,
+    options: [...sportsTeamNames],
+  },
+  {
     id: 'q_what_makes_great_fika',
     question: 'What would make a great Fika conversation for you?',
     body: 'Select all that apply.',
@@ -369,14 +427,6 @@ export const INTAKE_STEPS: ProfileStep[] = [
       'Weekend afternoons',
       'Weekend evenings',
     ],
-  },
-  {
-    id: 'q_favorite_coffee_shop',
-    question: "What's your favorite coffee shop in your city?",
-    body: "We use this to get a feel for good Fika spots in your area (think: plenty of tables, easy to get to, good coffee).",
-    type: 'text',
-    required: false,
-    placeholder: 'Name and neighborhood (optional)',
   },
   {
     id: 'confirm_intent',

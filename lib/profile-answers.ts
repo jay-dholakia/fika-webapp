@@ -4,8 +4,9 @@ import type { ProfileRow, IntakeResponsesV5Row } from './db-types'
 import type { IntakeResponseItem } from './db-types'
 
 function normalizeIntakeAnswerForDisplay(answer: string | string[] | number | null | undefined, stepType?: string): string | string[] | number {
-  if (answer == null) return stepType === 'multi_select' ? [] : ''
-  if (answer === INTAKE_ANSWER_SKIPPED) return stepType === 'multi_select' ? [] : ''
+  const multi = stepType === 'multi_select' || stepType === 'searchable_multi'
+  if (answer == null) return multi ? [] : ''
+  if (answer === INTAKE_ANSWER_SKIPPED) return multi ? [] : ''
   if (Array.isArray(answer) && answer.length === 1 && answer[0] === INTAKE_ANSWER_SKIPPED) return []
   return answer
 }

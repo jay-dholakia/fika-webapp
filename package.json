@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "generate:media-lists": "node scripts/fetch-onboarding-media-lists.mjs",
+    "generate:fandom-lists": "node scripts/fetch-fandom-intake-lists.mjs"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "^0.10.17",

@@ -4,6 +4,8 @@ import { useState, useMemo, useEffect } from 'react'
 import { getSupabase } from '@/lib/supabase'
 import { HOME_COUNTRY_UNITED_STATES } from '@/lib/countries-list'
 import type { ProfileStep } from '@/lib/onboarding-data'
+import { SearchableMultiPicker } from '@/app/app/components/SearchableMultiPicker'
+import { SearchableSinglePicker } from '@/app/app/components/SearchableSinglePicker'
 import { INTAKE_ANSWER_SKIPPED } from '@/lib/intro-detail'
 import type { IntakeResponseItem } from '@/lib/db-types'
 import type { IntakeResponsesV5Row } from '@/lib/db-types'
@@ -100,10 +102,17 @@ export function NewQuestionsFlow({ orderedSteps, intake, userId, onComplete }: N
       setError('Please answer this question.')
       return
     }
-    if (step.type === 'multi_select' && step.minSelections) {
+    if ((step.type === 'multi_select' || step.type === 'searchable_multi') && step.minSelections) {
       const arr = Array.isArray(raw) ? raw : []
       if (arr.length < step.minSelections) {
         setError(`Please choose at least ${step.minSelections}.`)
+        return
+      }
+    }
+    if ((step.type === 'multi_select' || step.type === 'searchable_multi') && step.maxSelections != null) {
+      const arr = Array.isArray(raw) ? raw : []
+      if (arr.length > step.maxSelections) {
+        setError(`Please choose at most ${step.maxSelections}.`)
         return
       }
     }
@@ -169,6 +178,15 @@ export function NewQuestionsFlow({ orderedSteps, intake, userId, onComplete }: N
         </div>
       )}
 
+      {step?.type === 'searchable_single' && step.options && (
+        <SearchableSinglePicker
+          step={step as ProfileStep & { type: 'searchable_single'; options: string[] }}
+          value={value}
+          disabled={saving}
+          onChange={(next) => setAnswers((a) => ({ ...a, [step.id]: next }))}
+        />
+      )}
+
       {step?.type === 'chips_single' && step.options && (
         <div>
           {step.options.map((opt) => {
@@ -225,6 +243,15 @@ export function NewQuestionsFlow({ orderedSteps, intake, userId, onComplete }: N
             </option>
           ))}
         </select>
+      )}
+
+      {step?.type === 'searchable_multi' && step.options && (
+        <SearchableMultiPicker
+          step={step as ProfileStep & { type: 'searchable_multi'; options: string[] }}
+          value={value}
+          disabled={saving}
+          onChange={(next) => setAnswers((a) => ({ ...a, [step.id]: next }))}
+        />
       )}
 
       {step?.type === 'multi_select' && step.options && (
