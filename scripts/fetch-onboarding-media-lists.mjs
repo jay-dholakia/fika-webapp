@@ -1,11 +1,13 @@
 /**
  * Regenerates lib/data/tv-streaming-shows.json and lib/data/podcasts.json (up to 600 each).
- * Order: iTunes US RSS top 100 first, then TVMaze (TV) / iTunes search (podcasts); case-insensitive dedupe.
+ * TV order: curated streaming hits (Netflix, Hulu, Prime, Apple TV+, Max), iTunes US RSS top TV,
+ * then TVMaze bulk; case-insensitive dedupe.
  * Run: node scripts/fetch-onboarding-media-lists.mjs
  */
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import { STREAMING_PLATFORM_CURATED } from './streaming-platform-shows-curation.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const root = path.join(__dirname, '..')
@@ -168,8 +170,16 @@ async function main() {
   fs.mkdirSync(dataDir, { recursive: true })
 
   const [topTv, mazeTv] = await Promise.all([fetchTopTvFromRss(), fetchTvMazeBulk()])
-  const tv = mergePopularFirst(topTv, mazeTv, MAX_TOTAL)
-  console.log('TV: top RSS', topTv.length, '+ TVMaze tail →', tv.length, 'unique')
+  const tv = mergePopularFirst([...STREAMING_PLATFORM_CURATED, ...topTv], mazeTv, MAX_TOTAL)
+  console.log(
+    'TV: curated streaming',
+    STREAMING_PLATFORM_CURATED.length,
+    '+ top RSS',
+    topTv.length,
+    '+ TVMaze tail →',
+    tv.length,
+    'unique'
+  )
   fs.writeFileSync(path.join(dataDir, 'tv-streaming-shows.json'), JSON.stringify(tv))
 
   const [topPods, searchPods] = await Promise.all([fetchTopPodcastsFromRss(), fetchPodcastsSearch()])
