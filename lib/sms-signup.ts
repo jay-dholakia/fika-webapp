@@ -15,6 +15,7 @@ function sampleSignupIntroRevealBody(): string {
     lifeChapterOverlap: ['doubling down on health and taking up a new hobby'],
     everydayAnchorOverlap: [],
     topCopyDimensions: ['q_interests', 'q_curiosity', 'q_life_chapter'],
+    textureOverlap: ['tv:The Bear'],
   })
 }
 

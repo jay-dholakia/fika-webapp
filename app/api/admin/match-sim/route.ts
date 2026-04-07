@@ -91,6 +91,39 @@ function getMulti(intake: IntakeRow, questionId: string): string[] {
   return getIntakeMulti(intake.responses, questionId)
 }
 
+const TEXTURE_QUESTION_IDS = [
+  'q_tv_streaming_shows',
+  'q_podcasts',
+  'q_favorite_artists',
+  'q_favorite_teams',
+] as const
+
+/** Prefix + label; `formatMatchRevealSentence` turns these into watch / listen / fans phrasing. */
+const TEXTURE_Q_KIND: Record<(typeof TEXTURE_QUESTION_IDS)[number], 'tv' | 'podcast' | 'artist' | 'team'> = {
+  q_tv_streaming_shows: 'tv',
+  q_podcasts: 'podcast',
+  q_favorite_artists: 'artist',
+  q_favorite_teams: 'team',
+}
+
+/** Exact string overlap on fandom/media fields (for reveal SMS texture line). */
+function textureOverlapsBetweenIntakes(a: IntakeRow, b: IntakeRow): string[] {
+  const out: string[] = []
+  for (const q of TEXTURE_QUESTION_IDS) {
+    const kind = TEXTURE_Q_KIND[q]
+    const ai = getMulti(a, q)
+    const bi = getMulti(b, q)
+    for (const x of ai) {
+      const token = `${kind}:${x}`
+      if (bi.includes(x) && !out.includes(token)) {
+        out.push(token)
+        if (out.length >= 2) return out
+      }
+    }
+  }
+  return out
+}
+
 function toMatcherPerson(c: SimCandidate): MatcherPerson {
   return {
     profile: {
@@ -532,6 +565,7 @@ export async function POST(request: Request) {
     overlapCuriosity: string[]
     overlapLifeChapter: string[]
     overlapEverydayAnchor: string[]
+    textureOverlap: string[]
     topCopyDimensions: CopyDimensionKey[]
     compareRows: CompareRow[]
     sectionScores: Record<string, number>
@@ -577,6 +611,7 @@ export async function POST(request: Request) {
       const overlapEverydayAnchor = getMulti(ca.intake, 'q_everyday_anchor').filter((x) =>
         getMulti(cb.intake, 'q_everyday_anchor').includes(x)
       )
+      const textureOverlap = textureOverlapsBetweenIntakes(ca.intake, cb.intake)
       const compareRows = buildComparisonRows(ca, cb)
       pairs.push({
         userAId: ca.profile.id,
@@ -599,6 +634,7 @@ export async function POST(request: Request) {
         overlapCuriosity,
         overlapLifeChapter,
         overlapEverydayAnchor,
+        textureOverlap,
         topCopyDimensions: rankCopyDimensions(breakdown),
         compareRows,
         sectionScores: sectionScoresFromBreakdown(breakdown),

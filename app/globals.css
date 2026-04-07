@@ -4562,6 +4562,25 @@ a {
 .admin-modal-dl span {
   display: contents;
 }
+.admin-sms-reveal-preview {
+  margin: 0.75rem 0 0;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-bg-soft);
+}
+.admin-sms-reveal-preview-label {
+  font-size: 0.8rem;
+  color: var(--color-textSecondary);
+  margin: 0 0 0.35rem;
+}
+.admin-sms-reveal-preview-body {
+  font-size: 0.95rem;
+  line-height: 1.45;
+  margin: 0;
+  color: var(--color-text);
+  white-space: pre-wrap;
+}
 .admin-compare-grid-wrap {
   overflow-x: auto;
   border: 1px solid var(--color-border);

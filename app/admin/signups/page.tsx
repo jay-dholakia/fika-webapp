@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { getSupabase } from '@/lib/supabase'
 import { getQuestionText, formatIntakeAnswer } from '@/lib/intro-detail'
 import type { IntakeResponseItem } from '@/lib/db-types'
+import { formatMatchRevealSentence } from '@/lib/sms-agent'
 
 type DashboardItem = { slug: string; label: string; count: number }
 type SignupRow = {
@@ -101,6 +102,8 @@ type SimPair = {
   overlapCuriosity: string[]
   overlapLifeChapter: string[]
   overlapEverydayAnchor: string[]
+  /** Shared shows / podcasts / artists / teams (exact overlap strings). */
+  textureOverlap: string[]
   topCopyDimensions: string[]
   compareRows: Array<{ label: string; a: string; b: string }>
   sectionScores: Record<string, number>
@@ -115,6 +118,24 @@ function formatDate(iso: string | null): string {
   } catch {
     return iso
   }
+}
+
+/**
+ * Same inputs as `match_candidates.reasons` when admin triggers SMS (raw slices + top_copy_dimensions).
+ * Matches production `v2_reveal_context` after the user sends 👍.
+ */
+function adminSimRevealSentence(p: SimPair, viewerIsUserA: boolean): string {
+  return formatMatchRevealSentence({
+    otherFirstName: (viewerIsUserA ? p.userBName : p.userAName)?.trim() || 'Someone',
+    sharedInterests: p.overlapInterests.slice(0, 3),
+    conversationHooks: p.overlapGreatFika.slice(0, 2),
+    sectionScores: p.sectionScores,
+    curiosityOverlap: p.overlapCuriosity.slice(0, 3),
+    lifeChapterOverlap: p.overlapLifeChapter.slice(0, 2),
+    everydayAnchorOverlap: p.overlapEverydayAnchor.slice(0, 2),
+    topCopyDimensions: p.topCopyDimensions.slice(0, 3),
+    textureOverlap: p.textureOverlap ?? [],
+  })
 }
 
 export default function AdminSignupsPage() {
@@ -288,6 +309,7 @@ export default function AdminSignupsPage() {
                 curiosity_overlap: p.overlapCuriosity.slice(0, 3),
                 life_chapter_overlap: p.overlapLifeChapter.slice(0, 2),
                 everyday_anchor_overlap: p.overlapEverydayAnchor.slice(0, 2),
+                texture_overlap: p.textureOverlap ?? [],
               },
               copy: {
                 top_copy_dimensions: p.topCopyDimensions.slice(0, 3),
@@ -809,6 +831,29 @@ export default function AdminSignupsPage() {
                 <p className="admin-modal-meta">Hoping for: {simPairModal.hopingA ?? '—'} ↔ {simPairModal.hopingB ?? '—'}</p>
                 <p className="admin-modal-meta">Shared interests: {simPairModal.overlapInterests?.length ? simPairModal.overlapInterests.slice(0, 8).join(', ') : '—'}</p>
                 <p className="admin-modal-meta">Great Fika overlap: {simPairModal.overlapGreatFika?.length ? simPairModal.overlapGreatFika.slice(0, 6).join(', ') : '—'}</p>
+              </div>
+
+              <div className="admin-modal-section">
+                <h3 className="admin-modal-section-title">Intro reveal SMS (after 👍)</h3>
+                <p className="admin-modal-meta">
+                  Two- or three-sentence factual reveal (overlaps only, no meet-ask) sent as{' '}
+                  <code style={{ fontSize: '0.85em' }}>v2_reveal_context</code> after 👍; the prompt and 👍/PASS lines follow in separate messages.
+                  Uses the same fields as <code style={{ fontSize: '0.85em' }}>reasons.raw</code> when you trigger SMS from here.{' '}
+                  <code style={{ fontSize: '0.85em' }}>texture_overlap</code> entries from the sim look like{' '}
+                  <code style={{ fontSize: '0.85em' }}>tv:The Bear</code> so the copy can say "both watch," "both listen to," or "fans of."
+                </p>
+                <div className="admin-sms-reveal-preview">
+                  <p className="admin-sms-reveal-preview-label">
+                    To <strong>{simPairModal.userAName}</strong> (about {simPairModal.userBName})
+                  </p>
+                  <p className="admin-sms-reveal-preview-body">{adminSimRevealSentence(simPairModal, true)}</p>
+                </div>
+                <div className="admin-sms-reveal-preview">
+                  <p className="admin-sms-reveal-preview-label">
+                    To <strong>{simPairModal.userBName}</strong> (about {simPairModal.userAName})
+                  </p>
+                  <p className="admin-sms-reveal-preview-body">{adminSimRevealSentence(simPairModal, false)}</p>
+                </div>
               </div>
 
               <div className="admin-modal-section">

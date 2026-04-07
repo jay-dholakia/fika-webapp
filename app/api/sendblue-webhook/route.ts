@@ -1423,6 +1423,7 @@ export async function POST(request: Request) {
         const curiosityOverlap = (rawReasons.curiosity_overlap as string[]) ?? []
         const lifeChapterOverlap = (rawReasons.life_chapter_overlap as string[]) ?? []
         const everydayAnchorOverlap = (rawReasons.everyday_anchor_overlap as string[]) ?? []
+        const textureOverlap = (rawReasons.texture_overlap as string[] | undefined) ?? []
         const topCopyDimensions = (copyReasons.top_copy_dimensions as string[]) ?? []
         const { data: pair } = await supabase
           .from('match_candidates')
@@ -1474,6 +1475,7 @@ export async function POST(request: Request) {
             lifeChapterOverlap,
             everydayAnchorOverlap,
             topCopyDimensions,
+            textureOverlap: textureOverlap.slice(0, 2),
           }),
           'v2_reveal_context',
           { userId, weekAnchorMonday, matchId }

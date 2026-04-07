@@ -414,6 +414,126 @@ export function messageMatchRevealPrompt(firstName?: string | null): string {
   return `We found a good Fika intro for you. Want to see it? Send me a 👍.`
 }
 
+/** After 👍: 2–3 factual sentences (overlaps only); meet-ask is sent in the next SMS. */
+type RevealClauseKey = 'interests' | 'curiosity' | 'conversation' | 'life' | 'anchor' | 'texture'
+
+const REVEAL_CLAUSE_ORDER: RevealClauseKey[] = [
+  'interests',
+  'curiosity',
+  'conversation',
+  'life',
+  'anchor',
+  'texture',
+]
+
+/** When more than five clauses would appear, drop these first (keep interests when present). */
+const REVEAL_CLAUSE_DROP_ORDER: RevealClauseKey[] = ['anchor', 'life', 'conversation', 'curiosity', 'texture']
+
+type TextureOverlapKind = 'tv' | 'podcast' | 'artist' | 'team' | 'unknown'
+
+const TEXTURE_TOKEN_RE = /^(tv|podcast|artist|team):(.*)$/i
+
+function parseTextureOverlapToken(raw: string): { kind: TextureOverlapKind; label: string } {
+  const s = String(raw).trim()
+  const m = s.match(TEXTURE_TOKEN_RE)
+  if (m?.[1] && m[2]?.trim()) {
+    return { kind: m[1]!.toLowerCase() as TextureOverlapKind, label: m[2]!.trim() }
+  }
+  return { kind: 'unknown', label: s }
+}
+
+/** One overlap item → clause fragment (no leading “you”). */
+function textureOverlapItemClause(kind: TextureOverlapKind, label: string): string {
+  if (!label) return ''
+  switch (kind) {
+    case 'tv':
+      return `both watch ${label}`
+    case 'podcast':
+    case 'artist':
+      return `both listen to ${label}`
+    case 'team':
+      return `you're both fans of ${label}`
+    default:
+      return `you're both into ${label}`
+  }
+}
+
+/** Up to two texture tokens → one reveal clause (e.g. both watch X, both listen to Y). */
+function buildTextureOverlapClause(tokens: string[]): string | null {
+  const cleaned = tokens
+    .map((s) => String(s).trim())
+    .filter(Boolean)
+    .filter((s, i, arr) => arr.indexOf(s) === i)
+    .slice(0, 2)
+  if (cleaned.length === 0) return null
+  const parsed = cleaned.map(parseTextureOverlapToken)
+  if (parsed.length === 1) {
+    const { kind, label } = parsed[0]!
+    const inner = textureOverlapItemClause(kind, label)
+    if (!inner) return null
+    return /^you're\b/i.test(inner) ? inner : `you ${inner}`
+  }
+  const [a, b] = parsed
+  if (
+    a!.kind === b!.kind &&
+    a!.kind !== 'unknown' &&
+    (a!.kind === 'tv' || a!.kind === 'podcast' || a!.kind === 'artist' || a!.kind === 'team')
+  ) {
+    if (a!.kind === 'tv') return `you both watch ${a!.label} and ${b!.label}`
+    if (a!.kind === 'podcast' || a!.kind === 'artist') return `you both listen to ${a!.label} and ${b!.label}`
+    return `you're both fans of ${a!.label} and ${b!.label}`
+  }
+  const left = textureOverlapItemClause(a!.kind, a!.label)
+  const right = textureOverlapItemClause(b!.kind, b!.label)
+  const l = /^you're\b/i.test(left) ? left : `you ${left}`
+  const r = /^you're\b/i.test(right) ? right : `you ${right}`
+  return `${l}, and ${r}`
+}
+
+/** Join overlap clauses inside one sentence (comma flow; last pair uses “and” / “and you also”). */
+function joinRevealClauseGroup(segments: string[]): string {
+  const cap = (s: string) => (s.length ? s.charAt(0).toUpperCase() + s.slice(1) : s)
+  if (segments.length === 0) return ''
+  if (segments.length === 1) return cap(segments[0]!)
+  if (segments.length === 2) return `${cap(segments[0]!)}, and ${segments[1]!}`
+  const head = cap(segments[0]!)
+  const mid = segments.slice(1, -1)
+  const last = segments[segments.length - 1]!
+  const middle = mid.length ? `${mid.join(', ')}, ` : ''
+  const lastBridge = /^you\b/i.test(last) ? `and ${last}` : `and you also ${last}`
+  return `${head}, ${middle}${lastBridge}`
+}
+
+/**
+ * Sentence 1 is always “Meet {name}.” With overlap, use one or two more sentences (2–3 total).
+ * Splits longer overlap lists across two body sentences so one bubble is not a single huge comma chain.
+ */
+function joinRevealOverlapClauses(firstName: string, segments: string[]): string {
+  const meet = `Meet ${firstName}.`
+  if (segments.length === 0) return meet
+
+  if (segments.length <= 2) {
+    return `${meet} ${joinRevealClauseGroup(segments)}.`
+  }
+
+  let first: string[]
+  let rest: string[]
+  if (segments.length === 3) {
+    first = segments.slice(0, 2)
+    rest = segments.slice(2)
+  } else if (segments.length === 4) {
+    first = segments.slice(0, 2)
+    rest = segments.slice(2, 4)
+  } else {
+    first = segments.slice(0, 3)
+    rest = segments.slice(3)
+  }
+
+  const body1 = joinRevealClauseGroup(first)
+  const body2 = joinRevealClauseGroup(rest)
+  return `${meet} ${body1}. ${body2}.`
+}
+
 export function formatMatchRevealSentence(params: {
   otherFirstName: string
   sharedInterests: string[]
@@ -423,6 +543,8 @@ export function formatMatchRevealSentence(params: {
   lifeChapterOverlap?: string[]
   everydayAnchorOverlap?: string[]
   topCopyDimensions?: string[]
+  /** Shared shows, podcasts, artists, or teams (exact overlap strings), max ~2 used in copy. */
+  textureOverlap?: string[]
 }): string {
   const {
     otherFirstName,
@@ -432,7 +554,13 @@ export function formatMatchRevealSentence(params: {
     lifeChapterOverlap = [],
     everydayAnchorOverlap = [],
     topCopyDimensions = [],
+    textureOverlap: textureOverlapRaw = [],
   } = params
+  const textureOverlapTokens = textureOverlapRaw
+    .map((s) => String(s).trim())
+    .filter(Boolean)
+    .filter((s, i, arr) => arr.indexOf(s) === i)
+    .slice(0, 2)
   const normalizeSmartPunctuation = (value: string): string =>
     value
       .replace(/[\u2018\u2019\u2032]/g, "'")
@@ -506,6 +634,9 @@ export function formatMatchRevealSentence(params: {
       lower.startsWith('what you are working on')
     ) {
       return 'work and projects'
+    }
+    if (lower.includes('swapping stories') && (lower.includes('chapter') || lower.includes('chapters'))) {
+      return 'life stories and how you each got here'
     }
     if (
       lower.startsWith("stuff we're into lately") ||
@@ -584,50 +715,54 @@ export function formatMatchRevealSentence(params: {
   const useCuriosityClause = copyDimensionOrder.includes('q_curiosity') && curiosityTeaser.length > 0
   const useConversationClause = topicTeaser.length > 0
 
-  const introClauses: string[] = []
-  if (interestTeaser.length > 0) {
-    const interests =
-      interestTeaser.length === 1 ? interestTeaser[0]! : `${interestTeaser[0]} + ${interestTeaser[1]}`
-    introClauses.push(`You're both into ${interests}.`)
-  }
-  if (useCuriosityClause) {
-    introClauses.push(`You're both curious about ${formatTopicList(curiosityTeaser)}.`)
-  }
-  if (useConversationClause) {
-    introClauses.push(`You both like talking about ${formatTopicList(topicTeaser)}.`)
-  }
+  const lifeTextForTail =
+    copyDimensionOrder.includes('q_life_chapter') && cleanedLifeChapter.length > 0
+      ? cleanedLifeChapter.length === 1
+        ? cleanedLifeChapter[0]!.replace(/\bmy\b/gi, 'your').replace(/\bour\b/gi, 'your')
+        : `${cleanedLifeChapter[0]!.replace(/\bmy\b/gi, 'your').replace(/\bour\b/gi, 'your')} and ${cleanedLifeChapter[1]!.replace(/\bmy\b/gi, 'your').replace(/\bour\b/gi, 'your')}`
+      : null
 
-  const extraClauses: string[] = []
-  if (copyDimensionOrder.includes('q_life_chapter') && cleanedLifeChapter.length > 0) {
-    const lifeText =
-      cleanedLifeChapter.length === 1
-        ? cleanedLifeChapter[0]!
-        : `${cleanedLifeChapter[0]} and ${cleanedLifeChapter[1]}`
-    extraClauses.push(`You both seem to be in a similar chapter right now: ${lifeText.replace(/\bmy\b/gi, 'your').replace(/\bour\b/gi, 'your')}.`)
-  }
-  if (copyDimensionOrder.includes('q_everyday_anchor') && cleanedEverydayAnchor.length > 0 && extraClauses.length === 0) {
-    const anchorText =
-      cleanedEverydayAnchor.length === 1
+  const anchorTextForTail =
+    copyDimensionOrder.includes('q_everyday_anchor') && cleanedEverydayAnchor.length > 0
+      ? cleanedEverydayAnchor.length === 1
         ? cleanedEverydayAnchor[0]!
         : `${cleanedEverydayAnchor[0]} and ${cleanedEverydayAnchor[1]}`
-    extraClauses.push(`Day to day, you're both anchored by ${anchorText}.`)
-  }
+      : null
 
-  if (introClauses.length > 0) {
-    return [`Meet ${otherFirstName}.`, ...introClauses, ...extraClauses].join(' ').trim()
-  }
+  const clauses: Partial<Record<RevealClauseKey, string>> = {}
+
   if (interestTeaser.length > 0) {
     const interests =
-      interestTeaser.length === 1 ? interestTeaser[0]! : `${interestTeaser[0]} + ${interestTeaser[1]}`
-    return [`Meet ${otherFirstName}. You're both into ${interests}.`, ...extraClauses].join(' ').trim()
+      interestTeaser.length === 1 ? interestTeaser[0]! : `${interestTeaser[0]} and ${interestTeaser[1]}`
+    clauses.interests = `you're both into ${interests}`
   }
   if (useCuriosityClause) {
-    return [`Meet ${otherFirstName}. You're both curious about ${formatTopicList(curiosityTeaser)}.`, ...extraClauses].join(' ').trim()
+    clauses.curiosity = `you're both curious about ${formatTopicList(curiosityTeaser)}`
   }
   if (useConversationClause) {
-    return [`Meet ${otherFirstName}. You both like talking about ${formatTopicList(topicTeaser)}.`, ...extraClauses].join(' ').trim()
+    clauses.conversation = `you're both open to talking about ${formatTopicList(topicTeaser)}`
   }
-  return `Meet ${otherFirstName}.`
+  if (lifeTextForTail) {
+    clauses.life = `you're in a similar life stage (${lifeTextForTail})`
+  }
+  if (anchorTextForTail) {
+    clauses.anchor = `day-to-day you're both anchored on ${anchorTextForTail}`
+  }
+  const textureClause = buildTextureOverlapClause(textureOverlapTokens)
+  if (textureClause) {
+    clauses.texture = textureClause
+  }
+
+  let keys = REVEAL_CLAUSE_ORDER.filter((k) => clauses[k])
+  const maxClauses = 5
+  while (keys.length > maxClauses) {
+    const drop = REVEAL_CLAUSE_DROP_ORDER.find((k) => keys.includes(k))
+    if (!drop) break
+    keys = keys.filter((k) => k !== drop)
+  }
+
+  const segments = keys.map((k) => clauses[k]!)
+  return joinRevealOverlapClauses(otherFirstName, segments)
 }
 
 /** User text didn’t match the current intro phase. */
