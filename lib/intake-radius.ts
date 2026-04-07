@@ -3,13 +3,10 @@
  * Used by venue selection and aligned with replenish-matches logic (q_radius in miles → km).
  */
 
-function getResponseValue(responses: Record<string, unknown> | null, questionId: string): unknown {
-  if (!responses || typeof responses !== 'object') return null
-  return responses[questionId] ?? null
-}
+import { getIntakeAnswer } from '@/lib/intake-response-utils'
 
-function getIntakeNumericValue(responses: Record<string, unknown> | null, questionId: string): number | null {
-  const raw = getResponseValue(responses, questionId)
+function getIntakeNumericValue(responses: unknown, questionId: string): number | null {
+  const raw = getIntakeAnswer(responses, questionId)
   if (raw === null || raw === undefined) return null
   if (typeof raw === 'number' && !isNaN(raw)) return raw
   const s = String(raw).trim()
@@ -27,8 +24,9 @@ export const DEFAULT_RADIUS_KM = 40
 
 /**
  * Travel distance from intake q_radius (miles) → km. Default 40 km.
+ * Accepts array-shaped intake `responses` or a flat record.
  */
-export function getIntakeRadiusKm(responses: Record<string, unknown> | null): number {
+export function getIntakeRadiusKm(responses: unknown): number {
   const miles = getIntakeNumericValue(responses, 'q_radius')
   return miles != null ? Math.round(miles * 1.60934) : DEFAULT_RADIUS_KM
 }

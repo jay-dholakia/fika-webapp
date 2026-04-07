@@ -268,4 +268,12 @@ const WORK_ROLE_PRIORITY: string[] = [
   'Actuary',
 ]
 
+/** Shown as chips below the work field when the search box is empty; must match strings in WORK_ROLE_OPTIONS. */
+export const WORK_ROLE_LIFE_SITUATION_CHIPS: string[] = [
+  'Currently unemployed',
+  'Taking a career break',
+  'Between jobs',
+  'On sabbatical',
+]
+
 export const WORK_ROLE_OPTIONS: string[] = mergeUniqueCaseInsensitive(WORK_ROLE_PRIORITY, PROFESSION_OPTIONS)

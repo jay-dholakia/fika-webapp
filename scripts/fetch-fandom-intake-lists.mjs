@@ -1,17 +1,19 @@
 /**
- * Writes lib/data/music-artists.json (500; intl seeds + multi-country iTunes + US fill),
+ * Writes lib/data/music-artists.json (large list: seeds + multi-country iTunes + US),
  * colleges.json (500), sports-teams.json (500).
  * Run: node scripts/fetch-fandom-intake-lists.mjs
  */
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import { PRIORITY_ARTIST_SEEDS } from './music-artist-seeds.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const root = path.join(__dirname, '..')
 const dataDir = path.join(root, 'lib', 'data')
 
-const ARTIST_CAP = 500
+/** Hard cap after merge; raise to grow list (picker filters client-side). */
+const ARTIST_CAP = 8000
 
 async function searchItunesArtists(term, country, limit = 200) {
   const url = `https://itunes.apple.com/search?term=${encodeURIComponent(term)}&entity=musicArtist&limit=${limit}&country=${country}`
@@ -21,7 +23,7 @@ async function searchItunesArtists(term, country, limit = 200) {
   return (data.results || []).map((r) => (r.artistName || '').trim()).filter(Boolean)
 }
 
-function pushUniqueArtists(names, seen, batch) {
+function addArtists(names, seen, batch) {
   for (const raw of batch) {
     const n = (raw || '').trim()
     if (!n) continue
@@ -29,249 +31,220 @@ function pushUniqueArtists(names, seen, batch) {
     if (seen.has(k)) continue
     seen.add(k)
     names.push(n)
-    if (names.length >= ARTIST_CAP) return true
   }
-  return false
 }
-
-/** Global / regional stars first so the picker is not US-only. */
-const INTERNATIONAL_ARTIST_SEEDS = [
-  // Latin & Iberia
-  'Bad Bunny',
-  'Rosalía',
-  'J Balvin',
-  'KAROL G',
-  'Romeo Santos',
-  'Shakira',
-  'Maluma',
-  'Peso Pluma',
-  'Feid',
-  'Anuel AA',
-  'Ozuna',
-  'Myke Towers',
-  'Rauw Alejandro',
-  'Daddy Yankee',
-  'Marc Anthony',
-  'Juanes',
-  'Mon Laferte',
-  'Natalia Lafourcade',
-  'Vicente Fernández',
-  'Luis Miguel',
-  'Caetano Veloso',
-  'Gilberto Gil',
-  'Anitta',
-  'Seu Jorge',
-  'Ivete Sangalo',
-  'Los Ángeles Azules',
-  'Grupo Firme',
-  'Bizarrap',
-  'Tini',
-  'Aitana',
-  'Pablo Alborán',
-  'Alejandro Sanz',
-  'Manuel Turizo',
-  'Christian Nodal',
-  'Eladio Carrión',
-  'Young Miko',
-  'C. Tangana',
-  'Quevedo',
-  'Saiko',
-  'Duki',
-  'Trueno',
-  'Nicki Nicole',
-  // K-pop, J-pop, C-pop, wider Asia
-  'BTS',
-  'BLACKPINK',
-  'Stray Kids',
-  'TWICE',
-  'NewJeans',
-  'SEVENTEEN',
-  '(G)I-DLE',
-  'aespa',
-  'ENHYPEN',
-  'TOMORROW X TOGETHER',
-  'LE SSERAFIM',
-  'IVE',
-  'IU',
-  'YOASOBI',
-  'Kenshi Yonezu',
-  'ONE OK ROCK',
-  'LiSA',
-  'Utada Hikaru',
-  'Official HIGE DANdism',
-  'King Gnu',
-  'Mrs. GREEN APPLE',
-  'Jay Chou',
-  'JJ Lin',
-  'G.E.M.',
-  'Jolin Tsai',
-  'Mayday',
-  // Europe (non-US-centric)
-  'Stromae',
-  'Angèle',
-  'Christine and the Queens',
-  'Måneskin',
-  'Rammstein',
-  'David Guetta',
-  'DJ Snake',
-  'Aya Nakamura',
-  'Zaho de Sagazan',
-  'Lomepal',
-  'Orelsan',
-  'Meduza',
-  'Calvin Harris',
-  'Ed Sheeran',
-  'Adele',
-  'Dua Lipa',
-  'Harry Styles',
-  'Coldplay',
-  'Sam Smith',
-  'Ellie Goulding',
-  'Zara Larsson',
-  'Tove Lo',
-  'AURORA',
-  'ABBA',
-  'Avicii',
-  'Swedish House Mafia',
-  'Martin Garrix',
-  'Tiësto',
-  'Armin van Buuren',
-  'Andrea Bocelli',
-  'Luciano Pavarotti',
-  'Lara Fabian',
-  // Africa & Caribbean
-  'Burna Boy',
-  'Wizkid',
-  'Davido',
-  'Tems',
-  'Rema',
-  'Ayra Starr',
-  'Asake',
-  'Tiwa Savage',
-  'Diamond Platnumz',
-  'Angelique Kidjo',
-  "Youssou N'Dour",
-  'Fela Kuti',
-  'Bob Marley',
-  'Sean Paul',
-  'Shaggy',
-  'Koffee',
-  // South Asia & Middle East
-  'A.R. Rahman',
-  'Arijit Singh',
-  'Shreya Ghoshal',
-  'Diljit Dosanjh',
-  'AP Dhillon',
-  'Badshah',
-  'Neha Kakkar',
-  'Amr Diab',
-  'Fairuz',
-  'Nancy Ajram',
-  'Khaled',
-  // Oceania & Canada (global exports)
-  'Tame Impala',
-  'Kylie Minogue',
-  'Sia',
-  'Keith Urban',
-  'The Weeknd',
-  'Drake',
-  'Celine Dion',
-]
 
 async function fetchArtists() {
   const seen = new Set()
   const names = []
 
-  pushUniqueArtists(names, seen, INTERNATIONAL_ARTIST_SEEDS)
+  addArtists(names, seen, PRIORITY_ARTIST_SEEDS)
 
-  /** [search term, iTunes country code] — pulls regional charts. */
+  /** US first after seeds so chart-heavy pop/hip-hop fills before intl exhausts cap. */
+  const usTerms = [
+    'pop',
+    'pop music',
+    'billboard',
+    'top 40',
+    'hip hop',
+    'rap',
+    'trap',
+    'r&b',
+    'soul',
+    'neo soul',
+    'country',
+    'country music',
+    'rock',
+    'classic rock',
+    'hard rock',
+    'alternative rock',
+    'indie rock',
+    'punk',
+    'emo',
+    'metal',
+    'heavy metal',
+    'jazz',
+    'smooth jazz',
+    'blues',
+    'folk',
+    'americana',
+    'bluegrass',
+    'electronic',
+    'edm',
+    'house',
+    'techno',
+    'dance',
+    'latin',
+    'latin pop',
+    'reggaeton',
+    'tejano',
+    'gospel',
+    'christian pop',
+    'worship',
+    'classical',
+    'opera',
+    'soundtrack',
+    'musical',
+    'funk',
+    'disco',
+    'motown',
+    'singer songwriter',
+    'indie',
+    'alternative',
+    'k-pop',
+    'boy band',
+    'girl group',
+    'singer',
+    'band',
+    'duo',
+    'orchestra',
+    'hiphop',
+    'urban',
+    'underground rap',
+    'southern rap',
+    'west coast rap',
+    'east coast rap',
+    'pop punk',
+    'metalcore',
+    'progressive rock',
+    'grunge',
+    'new wave',
+    'synth pop',
+    'hyperpop',
+    'phonk',
+    'drill',
+    'lo-fi',
+    'ambient',
+    'ska',
+    'reggae',
+    'afrobeats',
+    'latin trap',
+  ]
+
+  for (const term of usTerms) {
+    const batch = await searchItunesArtists(term, 'us')
+    addArtists(names, seen, batch)
+    await new Promise((r) => setTimeout(r, 180))
+  }
+
+  /** [search term, iTunes country code] */
   const internationalSearches = [
     ['reggaeton', 'mx'],
     ['reggaeton', 'co'],
     ['urbano latino', 'ar'],
     ['sertanejo', 'br'],
     ['funk', 'br'],
+    ['pagode', 'br'],
     ['kpop', 'kr'],
     ['k-pop', 'kr'],
     ['trot', 'kr'],
     ['jpop', 'jp'],
+    ['city pop', 'jp'],
     ['anisong', 'jp'],
     ['mandopop', 'tw'],
     ['cantopop', 'hk'],
+    ['c-pop', 'cn'],
     ['bollywood', 'in'],
     ['punjabi', 'in'],
+    ['tamil', 'in'],
+    ['telugu', 'in'],
     ['afrobeats', 'ng'],
     ['amapiano', 'za'],
+    ['gqom', 'za'],
+    ['highlife', 'gh'],
     ['coupe decale', 'ci'],
     ['rai', 'dz'],
     ['arabic pop', 'eg'],
     ['french rap', 'fr'],
+    ['french pop', 'fr'],
+    ['variété', 'fr'],
     ['schlager', 'de'],
+    ['deutschrap', 'de'],
     ['italian pop', 'it'],
+    ['opera', 'it'],
     ['reggaeton', 'es'],
+    ['flamenco', 'es'],
     ['dembow', 'do'],
-    ['salsa', 'cu'],
     ['bachata', 'do'],
+    ['salsa', 'cu'],
     ['cumbia', 'co'],
+    ['vallenato', 'co'],
     ['norteño', 'mx'],
+    ['banda', 'mx'],
     ['britpop', 'gb'],
     ['uk rap', 'gb'],
-    ['drill', 'gb'],
+    ['uk drill', 'gb'],
+    ['grime', 'gb'],
     ['australian hip hop', 'au'],
+    ['australian pop', 'au'],
     ['nederlandse pop', 'nl'],
+    ['nederlandse hip hop', 'nl'],
     ['turkish pop', 'tr'],
+    ['arabesk', 'tr'],
     ['russian pop', 'ru'],
     ['polish hip hop', 'pl'],
     ['swedish pop', 'se'],
+    ['norsk pop', 'no'],
+    ['danish pop', 'dk'],
+    ['suomi pop', 'fi'],
     ['reggaeton', 'cl'],
     ['peruvian cumbia', 'pe'],
+    ['argentine rock', 'ar'],
+    ['jamaican dancehall', 'jm'],
+    ['reggae', 'jm'],
+    ['greek pop', 'gr'],
+    ['israeli pop', 'il'],
+    ['persian pop', 'ir'],
+    ['thai pop', 'th'],
+    ['thai rap', 'th'],
+    ['vietnamese pop', 'vn'],
+    ['indonesian pop', 'id'],
+    ['malay pop', 'my'],
+    ['tagalog pop', 'ph'],
+    ['j-pop', 'jp'],
+    ['anime song', 'jp'],
+    ['celtic', 'ie'],
+    ['irish folk', 'ie'],
+    ['scottish folk', 'gb'],
+    ['portuguese pop', 'pt'],
+    ['fado', 'pt'],
+    ['belgian pop', 'be'],
+    ['swiss pop', 'ch'],
+    ['austrian pop', 'at'],
+    ['czech pop', 'cz'],
+    ['hungarian pop', 'hu'],
+    ['romanian pop', 'ro'],
+    ['ukrainian pop', 'ua'],
+    ['nigerian gospel', 'ng'],
+    ['kenyan pop', 'ke'],
+    ['ethiopian pop', 'et'],
+    ['congolese rumba', 'cd'],
+    ['zouk', 'gp'],
+    ['soca', 'tt'],
+    ['kompa', 'ht'],
+    ['merengue', 'do'],
+    ['tango', 'ar'],
+    ['samba', 'br'],
+    ['bossa nova', 'br'],
+    ['mpb', 'br'],
+    ['jazz', 'br'],
+    ['pop', 'nz'],
+    ['maori music', 'nz'],
+    ['singapore pop', 'sg'],
+    ['pop', 'sg'],
   ]
 
   for (const [term, country] of internationalSearches) {
-    if (names.length >= ARTIST_CAP) break
     const batch = await searchItunesArtists(term, country)
-    if (pushUniqueArtists(names, seen, batch)) break
-    await new Promise((r) => setTimeout(r, 200))
+    addArtists(names, seen, batch)
+    await new Promise((r) => setTimeout(r, 180))
   }
 
-  const usTerms = [
-    'pop',
-    'rock',
-    'hip hop',
-    'country',
-    'jazz',
-    'r&b',
-    'electronic',
-    'latin',
-    'metal',
-    'indie',
-    'folk',
-    'blues',
-    'reggae',
-    'k-pop',
-    'classical',
-    'soul',
-    'punk',
-    'alternative',
-    'dance',
-    'rap',
-    'singer',
-    'band',
-    'orchestra',
-    'gospel',
-    'edm',
-    'trap',
-    'house',
-    'techno',
-  ]
-  for (const term of usTerms) {
-    if (names.length >= ARTIST_CAP) break
-    const batch = await searchItunesArtists(term, 'us')
-    if (pushUniqueArtists(names, seen, batch)) break
-    await new Promise((r) => setTimeout(r, 200))
+  const out = names.slice(0, ARTIST_CAP)
+  if (out.length < ARTIST_CAP) {
+    console.warn('Artists: collected', out.length, 'unique (under cap', ARTIST_CAP + ')')
   }
-
-  return names.slice(0, ARTIST_CAP)
+  return out
 }
 
 async function fetchColleges() {
@@ -1063,7 +1036,7 @@ async function main() {
   console.log('Wrote sports-teams.json', teams.length)
 
   const artists = await fetchArtists()
-  if (artists.length < 500) console.warn('Artists:', artists.length)
+  if (artists.length < 2000) console.warn('Artists: only', artists.length, 'unique (expected a large catalog)')
   fs.writeFileSync(path.join(dataDir, 'music-artists.json'), JSON.stringify(artists))
   console.log('Wrote music-artists.json', artists.length)
 

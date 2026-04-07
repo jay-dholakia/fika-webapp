@@ -10,7 +10,7 @@ import tvStreamingTitles from '@/lib/data/tv-streaming-shows.json'
 import { ETHNICITY_OPTIONS } from '@/lib/ethnicity-options'
 import { RELATIONSHIP_STATUS_OPTIONS } from '@/lib/relationship-status-options'
 import { US_STATE_NAMES } from '@/lib/us-states-list'
-import { WORK_ROLE_OPTIONS } from '@/lib/work-role-options'
+import { WORK_ROLE_LIFE_SITUATION_CHIPS, WORK_ROLE_OPTIONS } from '@/lib/work-role-options'
 
 export type StepType =
   | 'text'
@@ -37,6 +37,8 @@ export type ProfileStep = {
   customAnswerMaxLength?: number
   /** searchable_single: option chips shown before the user types (full list still used when searching). */
   featuredOptions?: string[]
+  /** Short line above featured chips (e.g. work life-situation shortcuts). */
+  featuredOptionsCaption?: string
 }
 
 // PROFILE: name, demographics, location
@@ -141,19 +143,13 @@ export const INTAKE_STEPS: ProfileStep[] = [
     options: US_STATE_NAMES,
   },
   {
-    id: 'q_hometown',
-    question: 'Hometown',
-    body: 'City or region you grew up in.',
-    type: 'text',
-    required: false,
-    placeholder: 'e.g. Columbus, Ohio',
-  },
-  {
     id: 'q_college',
-    question: 'Where did you go to school? (optional)',
+    question: 'Where do or did you go to school?',
+    body: "Undergrad or grad is fine; if this doesn't apply, leave blank.",
     type: 'searchable_single',
     required: false,
     customAnswerMaxLength: 100,
+    placeholder: 'Optional — type to search or enter your school',
     options: [...collegeNames],
   },
   {
@@ -225,12 +221,14 @@ export const INTAKE_STEPS: ProfileStep[] = [
   {
     id: 'q_work',
     question: 'What do you do for work?',
-    body: 'Type to search or enter your own',
+    body: 'Enter your job title, or search the list for a close match. If you’re unemployed, between roles, or on a career break, use a shortcut below.',
     type: 'searchable_single',
     required: false,
+    featuredOptions: [...WORK_ROLE_LIFE_SITUATION_CHIPS],
+    featuredOptionsCaption: 'Not in a job title right now?',
     options: [...WORK_ROLE_OPTIONS],
     customAnswerMaxLength: 100,
-    placeholder: 'Type to search or enter your own',
+    placeholder: 'Enter your job title',
   },
   // Block 2 — Interests: interests → curiosity → recs
   {

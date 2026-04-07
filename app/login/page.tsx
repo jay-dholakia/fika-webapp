@@ -53,7 +53,7 @@ function LoginContent() {
           </button>
           {CONCIERGE_NUMBER ? (
             <a
-              href={`sms:${CONCIERGE_NUMBER}?body=${encodeURIComponent('Hi - set me up for Fika.')}`}
+              href={`sms:${CONCIERGE_NUMBER}?body=${encodeURIComponent('Hi — set me up for Fika.')}`}
               className="btn btn-secondary btn-block"
               style={{ marginTop: '0.75rem' }}
             >

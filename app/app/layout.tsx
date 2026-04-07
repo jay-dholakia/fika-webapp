@@ -108,7 +108,7 @@ function AppLayoutInner({
 
   function buildConciergeSmsHref() {
     if (!CONCIERGE_NUMBER) return undefined
-    const body = 'Hey'
+    const body = 'Hi — set me up for Fika.'
     return `sms:${CONCIERGE_NUMBER}?body=${encodeURIComponent(body)}`
   }
 

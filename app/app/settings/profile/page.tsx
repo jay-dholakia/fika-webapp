@@ -45,7 +45,6 @@ const PERSONA_EMBED_CONFIGURED = Boolean(
 const BACKGROUND_INTAKE_IDS = new Set([
   'q_home_country',
   'q_home_state',
-  'q_hometown',
   'q_college',
   'q_ethnicity',
   'q_relationship_status',

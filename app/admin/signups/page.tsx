@@ -52,6 +52,34 @@ type SimSummary = {
   market: string | null
   scoring?: string
 }
+type FikaMatchBreakdown = {
+  eligible: boolean
+  rejectReasons: string[]
+  feasibility: {
+    distanceFit: number
+    timeFit: number
+    dataConfidence: number
+    total: number
+  }
+  compatibility: {
+    greatFikaFit: number
+    interestsFit: number
+    curiosityFit: number
+    lifeChapterFit: number
+    everydayAnchorFit: number
+    opennessFit: number
+    hopingForFit: number
+    textureFit: number
+    total: number
+  }
+  penalties: {
+    avoidTopicsPenalty: number
+    severeMismatchPenalty: number
+    total: number
+  }
+  finalScore: number
+}
+
 type SimPair = {
   userAId: string
   userAName: string
@@ -76,6 +104,7 @@ type SimPair = {
   topCopyDimensions: string[]
   compareRows: Array<{ label: string; a: string; b: string }>
   sectionScores: Record<string, number>
+  matchBreakdown?: FikaMatchBreakdown
 }
 
 function formatDate(iso: string | null): string {
@@ -250,8 +279,10 @@ export default function AdminSignupsPage() {
             userBId: p.userBId,
             score: p.score,
             reasons: {
+              matchBreakdown: p.matchBreakdown ?? null,
               raw: {
                 sectionScores: p.sectionScores,
+                matchBreakdown: p.matchBreakdown ?? null,
                 shared_interests: p.overlapInterests.slice(0, 3),
                 conversation_hooks: p.overlapGreatFika.slice(0, 2),
                 curiosity_overlap: p.overlapCuriosity.slice(0, 3),
@@ -353,7 +384,11 @@ export default function AdminSignupsPage() {
           <div className="admin-dashboard" style={{ marginTop: '1rem', marginBottom: '1.25rem' }}>
             <h2 className="admin-dashboard-title">Match preview (no availability, no SMS)</h2>
             <p className="admin-description" style={{ marginBottom: '0.75rem' }}>
-              Ranks pairs by <strong>intake embedding cosine similarity</strong> only (no fallback score). A user counts only if <code style={{ fontSize: '0.9em' }}>intake_responses_v5.embed_vector</code> is set—usually when they finish onboarding and <code style={{ fontSize: '0.9em' }}>POST /api/complete-intake</code> runs with OpenAI. Hard filters still apply (distance, languages, preferences). Ignores availability overlap; sending an intro SMS creates the live match.
+              Ranks pairs with a <strong>config-driven structured matcher</strong>: eligibility (true blockers only), then{' '}
+              <strong>feasibility</strong> (distance, typical Fika times overlap, profile completeness) and{' '}
+              <strong>compatibility</strong> (chips + matrices for single-select fields). Embeddings are not used for ranking.
+              Hard eligibility: gender/age prefs, shared language when both listed, distance beyond combined travel radii + buffer, and platonic confirmation.
+              Sending an intro SMS creates the live match.
             </p>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
               <label className="admin-toggle" style={{ marginRight: '0.25rem' }}>
@@ -372,7 +407,7 @@ export default function AdminSignupsPage() {
                   onChange={(e) => setSimRelaxedFilters(e.target.checked)}
                   disabled={simLoading || triggeringSms}
                 />
-                <span className="admin-toggle-label">Relax filters (keep distance + gender prefs)</span>
+                <span className="admin-toggle-label">Relax eligibility (skip language overlap + confirm intent)</span>
               </label>
               <label className="admin-toggle" style={{ marginRight: '0.25rem' }}>
                 <span className="admin-toggle-label">Max users</span>
@@ -470,12 +505,24 @@ export default function AdminSignupsPage() {
                   <tbody>
                     {visiblePairs.map((p, idx) => {
                       const pairKey = `${p.userAId}:${p.userBId}`
-                      const topFactors = Object.entries(p.sectionScores ?? {})
-                        .filter(([k]) => k !== 'avoid_topics_penalty')
-                        .sort((a, b) => b[1] - a[1])
-                        .slice(0, 3)
-                        .map(([k, v]) => `${k.replace(/_/g, ' ')} ${v.toFixed(2)}`)
-                        .join(' · ')
+                      const bd = p.matchBreakdown
+                      const topFactors = bd
+                        ? [
+                            ['interests', bd.compatibility.interestsFit],
+                            ['great Fika', bd.compatibility.greatFikaFit],
+                            ['life chapter', bd.compatibility.lifeChapterFit],
+                            ['feasibility', bd.feasibility.total],
+                          ]
+                            .sort((a, b) => (b[1] as number) - (a[1] as number))
+                            .slice(0, 3)
+                            .map(([k, v]) => `${k} ${(v as number).toFixed(2)}`)
+                            .join(' · ')
+                        : Object.entries(p.sectionScores ?? {})
+                            .filter(([k]) => !k.includes('penalty') && k !== 'penalty_total')
+                            .sort((a, b) => b[1] - a[1])
+                            .slice(0, 3)
+                            .map(([k, v]) => `${k.replace(/_/g, ' ')} ${v.toFixed(2)}`)
+                            .join(' · ')
                       return (
                         <tr
                           key={`${p.userAId}-${p.userBId}`}
@@ -681,21 +728,49 @@ export default function AdminSignupsPage() {
 
               <div className="admin-modal-section">
                 <h3 className="admin-modal-section-title">Score breakdown</h3>
-                <p className="admin-modal-meta">Subscores are 0–1 overlap or fit; avoid-topics penalty is subtracted from the weighted total.</p>
-                <dl className="admin-modal-dl">
-                  {Object.entries(simPairModal.sectionScores ?? {})
-                    .sort((a, b) => {
-                      if (a[0] === 'avoid_topics_penalty') return 1
-                      if (b[0] === 'avoid_topics_penalty') return -1
-                      return b[1] - a[1]
-                    })
-                    .map(([k, v]) => (
-                      <span key={k}>
-                        <dt>{k.replace(/_/g, ' ')}</dt>
-                        <dd>{v.toFixed(3)}</dd>
-                      </span>
-                    ))}
-                </dl>
+                <p className="admin-modal-meta">
+                  Final score = 0.4 × feasibility + 0.6 × (compatibility − penalties). Subscores are 0–1.
+                </p>
+                {simPairModal.matchBreakdown ? (
+                  <>
+                    <h4 className="admin-modal-meta" style={{ marginTop: '0.75rem', fontWeight: 600 }}>Feasibility</h4>
+                    <dl className="admin-modal-dl">
+                      <span><dt>Distance fit</dt><dd>{simPairModal.matchBreakdown.feasibility.distanceFit.toFixed(3)}</dd></span>
+                      <span><dt>Time fit</dt><dd>{simPairModal.matchBreakdown.feasibility.timeFit.toFixed(3)}</dd></span>
+                      <span><dt>Data confidence</dt><dd>{simPairModal.matchBreakdown.feasibility.dataConfidence.toFixed(3)}</dd></span>
+                      <span><dt>Total</dt><dd>{simPairModal.matchBreakdown.feasibility.total.toFixed(3)}</dd></span>
+                    </dl>
+                    <h4 className="admin-modal-meta" style={{ marginTop: '0.75rem', fontWeight: 600 }}>Compatibility</h4>
+                    <dl className="admin-modal-dl">
+                      <span><dt>Great Fika</dt><dd>{simPairModal.matchBreakdown.compatibility.greatFikaFit.toFixed(3)}</dd></span>
+                      <span><dt>Interests</dt><dd>{simPairModal.matchBreakdown.compatibility.interestsFit.toFixed(3)}</dd></span>
+                      <span><dt>Curiosity</dt><dd>{simPairModal.matchBreakdown.compatibility.curiosityFit.toFixed(3)}</dd></span>
+                      <span><dt>Life chapter</dt><dd>{simPairModal.matchBreakdown.compatibility.lifeChapterFit.toFixed(3)}</dd></span>
+                      <span><dt>Everyday anchor</dt><dd>{simPairModal.matchBreakdown.compatibility.everydayAnchorFit.toFixed(3)}</dd></span>
+                      <span><dt>Openness</dt><dd>{simPairModal.matchBreakdown.compatibility.opennessFit.toFixed(3)}</dd></span>
+                      <span><dt>Hoping for</dt><dd>{simPairModal.matchBreakdown.compatibility.hopingForFit.toFixed(3)}</dd></span>
+                      <span><dt>Texture</dt><dd>{simPairModal.matchBreakdown.compatibility.textureFit.toFixed(3)}</dd></span>
+                      <span><dt>Total (pre-penalty)</dt><dd>{simPairModal.matchBreakdown.compatibility.total.toFixed(3)}</dd></span>
+                    </dl>
+                    <h4 className="admin-modal-meta" style={{ marginTop: '0.75rem', fontWeight: 600 }}>Penalties</h4>
+                    <dl className="admin-modal-dl">
+                      <span><dt>Avoid topics</dt><dd>{simPairModal.matchBreakdown.penalties.avoidTopicsPenalty.toFixed(3)}</dd></span>
+                      <span><dt>Severe mismatch</dt><dd>{simPairModal.matchBreakdown.penalties.severeMismatchPenalty.toFixed(3)}</dd></span>
+                      <span><dt>Total</dt><dd>{simPairModal.matchBreakdown.penalties.total.toFixed(3)}</dd></span>
+                    </dl>
+                  </>
+                ) : (
+                  <dl className="admin-modal-dl">
+                    {Object.entries(simPairModal.sectionScores ?? {})
+                      .sort((a, b) => b[1] - a[1])
+                      .map(([k, v]) => (
+                        <span key={k}>
+                          <dt>{k.replace(/_/g, ' ')}</dt>
+                          <dd>{v.toFixed(3)}</dd>
+                        </span>
+                      ))}
+                  </dl>
+                )}
               </div>
 
               <div className="admin-modal-section">

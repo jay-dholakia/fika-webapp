@@ -26,7 +26,6 @@ const ABOUT_YOU_EXTRA_IDS = ['q_hoping_for']
 const BACKGROUND_STEP_IDS = [
   'q_home_country',
   'q_home_state',
-  'q_hometown',
   'q_college',
   'q_ethnicity',
   'q_relationship_status',

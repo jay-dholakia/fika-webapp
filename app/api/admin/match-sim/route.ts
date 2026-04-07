@@ -4,9 +4,13 @@ import { NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase-server'
 import { isAdminByUserId } from '@/lib/admin-markets'
 import { getIntakeRadiusKm } from '@/lib/intake-radius'
+import { getIntakeMulti, getIntakeAnswer } from '@/lib/intake-response-utils'
+import type { FikaMatchBreakdown } from '@/lib/match/fika-matcher'
+import { scoreFikaPair, type MatcherPerson } from '@/lib/match/fika-matcher'
+import { MATCH_SCORING_VERSION } from '@/lib/match/weights'
 import { fetchUserIdsWithUpcomingConfirmedFika } from '@/lib/upcoming-confirmed-fika'
 
-/** Admin simulation: ranks pairs by structured intake overlap + distance (+ hard filters). `trigger_sms` → `match_candidates` + `sms-match-delivery`. */
+/** Admin simulation: config-driven structured matcher (eligibility + feasibility + compatibility). */
 export const dynamic = 'force-dynamic'
 
 type ProfileRow = {
@@ -80,22 +84,32 @@ function calculateDistance(lat1: number, lng1: number, lat2: number, lng2: numbe
 }
 
 function getResponseValue(intake: IntakeRow, questionId: string): unknown {
-  const responses = Array.isArray(intake.responses) ? intake.responses as Array<{ question_id?: string; answer?: unknown }> : []
-  const r = responses.find((x) => x.question_id === questionId)
-  const value = r?.answer
-  if (value === 'N/A') return null
-  if (Array.isArray(value) && value.length === 1 && value[0] === 'N/A') return null
-  return value ?? null
+  return getIntakeAnswer(intake.responses, questionId)
 }
 
 function getMulti(intake: IntakeRow, questionId: string): string[] {
-  const v = getResponseValue(intake, questionId)
-  if (Array.isArray(v)) return v.map((x) => String(x))
-  if (typeof v === 'string' && v.trim()) return [v]
-  return []
+  return getIntakeMulti(intake.responses, questionId)
 }
 
-function rankCopyDimensions(sectionScores: Record<string, number>): CopyDimensionKey[] {
+function toMatcherPerson(c: SimCandidate): MatcherPerson {
+  return {
+    profile: {
+      lat: c.profile.lat,
+      lng: c.profile.lng,
+      birthdate: c.profile.birthdate,
+      gender: c.profile.gender,
+      gender_preference: c.profile.gender_preference,
+      age_preference: c.profile.age_preference,
+      languages: c.profile.languages,
+    },
+    responses: c.intake.responses,
+    age: c.age,
+    radiusKm: c.radiusKm,
+  }
+}
+
+function rankCopyDimensions(breakdown: FikaMatchBreakdown): CopyDimensionKey[] {
+  const c = breakdown.compatibility
   const copySafe: CopyDimensionKey[] = [
     'q_interests',
     'q_curiosity',
@@ -103,8 +117,15 @@ function rankCopyDimensions(sectionScores: Record<string, number>): CopyDimensio
     'q_life_chapter',
     'q_everyday_anchor',
   ]
+  const scores: Record<CopyDimensionKey, number> = {
+    q_interests: c.interestsFit,
+    q_curiosity: c.curiosityFit,
+    q_what_makes_great_fika: c.greatFikaFit,
+    q_life_chapter: c.lifeChapterFit,
+    q_everyday_anchor: c.everydayAnchorFit,
+  }
   return [...copySafe].sort((a, b) => {
-    const scoreDiff = (sectionScores[b] ?? 0) - (sectionScores[a] ?? 0)
+    const scoreDiff = (scores[b] ?? 0) - (scores[a] ?? 0)
     if (scoreDiff !== 0) return scoreDiff
     return copySafe.indexOf(a) - copySafe.indexOf(b)
   })
@@ -140,222 +161,25 @@ function buildComparisonRows(a: SimCandidate, b: SimCandidate): CompareRow[] {
   ]
 }
 
-const OPENNESS_OPEN_ANYONE = "I'm open to anyone"
-const OPENNESS_RELATE = "Someone I'd instantly relate to"
-const OPENNESS_BUBBLE = 'Someone outside my usual bubble'
-
-/** Overlap count / max(selected lengths); 0 if either side empty. */
-function multiSelectOverlapScore(a: string[], b: string[]): number {
-  if (a.length === 0 || b.length === 0) return 0
-  const overlap = a.filter((v) => b.includes(v)).length
-  return overlap / Math.max(a.length, b.length)
-}
-
-function distanceProportionScore(distanceKm: number | null, maxKm: number): number {
-  if (distanceKm == null || maxKm <= 0) return 0.5
-  return Math.max(0, Math.min(1, 1 - distanceKm / maxKm))
-}
-
-function opennessFitSubscore(oa: string | null, ob: string | null): number {
-  if (!oa || !ob) return 0.55
-  if (oa === OPENNESS_OPEN_ANYONE && ob === OPENNESS_OPEN_ANYONE) return 1
-  if (oa === OPENNESS_OPEN_ANYONE || ob === OPENNESS_OPEN_ANYONE) return 0.88
-  if (oa === ob) return 1
-  return 0.5
-}
-
-const AVOID_IGNORE = new Set(['Nothing in particular', 'Prefer not to say'])
-
-/** Maps avoid-topic chip → interest labels that conflict if the other person selected them. */
-const AVOID_TO_INTERESTS: Record<string, string[]> = {
-  Politics: ['Politics & current events'],
-  Religion: ['Philosophy'],
-  'Work & career': ['Entrepreneurship & startups', 'Investing & finance'],
-  'Relationship status': [],
-  Health: ['Fitness', 'Running', 'Hiking', 'Outdoors', 'Yoga / Pilates', 'Weightlifting', 'Cycling', 'Swimming'],
-  'Personal finances': ['Investing & finance'],
-}
-
-function avoidTopicsPenalty(a: SimCandidate, b: SimCandidate): number {
-  const avoidA = getMulti(a.intake, 'q_avoid_topics').filter((x) => !AVOID_IGNORE.has(x))
-  const avoidB = getMulti(b.intake, 'q_avoid_topics').filter((x) => !AVOID_IGNORE.has(x))
-  const interestsA = getMulti(a.intake, 'q_interests')
-  const interestsB = getMulti(b.intake, 'q_interests')
-  let hits = 0
-  for (const av of avoidA) {
-    const mapped = AVOID_TO_INTERESTS[av]
-    if (mapped?.some((t) => interestsB.includes(t))) hits++
-  }
-  for (const av of avoidB) {
-    const mapped = AVOID_TO_INTERESTS[av]
-    if (mapped?.some((t) => interestsA.includes(t))) hits++
-  }
-  return Math.min(0.12, hits * 0.04)
-}
-
-const STRUCTURED_WEIGHTS = {
-  interests: 0.28,
-  greatFika: 0.22,
-  lifeChapter: 0.14,
-  curiosity: 0.12,
-  everydayAnchor: 0.1,
-  distance: 0.06,
-  openness: 0.04,
-} as const
-
-function structuredPairScore(
-  a: SimCandidate,
-  b: SimCandidate,
-  distanceKm: number | null
-): { score: number; sectionScores: Record<string, number> } {
-  const sInt = multiSelectOverlapScore(getMulti(a.intake, 'q_interests'), getMulti(b.intake, 'q_interests'))
-  const sGf = multiSelectOverlapScore(
-    getMulti(a.intake, 'q_what_makes_great_fika'),
-    getMulti(b.intake, 'q_what_makes_great_fika')
-  )
-  const sLc = multiSelectOverlapScore(getMulti(a.intake, 'q_life_chapter'), getMulti(b.intake, 'q_life_chapter'))
-  const sCur = multiSelectOverlapScore(getMulti(a.intake, 'q_curiosity'), getMulti(b.intake, 'q_curiosity'))
-  const sEa = multiSelectOverlapScore(getMulti(a.intake, 'q_everyday_anchor'), getMulti(b.intake, 'q_everyday_anchor'))
-  const maxKm = a.radiusKm + b.radiusKm
-  const sDist = distanceProportionScore(distanceKm, maxKm)
-  const oa = getMulti(a.intake, 'q_openness')[0] ?? null
-  const ob = getMulti(b.intake, 'q_openness')[0] ?? null
-  const sOpen = opennessFitSubscore(oa, ob)
-  const pen = avoidTopicsPenalty(a, b)
-
-  let raw =
-    STRUCTURED_WEIGHTS.interests * sInt +
-    STRUCTURED_WEIGHTS.greatFika * sGf +
-    STRUCTURED_WEIGHTS.lifeChapter * sLc +
-    STRUCTURED_WEIGHTS.curiosity * sCur +
-    STRUCTURED_WEIGHTS.everydayAnchor * sEa +
-    STRUCTURED_WEIGHTS.distance * sDist +
-    STRUCTURED_WEIGHTS.openness * sOpen
-  raw = Math.max(0, Math.min(1, raw - pen))
-
+function sectionScoresFromBreakdown(bd: FikaMatchBreakdown): Record<string, number> {
   return {
-    score: raw,
-    sectionScores: {
-      q_interests: sInt,
-      q_what_makes_great_fika: sGf,
-      q_life_chapter: sLc,
-      q_curiosity: sCur,
-      q_everyday_anchor: sEa,
-      distance: sDist,
-      q_openness_fit: sOpen,
-      avoid_topics_penalty: pen,
-    },
+    feasibility_total: bd.feasibility.total,
+    distance_fit: bd.feasibility.distanceFit,
+    time_fit: bd.feasibility.timeFit,
+    data_confidence: bd.feasibility.dataConfidence,
+    compatibility_total: bd.compatibility.total,
+    q_what_makes_great_fika: bd.compatibility.greatFikaFit,
+    q_interests: bd.compatibility.interestsFit,
+    q_curiosity: bd.compatibility.curiosityFit,
+    q_life_chapter: bd.compatibility.lifeChapterFit,
+    q_everyday_anchor: bd.compatibility.everydayAnchorFit,
+    q_openness_fit: bd.compatibility.opennessFit,
+    q_hoping_for_fit: bd.compatibility.hopingForFit,
+    texture_fit: bd.compatibility.textureFit,
+    avoid_topics_penalty: bd.penalties.avoidTopicsPenalty,
+    severe_mismatch_penalty: bd.penalties.severeMismatchPenalty,
+    penalty_total: bd.penalties.total,
   }
-}
-
-function sameGender(a: string, b: string): boolean {
-  if (a === b) return true
-  if ((a === 'female' || a === 'woman' || a === 'women') && (b === 'female' || b === 'woman' || b === 'women')) return true
-  if ((a === 'male' || a === 'man' || a === 'men') && (b === 'male' || b === 'man' || b === 'men')) return true
-  if ((a === 'non-binary' || a === 'nonbinary') && (b === 'non-binary' || b === 'nonbinary')) return true
-  return false
-}
-
-function preferenceAllows(pref: string, userGender: string, candidateGender: string): boolean {
-  if (pref === 'no preference') return true
-  if (pref === 'same gender') return sameGender(userGender, candidateGender)
-  if (pref === 'different gender') return !sameGender(userGender, candidateGender)
-  return true
-}
-
-function passesFilters(
-  a: SimCandidate,
-  b: SimCandidate,
-  opts?: { relaxedFilters?: boolean }
-): { ok: boolean; reason?: string } {
-  const relaxedFilters = opts?.relaxedFilters === true
-  if (a.profile.lat != null && a.profile.lng != null && b.profile.lat != null && b.profile.lng != null) {
-    const distanceKm = calculateDistance(a.profile.lat, a.profile.lng, b.profile.lat, b.profile.lng)
-    const maxKm = a.radiusKm + b.radiusKm
-    if (distanceKm > maxKm) return { ok: false, reason: 'geography' }
-  }
-
-  if (!relaxedFilters) {
-    const la = Array.isArray(a.profile.languages) ? a.profile.languages : []
-    const lb = Array.isArray(b.profile.languages) ? b.profile.languages : []
-    if (la.length > 0 && lb.length > 0) {
-      const setA = new Set(la.map((x) => x.trim().toLowerCase()))
-      const overlap = lb.some((x) => setA.has(x.trim().toLowerCase()))
-      if (!overlap) return { ok: false, reason: 'languages' }
-    }
-  }
-
-  if (
-    a.profile.gender && b.profile.gender &&
-    a.profile.gender_preference && b.profile.gender_preference
-  ) {
-    const aGender = a.profile.gender.trim().toLowerCase()
-    const bGender = b.profile.gender.trim().toLowerCase()
-    const aPref = a.profile.gender_preference.trim().toLowerCase()
-    const bPref = b.profile.gender_preference.trim().toLowerCase()
-    if (!preferenceAllows(aPref, aGender, bGender)) return { ok: false, reason: 'gender_pref' }
-    if (!preferenceAllows(bPref, bGender, aGender)) return { ok: false, reason: 'gender_pref' }
-  }
-
-  {
-    const preferAround = 'Prefer around my age'
-    const aAround = a.profile.age_preference?.trim() === preferAround
-    const bAround = b.profile.age_preference?.trim() === preferAround
-
-    if (aAround) {
-      if (a.age == null || b.age == null) return { ok: false, reason: 'age_pref' }
-      if (Math.abs(a.age - b.age) > 3) return { ok: false, reason: 'age_pref' }
-    }
-    if (bAround) {
-      if (a.age == null || b.age == null) return { ok: false, reason: 'age_pref' }
-      if (Math.abs(a.age - b.age) > 3) return { ok: false, reason: 'age_pref' }
-    }
-  }
-
-  if (!relaxedFilters) {
-    const convOnly = 'Conversation with new people — not necessarily friendship'
-    const activeFriends = 'Actively looking for new friends'
-    const aHop = getMulti(a.intake, 'q_hoping_for')[0] ?? null
-    const bHop = getMulti(b.intake, 'q_hoping_for')[0] ?? null
-    if ((aHop === convOnly && bHop === activeFriends) || (aHop === activeFriends && bHop === convOnly)) {
-      return { ok: false, reason: 'hoping_for' }
-    }
-
-    const timesA = getMulti(a.intake, 'q_typical_fika_times')
-    const timesB = getMulti(b.intake, 'q_typical_fika_times')
-    if (timesA.length === 0 || timesB.length === 0) {
-      return { ok: false, reason: 'fika_times' }
-    }
-    if (!timesA.some((t) => timesB.includes(t))) {
-      return { ok: false, reason: 'fika_times' }
-    }
-
-    const oa = getMulti(a.intake, 'q_openness')[0] ?? null
-    const ob = getMulti(b.intake, 'q_openness')[0] ?? null
-    if (oa && ob && oa !== OPENNESS_OPEN_ANYONE && ob !== OPENNESS_OPEN_ANYONE) {
-      const clash =
-        (oa === OPENNESS_RELATE && ob === OPENNESS_BUBBLE) ||
-        (oa === OPENNESS_BUBBLE && ob === OPENNESS_RELATE)
-      if (clash) return { ok: false, reason: 'openness' }
-    }
-  }
-
-  return { ok: true }
-}
-
-function getWeekAnchorMonday(now: Date): string {
-  const monday = new Date(now)
-  const day = monday.getUTCDay()
-  const diffToMonday = (day + 6) % 7
-  monday.setUTCDate(monday.getUTCDate() - diffToMonday)
-  monday.setUTCHours(0, 0, 0, 0)
-  return monday.toISOString().split('T')[0]
-}
-
-function getExpiresAtWednesdayMidnightUtc(weekAnchorMonday: string): string {
-  const d = new Date(`${weekAnchorMonday}T00:00:00.000Z`)
-  d.setUTCDate(d.getUTCDate() + 2)
-  return d.toISOString()
 }
 
 async function getAdminUserId(request: Request): Promise<string | null> {
@@ -466,6 +290,21 @@ async function insertOrUpdateMatchCandidateForTrigger(
   return { ok: false, error: 'update pair row returned no row' }
 }
 
+function getWeekAnchorMonday(now: Date): string {
+  const monday = new Date(now)
+  const day = monday.getUTCDay()
+  const diffToMonday = (day + 6) % 7
+  monday.setUTCDate(monday.getUTCDate() - diffToMonday)
+  monday.setUTCHours(0, 0, 0, 0)
+  return monday.toISOString().split('T')[0]
+}
+
+function getExpiresAtWednesdayMidnightUtc(weekAnchorMonday: string): string {
+  const d = new Date(`${weekAnchorMonday}T00:00:00.000Z`)
+  d.setUTCDate(d.getUTCDate() + 2)
+  return d.toISOString()
+}
+
 export async function POST(request: Request) {
   const userId = await getAdminUserId(request)
   if (!userId) return NextResponse.json({ error: 'Not signed in', code: 'NO_SESSION' }, { status: 401 })
@@ -564,11 +403,18 @@ export async function POST(request: Request) {
     }, { status: res.ok ? 200 : 500 })
   }
 
-  const market = typeof body.market === 'string' && body.market.trim() ? body.market.trim() : null
+  const market = typeof body.market === 'string' ? body.market.trim() : null
   const optedInOnly = body.optedInOnly === true
   const relaxedFilters = body.relaxedFilters === true
   const maxUsers = Math.min(300, Math.max(20, typeof body.maxUsers === 'number' ? Math.floor(body.maxUsers) : 120))
   const topN = Math.min(300, Math.max(10, typeof body.topN === 'number' ? Math.floor(body.topN) : 100))
+
+  const logMatrix =
+    process.env.NODE_ENV === 'development'
+      ? (msg: string) => {
+          console.debug(msg)
+        }
+      : undefined
 
   const { data: activeMarkets } = await supabase.from('markets').select('slug').eq('active', true)
   const activeSlugs = (activeMarkets ?? []).map((m: { slug: string }) => m.slug)
@@ -615,7 +461,7 @@ export async function POST(request: Request) {
         optedInOnly,
         relaxedFilters,
         market,
-        scoring: 'structured_v1',
+        scoring: MATCH_SCORING_VERSION,
       },
       pairs: [],
     })
@@ -641,7 +487,7 @@ export async function POST(request: Request) {
       profile: p,
       intake,
       age: ageFromBirthdate(p.birthdate),
-      radiusKm: getIntakeRadiusKm(intake),
+      radiusKm: getIntakeRadiusKm(intake.responses),
     })
   }
 
@@ -658,7 +504,7 @@ export async function POST(request: Request) {
         optedInOnly,
         relaxedFilters,
         market,
-        scoring: 'structured_v1',
+        scoring: MATCH_SCORING_VERSION,
       },
       pairs: [],
     })
@@ -689,56 +535,61 @@ export async function POST(request: Request) {
     topCopyDimensions: CopyDimensionKey[]
     compareRows: CompareRow[]
     sectionScores: Record<string, number>
+    matchBreakdown: FikaMatchBreakdown
   }> = []
 
   for (let i = 0; i < candidates.length; i++) {
     for (let j = i + 1; j < candidates.length; j++) {
-      const a = candidates[i]
-      const b = candidates[j]
-      const pass = passesFilters(a, b, { relaxedFilters })
-      if (!pass.ok) {
+      const ca = candidates[i]
+      const cb = candidates[j]
+      const ma = toMatcherPerson(ca)
+      const mb = toMatcherPerson(cb)
+      const breakdown = scoreFikaPair(ma, mb, {
+        relaxedEligibility: relaxedFilters,
+        logMatrixUnknown: logMatrix,
+      })
+      if (!breakdown.eligible) {
         filteredOut++
         continue
       }
       const distanceKm =
-        a.profile.lat != null && a.profile.lng != null && b.profile.lat != null && b.profile.lng != null
-          ? calculateDistance(a.profile.lat, a.profile.lng, b.profile.lat, b.profile.lng)
+        ca.profile.lat != null && ca.profile.lng != null && cb.profile.lat != null && cb.profile.lng != null
+          ? calculateDistance(ca.profile.lat, ca.profile.lng, cb.profile.lat, cb.profile.lng)
           : null
-      const scored = structuredPairScore(a, b, distanceKm)
-      const aLang = Array.isArray(a.profile.languages) ? a.profile.languages : []
-      const bLang = Array.isArray(b.profile.languages) ? b.profile.languages : []
+      const aLang = Array.isArray(ca.profile.languages) ? ca.profile.languages : []
+      const bLang = Array.isArray(cb.profile.languages) ? cb.profile.languages : []
       const langSet = new Set(aLang.map((x) => x.trim().toLowerCase()))
       const sharedLanguages = bLang.filter((x) => langSet.has(x.trim().toLowerCase()))
-      const hopingA = getMulti(a.intake, 'q_hoping_for')[0] ?? null
-      const hopingB = getMulti(b.intake, 'q_hoping_for')[0] ?? null
-      const overlapGreatFika = getMulti(a.intake, 'q_what_makes_great_fika').filter((x) =>
-        getMulti(b.intake, 'q_what_makes_great_fika').includes(x)
+      const hopingA = getMulti(ca.intake, 'q_hoping_for')[0] ?? null
+      const hopingB = getMulti(cb.intake, 'q_hoping_for')[0] ?? null
+      const overlapGreatFika = getMulti(ca.intake, 'q_what_makes_great_fika').filter((x) =>
+        getMulti(cb.intake, 'q_what_makes_great_fika').includes(x)
       )
-      const overlapInterests = getMulti(a.intake, 'q_interests').filter((x) =>
-        getMulti(b.intake, 'q_interests').includes(x)
+      const overlapInterests = getMulti(ca.intake, 'q_interests').filter((x) =>
+        getMulti(cb.intake, 'q_interests').includes(x)
       )
-      const overlapCuriosity = getMulti(a.intake, 'q_curiosity').filter((x) =>
-        getMulti(b.intake, 'q_curiosity').includes(x)
+      const overlapCuriosity = getMulti(ca.intake, 'q_curiosity').filter((x) =>
+        getMulti(cb.intake, 'q_curiosity').includes(x)
       )
-      const overlapLifeChapter = getMulti(a.intake, 'q_life_chapter').filter((x) =>
-        getMulti(b.intake, 'q_life_chapter').includes(x)
+      const overlapLifeChapter = getMulti(ca.intake, 'q_life_chapter').filter((x) =>
+        getMulti(cb.intake, 'q_life_chapter').includes(x)
       )
-      const overlapEverydayAnchor = getMulti(a.intake, 'q_everyday_anchor').filter((x) =>
-        getMulti(b.intake, 'q_everyday_anchor').includes(x)
+      const overlapEverydayAnchor = getMulti(ca.intake, 'q_everyday_anchor').filter((x) =>
+        getMulti(cb.intake, 'q_everyday_anchor').includes(x)
       )
-      const compareRows = buildComparisonRows(a, b)
+      const compareRows = buildComparisonRows(ca, cb)
       pairs.push({
-        userAId: a.profile.id,
-        userAName: a.profile.first_name?.trim() || 'Unknown',
-        userAAge: a.age,
-        userAGender: a.profile.gender ?? null,
-        userACity: a.profile.city ?? null,
-        userBId: b.profile.id,
-        userBName: b.profile.first_name?.trim() || 'Unknown',
-        userBAge: b.age,
-        userBGender: b.profile.gender ?? null,
-        userBCity: b.profile.city ?? null,
-        score: scored.score,
+        userAId: ca.profile.id,
+        userAName: ca.profile.first_name?.trim() || 'Unknown',
+        userAAge: ca.age,
+        userAGender: ca.profile.gender ?? null,
+        userACity: ca.profile.city ?? null,
+        userBId: cb.profile.id,
+        userBName: cb.profile.first_name?.trim() || 'Unknown',
+        userBAge: cb.age,
+        userBGender: cb.profile.gender ?? null,
+        userBCity: cb.profile.city ?? null,
+        score: breakdown.finalScore,
         distanceKm,
         sharedLanguages,
         hopingA,
@@ -748,9 +599,10 @@ export async function POST(request: Request) {
         overlapCuriosity,
         overlapLifeChapter,
         overlapEverydayAnchor,
-        topCopyDimensions: rankCopyDimensions(scored.sectionScores),
+        topCopyDimensions: rankCopyDimensions(breakdown),
         compareRows,
-        sectionScores: scored.sectionScores,
+        sectionScores: sectionScoresFromBreakdown(breakdown),
+        matchBreakdown: breakdown,
       })
     }
   }
@@ -770,9 +622,8 @@ export async function POST(request: Request) {
       optedInOnly,
       relaxedFilters,
       market,
-      scoring: 'structured_v1',
+      scoring: MATCH_SCORING_VERSION,
     },
     pairs: top,
   })
 }
-

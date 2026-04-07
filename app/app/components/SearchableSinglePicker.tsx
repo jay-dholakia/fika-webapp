@@ -55,7 +55,7 @@ export function SearchableSinglePicker({ step, value, onChange, disabled }: Sear
         disabled={disabled}
         autoComplete="off"
         style={{ marginBottom: '0.75rem' }}
-        aria-label="Search or enter your answer"
+        aria-label={step.placeholder?.trim() ? step.placeholder : 'Search or enter your answer'}
       />
       {qTrim ? (
         <div style={{ marginBottom: '0.75rem' }}>
@@ -72,6 +72,14 @@ export function SearchableSinglePicker({ step, value, onChange, disabled }: Sear
             Use &ldquo;{preview}&rdquo;
           </button>
         </div>
+      ) : null}
+      {featured && !qTrim && !selected && step.featuredOptionsCaption ? (
+        <p
+          className="onboarding-body"
+          style={{ marginBottom: '0.5rem', marginTop: 0, fontSize: '0.875rem', color: 'var(--color-textSecondary)' }}
+        >
+          {step.featuredOptionsCaption}
+        </p>
       ) : null}
       {selected ? (
         <div style={{ marginBottom: '0.75rem' }}>
