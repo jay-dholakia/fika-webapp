@@ -635,40 +635,70 @@ export default function AdminSignupsPage() {
               ) : (
                 <>
                   {modalProfile && (
-                    <section className="admin-modal-section">
-                      <h3 className="admin-modal-section-title">Profile</h3>
-                      <dl className="admin-modal-dl">
-                        <dt>Name</dt>
-                        <dd>
-                          {modalProfile.firstName ?? '—'}
-                          {modalProfile.hasUpcomingConfirmedFika ? (
-                            <span
-                              className="admin-badge admin-badge-upcoming-fika"
-                              style={{ marginLeft: '0.5rem', verticalAlign: 'middle' }}
-                              title="Has a confirmed Fika that has not happened yet — not eligible for a new intro"
-                            >
-                              Upcoming Fika
-                            </span>
-                          ) : null}
-                        </dd>
-                        <dt>City</dt>
-                        <dd>{modalProfile.city ?? '—'}</dd>
-                        <dt>Market</dt>
-                        <dd>{modalProfile.marketLabel ?? modalProfile.market ?? '—'}</dd>
-                        <dt>Birthdate</dt>
-                        <dd>{modalProfile.birthdate ?? '—'}</dd>
-                        <dt>Gender</dt>
-                        <dd>{modalProfile.gender ?? '—'}</dd>
-                        <dt>Pronouns</dt>
-                        <dd>{modalProfile.pronouns ?? '—'}</dd>
-                        <dt>Relationship status</dt>
-                        <dd>{modalProfile.relationshipStatus ?? '—'}</dd>
-                        <dt>Intent confirmed</dt>
-                        <dd>{modalProfile.intentConfirmedAt ? formatDate(modalProfile.intentConfirmedAt) : '—'}</dd>
-                        <dt>Created</dt>
-                        <dd>{formatDate(modalProfile.createdAt)}</dd>
-                      </dl>
-                    </section>
+                    <>
+                      <div className="admin-people-modal-photo-wrap">
+                        {modalProfile.avatarUrl ? (
+                          <img
+                            src={modalProfile.avatarUrl}
+                            alt={
+                              modalProfile.firstName?.trim()
+                                ? `Profile photo of ${modalProfile.firstName.trim()}`
+                                : 'Profile photo'
+                            }
+                            className="admin-people-modal-photo"
+                            width={88}
+                            height={88}
+                            decoding="async"
+                          />
+                        ) : (
+                          <div
+                            className="admin-people-modal-photo admin-people-modal-photo-placeholder"
+                            role="img"
+                            aria-label={
+                              modalProfile.firstName?.trim()
+                                ? `No profile photo; ${modalProfile.firstName.trim()}`
+                                : 'No profile photo'
+                            }
+                          >
+                            {(modalProfile.firstName?.trim()?.[0] ?? '?').toUpperCase()}
+                          </div>
+                        )}
+                      </div>
+                      <section className="admin-modal-section">
+                        <h3 className="admin-modal-section-title">Profile</h3>
+                        <dl className="admin-modal-dl">
+                          <dt>Name</dt>
+                          <dd>
+                            {modalProfile.firstName ?? '—'}
+                            {modalProfile.hasUpcomingConfirmedFika ? (
+                              <span
+                                className="admin-badge admin-badge-upcoming-fika"
+                                style={{ marginLeft: '0.5rem', verticalAlign: 'middle' }}
+                                title="Has a confirmed Fika that has not happened yet — not eligible for a new intro"
+                              >
+                                Upcoming Fika
+                              </span>
+                            ) : null}
+                          </dd>
+                          <dt>City</dt>
+                          <dd>{modalProfile.city ?? '—'}</dd>
+                          <dt>Market</dt>
+                          <dd>{modalProfile.marketLabel ?? modalProfile.market ?? '—'}</dd>
+                          <dt>Birthdate</dt>
+                          <dd>{modalProfile.birthdate ?? '—'}</dd>
+                          <dt>Gender</dt>
+                          <dd>{modalProfile.gender ?? '—'}</dd>
+                          <dt>Pronouns</dt>
+                          <dd>{modalProfile.pronouns ?? '—'}</dd>
+                          <dt>Relationship status</dt>
+                          <dd>{modalProfile.relationshipStatus ?? '—'}</dd>
+                          <dt>Intent confirmed</dt>
+                          <dd>{modalProfile.intentConfirmedAt ? formatDate(modalProfile.intentConfirmedAt) : '—'}</dd>
+                          <dt>Created</dt>
+                          <dd>{formatDate(modalProfile.createdAt)}</dd>
+                        </dl>
+                      </section>
+                    </>
                   )}
                   {modalIntake && (
                     <section className="admin-modal-section">

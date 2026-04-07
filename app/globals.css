@@ -4502,6 +4502,31 @@ a {
   padding: 1.25rem;
   overflow-y: auto;
 }
+/* People (signups) modal: profile photo ≈ US nickel diameter (~21mm → ~5.5rem / 88px) */
+.admin-people-modal-photo-wrap {
+  display: flex;
+  justify-content: center;
+  margin: 0 0 1.25rem;
+}
+.admin-people-modal-photo {
+  width: 5.5rem;
+  height: 5.5rem;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 2px solid var(--color-border);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+.admin-people-modal-photo-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg-soft);
+  color: var(--color-textSecondary);
+  font-size: 1.75rem;
+  font-weight: 600;
+  line-height: 1;
+}
 .admin-modal-section {
   margin-bottom: 1.5rem;
 }
