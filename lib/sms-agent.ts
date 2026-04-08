@@ -982,10 +982,10 @@ export function messageRelayToOther(senderFirstName: string, text: string): stri
 }
 
 
-/** Day-of reminder (e.g. 3 hours before). otherFirstName = match's first name. */
+/** Day-of coordination reminder (~90 minutes before). otherFirstName = match's first name. */
 export function messageThreeHourReminder(time: string, venueName: string, neighborhood: string, otherFirstName?: string | null): string {
   const name = otherFirstName?.trim() || 'your intro'
-  return `Your Fika is in about 3 hours.\n\n${time}\n${venueName} (${neighborhood})\n\nYou can text here to coordinate with ${name} if needed.`
+  return `Your Fika is in about 90 minutes.\n\n${time}\n${venueName} (${neighborhood})\n\nYou can text here to coordinate with ${name} if needed.`
 }
 
 /** Relay-closed + follow-up prompt copy. */

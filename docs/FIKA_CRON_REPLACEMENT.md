@@ -9,7 +9,7 @@
 ## What “replace all crons” means in practice
 
 - **Replace:** Time-based **bulk** steps that assumed **Sunday → Monday → Tuesday** weekly pool logic (opt-in blast, follow-up, expiration, scheduled replenish, scheduled intro delivery, scheduled match expiration).
-- **Honest caveat:** Some behaviors are **inherently time-based** (e.g. “morning of Fika,” “3 hours before,” “post-Fika next day”). Those can become:
+- **Honest caveat:** Some behaviors are **inherently time-based** (e.g. “morning of Fika,” “~90 minutes before,” “post-Fika next day”). Those can become:
   - **Per-match scheduled jobs** (queue/worker), **or**
   - **A single thin sweep cron** (e.g. hourly) that only runs **new** protocol logic — not the old weekly pipeline.
 
@@ -37,11 +37,11 @@ Defined in e.g. `supabase/migrations/20260425180000_reenable_weekly_pool_sms_cro
 | Job / pattern | Edge Function | Role today | Replacement options |
 |---------------|---------------|------------|---------------------|
 | `sms-onboarding-reminder` | `sms-onboarding-reminder` | Every 30m: nudge incomplete onboarding | **Outside** core match protocol. Keep, replace with **event** (signup + idle), or **one** daily sweep. |
-| `sms-three-hour-reminder` | `sms-three-hour-reminder` | Hourly: 3h-before Fika | **Phase 6-ish** — can stay as **thin sweep** or **per-match** scheduled send. |
+| `sms-three-hour-reminder` | `sms-three-hour-reminder` | Hourly: ~90m-before Fika | **Phase 6-ish** — can stay as **thin sweep** or **per-match** scheduled send. |
 | `sms-day-reminder` | `sms-day-reminder` | Day-of | Same — **time-triggered**; protocol copy should match Phase 6. |
 | `sms-post-fika` | `sms-post-fika` | Post-Fika loop | **Phase 7** — **after** Fika time + offset; event or sweep. |
 
-These are **not** “weekly pool” crons but they **are** schedulers. If the goal is literally **no** `pg_cron` rows, you’ll need **another** mechanism for “send at 8am on Fika day” and “send 3h before.”
+These are **not** “weekly pool” crons but they **are** schedulers. If the goal is literally **no** `pg_cron` rows, you’ll need **another** mechanism for “send at 8am on Fika day” and “send ~90m before.”
 
 ---
 

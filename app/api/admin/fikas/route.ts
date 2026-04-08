@@ -62,7 +62,7 @@ function pickNeedsAttentionReason(row: {
   if (row.stage === 'awaiting_opt_in' || row.stage === 'awaiting_other_opt_in') return 'Waiting on opt-in'
   if (row.stage === 'scheduling') return 'Scheduling in progress'
   if (row.stage === 'confirmed') {
-    if (!row.three_hour_reminder_sent_at) return 'Reminder not sent'
+    if (!row.three_hour_reminder_sent_at) return 'Pre-Fika (~90m) reminder not sent'
     if (!row.post_fika_sent_at) return 'Post-Fika not sent'
   }
   return null

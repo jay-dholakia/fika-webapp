@@ -48,11 +48,14 @@ export function isFikaToday(weekAnchorMonday: string, slotId: string, marketTime
   return getFikaDateFromSlot(weekAnchorMonday, slotId) === getTodayYmdInTimezone(tz)
 }
 
+/** Coordination relay opens this long before Fika start (SMS ↔ match, web when enabled). */
+export const RELAY_OPEN_BEFORE_MS = 90 * 60 * 1000
+
 export function isInRelayWindow(weekAnchorMonday: string, slotId: string, marketTimeZone?: string): boolean {
   const ms = getFikaTimeMs(weekAnchorMonday, slotId, marketTimeZone)
   if (ms == null) return false
   const now = Date.now()
-  const opensAt = ms - 3 * 60 * 60 * 1000
+  const opensAt = ms - RELAY_OPEN_BEFORE_MS
   const closesAt = ms + 2 * 60 * 60 * 1000
   return now >= opensAt && now <= closesAt
 }

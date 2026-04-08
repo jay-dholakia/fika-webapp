@@ -1045,7 +1045,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true })
   }
 
-  // ----- Free-text relay window: 3h before through 2h after confirmed Fika -----
+  // ----- Free-text relay window: 90m before through 2h after confirmed Fika -----
   const { data: relayMatches } = await supabase
     .from('match_candidates')
     .select('id, user_a, user_b, week_anchor_monday, confirmed_slot_id')
@@ -1204,8 +1204,8 @@ export async function POST(request: Request) {
     const apiKey = getOpenAiKeyForSms()
     const fikaSummary = `Confirmed Fika: ${upDay} at ${upTime} at ${venueNameUp} (${neighborhoodUp}).`
     const relayWindowDescription = inRelayUpcoming
-      ? 'Right now the user is inside the coordination window (~3 hours before through ~2 hours after start): messages here may be relayed to their intro for last-minute coordination.'
-      : 'The user is not in that coordination window yet; it opens ~3 hours before start. They cannot change the scheduled time by text; they can reply Cancel if they cannot make it, or Help.'
+      ? 'Right now the user is inside the coordination window (~90 minutes before through ~2 hours after start): messages here may be relayed to their intro for last-minute coordination.'
+      : 'The user is not in that coordination window yet; it opens ~90 minutes before start. They cannot change the scheduled time by text; they can reply Cancel if they cannot make it, or Help.'
     const allowedActionsLine =
       'Keyword actions only: Help and Cancel (for backing out of this Fika). Reschedule is not available by SMS. Other texts must not be treated as scheduling changes.'
 

@@ -1,4 +1,4 @@
-// SMS cron: 3 hours before Fika — reminder + "reply HERE or RUNNING LATE and we'll let your match know".
+// SMS cron: ~90 minutes before Fika — coordination reminder (opens same window as relay / match chat).
 // Invoked by pg_cron every hour. Requires SENDBLUE_API_KEY_ID, SENDBLUE_API_SECRET_KEY.
 
 declare const Deno: { env: { get(key: string): string | undefined } }
@@ -25,11 +25,12 @@ function slotToTimeStr(slotId: string): string {
   return min === 0 ? `${h12}${period}` : `${h12}:${min.toString().padStart(2, '0')}${period}`
 }
 
-const MS_2_5_H = 2.5 * 60 * 60 * 1000
-const MS_3_5_H = 3.5 * 60 * 60 * 1000
+/** Hourly cron: include matches whose start is 45–135 min away so at least one tick hits ~90 min before. */
+const MS_REMINDER_MIN_BEFORE = 45 * 60 * 1000
+const MS_REMINDER_MAX_BEFORE = 135 * 60 * 1000
 
-function buildThreeHourMessage(time: string, venueName: string, neighborhood: string): string {
-  return `Your Fika is in about 3 hours: ${time} at ${venueName} (${neighborhood}).\nText here to coordinate directly with your intro. Relay closes 2 hours after your scheduled time.`
+function buildPreFikaCoordinationReminderMessage(time: string, venueName: string, neighborhood: string): string {
+  return `Your Fika is in about 90 minutes: ${time} at ${venueName} (${neighborhood}).\nText here to coordinate directly with your intro. Relay closes 2 hours after your scheduled time.`
 }
 
 async function hasInboundWithin24h(supabase: any, phone: string): Promise<boolean> {
@@ -81,7 +82,7 @@ serve(async () => {
       const fikaMs = getFikaTimeMs(m.week_anchor_monday, m.confirmed_slot_id, tz)
       if (fikaMs == null) continue
       const diff = fikaMs - now
-      if (diff >= MS_2_5_H && diff <= MS_3_5_H) {
+      if (diff >= MS_REMINDER_MIN_BEFORE && diff <= MS_REMINDER_MAX_BEFORE) {
         const { data: venue } = await supabase
           .from('venues')
           .select('name, neighborhood, city')
@@ -100,7 +101,7 @@ serve(async () => {
     let sent = 0
     let skipped_no_recent_inbound = 0
     for (const item of toSend) {
-      const message = buildThreeHourMessage(item.timeStr, item.venueName, item.neighborhood)
+      const message = buildPreFikaCoordinationReminderMessage(item.timeStr, item.venueName, item.neighborhood)
       for (const userId of item.userIds) {
         const { data: profile } = await supabase
           .from('profiles')
