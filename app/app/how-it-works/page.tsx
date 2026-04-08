@@ -69,19 +69,13 @@ export default function HowItWorksPage() {
 
   return (
     <>
-      <div className="app-card app-welcome-card">
-        <h1 className="app-welcome-card-title">Welcome to Fika!</h1>
-        <p className="app-welcome-card-text">
-          {marketActive === false ? (
-            <>You&apos;re in. We&apos;re not matching in your area yet—we&apos;ll let you know when we are.</>
-          ) : (
-            <>You&apos;re in. We&apos;ll text you when we have a match.</>
-          )}
-        </p>
-      </div>
-
       <div className="app-card app-how-it-works-page">
-        <h2 className="app-how-it-works-title">How it works</h2>
+        {marketActive === false ? (
+          <p className="app-welcome-card-text" style={{ marginTop: 0, marginBottom: '1rem' }}>
+            You&apos;re in. We&apos;re not matching in your area yet—we&apos;ll let you know when we are.
+          </p>
+        ) : null}
+        <h1 className="app-how-it-works-title">How it works</h1>
 
       <section className="app-how-it-works-section" aria-labelledby="getting-started-heading">
         <h2 id="getting-started-heading" className="app-how-it-works-section-title">Getting started</h2>
@@ -97,7 +91,7 @@ export default function HowItWorksPage() {
             <div className="app-how-it-works-step-content">
               <span className="app-how-it-works-when">Complete your intro (~5 min)</span>
               <span className="app-how-it-works-what">
-                Short questionnaire so we can match you nearby—enough in common to click, enough difference to stay
+                Short questionnaire so we can match you nearby—similar enough to click, different enough to keep it
                 interesting.
               </span>
               {!questionnaireComplete && !onboardingLoading && (

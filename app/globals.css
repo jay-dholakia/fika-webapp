@@ -2403,6 +2403,19 @@ a {
   border-bottom: 1px solid var(--color-border);
   margin-bottom: 1rem;
 }
+.app-sidebar-profile {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0 1.25rem 1rem;
+  margin-bottom: 0.5rem;
+  border-bottom: 1px solid var(--color-border);
+  box-sizing: border-box;
+}
+.app-sidebar-profile-text {
+  min-width: 0;
+  flex: 1;
+}
 .app-sidebar-logo {
   font-family: var(--font-heading);
   font-weight: 600;

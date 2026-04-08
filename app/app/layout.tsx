@@ -174,16 +174,7 @@ function AppLayoutInner({
             fika
           </Link>
         </div>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.75rem',
-            padding: '0 0 1rem 0',
-            marginBottom: '0.5rem',
-            borderBottom: '1px solid var(--color-border)',
-          }}
-        >
+        <div className="app-sidebar-profile">
           {profile?.avatar_url ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -210,7 +201,7 @@ function AppLayoutInner({
               }}
             />
           )}
-          <div style={{ minWidth: 0 }}>
+          <div className="app-sidebar-profile-text">
             <p style={{ margin: 0, fontSize: '0.8125rem', color: 'var(--color-textSecondary)' }}>Signed in as</p>
             <p
               style={{
