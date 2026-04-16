@@ -162,7 +162,7 @@ export async function POST(request: Request) {
     })
     .eq('id', session.id)
 
-  // After first-time merge: send entry SMS sequence (3 messages). Creates global SMS state for the batch week.
+  // After first-time merge: send one entry SMS (You're in + invite sms: link + profile URL). Creates global SMS state for the batch week.
   if (session.phone && process.env.SENDBLUE_API_KEY_ID) {
     try {
       const weekAnchorMonday = getCurrentWeekAnchorMonday()

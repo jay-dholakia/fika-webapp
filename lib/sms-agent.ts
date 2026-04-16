@@ -210,6 +210,29 @@ export type TimedSmsMessage = {
   delayAfterMs?: number
 }
 
+/** Same preset body as web/app “Text us” CTAs (`Hi — set me up for Fika.`). */
+export const CONCIERGE_SIGNUP_SMS_BODY = 'Hi — set me up for Fika.'
+
+/**
+ * Opens the user’s SMS app to the concierge with {@link CONCIERGE_SIGNUP_SMS_BODY} prefilled (tap or share).
+ * Uses `SENDBLUE_CONCIERGE_NUMBER` or `NEXT_PUBLIC_SENDBLUE_CONCIERGE_NUMBER`.
+ */
+export function buildConciergeSignupInviteSmsHref(): string | null {
+  const raw =
+    (process.env.SENDBLUE_CONCIERGE_NUMBER || process.env.NEXT_PUBLIC_SENDBLUE_CONCIERGE_NUMBER || '').trim()
+  if (!raw) return null
+  return `sms:${raw}?body=${encodeURIComponent(CONCIERGE_SIGNUP_SMS_BODY)}`
+}
+
+function firstTimeEntryInviteAndProfileBlock(appBase: string): string {
+  const base = appBase.trim().replace(/\/$/, '') || 'https://letsfika.vercel.app'
+  const inviteHref = buildConciergeSignupInviteSmsHref()
+  const inviteCopy = inviteHref
+    ? `Know someone nearby who'd like this? Send them this link:\n${inviteHref}`
+    : `Know someone nearby who'd like this? They can text us with: ${CONCIERGE_SIGNUP_SMS_BODY}`
+  return `${inviteCopy}\n\nProfile: ${base}/app`
+}
+
 /** First-time sequence after signup (active market). `isAfterDeadline` kept for API compatibility. */
 export function messageEntryFirstTimeMessages(
   _isAfterDeadline: boolean,
@@ -217,38 +240,22 @@ export function messageEntryFirstTimeMessages(
   appBase: string = 'https://letsfika.vercel.app'
 ): TimedSmsMessage[] {
   const base = appBase.trim().replace(/\/$/, '') || 'https://letsfika.vercel.app'
-  return [
-    { content: 'You’re in 🤝', delayAfterMs: SMS_PACING_MS.quickAck },
-    {
-      content: 'We’re lining up your first intro now — we’ll text you as soon as there’s a strong match.',
-      delayAfterMs: SMS_PACING_MS.reflective,
-    },
-    {
-      content: 'Know a few people nearby who’d be into this? The more people who join, the faster intros start.',
-      delayAfterMs: SMS_PACING_MS.context,
-    },
-    { content: `Update your profile anytime:\n${base}/app` },
-  ]
+  const body =
+    `You're in 🤝 We're lining up your first intro — we'll text when there's a strong match.\n\n` +
+    firstTimeEntryInviteAndProfileBlock(base)
+  return [{ content: body, delayAfterMs: SMS_PACING_MS.quickAck }]
 }
 
-/** First-time entry when user's market is inactive. Returns 4 messages (URL standalone). */
+/** First-time entry when user's market is inactive. Single SMS (URL standalone for profile). */
 export function messageEntryFirstTimeMessagesInactiveMarket(
   appBase: string = 'https://letsfika.vercel.app',
   _cityLabel?: string | null
 ): TimedSmsMessage[] {
   const base = appBase.trim().replace(/\/$/, '') || 'https://letsfika.vercel.app'
-  return [
-    { content: 'You’re in 🤝', delayAfterMs: SMS_PACING_MS.quickAck },
-    {
-      content: 'We’re building up Fika in your area — once there are a few strong matches, we’ll send your first intro.',
-      delayAfterMs: SMS_PACING_MS.reflective,
-    },
-    {
-      content: 'Know a few people nearby who’d be into this? The more people who join, the faster intros start.',
-      delayAfterMs: SMS_PACING_MS.context,
-    },
-    { content: `Update your profile anytime:\n${base}/app` },
-  ]
+  const body =
+    `You're in 🤝 We're building up Fika in your area — once there are a few strong matches, we'll send your first intro.\n\n` +
+    firstTimeEntryInviteAndProfileBlock(base)
+  return [{ content: body, delayAfterMs: SMS_PACING_MS.quickAck }]
 }
 
 /** Reply when user in an inactive market texts in. */
