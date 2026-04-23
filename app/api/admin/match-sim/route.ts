@@ -191,7 +191,7 @@ function buildComparisonRows(a: SimCandidate, b: SimCandidate): CompareRow[] {
     { label: 'Avoid topics', a: asDisplay(getResponseValue(a.intake, 'q_avoid_topics')), b: asDisplay(getResponseValue(b.intake, 'q_avoid_topics')) },
     { label: 'Languages', a: asDisplay(a.profile.languages), b: asDisplay(b.profile.languages) },
     { label: 'Gender (same-gender matches only)', a: asDisplay(a.profile.gender), b: asDisplay(b.profile.gender) },
-    { label: 'Age preference', a: asDisplay(a.profile.age_preference), b: asDisplay(b.profile.age_preference) },
+    { label: 'Age', a: a.age != null ? String(a.age) : '—', b: b.age != null ? String(b.age) : '—' },
   ]
 }
 

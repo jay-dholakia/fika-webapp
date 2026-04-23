@@ -4,7 +4,7 @@
  */
 
 /** Reported in admin match-sim API `summary.scoring`. */
-export const MATCH_SCORING_VERSION = 'fika_structured_v5' as const
+export const MATCH_SCORING_VERSION = 'fika_structured_v6' as const
 
 /** final = clamp(0,1, FEASIBILITY_PORTION * feasibility + COMPATIBILITY_PORTION * (compatibility - penaltyTotal)) */
 export const FEASIBILITY_PORTION = 0.4

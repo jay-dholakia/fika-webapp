@@ -30,6 +30,7 @@ export type MatcherProfile = {
   gender: string | null
   /** Legacy column; pairing uses same-gender-only (`checkPairEligibility`), not this field. */
   gender_preference: string | null
+  /** Legacy column; age-based pairing is not used (`checkPairEligibility`). */
   age_preference: string | null
   languages: string[] | null
 }
@@ -274,18 +275,6 @@ export function checkPairEligibility(
     } else if (!sameGender(ga, gb)) {
       reasons.push('same_gender_required')
     }
-  }
-
-  const preferAround = 'prefer around my age'
-  const aAround = a.profile.age_preference?.trim().toLowerCase() === preferAround
-  const bAround = b.profile.age_preference?.trim().toLowerCase() === preferAround
-  if (aAround) {
-    if (a.age == null || b.age == null) reasons.push('age_pref')
-    else if (Math.abs(a.age - b.age) > 3) reasons.push('age_pref')
-  }
-  if (bAround) {
-    if (a.age == null || b.age == null) reasons.push('age_pref')
-    else if (Math.abs(a.age - b.age) > 3) reasons.push('age_pref')
   }
 
   if (!relaxed) {
