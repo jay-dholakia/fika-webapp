@@ -1,6 +1,6 @@
 /**
  * SMS agent: state machine, message templates, venue picker, slot↔day/window mapping.
- * Used by webhook and Edge Functions. Copy: we reach out by SMS when we find a good Fika intro; we text a time and place to confirm — no fixed weekly blast.
+ * Used by webhook and Edge Functions. Copy: we reach out by SMS when we find a good Fika intro; we text a time and place to confirm.
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js'

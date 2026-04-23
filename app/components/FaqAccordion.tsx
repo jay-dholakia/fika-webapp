@@ -5,7 +5,7 @@ import { useState } from 'react'
 const faqItems = [
   {
     q: 'How do you choose who I meet?',
-    a: 'We use your profile, preferences, and when you’re usually free. There’s no fixed weekly cadence—we text you on our number when we have a good intro. You’ll get a proposed time and a public place (often a café) to confirm by text.',
+    a: 'We use your profile, preferences, and when you’re usually free. We text you from our number when we have a good intro. You’ll get a proposed time and a public place (often a café) to confirm by text.',
   },
   {
     q: 'Do I have to meet in person?',

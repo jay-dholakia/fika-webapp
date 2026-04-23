@@ -5,7 +5,7 @@ import { useState } from 'react'
 const portalFaqItems = [
   {
     q: 'How do intros and scheduling work?',
-    a: 'We match using your profile, preferences, and when you’re usually free. There’s no fixed weekly cadence—we text you on this number when we have a strong intro. We focus on one at a time. You’ll get an SMS with a short intro, a proposed time, and a public spot (usually a café). Reply to confirm or ask for one alternate; both people need to confirm before you’re set.',
+    a: 'We match using your profile, preferences, and when you’re usually free. We text you on this number when we have a strong intro. We focus on one at a time. You’ll get an SMS with a short intro, a proposed time, and a public spot (usually a café). Reply to confirm or ask for one alternate; both people need to confirm before you’re set.',
   },
   {
     q: 'How long do I have to respond?',
