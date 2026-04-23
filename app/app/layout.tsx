@@ -9,6 +9,17 @@ import { authLog } from '@/lib/auth-log'
 
 const CONCIERGE_NUMBER = process.env.NEXT_PUBLIC_SENDBLUE_CONCIERGE_NUMBER?.trim() || null
 
+/** Portal feedback corner: SMS to this number with prefilled intro (not necessarily concierge). */
+const FEEDBACK_SMS_E164 = '+19496789729'
+
+function buildFeedbackSmsHref(userId: string | null | undefined, firstName: string | null | undefined): string | undefined {
+  if (!userId?.trim()) return undefined
+  const last4 = userId.replace(/-/g, '').slice(-4) || '----'
+  const name = (firstName?.trim() || 'Fika member').replace(/\s+/g, ' ')
+  const body = `Hi, I'm ${name} (user id ending in ${last4}) - here's my feedback:`
+  return `sms:${FEEDBACK_SMS_E164}?body=${encodeURIComponent(body)}`
+}
+
 function AppLayoutLoading() {
   return (
     <div style={{ padding: '2rem', textAlign: 'center' }}>
@@ -243,9 +254,9 @@ function AppLayoutInner({
       </main>
       <div className="app-feedback-corner">
         <a
-          href={buildConciergeSmsHref()}
+          href={buildFeedbackSmsHref(userId, profile?.first_name) ?? '#'}
           className="app-feedback-pill"
-          aria-label="Text concierge with feedback"
+          aria-label="Send feedback by text message"
         >
           <span className="app-feedback-pill-icon" aria-hidden>
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
