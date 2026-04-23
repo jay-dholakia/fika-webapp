@@ -270,7 +270,6 @@ a {
   position: relative;
   z-index: 1;
   max-width: 680px;
-  container-type: inline-size;
 }
 @media (max-width: 899px) {
   .hero-inner {
@@ -298,16 +297,13 @@ a {
   display: block;
   color: var(--color-secondary);
   font-style: italic;
-  /* Slightly smaller than .hero-title so “Have a real conversation.” stays one line */
-  font-size: clamp(0.9375rem, 2.85vw + 0.45rem, 2.4rem);
-  line-height: 1.1;
+  /* Smaller than the first line, scales with the h1 (em), stays one line */
+  font-size: clamp(0.8125rem, 0.5em, 1.9rem);
+  line-height: 1.12;
   letter-spacing: -0.02em;
-}
-@container (min-width: 0px) {
-  .hero-title-accent {
-    /* Tracks hero column width on desktop grid and mobile stack */
-    font-size: clamp(0.9375rem, calc(100cqi / 14), 2.4rem);
-  }
+  white-space: nowrap;
+  word-break: normal;
+  overflow-wrap: normal;
 }
 .hero-sub {
   font-size: 1.15rem;
