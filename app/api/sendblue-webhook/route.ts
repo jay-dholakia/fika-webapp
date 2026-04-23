@@ -727,17 +727,16 @@ export async function POST(request: Request) {
     const appBase = (process.env.APP_CANONICAL_URL ?? '').trim()
       ? process.env.APP_CANONICAL_URL!.trim().replace(/\/$/, '')
       : DEFAULT_SIGNUP_BASE
-    // Static PNG has typography baked in. Prefer dynamic /api/intro-card when SIGNUP_SAMPLE_AVATAR_URL is set
-    // to the public Jay sample headshot URL (not the concierge contact-card photo — those are separate assets).
-    const sampleAvatarUrl = process.env.SIGNUP_SAMPLE_AVATAR_URL?.trim() || null
-    const signupSampleImageUrl = sampleAvatarUrl
-      ? buildIntroCardUrl({
-          appBase,
-          avatarUrl: sampleAvatarUrl,
-          firstName: 'Jay',
-          age: '32',
-        }) ?? `${appBase}/images/jay-intro-overlay-literal-edited.png`
-      : `${appBase}/images/jay-intro-overlay-literal-edited.png`
+    // Sample intro card: Maya / 32 + “fika” via /api/intro-card. Override avatar with SIGNUP_SAMPLE_AVATAR_URL if needed.
+    const defaultSampleAvatarUrl = `${appBase}/images/maya-intro-agent.png`
+    const sampleAvatarUrl = process.env.SIGNUP_SAMPLE_AVATAR_URL?.trim() || defaultSampleAvatarUrl
+    const signupSampleImageUrl =
+      buildIntroCardUrl({
+        appBase,
+        avatarUrl: sampleAvatarUrl,
+        firstName: 'Maya',
+        age: '32',
+      }) ?? `${appBase}/images/maya-intro-agent.png`
     const { data: existing } = await supabase
       .from('onboarding_sessions')
       .select('token')

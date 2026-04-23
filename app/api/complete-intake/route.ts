@@ -53,7 +53,7 @@ export async function POST(request: Request) {
 
   const completedAt = embedResult.completedAt
 
-  // After first-time intake completion: send one entry SMS (You're in + invite sms: link + profile URL)
+  // After first-time intake completion: two concierge SMS (You're in + invite link, then profile edit URL)
   if (!embedOnly) {
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
     if (serviceKey && process.env.SENDBLUE_API_KEY_ID) {

@@ -224,38 +224,43 @@ export function buildConciergeSignupInviteSmsHref(): string | null {
   return `sms:${raw}?body=${encodeURIComponent(CONCIERGE_SIGNUP_SMS_BODY)}`
 }
 
-function firstTimeEntryInviteAndProfileBlock(appBase: string): string {
-  const base = appBase.trim().replace(/\/$/, '') || 'https://letsfika.vercel.app'
+/** Invite-a-friend lines (prefilled SMS when configured, else plain concierge body text). */
+function firstTimeEntryInviteBlock(): string {
   const inviteHref = buildConciergeSignupInviteSmsHref()
-  const inviteCopy = inviteHref
+  return inviteHref
     ? `Know someone nearby who'd like this? Send them this link:\n${inviteHref}`
-    : `Know someone nearby who'd like this? They can text us with: ${CONCIERGE_SIGNUP_SMS_BODY}`
-  return `${inviteCopy}\n\nProfile: ${base}/app`
+    : `Know someone nearby who'd like this? They can text us with:\n${CONCIERGE_SIGNUP_SMS_BODY}`
 }
 
-/** First-time sequence after signup (active market). `isAfterDeadline` kept for API compatibility. */
+/** First-time sequence after signup (active market). Two SMS: intro + invite, then profile edit link. */
 export function messageEntryFirstTimeMessages(
   _isAfterDeadline: boolean,
   _nextMondayPhrase: string = 'next Monday',
   appBase: string = 'https://letsfika.vercel.app'
 ): TimedSmsMessage[] {
   const base = appBase.trim().replace(/\/$/, '') || 'https://letsfika.vercel.app'
-  const body =
-    `You're in 🤝 We're lining up your first intro — we'll text when there's a strong match.\n\n` +
-    firstTimeEntryInviteAndProfileBlock(base)
-  return [{ content: body, delayAfterMs: SMS_PACING_MS.quickAck }]
+  const lead =
+    "You're in 🤝 We're lining up your first intro — we'll text when there's a strong match.\n" +
+    firstTimeEntryInviteBlock()
+  return [
+    { content: lead, delayAfterMs: SMS_PACING_MS.quickAck },
+    { content: `To edit your profile: ${base}/app`, delayAfterMs: SMS_PACING_MS.quickAck },
+  ]
 }
 
-/** First-time entry when user's market is inactive. Single SMS (URL standalone for profile). */
+/** First-time entry when user's market is inactive. Two SMS: intro + invite, then profile edit link. */
 export function messageEntryFirstTimeMessagesInactiveMarket(
   appBase: string = 'https://letsfika.vercel.app',
   _cityLabel?: string | null
 ): TimedSmsMessage[] {
   const base = appBase.trim().replace(/\/$/, '') || 'https://letsfika.vercel.app'
-  const body =
-    `You're in 🤝 We're building up Fika in your area — once there are a few strong matches, we'll send your first intro.\n\n` +
-    firstTimeEntryInviteAndProfileBlock(base)
-  return [{ content: body, delayAfterMs: SMS_PACING_MS.quickAck }]
+  const lead =
+    "You're in 🤝 We're building up Fika in your area — once there are a few strong matches, we'll send your first intro.\n" +
+    firstTimeEntryInviteBlock()
+  return [
+    { content: lead, delayAfterMs: SMS_PACING_MS.quickAck },
+    { content: `To edit your profile: ${base}/app`, delayAfterMs: SMS_PACING_MS.quickAck },
+  ]
 }
 
 /** Reply when user in an inactive market texts in. */
