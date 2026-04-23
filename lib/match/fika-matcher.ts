@@ -19,7 +19,6 @@ import {
   FEASIBILITY_WEIGHTS,
   MULTI_CHIP_BLEND,
   SEVERE_MISMATCH_PENALTY_CAP,
-  TEXTURE_FIELD_IDS,
   TIME_FIT_BLEND,
 } from '@/lib/match/weights'
 
@@ -235,26 +234,6 @@ function severeMismatchPenalty(opennessFit: number, hopingFit: number): number {
   return Math.min(SEVERE_MISMATCH_PENALTY_CAP, s)
 }
 
-function textureFitScore(a: MatcherPerson, b: MatcherPerson): number {
-  const parts: number[] = []
-  for (const id of TEXTURE_FIELD_IDS) {
-    if (id === 'q_college' || id === 'q_work') {
-      const va = getIntakeSingle(a.responses, id)
-      const vb = getIntakeSingle(b.responses, id)
-      if (!va || !vb) continue
-      if (va.trim().toLowerCase() === vb.trim().toLowerCase()) parts.push(1)
-      else parts.push(0.35)
-      continue
-    }
-    const sa = getIntakeMulti(a.responses, id)
-    const sb = getIntakeMulti(b.responses, id)
-    if (sa.length === 0 || sb.length === 0) continue
-    parts.push(multiSelectChipOverlapScore(sa, sb))
-  }
-  if (parts.length === 0) return 0.5
-  return parts.reduce((x, y) => x + y, 0) / parts.length
-}
-
 export type EligibilityOptions = {
   relaxedEligibility?: boolean
 }
@@ -370,7 +349,6 @@ export function scoreFikaPair(a: MatcherPerson, b: MatcherPerson, opts?: ScorePa
   const ha = getIntakeSingle(a.responses, 'q_hoping_for')
   const hb = getIntakeSingle(b.responses, 'q_hoping_for')
   const hopingForFit = hopingForCompatibilityScore(ha, hb, log)
-  const textureFit = textureFitScore(a, b)
 
   const w = COMPATIBILITY_WEIGHTS
   const compatibilityTotal =
@@ -380,8 +358,7 @@ export function scoreFikaPair(a: MatcherPerson, b: MatcherPerson, opts?: ScorePa
     w.lifeChapter * lifeChapterFit +
     w.everydayAnchor * everydayAnchorFit +
     w.openness * opennessFit +
-    w.hopingFor * hopingForFit +
-    w.texture * textureFit
+    w.hopingFor * hopingForFit
 
   const avoidTopicsPenalty = avoidTopicsPenaltySymmetric(a, b)
   const severeMismatch = severeMismatchPenalty(opennessFit, hopingForFit)
@@ -410,7 +387,7 @@ export function scoreFikaPair(a: MatcherPerson, b: MatcherPerson, opts?: ScorePa
       everydayAnchorFit,
       opennessFit,
       hopingForFit,
-      textureFit,
+      textureFit: 0,
       total: compatibilityTotal,
     },
     penalties: {

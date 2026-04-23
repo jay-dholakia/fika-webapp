@@ -4,7 +4,7 @@
  */
 
 /** Reported in admin match-sim API `summary.scoring`. */
-export const MATCH_SCORING_VERSION = 'fika_structured_v2' as const
+export const MATCH_SCORING_VERSION = 'fika_structured_v3' as const
 
 /** final = clamp(0,1, FEASIBILITY_PORTION * feasibility + COMPATIBILITY_PORTION * (compatibility - penaltyTotal)) */
 export const FEASIBILITY_PORTION = 0.4
@@ -18,21 +18,18 @@ export const FEASIBILITY_WEIGHTS = {
 
 /**
  * Per-dimension weights inside compatibility_score (sum = 1).
- * Slim intake (see `INTAKE_STEPS` in onboarding-data): we no longer collect
- * great Fika / curiosity / life chapter / everyday anchor / openness.
- * Those terms always scored ~0.5 for new users, so their weight is set to 0
- * and redistributed onto interests, hoping-for, and texture in the same
- * ratio as the previous active slice (22 : 6 : 5 of the old 33% “live” band).
+ * Slim intake: only interests + hoping-for carry signal (see `INTAKE_STEPS`).
+ * Texture (work/college/media lists) is not asked anymore — weight 0, not used in `scoreFikaPair`.
  */
 export const COMPATIBILITY_WEIGHTS = {
   greatFika: 0,
-  interests: 22 / 33,
+  interests: 11 / 14,
   curiosity: 0,
   lifeChapter: 0,
   everydayAnchor: 0,
   openness: 0,
-  hopingFor: 6 / 33,
-  texture: 5 / 33,
+  hopingFor: 3 / 14,
+  texture: 0,
 } as const
 
 /** Multi-select chip overlap: blend of Jaccard and overlap coefficient. */
@@ -71,16 +68,6 @@ export const DATA_CONFIDENCE_FIELD_IDS = [
   'q_typical_fika_times',
   'q_radius',
   'confirm_intent',
-] as const
-
-/** Texture subfields (tie-breaker only); averaged where present. */
-export const TEXTURE_FIELD_IDS = [
-  'q_college',
-  'q_work',
-  'q_tv_streaming_shows',
-  'q_podcasts',
-  'q_favorite_artists',
-  'q_favorite_teams',
 ] as const
 
 export const CONFIRM_INTENT_REQUIRED_VALUE = "I'm in"
