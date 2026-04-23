@@ -32,9 +32,6 @@ export async function POST(request: Request) {
   if (!url || !anonKey) {
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 500 })
   }
-  if (!openaiKey) {
-    return NextResponse.json({ error: 'OPENAI_API_KEY not configured' }, { status: 500 })
-  }
 
   const supabase = createClient(url, anonKey, {
     global: { headers: { Authorization: `Bearer ${token}` } },
@@ -45,7 +42,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid token or user not found' }, { status: 401 })
   }
 
-  const embedResult = await computeAndStoreIntakeEmbedding(supabase, user.id, openaiKey)
+  const embedResult = await computeAndStoreIntakeEmbedding(supabase, user.id, openaiKey || undefined)
   if (!embedResult.ok) {
     const status = embedResult.error === 'No intake responses found' ? 400 : 500
     return NextResponse.json({ error: embedResult.error }, { status })

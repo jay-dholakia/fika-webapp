@@ -1,14 +1,7 @@
 import { getIntakeMulti, getIntakeSingle } from '@/lib/intake-response-utils'
-import {
-  everydayAnchorMultiCompatibility,
-  hopingForCompatibilityScore,
-  lifeChapterMultiCompatibility,
-  opennessCompatibilityScore,
-} from '@/lib/match/compatibility-matrices'
+import { hopingForCompatibilityScore } from '@/lib/match/compatibility-matrices'
 import { marketTenureFitScore, workFitScore } from '@/lib/match/tenure-work-fit'
 import {
-  AVOID_TOPICS_PENALTY_CAP,
-  AVOID_TOPICS_PENALTY_PER_HIT,
   COMPATIBILITY_PORTION,
   COMPATIBILITY_WEIGHTS,
   CONFIRM_INTENT_REQUIRED_VALUE,
@@ -72,35 +65,6 @@ export type FikaMatchBreakdown = {
   finalScore: number
 }
 
-const AVOID_IGNORE = new Set(['Nothing in particular', 'Prefer not to say'])
-
-/** Maps avoid-topic chip → interest labels that conflict if the other person selected them. */
-const AVOID_TO_INTERESTS: Record<string, string[]> = {
-  Politics: ['Politics & current events'],
-  Religion: ['Philosophy'],
-  'Work & career': ['Entrepreneurship & startups', 'Investing & finance'],
-  'Relationship status': [],
-  Health: ['Fitness', 'Running', 'Hiking', 'Outdoors', 'Yoga / Pilates', 'Weightlifting', 'Cycling', 'Swimming'],
-  'Personal finances': ['Investing & finance'],
-}
-
-const SPORTS_INTERESTS = new Set([
-  'Basketball',
-  'Football',
-  'Soccer',
-  'Baseball',
-  'Running',
-  'Hiking',
-  'Outdoors',
-  'Yoga / Pilates',
-  'Weightlifting',
-  'Cycling',
-  'Swimming',
-  'Tennis',
-  'Pickleball',
-  'Dance',
-])
-
 function calculateDistanceKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const r = 6371
   const dLat = (lat2 - lat1) * Math.PI / 180
@@ -155,7 +119,7 @@ function distanceFitScore(distanceKm: number | null, combinedRadiusKm: number): 
 }
 
 function intakeFieldPresent(responses: unknown, questionId: string): boolean {
-  const multi = ['q_interests', 'q_what_makes_great_fika', 'q_life_chapter', 'q_curiosity', 'q_everyday_anchor', 'q_typical_fika_times']
+  const multi = ['q_interests', 'q_typical_fika_times']
   if (multi.includes(questionId)) {
     return getIntakeMulti(responses, questionId).length > 0
   }
@@ -205,30 +169,10 @@ function sameGender(a: string, b: string): boolean {
   return false
 }
 
-function avoidTopicsPenaltySymmetric(a: MatcherPerson, b: MatcherPerson): number {
-  const avoidA = getIntakeMulti(a.responses, 'q_avoid_topics').filter((x) => !AVOID_IGNORE.has(x))
-  const avoidB = getIntakeMulti(b.responses, 'q_avoid_topics').filter((x) => !AVOID_IGNORE.has(x))
-  const interestsA = getIntakeMulti(a.responses, 'q_interests')
-  const interestsB = getIntakeMulti(b.responses, 'q_interests')
-  let hits = 0
-  for (const av of avoidA) {
-    const mapped = AVOID_TO_INTERESTS[av]
-    if (mapped?.some((t) => interestsB.includes(t))) hits++
-    if (av === 'Health' && interestsB.some((t) => SPORTS_INTERESTS.has(t))) hits++
-  }
-  for (const av of avoidB) {
-    const mapped = AVOID_TO_INTERESTS[av]
-    if (mapped?.some((t) => interestsA.includes(t))) hits++
-    if (av === 'Health' && interestsA.some((t) => SPORTS_INTERESTS.has(t))) hits++
-  }
-  return Math.min(AVOID_TOPICS_PENALTY_CAP, hits * AVOID_TOPICS_PENALTY_PER_HIT)
-}
-
-function severeMismatchPenalty(opennessFit: number, hopingFit: number): number {
-  let s = 0
-  if (hopingFit < 0.48) s += Math.min(0.035, 0.48 - hopingFit)
-  if (opennessFit < 0.4) s += Math.min(0.035, 0.4 - opennessFit)
-  return Math.min(SEVERE_MISMATCH_PENALTY_CAP, s)
+/** Soft penalty when hoping-for signals are very discordant (`q_openness` retired from intake). */
+function severeMismatchPenalty(hopingFit: number): number {
+  if (hopingFit >= 0.48) return 0
+  return Math.min(SEVERE_MISMATCH_PENALTY_CAP, 0.48 - hopingFit)
 }
 
 export type EligibilityOptions = {
@@ -311,27 +255,10 @@ export function scoreFikaPair(a: MatcherPerson, b: MatcherPerson, opts?: ScorePa
     FEASIBILITY_WEIGHTS.timeFit * timeFit +
     FEASIBILITY_WEIGHTS.dataConfidence * dataConfidence
 
-  const greatFikaA = getIntakeMulti(a.responses, 'q_what_makes_great_fika')
-  const greatFikaB = getIntakeMulti(b.responses, 'q_what_makes_great_fika')
-  const greatFikaFit =
-    greatFikaA.length === 0 && greatFikaB.length === 0
-      ? 0.5
-      : multiSelectChipOverlapScore(greatFikaA, greatFikaB)
   const interestsFit = multiSelectChipOverlapScore(
     getIntakeMulti(a.responses, 'q_interests'),
     getIntakeMulti(b.responses, 'q_interests')
   )
-  const curiosityA = getIntakeMulti(a.responses, 'q_curiosity')
-  const curiosityB = getIntakeMulti(b.responses, 'q_curiosity')
-  const curiosityFit =
-    curiosityA.length === 0 && curiosityB.length === 0
-      ? 0.5
-      : multiSelectChipOverlapScore(curiosityA, curiosityB)
-  const lifeChapterFit = lifeChapterMultiCompatibility(a.responses, b.responses, log)
-  const everydayAnchorFit = everydayAnchorMultiCompatibility(a.responses, b.responses, log)
-  const oa = getIntakeSingle(a.responses, 'q_openness')
-  const ob = getIntakeSingle(b.responses, 'q_openness')
-  const opennessFit = opennessCompatibilityScore(oa, ob, log)
   const ha = getIntakeSingle(a.responses, 'q_hoping_for')
   const hb = getIntakeSingle(b.responses, 'q_hoping_for')
   const hopingForFit = hopingForCompatibilityScore(ha, hb, log)
@@ -340,18 +267,13 @@ export function scoreFikaPair(a: MatcherPerson, b: MatcherPerson, opts?: ScorePa
 
   const w = COMPATIBILITY_WEIGHTS
   const compatibilityTotal =
-    w.greatFika * greatFikaFit +
     w.interests * interestsFit +
     w.marketTenure * marketTenureFit +
     w.work * workFit +
-    w.curiosity * curiosityFit +
-    w.lifeChapter * lifeChapterFit +
-    w.everydayAnchor * everydayAnchorFit +
-    w.openness * opennessFit +
     w.hopingFor * hopingForFit
 
-  const avoidTopicsPenalty = avoidTopicsPenaltySymmetric(a, b)
-  const severeMismatch = severeMismatchPenalty(opennessFit, hopingForFit)
+  const avoidTopicsPenalty = 0
+  const severeMismatch = severeMismatchPenalty(hopingForFit)
   const penaltyTotal = avoidTopicsPenalty + severeMismatch
 
   const adjustedCompat = Math.max(0, compatibilityTotal - penaltyTotal)
@@ -370,12 +292,12 @@ export function scoreFikaPair(a: MatcherPerson, b: MatcherPerson, opts?: ScorePa
       total: feasibilityTotal,
     },
     compatibility: {
-      greatFikaFit,
+      greatFikaFit: 0,
       interestsFit,
-      curiosityFit,
-      lifeChapterFit,
-      everydayAnchorFit,
-      opennessFit,
+      curiosityFit: 0,
+      lifeChapterFit: 0,
+      everydayAnchorFit: 0,
+      opennessFit: 0,
       hopingForFit,
       marketTenureFit,
       workFit,

@@ -799,12 +799,7 @@ export default function AdminSignupsPage() {
                     </dl>
                     <h4 className="admin-modal-meta" style={{ marginTop: '0.75rem', fontWeight: 600 }}>Compatibility</h4>
                     <dl className="admin-modal-dl">
-                      <span><dt>Great Fika</dt><dd>{simPairModal.matchBreakdown.compatibility.greatFikaFit.toFixed(3)}</dd></span>
                       <span><dt>Interests</dt><dd>{simPairModal.matchBreakdown.compatibility.interestsFit.toFixed(3)}</dd></span>
-                      <span><dt>Curiosity</dt><dd>{simPairModal.matchBreakdown.compatibility.curiosityFit.toFixed(3)}</dd></span>
-                      <span><dt>Life chapter</dt><dd>{simPairModal.matchBreakdown.compatibility.lifeChapterFit.toFixed(3)}</dd></span>
-                      <span><dt>Everyday anchor</dt><dd>{simPairModal.matchBreakdown.compatibility.everydayAnchorFit.toFixed(3)}</dd></span>
-                      <span><dt>Openness</dt><dd>{simPairModal.matchBreakdown.compatibility.opennessFit.toFixed(3)}</dd></span>
                       <span><dt>Hoping for</dt><dd>{simPairModal.matchBreakdown.compatibility.hopingForFit.toFixed(3)}</dd></span>
                       <span><dt>Market tenure</dt><dd>{simPairModal.matchBreakdown.compatibility.marketTenureFit.toFixed(3)}</dd></span>
                       <span><dt>Work</dt><dd>{simPairModal.matchBreakdown.compatibility.workFit.toFixed(3)}</dd></span>
@@ -812,8 +807,7 @@ export default function AdminSignupsPage() {
                     </dl>
                     <h4 className="admin-modal-meta" style={{ marginTop: '0.75rem', fontWeight: 600 }}>Penalties</h4>
                     <dl className="admin-modal-dl">
-                      <span><dt>Avoid topics</dt><dd>{simPairModal.matchBreakdown.penalties.avoidTopicsPenalty.toFixed(3)}</dd></span>
-                      <span><dt>Severe mismatch</dt><dd>{simPairModal.matchBreakdown.penalties.severeMismatchPenalty.toFixed(3)}</dd></span>
+                      <span><dt>Hoping mismatch</dt><dd>{simPairModal.matchBreakdown.penalties.severeMismatchPenalty.toFixed(3)}</dd></span>
                       <span><dt>Total</dt><dd>{simPairModal.matchBreakdown.penalties.total.toFixed(3)}</dd></span>
                     </dl>
                   </>

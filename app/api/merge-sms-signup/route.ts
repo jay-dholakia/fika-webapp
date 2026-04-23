@@ -138,19 +138,17 @@ export async function POST(request: Request) {
       { onConflict: 'user_id' }
     )
     const openaiKey = process.env.EXPO_PUBLIC_OPENAI_API_KEY || process.env.OPENAI_API_KEY
-    if (openaiKey) {
-      try {
-        const embedResult = await withTimeout(
-          computeAndStoreIntakeEmbedding(supabase, user.id, openaiKey),
-          8000,
-          'computeAndStoreIntakeEmbedding'
-        )
-        if (!embedResult.ok) {
-          console.error('merge-sms-signup: intake embedding failed', embedResult.error)
-        }
-      } catch (e) {
-        console.error('merge-sms-signup: intake embedding timeout/error', e)
+    try {
+      const embedResult = await withTimeout(
+        computeAndStoreIntakeEmbedding(supabase, user.id, openaiKey || undefined),
+        8000,
+        'computeAndStoreIntakeEmbedding'
+      )
+      if (!embedResult.ok) {
+        console.error('merge-sms-signup: intake finalize failed', embedResult.error)
       }
+    } catch (e) {
+      console.error('merge-sms-signup: intake finalize timeout/error', e)
     }
   }
 

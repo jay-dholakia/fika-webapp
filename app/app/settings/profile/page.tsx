@@ -117,7 +117,7 @@ export default function SettingsProfilePage() {
     if (!supabase) return
     const { data: existing } = await supabase
       .from('intake_responses_v5')
-      .select('responses, availability_times, completed_at, embed_vector')
+      .select('responses, availability_times, completed_at')
       .eq('user_id', userId)
       .maybeSingle()
 
@@ -167,7 +167,6 @@ export default function SettingsProfilePage() {
       updated_at: new Date().toISOString(),
     }
     if (existing?.completed_at != null) payload.completed_at = existing.completed_at
-    if (existing?.embed_vector != null) payload.embed_vector = existing.embed_vector
     if (Array.isArray(availabilityTimes)) payload.availability_times = availabilityTimes
     const { error: e } = await supabase.from('intake_responses_v5').upsert(payload, { onConflict: 'user_id' })
     if (e) throw new Error(e.message)
@@ -206,7 +205,7 @@ export default function SettingsProfilePage() {
     try {
       await saveProfileFromAnswers()
       await saveIntakeFromAnswers()
-      // Recompute embedding after intake edits so match preview uses latest answers.
+      // Refresh intro card summary when OpenAI is configured (no intake embeddings).
       const supabase = getSupabase()
       const { data: { session } } = await supabase?.auth.getSession() ?? { data: { session: null } }
       if (session?.access_token) {

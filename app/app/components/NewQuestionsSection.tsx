@@ -72,7 +72,7 @@ export function NewQuestionsSection({
                 })
               }
             } catch {
-              // non-fatal: embedding can be retried from settings or admin
+              // non-fatal: intro refresh can be retried from settings
             }
             refetch()
           }}

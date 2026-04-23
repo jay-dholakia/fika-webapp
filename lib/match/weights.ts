@@ -4,7 +4,7 @@
  */
 
 /** Reported in admin match-sim API `summary.scoring`. */
-export const MATCH_SCORING_VERSION = 'fika_structured_v6' as const
+export const MATCH_SCORING_VERSION = 'fika_structured_v7' as const
 
 /** final = clamp(0,1, FEASIBILITY_PORTION * feasibility + COMPATIBILITY_PORTION * (compatibility - penaltyTotal)) */
 export const FEASIBILITY_PORTION = 0.4
@@ -18,20 +18,13 @@ export const FEASIBILITY_WEIGHTS = {
 
 /**
  * Per-dimension weights inside compatibility_score (sum = 1).
- * Slim intake: interests + hoping-for + time in market + optional work line.
- * `texture` kept at 0 (legacy bucket); use `work` for `q_work` only.
+ * Active intake only: interests, hoping-for, market tenure, work.
  */
 export const COMPATIBILITY_WEIGHTS = {
-  greatFika: 0,
   interests: 0.45,
   marketTenure: 0.18,
   work: 0.15,
-  curiosity: 0,
-  lifeChapter: 0,
-  everydayAnchor: 0,
-  openness: 0,
   hopingFor: 0.22,
-  texture: 0,
 } as const
 
 /** Multi-select chip overlap: blend of Jaccard and overlap coefficient. */
@@ -52,19 +45,12 @@ export const DISTANCE_FIT_SLIGHTLY_OVER_RADIUS = 0.2
 /** When coordinates missing, distance_fit is neutral-ish. */
 export const DISTANCE_FIT_MISSING_COORDS = 0.6
 
-/** Avoid-topics: subtract per mapped conflict; cap total. */
-export const AVOID_TOPICS_PENALTY_PER_HIT = 0.04
-export const AVOID_TOPICS_PENALTY_CAP = 0.12
-
-/** Soft penalty for strong hoping/openness tension (never hard-reject). */
+/** Soft penalty for discordant hoping-for signals (never hard-reject). */
 export const SEVERE_MISMATCH_PENALTY_CAP = 0.06
 
-/** Fields counted for data_confidence (presence on both users helps feasibility). Aligned with current intake steps. */
+/** Required intake only — optional fields (ethnicity, relationship, work) do not reduce feasibility. */
 export const DATA_CONFIDENCE_FIELD_IDS = [
   'q_market_tenure',
-  'q_ethnicity',
-  'q_relationship_status',
-  'q_work',
   'q_interests',
   'q_hoping_for',
   'q_typical_fika_times',

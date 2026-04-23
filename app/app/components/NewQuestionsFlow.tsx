@@ -34,7 +34,7 @@ async function saveIntakeAnswer(
   if (!supabase) throw new Error('Not configured')
   const { data: existing } = await supabase
     .from('intake_responses_v5')
-    .select('responses, availability_times, completed_at, embed_vector')
+    .select('responses, availability_times, completed_at')
     .eq('user_id', userId)
     .maybeSingle()
 
@@ -58,7 +58,6 @@ async function saveIntakeAnswer(
     updated_at: new Date().toISOString(),
   }
   if (existing?.completed_at != null) payload.completed_at = existing.completed_at
-  if (existing?.embed_vector != null) payload.embed_vector = existing.embed_vector
   const { error } = await supabase.from('intake_responses_v5').upsert(payload, { onConflict: 'user_id' })
   if (error) throw new Error(error.message)
 }
