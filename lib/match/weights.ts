@@ -4,7 +4,7 @@
  */
 
 /** Reported in admin match-sim API `summary.scoring`. */
-export const MATCH_SCORING_VERSION = 'fika_structured_v3' as const
+export const MATCH_SCORING_VERSION = 'fika_structured_v4' as const
 
 /** final = clamp(0,1, FEASIBILITY_PORTION * feasibility + COMPATIBILITY_PORTION * (compatibility - penaltyTotal)) */
 export const FEASIBILITY_PORTION = 0.4
@@ -18,17 +18,19 @@ export const FEASIBILITY_WEIGHTS = {
 
 /**
  * Per-dimension weights inside compatibility_score (sum = 1).
- * Slim intake: only interests + hoping-for carry signal (see `INTAKE_STEPS`).
- * Texture (work/college/media lists) is not asked anymore — weight 0, not used in `scoreFikaPair`.
+ * Slim intake: interests + hoping-for + time in market + optional work line.
+ * `texture` kept at 0 (legacy bucket); use `work` for `q_work` only.
  */
 export const COMPATIBILITY_WEIGHTS = {
   greatFika: 0,
-  interests: 11 / 14,
+  interests: 0.45,
+  marketTenure: 0.18,
+  work: 0.15,
   curiosity: 0,
   lifeChapter: 0,
   everydayAnchor: 0,
   openness: 0,
-  hopingFor: 3 / 14,
+  hopingFor: 0.22,
   texture: 0,
 } as const
 

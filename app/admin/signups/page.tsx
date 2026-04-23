@@ -70,6 +70,8 @@ type FikaMatchBreakdown = {
     everydayAnchorFit: number
     opennessFit: number
     hopingForFit: number
+    marketTenureFit: number
+    workFit: number
     textureFit: number
     total: number
   }
@@ -531,6 +533,9 @@ export default function AdminSignupsPage() {
                       const topFactors = bd
                         ? [
                             ['interests', bd.compatibility.interestsFit],
+                            ['hoping for', bd.compatibility.hopingForFit],
+                            ['market tenure', bd.compatibility.marketTenureFit],
+                            ['work', bd.compatibility.workFit],
                             ['great Fika', bd.compatibility.greatFikaFit],
                             ['life chapter', bd.compatibility.lifeChapterFit],
                             ['feasibility', bd.feasibility.total],
@@ -801,7 +806,8 @@ export default function AdminSignupsPage() {
                       <span><dt>Everyday anchor</dt><dd>{simPairModal.matchBreakdown.compatibility.everydayAnchorFit.toFixed(3)}</dd></span>
                       <span><dt>Openness</dt><dd>{simPairModal.matchBreakdown.compatibility.opennessFit.toFixed(3)}</dd></span>
                       <span><dt>Hoping for</dt><dd>{simPairModal.matchBreakdown.compatibility.hopingForFit.toFixed(3)}</dd></span>
-                      <span><dt>Texture</dt><dd>{simPairModal.matchBreakdown.compatibility.textureFit.toFixed(3)}</dd></span>
+                      <span><dt>Market tenure</dt><dd>{simPairModal.matchBreakdown.compatibility.marketTenureFit.toFixed(3)}</dd></span>
+                      <span><dt>Work</dt><dd>{simPairModal.matchBreakdown.compatibility.workFit.toFixed(3)}</dd></span>
                       <span><dt>Total (pre-penalty)</dt><dd>{simPairModal.matchBreakdown.compatibility.total.toFixed(3)}</dd></span>
                     </dl>
                     <h4 className="admin-modal-meta" style={{ marginTop: '0.75rem', fontWeight: 600 }}>Penalties</h4>

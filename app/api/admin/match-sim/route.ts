@@ -178,6 +178,7 @@ function asDisplay(value: unknown): string {
 
 function buildComparisonRows(a: SimCandidate, b: SimCandidate): CompareRow[] {
   return [
+    { label: 'Time in area', a: asDisplay(getResponseValue(a.intake, 'q_market_tenure')), b: asDisplay(getResponseValue(b.intake, 'q_market_tenure')) },
     { label: 'Work', a: asDisplay(getResponseValue(a.intake, 'q_work')), b: asDisplay(getResponseValue(b.intake, 'q_work')) },
     { label: 'Life chapter', a: asDisplay(getResponseValue(a.intake, 'q_life_chapter')), b: asDisplay(getResponseValue(b.intake, 'q_life_chapter')) },
     { label: 'Day-to-day anchor', a: asDisplay(getResponseValue(a.intake, 'q_everyday_anchor')), b: asDisplay(getResponseValue(b.intake, 'q_everyday_anchor')) },
@@ -208,6 +209,8 @@ function sectionScoresFromBreakdown(bd: FikaMatchBreakdown): Record<string, numb
     q_everyday_anchor: bd.compatibility.everydayAnchorFit,
     q_openness_fit: bd.compatibility.opennessFit,
     q_hoping_for_fit: bd.compatibility.hopingForFit,
+    q_market_tenure_fit: bd.compatibility.marketTenureFit,
+    q_work_fit: bd.compatibility.workFit,
     texture_fit: bd.compatibility.textureFit,
     avoid_topics_penalty: bd.penalties.avoidTopicsPenalty,
     severe_mismatch_penalty: bd.penalties.severeMismatchPenalty,

@@ -5,6 +5,7 @@ import {
   lifeChapterMultiCompatibility,
   opennessCompatibilityScore,
 } from '@/lib/match/compatibility-matrices'
+import { marketTenureFitScore, workFitScore } from '@/lib/match/tenure-work-fit'
 import {
   AVOID_TOPICS_PENALTY_CAP,
   AVOID_TOPICS_PENALTY_PER_HIT,
@@ -56,6 +57,8 @@ export type FikaMatchBreakdown = {
     everydayAnchorFit: number
     opennessFit: number
     hopingForFit: number
+    marketTenureFit: number
+    workFit: number
     textureFit: number
     total: number
   }
@@ -349,11 +352,15 @@ export function scoreFikaPair(a: MatcherPerson, b: MatcherPerson, opts?: ScorePa
   const ha = getIntakeSingle(a.responses, 'q_hoping_for')
   const hb = getIntakeSingle(b.responses, 'q_hoping_for')
   const hopingForFit = hopingForCompatibilityScore(ha, hb, log)
+  const marketTenureFit = marketTenureFitScore(a.responses, b.responses)
+  const workFit = workFitScore(a.responses, b.responses)
 
   const w = COMPATIBILITY_WEIGHTS
   const compatibilityTotal =
     w.greatFika * greatFikaFit +
     w.interests * interestsFit +
+    w.marketTenure * marketTenureFit +
+    w.work * workFit +
     w.curiosity * curiosityFit +
     w.lifeChapter * lifeChapterFit +
     w.everydayAnchor * everydayAnchorFit +
@@ -387,6 +394,8 @@ export function scoreFikaPair(a: MatcherPerson, b: MatcherPerson, opts?: ScorePa
       everydayAnchorFit,
       opennessFit,
       hopingForFit,
+      marketTenureFit,
+      workFit,
       textureFit: 0,
       total: compatibilityTotal,
     },
