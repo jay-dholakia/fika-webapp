@@ -4,7 +4,7 @@
  */
 
 /** Reported in admin match-sim API `summary.scoring`. */
-export const MATCH_SCORING_VERSION = 'fika_structured_v1' as const
+export const MATCH_SCORING_VERSION = 'fika_structured_v2' as const
 
 /** final = clamp(0,1, FEASIBILITY_PORTION * feasibility + COMPATIBILITY_PORTION * (compatibility - penaltyTotal)) */
 export const FEASIBILITY_PORTION = 0.4
@@ -16,16 +16,23 @@ export const FEASIBILITY_WEIGHTS = {
   dataConfidence: 0.1,
 } as const
 
-/** Per-dimension weights inside compatibility_score (sum = 1). */
+/**
+ * Per-dimension weights inside compatibility_score (sum = 1).
+ * Slim intake (see `INTAKE_STEPS` in onboarding-data): we no longer collect
+ * great Fika / curiosity / life chapter / everyday anchor / openness.
+ * Those terms always scored ~0.5 for new users, so their weight is set to 0
+ * and redistributed onto interests, hoping-for, and texture in the same
+ * ratio as the previous active slice (22 : 6 : 5 of the old 33% “live” band).
+ */
 export const COMPATIBILITY_WEIGHTS = {
-  greatFika: 0.24,
-  interests: 0.22,
-  curiosity: 0.14,
-  lifeChapter: 0.12,
-  everydayAnchor: 0.1,
-  openness: 0.07,
-  hopingFor: 0.06,
-  texture: 0.05,
+  greatFika: 0,
+  interests: 22 / 33,
+  curiosity: 0,
+  lifeChapter: 0,
+  everydayAnchor: 0,
+  openness: 0,
+  hopingFor: 6 / 33,
+  texture: 5 / 33,
 } as const
 
 /** Multi-select chip overlap: blend of Jaccard and overlap coefficient. */
@@ -53,15 +60,13 @@ export const AVOID_TOPICS_PENALTY_CAP = 0.12
 /** Soft penalty for strong hoping/openness tension (never hard-reject). */
 export const SEVERE_MISMATCH_PENALTY_CAP = 0.06
 
-/** Fields counted for data_confidence (presence on both users helps feasibility). */
+/** Fields counted for data_confidence (presence on both users helps feasibility). Aligned with current intake steps. */
 export const DATA_CONFIDENCE_FIELD_IDS = [
   'q_market_tenure',
+  'q_ethnicity',
+  'q_relationship_status',
+  'q_work',
   'q_interests',
-  'q_what_makes_great_fika',
-  'q_life_chapter',
-  'q_curiosity',
-  'q_everyday_anchor',
-  'q_openness',
   'q_hoping_for',
   'q_typical_fika_times',
   'q_radius',
