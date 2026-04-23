@@ -7,7 +7,7 @@ export default function Footer() {
         <Link href="/" className="logo">
           fika
         </Link>
-        <p className="footer-tagline">Real connection, one conversation at a time.</p>
+        <p className="footer-tagline">Meet someone new. Have a real conversation.</p>
         <nav className="footer-links" aria-label="Legal">
           <Link href="/privacy">Privacy Policy</Link>
           <Link href="/terms">Terms of Service</Link>

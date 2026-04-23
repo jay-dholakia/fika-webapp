@@ -45,8 +45,8 @@ function AppHomeContent() {
   const SHARE_URL = 'https://letsfika.vercel.app'
   const cityLabelForShare = marketSlug ? (getMarketBySlug(marketSlug)?.label ?? marketLabel ?? 'your area') : null
   const SHARE_TEXT = cityLabelForShare
-    ? `Join me on Fika in ${cityLabelForShare} — real conversations over coffee with people nearby.`
-    : `Join me on Fika — real conversations over coffee with people nearby.`
+    ? `Join me on Fika in ${cityLabelForShare} — meet someone new; have a real conversation over coffee nearby.`
+    : `Join me on Fika — meet someone new; have a real conversation over coffee nearby.`
   const showQuestionnaireCard = !onboardingLoading && !onboardingComplete
 
   function copyShareToClipboard(url: string, text: string) {
@@ -370,7 +370,7 @@ function AppHomeContent() {
                   if (typeof navigator !== 'undefined' && navigator.share) {
                     try {
                       await navigator.share({
-                        title: 'Fika — Real people. Real conversation.',
+                        title: 'Fika — Meet someone new. Have a real conversation.',
                         text: SHARE_TEXT,
                         url: SHARE_URL,
                       })

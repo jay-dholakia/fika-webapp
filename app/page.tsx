@@ -21,8 +21,8 @@ export default function Home() {
               <section className="hero">
                 <div className="hero-inner">
                   <h1 className="hero-title">
-                    Real people.<br />
-                    <span className="hero-title-accent">Real conversation.</span>
+                    Meet someone new.<br />
+                    <span className="hero-title-accent">Have a real conversation.</span>
                   </h1>
                   <p className="hero-sub">
                     Thoughtful intros, sent by text. You meet. You talk. You connect.

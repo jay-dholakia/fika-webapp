@@ -54,8 +54,8 @@ export default function HowItWorksPage() {
   }, [marketSlug])
   const cityLabel = marketSlug ? (getMarketBySlug(marketSlug)?.label ?? 'your area') : 'your area'
   const SHARE_TEXT = marketSlug
-    ? `Join me on Fika in ${cityLabel} — real conversations over coffee with people nearby.`
-    : `Join me on Fika — real conversations over coffee with people nearby.`
+    ? `Join me on Fika in ${cityLabel} — meet someone new; have a real conversation over coffee nearby.`
+    : `Join me on Fika — meet someone new; have a real conversation over coffee nearby.`
 
   function copyShareToClipboard(url: string, text: string) {
     const combined = `${text}\n\n${url}`
@@ -132,7 +132,7 @@ export default function HowItWorksPage() {
                       if (typeof navigator !== 'undefined' && navigator.share) {
                         try {
                           await navigator.share({
-                            title: 'Fika — Real people. Real conversation.',
+                            title: 'Fika — Meet someone new. Have a real conversation.',
                             text: SHARE_TEXT,
                             url: SHARE_URL,
                           })
@@ -191,7 +191,7 @@ export default function HowItWorksPage() {
             <div className="app-how-it-works-step-content">
               <span className="app-how-it-works-when">You meet</span>
               <span className="app-how-it-works-what">
-                Show up for coffee and a real conversation—low pressure, no script.
+                Show up for coffee and meet someone new—have a real conversation, low pressure, no script.
               </span>
             </div>
           </li>
