@@ -67,11 +67,12 @@ export const PROFILE_STEPS: ProfileStep[] = [
     placeholder: 'Month, day, and year',
   },
   {
-    id: 'gender',
-    question: "What's your gender?",
+    id: 'pronouns',
+    question: 'What pronouns do you use?',
+    body: 'We use this in SMS intros — for example, “they’re a teacher who loves …”.',
     type: 'chips_single',
     required: true,
-    options: ['Female', 'Male', 'Non-binary', 'Other', 'Prefer not to say'],
+    options: ['She/her', 'He/him', 'They/them', 'She/they', 'He/they'],
   },
   {
     id: 'languages',

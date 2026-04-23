@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase-server'
 import { isAdminByUserId } from '@/lib/admin-markets'
 import { getIntakeRadiusKm } from '@/lib/intake-radius'
-import { getIntakeMulti, getIntakeAnswer } from '@/lib/intake-response-utils'
+import { getIntakeMulti, getIntakeAnswer, getIntakeSingle } from '@/lib/intake-response-utils'
 import type { FikaMatchBreakdown } from '@/lib/match/fika-matcher'
 import { scoreFikaPair, type MatcherPerson } from '@/lib/match/fika-matcher'
 import { MATCH_SCORING_VERSION } from '@/lib/match/weights'
@@ -22,6 +22,7 @@ type ProfileRow = {
   lng: number | null
   birthdate: string | null
   gender: string | null
+  pronouns: string | null
   gender_preference: string | null
   age_preference: string | null
   languages: string[] | null
@@ -99,7 +100,7 @@ const TEXTURE_QUESTION_IDS = [
   'q_favorite_teams',
 ] as const
 
-/** Prefix + label; `formatMatchRevealSentence` turns these into watch / listen / fans phrasing. */
+/** Prefix + label; overlap tokens for admin UI / debugging (not used in reveal SMS copy). */
 const TEXTURE_Q_KIND: Record<(typeof TEXTURE_QUESTION_IDS)[number], 'tv' | 'podcast' | 'artist' | 'team'> = {
   q_tv_streaming_shows: 'tv',
   q_podcasts: 'podcast',
@@ -132,6 +133,7 @@ function toMatcherPerson(c: SimCandidate): MatcherPerson {
       lng: c.profile.lng,
       birthdate: c.profile.birthdate,
       gender: c.profile.gender,
+      pronouns: c.profile.pronouns ?? null,
       gender_preference: c.profile.gender_preference,
       age_preference: c.profile.age_preference,
       languages: c.profile.languages,
@@ -191,7 +193,7 @@ function buildComparisonRows(a: SimCandidate, b: SimCandidate): CompareRow[] {
     { label: 'Typical Fika times', a: asDisplay(getResponseValue(a.intake, 'q_typical_fika_times')), b: asDisplay(getResponseValue(b.intake, 'q_typical_fika_times')) },
     { label: 'Safety confirm', a: asDisplay(getResponseValue(a.intake, 'confirm_intent')), b: asDisplay(getResponseValue(b.intake, 'confirm_intent')) },
     { label: 'Languages', a: asDisplay(a.profile.languages), b: asDisplay(b.profile.languages) },
-    { label: 'Gender (same-gender matches only)', a: asDisplay(a.profile.gender), b: asDisplay(b.profile.gender) },
+    { label: 'Pronouns (pairing)', a: asDisplay(a.profile.pronouns ?? a.profile.gender), b: asDisplay(b.profile.pronouns ?? b.profile.gender) },
     { label: 'Age', a: a.age != null ? String(a.age) : '—', b: b.age != null ? String(b.age) : '—' },
   ]
 }
@@ -468,7 +470,7 @@ export async function POST(request: Request) {
 
   let profilesQuery = supabase
     .from('profiles')
-    .select('id, first_name, market, city, lat, lng, birthdate, gender, gender_preference, age_preference, languages, in_match_bowl, is_active')
+    .select('id, first_name, market, city, lat, lng, birthdate, gender, pronouns, gender_preference, age_preference, languages, in_match_bowl, is_active')
     .eq('in_match_bowl', true)
     .eq('is_active', true)
     .limit(maxUsers)
@@ -553,11 +555,15 @@ export async function POST(request: Request) {
     userAName: string
     userAAge: number | null
     userAGender: string | null
+    userAPronouns: string | null
+    userAWorkLabel: string | null
     userACity: string | null
     userBId: string
     userBName: string
     userBAge: number | null
     userBGender: string | null
+    userBPronouns: string | null
+    userBWorkLabel: string | null
     userBCity: string | null
     score: number
     distanceKm: number | null
@@ -623,16 +629,22 @@ export async function POST(request: Request) {
       )
       const textureOverlap = textureOverlapsBetweenIntakes(ca.intake, cb.intake)
       const compareRows = buildComparisonRows(ca, cb)
+      const userAWorkLabel = getIntakeSingle(ca.intake.responses, 'q_work')
+      const userBWorkLabel = getIntakeSingle(cb.intake.responses, 'q_work')
       pairs.push({
         userAId: ca.profile.id,
         userAName: ca.profile.first_name?.trim() || 'Unknown',
         userAAge: ca.age,
         userAGender: ca.profile.gender ?? null,
+        userAPronouns: ca.profile.pronouns ?? null,
+        userAWorkLabel,
         userACity: ca.profile.city ?? null,
         userBId: cb.profile.id,
         userBName: cb.profile.first_name?.trim() || 'Unknown',
         userBAge: cb.age,
         userBGender: cb.profile.gender ?? null,
+        userBPronouns: cb.profile.pronouns ?? null,
+        userBWorkLabel,
         userBCity: cb.profile.city ?? null,
         score: breakdown.finalScore,
         distanceKm,

@@ -40,6 +40,7 @@ interface MapPoint {
   first_name: string | null
   created_at: string | null
   gender: string | null
+  pronouns: string | null
   age: number | null
 }
 
@@ -660,7 +661,7 @@ export default function AdminMapClient() {
                     {p.city || '—'} · {p.market || 'no market'}
                   </p>
                   <p style={{ margin: '4px 0 0 0', fontSize: 12, color: '#666' }}>
-                    {p.gender || '—'} · {p.age != null ? `${p.age}` : '—'}
+                    {p.pronouns || p.gender || '—'} · {p.age != null ? `${p.age}` : '—'}
                   </p>
                 </div>
               </Popup>

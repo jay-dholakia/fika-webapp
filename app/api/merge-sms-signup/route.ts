@@ -65,7 +65,14 @@ export async function POST(request: Request) {
   const payload = (session.payload as Record<string, unknown>) ?? {}
   const first_name = (payload.first_name as string)?.trim() || ' '
   const birthdate = payload.birthdate as string | null
-  const gender = payload.gender as string | null
+  let pronouns = typeof payload.pronouns === 'string' ? payload.pronouns.trim() || null : null
+  const legacyGender = typeof payload.gender === 'string' ? payload.gender.trim() : ''
+  if (!pronouns && legacyGender) {
+    const g = legacyGender.toLowerCase()
+    if (g === 'female' || g === 'woman' || g === 'women') pronouns = 'She/her'
+    else if (g === 'male' || g === 'man' || g === 'men') pronouns = 'He/him'
+    else pronouns = 'They/them'
+  }
   const gender_preference = payload.gender_preference as string | null
   const age_preference = payload.age_preference as string | null
   const languages = Array.isArray(payload.languages) ? payload.languages : null
@@ -92,7 +99,8 @@ export async function POST(request: Request) {
       id: user.id,
       first_name,
       birthdate: birthdate || null,
-      gender: gender || null,
+      gender: null,
+      pronouns,
       gender_preference: gender_preference || null,
       age_preference: age_preference || null,
       languages,

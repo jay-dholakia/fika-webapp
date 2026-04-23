@@ -34,7 +34,7 @@ export async function GET(request: Request) {
 
   const { data: profiles } = await supabase
     .from('profiles')
-    .select('id, first_name, city, market, lat, lng, created_at, gender, birthdate')
+    .select('id, first_name, city, market, lat, lng, created_at, gender, pronouns, birthdate')
     .not('lat', 'is', null)
     .not('lng', 'is', null)
 
@@ -58,6 +58,7 @@ export async function GET(request: Request) {
     first_name: (p as { first_name?: string | null }).first_name ?? null,
     created_at: (p as { created_at?: string | null }).created_at ?? null,
     gender: (p as { gender?: string | null }).gender ?? null,
+    pronouns: (p as { pronouns?: string | null }).pronouns ?? null,
     age: ageFromBirthdate((p as { birthdate?: string | null }).birthdate ?? null),
   }))
 

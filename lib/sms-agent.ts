@@ -379,7 +379,7 @@ export function formatMatchIntroSharedContext(
     if (fikaOnly.length > 0) {
       const fikaPart =
         fikaOnly.length === 1 ? fikaOnly[0]! : `${fikaOnly[0]} and ${fikaOnly[1]}`
-      line += ` For this Fika you're both up for talking about ${fikaPart}.`
+      line += ` You both like talking about ${fikaPart}.`
     }
     return line
   }
@@ -395,7 +395,7 @@ export function formatMatchIntroSharedContext(
   const fika = (fikaTalkOverlap ?? []).map((s) => String(s).trim()).filter(Boolean).slice(0, 2)
   if (fika.length > 0) {
     const fikaPart = fika.length === 1 ? fika[0]! : `${fika[0]} and ${fika[1]}`
-    line += ` For this Fika you're both up for talking about ${fikaPart}.`
+    line += ` You both like talking about ${fikaPart}.`
   }
   return line
 }
@@ -437,169 +437,85 @@ export function messageStrongIntroOffer(): string {
 export function messageMatchRevealPrompt(firstName?: string | null): string {
   const name = firstName?.trim()
   if (name) {
-    return `Hey ${name} - we found a good Fika intro for you. Want to see it? Send me a 👍.`
+    return `Hey ${name} - we found a good Fika intro for you. Want to see it? Reply YES.`
   }
-  return `We found a good Fika intro for you. Want to see it? Send me a 👍.`
+  return `We found a good Fika intro for you. Want to see it? Reply YES.`
 }
 
-/** After 👍: 2–3 factual sentences (overlaps only); meet-ask is sent in the next SMS. */
-type RevealClauseKey = 'interests' | 'fikaTalk' | 'curiosity' | 'conversation' | 'life' | 'anchor' | 'texture'
-
-const REVEAL_CLAUSE_ORDER: RevealClauseKey[] = [
-  'interests',
-  'fikaTalk',
-  'curiosity',
-  'conversation',
-  'life',
-  'anchor',
-  'texture',
-]
-
-/** When more than five clauses would appear, drop these first (interests are never dropped). */
-const REVEAL_CLAUSE_DROP_ORDER: RevealClauseKey[] = [
-  'anchor',
-  'life',
-  'texture',
-  'conversation',
-  'curiosity',
-  'fikaTalk',
-]
-
-type TextureOverlapKind = 'tv' | 'podcast' | 'artist' | 'team' | 'unknown'
-
-const TEXTURE_TOKEN_RE = /^(tv|podcast|artist|team):(.*)$/i
-
-function parseTextureOverlapToken(raw: string): { kind: TextureOverlapKind; label: string } {
-  const s = String(raw).trim()
-  const m = s.match(TEXTURE_TOKEN_RE)
-  if (m?.[1] && m[2]?.trim()) {
-    return { kind: m[1]!.toLowerCase() as TextureOverlapKind, label: m[2]!.trim() }
-  }
-  return { kind: 'unknown', label: s }
+type RevealPronounPack = {
+  /** e.g. She's, He's, They're, Ze's */
+  contractLead: string
+  loveVerbAfterAnd: 'loves' | 'love'
+  standaloneLoveLead: string
 }
 
-/** One overlap item → clause fragment (no leading “you”). */
-function textureOverlapItemClause(kind: TextureOverlapKind, label: string): string {
-  if (!label) return ''
-  switch (kind) {
-    case 'tv':
-      return `both watch ${label}`
-    case 'podcast':
-    case 'artist':
-      return `both listen to ${label}`
-    case 'team':
-      return `you're both fans of ${label}`
-    default:
-      return `you're both into ${label}`
+const DEFAULT_REVEAL_PRONOUN_PACK: RevealPronounPack = {
+  contractLead: "They're",
+  loveVerbAfterAnd: 'love',
+  standaloneLoveLead: 'They love',
+}
+
+/** Subject contraction + love phrasing from profile `pronouns` (e.g. she/her, they/them, ze/zir). */
+function revealPronounPackFromProfilePronouns(raw: string | null | undefined): RevealPronounPack {
+  const trimmed = (raw ?? '').trim()
+  if (!trimmed) return DEFAULT_REVEAL_PRONOUN_PACK
+
+  const firstSegment =
+    trimmed
+      .split(/[/,\s]+/)
+      .map((s) => s.trim())
+      .find((s) => s.replace(/[^a-zA-Z]/g, '').length > 0) ?? trimmed
+  const letters = firstSegment.replace(/[^a-zA-Z]/g, '')
+  if (!letters) return DEFAULT_REVEAL_PRONOUN_PACK
+
+  const lowered = letters.toLowerCase()
+  if (lowered === 'she') {
+    return { contractLead: "She's", loveVerbAfterAnd: 'loves', standaloneLoveLead: 'She loves' }
+  }
+  if (lowered === 'he') {
+    return { contractLead: "He's", loveVerbAfterAnd: 'loves', standaloneLoveLead: 'He loves' }
+  }
+  if (lowered === 'they') {
+    return { contractLead: "They're", loveVerbAfterAnd: 'love', standaloneLoveLead: 'They love' }
+  }
+
+  const cap = letters.charAt(0).toUpperCase() + letters.slice(1).toLowerCase()
+  return {
+    contractLead: `${cap}'s`,
+    loveVerbAfterAnd: 'loves',
+    standaloneLoveLead: `${cap} loves`,
   }
 }
 
-/** Up to two texture tokens → one reveal clause (e.g. both watch X, both listen to Y). */
-function buildTextureOverlapClause(tokens: string[]): string | null {
-  const cleaned = tokens
-    .map((s) => String(s).trim())
-    .filter(Boolean)
-    .filter((s, i, arr) => arr.indexOf(s) === i)
-    .slice(0, 2)
-  if (cleaned.length === 0) return null
-  const parsed = cleaned.map(parseTextureOverlapToken)
-  if (parsed.length === 1) {
-    const { kind, label } = parsed[0]!
-    const inner = textureOverlapItemClause(kind, label)
-    if (!inner) return null
-    return /^you're\b/i.test(inner) ? inner : `you ${inner}`
-  }
-  const [a, b] = parsed
-  if (
-    a!.kind === b!.kind &&
-    a!.kind !== 'unknown' &&
-    (a!.kind === 'tv' || a!.kind === 'podcast' || a!.kind === 'artist' || a!.kind === 'team')
-  ) {
-    if (a!.kind === 'tv') return `you both watch ${a!.label} and ${b!.label}`
-    if (a!.kind === 'podcast' || a!.kind === 'artist') return `you both listen to ${a!.label} and ${b!.label}`
-    return `you're both fans of ${a!.label} and ${b!.label}`
-  }
-  const left = textureOverlapItemClause(a!.kind, a!.label)
-  const right = textureOverlapItemClause(b!.kind, b!.label)
-  const l = /^you're\b/i.test(left) ? left : `you ${left}`
-  const r = /^you're\b/i.test(right) ? right : `you ${right}`
-  return `${l}, and ${r}`
-}
-
-/** Join overlap clauses inside one sentence (comma flow; last pair uses “and” / “and you also”). */
-function joinRevealClauseGroup(segments: string[]): string {
-  const cap = (s: string) => (s.length ? s.charAt(0).toUpperCase() + s.slice(1) : s)
-  if (segments.length === 0) return ''
-  if (segments.length === 1) return cap(segments[0]!)
-  if (segments.length === 2) return `${cap(segments[0]!)}, and ${segments[1]!}`
-  const head = cap(segments[0]!)
-  const mid = segments.slice(1, -1)
-  const last = segments[segments.length - 1]!
-  const middle = mid.length ? `${mid.join(', ')}, ` : ''
-  const lastBridge = /^you\b/i.test(last) ? `and ${last}` : `and you also ${last}`
-  return `${head}, ${middle}${lastBridge}`
+function truncateRevealWorkLabel(raw: string, max = 52): string {
+  const t = raw.replace(/\s+/g, ' ').trim()
+  if (!t) return ''
+  if (t.length <= max) return t
+  return `${t.slice(0, max - 1)}…`
 }
 
 /**
- * Sentence 1 is always “Meet {name}.” With overlap, use one or two more sentences (2–3 total).
- * Splits longer overlap lists across two body sentences so one bubble is not a single huge comma chain.
+ * Reveal bubble (after user replies YES to see intro): Meet → job + loves → shared talk chips → meet ask.
+ * Example: Meet Maya. She's a Graphic Designer and loves typography and film photography.
+ * You both like talking about travel stories, creative side projects, and what's been making you laugh lately.
+ * Want to meet for Fika? Reply with a Yes or No.
  */
-function joinRevealOverlapClauses(firstName: string, segments: string[]): string {
-  const meet = `Meet ${firstName}.`
-  if (segments.length === 0) return meet
-
-  if (segments.length <= 2) {
-    return `${meet} ${joinRevealClauseGroup(segments)}.`
-  }
-
-  let first: string[]
-  let rest: string[]
-  if (segments.length === 3) {
-    first = segments.slice(0, 2)
-    rest = segments.slice(2)
-  } else if (segments.length === 4) {
-    first = segments.slice(0, 2)
-    rest = segments.slice(2, 4)
-  } else {
-    first = segments.slice(0, 3)
-    rest = segments.slice(3)
-  }
-
-  const body1 = joinRevealClauseGroup(first)
-  const body2 = joinRevealClauseGroup(rest)
-  return `${meet} ${body1}. ${body2}.`
-}
-
 export function formatMatchRevealSentence(params: {
   otherFirstName: string
+  /** Profile `pronouns` for the other person (e.g. she/her, they/them). */
+  otherPronouns?: string | null
+  /** Intake `q_work` line for the other person (their job / how they describe work). */
+  otherWorkLabel?: string | null
   sharedInterests: string[]
   conversationHooks: string[]
-  sectionScores?: Record<string, number>
-  curiosityOverlap?: string[]
-  lifeChapterOverlap?: string[]
-  everydayAnchorOverlap?: string[]
-  topCopyDimensions?: string[]
   /** Shared `q_like_talking_about` chip labels (exact overlap strings). */
   fikaTalkOverlap?: string[]
-  /** Shared shows, podcasts, artists, or teams (exact overlap strings), max ~2 used in copy. */
-  textureOverlap?: string[]
 }): string {
-  const {
-    otherFirstName,
-    sharedInterests,
-    conversationHooks,
-    curiosityOverlap = [],
-    lifeChapterOverlap = [],
-    everydayAnchorOverlap = [],
-    topCopyDimensions = [],
-    fikaTalkOverlap = [],
-    textureOverlap: textureOverlapRaw = [],
-  } = params
-  const textureOverlapTokens = textureOverlapRaw
-    .map((s) => String(s).trim())
-    .filter(Boolean)
-    .filter((s, i, arr) => arr.indexOf(s) === i)
-    .slice(0, 2)
+  const { otherFirstName, otherPronouns, otherWorkLabel, sharedInterests, conversationHooks, fikaTalkOverlap = [] } =
+    params
+
+  const pronounPack = revealPronounPackFromProfilePronouns(otherPronouns)
+
   const normalizeSmartPunctuation = (value: string): string =>
     value
       .replace(/[\u2018\u2019\u2032]/g, "'")
@@ -624,42 +540,6 @@ export function formatMatchRevealSentence(params: {
         .join(' + ')
     }
     return normalized
-  }
-
-  const normalizeCuriosityTopic = (value: string): string => {
-    const normalized = normalizeSmartPunctuation(value).trim().replace(/\.$/, '')
-    const lower = normalized.toLowerCase()
-    if (lower === 'take a pottery class') return 'pottery'
-    if (lower === 'learn how to paint') return 'painting'
-    if (lower === 'learn an instrument') return 'music'
-    if (lower === 'take a dance class') return 'dance'
-    if (lower === 'take a cooking class') return 'cooking'
-    if (lower === 'start learning a new language') return 'languages'
-    if (lower === 'join a storytelling workshop') return 'storytelling'
-    if (lower === 'take a photography course') return 'photography'
-    if (lower === 'start a fitness program') return 'fitness'
-    if (lower === 'join a local sports league') return 'sports'
-    if (lower === 'take a coding course') return 'coding'
-    if (lower === 'take an ai course') return 'AI'
-    if (lower === 'take a philosophy class') return 'philosophy'
-    if (lower === 'take an improv class') return 'improv'
-    if (lower === 'take a human behavior course') return 'human behavior'
-    if (lower === 'join a public speaking group') return 'public speaking'
-    if (lower === 'take a course on how to build a business') return 'building a business'
-    if (lower === 'take a class on personal finance') return 'personal finance'
-    return normalized
-  }
-
-  const normalizeLifeChapter = (value: string): string => {
-    const normalized = normalizeSmartPunctuation(value).trim().replace(/\.$/, '')
-    if (/^i'm /i.test(normalized)) return normalized.replace(/^i'm /i, '').trim()
-    if (/^i am /i.test(normalized)) return normalized.replace(/^i am /i, '').trim()
-    return normalized
-  }
-
-  const normalizeEverydayAnchor = (value: string): string => {
-    const normalized = normalizeSmartPunctuation(value).trim().replace(/\.$/, '')
-    return normalized.charAt(0).toLowerCase() + normalized.slice(1)
   }
 
   const normalizeRevealTopic = (topic: string): string => {
@@ -718,11 +598,12 @@ export function formatMatchRevealSentence(params: {
       .trim()
   }
 
+  const sentenceCaseTopic = (topic: string): string =>
+    /^[A-Z0-9]{2,}$/.test(topic) ? topic : topic.charAt(0).toLowerCase() + topic.slice(1)
+
+  const name = otherFirstName.trim() || 'Someone'
   const cleanedInterests = sharedInterests.map((s) => sanitizeInterest(String(s))).filter(Boolean)
   const cleanedHooks = conversationHooks.map((topic) => normalizeRevealTopic(String(topic))).filter(Boolean)
-  const cleanedCuriosity = curiosityOverlap.map((item) => normalizeCuriosityTopic(String(item))).filter(Boolean)
-  const cleanedLifeChapter = lifeChapterOverlap.map((item) => normalizeLifeChapter(String(item))).filter(Boolean)
-  const cleanedEverydayAnchor = everydayAnchorOverlap.map((item) => normalizeEverydayAnchor(String(item))).filter(Boolean)
   let interestTeaser = cleanedInterests.slice(0, 2)
   let remainingHooks = [...cleanedHooks]
 
@@ -742,84 +623,51 @@ export function formatMatchRevealSentence(params: {
     }
   }
 
-  const topicTeaser = remainingHooks
-    .map((topic) => (/^[A-Z0-9]{2,}$/.test(topic) ? topic : topic.charAt(0).toLowerCase() + topic.slice(1)))
-    .filter((topic, index, list) => list.indexOf(topic) === index)
-    .slice(0, 3)
+  const interestsPhrase =
+    interestTeaser.length === 0 ? '' : interestTeaser.length === 1 ? interestTeaser[0]! : `${interestTeaser[0]} and ${interestTeaser[1]}`
+
   const cleanedFikaTalk = fikaTalkOverlap
     .map((s) => normalizeSmartPunctuation(String(s)).trim())
     .filter(Boolean)
     .filter((s, i, arr) => arr.indexOf(s) === i)
-  const fikaTeaser = cleanedFikaTalk
-    .map((topic) => (/^[A-Z0-9]{2,}$/.test(topic) ? topic : topic.charAt(0).toLowerCase() + topic.slice(1)))
-    .slice(0, 2)
-  const curiosityTeaser = cleanedCuriosity
-    .map((topic) => /^[A-Z0-9]{2,}$/.test(topic) ? topic : topic.charAt(0).toLowerCase() + topic.slice(1))
-    .filter((topic, index, list) => list.indexOf(topic) === index)
-    .slice(0, 3)
-  const copyDimensionOrder = topCopyDimensions.filter((value, index, list) => list.indexOf(value) === index)
-  const useCuriosityClause = copyDimensionOrder.includes('q_curiosity') && curiosityTeaser.length > 0
-  const useConversationClause = topicTeaser.length > 0
+  const fikaTeaser = cleanedFikaTalk.map(sentenceCaseTopic).slice(0, 3)
 
-  const lifeTextForTail =
-    copyDimensionOrder.includes('q_life_chapter') && cleanedLifeChapter.length > 0
-      ? cleanedLifeChapter.length === 1
-        ? cleanedLifeChapter[0]!.replace(/\bmy\b/gi, 'your').replace(/\bour\b/gi, 'your')
-        : `${cleanedLifeChapter[0]!.replace(/\bmy\b/gi, 'your').replace(/\bour\b/gi, 'your')} and ${cleanedLifeChapter[1]!.replace(/\bmy\b/gi, 'your').replace(/\bour\b/gi, 'your')}`
-      : null
+  const hookTalkFillers = remainingHooks
+    .map(sentenceCaseTopic)
+    .filter((topic, index, list) => topic && list.indexOf(topic) === index)
+    .filter((t) => !fikaTeaser.some((f) => f.toLowerCase() === t.toLowerCase()))
+    .slice(0, Math.max(0, 3 - fikaTeaser.length))
 
-  const anchorTextForTail =
-    copyDimensionOrder.includes('q_everyday_anchor') && cleanedEverydayAnchor.length > 0
-      ? cleanedEverydayAnchor.length === 1
-        ? cleanedEverydayAnchor[0]!
-        : `${cleanedEverydayAnchor[0]} and ${cleanedEverydayAnchor[1]}`
-      : null
+  const talkTeaser = [...fikaTeaser, ...hookTalkFillers].slice(0, 3)
 
-  const clauses: Partial<Record<RevealClauseKey, string>> = {}
+  const work = truncateRevealWorkLabel(String(otherWorkLabel ?? ''))
 
-  if (interestTeaser.length > 0) {
-    const interests =
-      interestTeaser.length === 1 ? interestTeaser[0]! : `${interestTeaser[0]} and ${interestTeaser[1]}`
-    clauses.interests = `you're both into ${interests}`
-  }
-  if (fikaTeaser.length > 0) {
-    clauses.fikaTalk = `for this Fika you're both up for talking about ${formatTopicList(fikaTeaser)}`
-  }
-  if (useCuriosityClause) {
-    clauses.curiosity = `you're both curious about ${formatTopicList(curiosityTeaser)}`
-  }
-  if (useConversationClause) {
-    clauses.conversation = `you're both open to talking about ${formatTopicList(topicTeaser)}`
-  }
-  if (lifeTextForTail) {
-    clauses.life = `you're in a similar life stage (${lifeTextForTail})`
-  }
-  if (anchorTextForTail) {
-    clauses.anchor = `day-to-day you're both anchored on ${anchorTextForTail}`
-  }
-  const textureClause = buildTextureOverlapClause(textureOverlapTokens)
-  if (textureClause) {
-    clauses.texture = textureClause
-  }
+  const profileSentence = (() => {
+    if (work && interestsPhrase) {
+      return `${pronounPack.contractLead} a ${work} and ${pronounPack.loveVerbAfterAnd} ${interestsPhrase}.`
+    }
+    if (work) {
+      return `${pronounPack.contractLead} a ${work}.`
+    }
+    if (interestsPhrase) {
+      return `${pronounPack.standaloneLoveLead} ${interestsPhrase}.`
+    }
+    return ''
+  })()
 
-  let keys = REVEAL_CLAUSE_ORDER.filter((k) => clauses[k])
-  const maxClauses = 5
-  while (keys.length > maxClauses) {
-    const drop = REVEAL_CLAUSE_DROP_ORDER.find((k) => keys.includes(k))
-    if (!drop) break
-    keys = keys.filter((k) => k !== drop)
-  }
+  const talkSentence =
+    talkTeaser.length > 0 ? `You both like talking about ${formatTopicList(talkTeaser)}.` : ''
 
-  const segments = keys.map((k) => clauses[k]!)
-  return joinRevealOverlapClauses(otherFirstName, segments)
+  const bits = [`Meet ${name}.`, profileSentence, talkSentence, 'Want to meet for Fika? Reply with a Yes or No.'].filter(Boolean)
+  return bits.join(' ')
 }
 
 /** User text didn’t match the current intro phase. */
 export function messageMatchOfferedUnrecognized(phase: 'reveal_pending' | 'revealed' = 'revealed'): string {
   if (phase === 'reveal_pending') {
-    return `Send me a 👍 if you want to see the intro.`
+    return `Reply YES if you want to see the intro, or PASS to skip for now.`
   }
-  return `Send me a 👍 if you'd like to meet. Or reply PASS if this person doesn't feel like the right fit.`
+  return `Reply YES if you'd like to meet, or NO or PASS if this doesn't feel like the right fit.`
 }
 
 /** Phase 2 teaser after both users say YES. */
@@ -837,7 +685,7 @@ export function messageMutualYesContext(params: {
   venueName: string
   neighborhood?: string | null
   broadAvailabilityLabel?: string | null
-  /** Shared `q_like_talking_about` chips; surfaced after 👍 in reveal and here when both said yes. */
+  /** Shared `q_like_talking_about` chips; surfaced in reveal and here when both said yes. */
   fikaTalkOverlap?: string[]
 }): string {
   const { sharedInterests, conversationThread, venueName, neighborhood, broadAvailabilityLabel, fikaTalkOverlap } =

@@ -429,7 +429,7 @@ export function IntroDetailModal({
 
               {displayFikaTalkOverlap.length > 0 ? (
                 <section className="app-intro-detail-section">
-                  <h3 className="app-intro-detail-section-title">Up for talking about (this Fika)</h3>
+                  <h3 className="app-intro-detail-section-title">Like talking about</h3>
                   <div className="app-intro-pills">
                     {displayFikaTalkOverlap.map((topic, i) => (
                       <span key={i} className="app-intro-pill">{topic}</span>

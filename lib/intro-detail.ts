@@ -64,7 +64,7 @@ export function buildIntroSummary(responses: IntakeResponseItem[]): string | nul
     parts.push(`Right now they're in a chapter of ${life.toLowerCase()}.`)
   }
   const connectParts: string[] = []
-  if (talkAbout) connectParts.push(`feel like talking about ${talkAbout.toLowerCase()}`)
+  if (talkAbout) connectParts.push(`like talking about ${talkAbout.toLowerCase()}`)
   if (who) connectParts.push(`open to ${who.toLowerCase()}`)
   if (connectParts.length > 0) {
     parts.push(`They ${connectParts.join(', ')}.`)

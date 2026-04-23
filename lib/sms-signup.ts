@@ -10,8 +10,9 @@ import { SMS_PACING_MS } from '@/lib/sms-pacing'
 /** Natural sample “reveal” after the card—demo only, not a real match. */
 function sampleSignupIntroRevealBody(): string {
   return (
-    "Meet Maya. She's into philosophy and hiking—just like you—and she recently moved to LA. " +
-    'Would you be down to meet up? Simply text me a Yes or No.'
+    "Meet Maya. She's a Graphic Designer and loves typography and film photography. " +
+    "You both like talking about travel stories, creative side projects, and what's been making you laugh lately. " +
+    'Want to meet for Fika? Reply with a Yes or No.'
   )
 }
 

@@ -88,11 +88,15 @@ type SimPair = {
   userAName: string
   userAAge: number | null
   userAGender: string | null
+  userAPronouns: string | null
+  userAWorkLabel: string | null
   userACity: string | null
   userBId: string
   userBName: string
   userBAge: number | null
   userBGender: string | null
+  userBPronouns: string | null
+  userBWorkLabel: string | null
   userBCity: string | null
   score: number
   distanceKm: number | null
@@ -125,20 +129,16 @@ function formatDate(iso: string | null): string {
 
 /**
  * Same inputs as `match_candidates.reasons` when admin triggers SMS (raw slices + top_copy_dimensions).
- * Matches production `v2_reveal_context` after the user sends 👍.
+ * Matches production `v2_reveal_context` after the user replies YES to see the intro.
  */
 function adminSimRevealSentence(p: SimPair, viewerIsUserA: boolean): string {
   return formatMatchRevealSentence({
     otherFirstName: (viewerIsUserA ? p.userBName : p.userAName)?.trim() || 'Someone',
+    otherPronouns: viewerIsUserA ? p.userBPronouns : p.userAPronouns,
+    otherWorkLabel: viewerIsUserA ? p.userBWorkLabel : p.userAWorkLabel,
     sharedInterests: p.overlapInterests.slice(0, 3),
     conversationHooks: p.overlapGreatFika.slice(0, 2),
-    sectionScores: p.sectionScores,
-    curiosityOverlap: p.overlapCuriosity.slice(0, 3),
-    lifeChapterOverlap: p.overlapLifeChapter.slice(0, 2),
-    everydayAnchorOverlap: p.overlapEverydayAnchor.slice(0, 2),
-    topCopyDimensions: p.topCopyDimensions.slice(0, 3),
     fikaTalkOverlap: p.overlapLikeTalkingAbout.slice(0, 3),
-    textureOverlap: p.textureOverlap ?? [],
   })
 }
 
@@ -720,8 +720,6 @@ export default function AdminSignupsPage() {
                           <dd>{modalProfile.marketLabel ?? modalProfile.market ?? '—'}</dd>
                           <dt>Birthdate</dt>
                           <dd>{modalProfile.birthdate ?? '—'}</dd>
-                          <dt>Gender</dt>
-                          <dd>{modalProfile.gender ?? '—'}</dd>
                           <dt>Pronouns</dt>
                           <dd>{modalProfile.pronouns ?? '—'}</dd>
                           <dt>Relationship status</dt>
@@ -847,13 +845,13 @@ export default function AdminSignupsPage() {
               </div>
 
               <div className="admin-modal-section">
-                <h3 className="admin-modal-section-title">Intro reveal SMS (after 👍)</h3>
+                <h3 className="admin-modal-section-title">Intro reveal SMS (after YES)</h3>
                 <p className="admin-modal-meta">
-                  Two- or three-sentence factual reveal (overlaps only, no meet-ask) sent as{' '}
-                  <code style={{ fontSize: '0.85em' }}>v2_reveal_context</code> after 👍; the prompt and 👍/PASS lines follow in separate messages.
-                  Uses the same fields as <code style={{ fontSize: '0.85em' }}>reasons.raw</code> when you trigger SMS from here.{' '}
-                  <code style={{ fontSize: '0.85em' }}>texture_overlap</code> entries from the sim look like{' '}
-                  <code style={{ fontSize: '0.85em' }}>tv:The Bear</code> so the copy can say "both watch," "both listen to," or "fans of."
+                  Single message sent as <code style={{ fontSize: '0.85em' }}>v2_reveal_context</code> after the user
+                  replies YES to the teaser; it ends with whether they want to meet (YES/NO). There is no separate 👍/PASS
+                  line after that. Uses the same fields as <code style={{ fontSize: '0.85em' }}>reasons.raw</code> when
+                  you trigger SMS from here. <code style={{ fontSize: '0.85em' }}>texture_overlap</code> on the sim is
+                  for debugging only (not used in this reveal copy).
                 </p>
                 <div className="admin-sms-reveal-preview">
                   <p className="admin-sms-reveal-preview-label">

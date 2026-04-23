@@ -87,7 +87,7 @@ export default function SettingsProfilePage() {
       id: userId,
       first_name: firstName,
       birthdate: typeof answers.birthdate === 'string' ? answers.birthdate || null : null,
-      gender: typeof answers.gender === 'string' ? answers.gender || null : null,
+      gender: profile?.gender ?? null,
       gender_preference: typeof answers.gender_preference === 'string' ? answers.gender_preference || null : null,
       age_preference: typeof answers.age_preference === 'string' ? answers.age_preference || null : null,
       pronouns: typeof answers.pronouns === 'string' ? answers.pronouns || null : null,

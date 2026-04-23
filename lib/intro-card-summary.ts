@@ -67,7 +67,7 @@ export function buildIntroCardFallback(responses: IntakeResponseItem[]): IntroCa
   if (anchor) bullets.push(`Day-to-day: ${anchor}`)
   if (interests) bullets.push(`Interests: ${interests}`)
   if (curiosity) bullets.push(`Curious about: ${curiosity}`)
-  if (talkAbout) bullets.push(`Feels like talking about: ${talkAbout}`)
+  if (talkAbout) bullets.push(`Like talking about: ${talkAbout}`)
   if (openness) bullets.push(`Open to: ${openness}`)
   if (life && bullets.length < 4) bullets.unshift(`Life chapter: ${life}`)
 

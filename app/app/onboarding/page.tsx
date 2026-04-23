@@ -141,7 +141,17 @@ function getInitialAnswers(
   for (const s of PROFILE_STEPS) {
     if (s.id === 'first_name') answers.first_name = profile?.first_name?.trim() ?? ''
     else if (s.id === 'birthdate') answers.birthdate = profile?.birthdate ?? ''
-    else if (s.id === 'gender') answers.gender = profile?.gender ?? ''
+    else if (s.id === 'pronouns') {
+      let pr = profile?.pronouns?.trim() ?? ''
+      if (!pr && profile?.gender?.trim()) {
+        const g = profile.gender.trim().toLowerCase()
+        if (g === 'female' || g === 'woman' || g === 'women') pr = 'She/her'
+        else if (g === 'male' || g === 'man' || g === 'men') pr = 'He/him'
+        else if (g === 'non-binary' || g === 'nonbinary') pr = 'They/them'
+        else pr = 'They/them'
+      }
+      answers.pronouns = pr
+    }
     else if (s.id === 'languages') answers.languages = Array.isArray(profile?.languages) ? profile.languages : []
     else if (s.id === 'location' && profile?.city) answers.location = { city: profile.city, lat: profile.lat ?? 0, lng: profile.lng ?? 0 }
   }
@@ -645,7 +655,8 @@ function AppOnboardingContent() {
       id: sessionUserId,
       first_name: (typeof answers.first_name === 'string' ? answers.first_name.trim() : '') || ' ',
       birthdate: birthdateIso ?? null,
-      gender: (typeof answers.gender === 'string' ? answers.gender : null) ?? null,
+      gender: null,
+      pronouns: (typeof answers.pronouns === 'string' ? answers.pronouns.trim() : null) || null,
       gender_preference: (typeof answers.gender_preference === 'string' ? answers.gender_preference : null) ?? null,
       age_preference: (typeof answers.age_preference === 'string' ? answers.age_preference : null) ?? null,
       languages: Array.isArray(answers.languages) ? answers.languages : null,

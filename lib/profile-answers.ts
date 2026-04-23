@@ -26,7 +26,17 @@ export function getAnswersFromProfileAndIntake(
   for (const s of PROFILE_STEPS) {
     if (s.id === 'first_name') answers.first_name = profile?.first_name?.trim() ?? ''
     else if (s.id === 'birthdate') answers.birthdate = profile?.birthdate ?? ''
-    else if (s.id === 'gender') answers.gender = profile?.gender ?? ''
+    else if (s.id === 'pronouns') {
+      let pr = profile?.pronouns?.trim() ?? ''
+      if (!pr && profile?.gender?.trim()) {
+        const g = profile.gender.trim().toLowerCase()
+        if (g === 'female' || g === 'woman' || g === 'women') pr = 'She/her'
+        else if (g === 'male' || g === 'man' || g === 'men') pr = 'He/him'
+        else if (g === 'non-binary' || g === 'nonbinary') pr = 'They/them'
+        else pr = 'They/them'
+      }
+      answers.pronouns = pr
+    }
     else if (s.id === 'languages') answers.languages = Array.isArray(profile?.languages) ? profile.languages : []
     else if (s.id === 'location' && profile?.city != null)
       answers.location = { city: profile.city, lat: profile.lat ?? 0, lng: profile.lng ?? 0 }

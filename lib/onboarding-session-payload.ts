@@ -40,7 +40,7 @@ export function buildOnboardingSessionPayload(answers: AnswersState): Record<str
   return {
     first_name: typeof answers.first_name === 'string' ? answers.first_name.trim() || ' ' : ' ',
     birthdate: answers.birthdate ?? null,
-    gender: answers.gender ?? null,
+    pronouns: typeof answers.pronouns === 'string' ? answers.pronouns.trim() || null : null,
     gender_preference: answers.gender_preference ?? null,
     age_preference: answers.age_preference ?? null,
     languages: Array.isArray(answers.languages) ? answers.languages : null,
@@ -58,7 +58,13 @@ export function payloadToAnswers(payload: Record<string, unknown>): AnswersState
   const answers: AnswersState = {}
   if (typeof payload.first_name === 'string') answers.first_name = payload.first_name
   if (typeof payload.birthdate === 'string') answers.birthdate = payload.birthdate
-  if (typeof payload.gender === 'string') answers.gender = payload.gender
+  if (typeof payload.pronouns === 'string') answers.pronouns = payload.pronouns
+  else if (typeof (payload as { gender?: string }).gender === 'string' && (payload as { gender: string }).gender.trim()) {
+    const g = (payload as { gender: string }).gender.trim().toLowerCase()
+    if (g === 'female' || g === 'woman' || g === 'women') answers.pronouns = 'She/her'
+    else if (g === 'male' || g === 'man' || g === 'men') answers.pronouns = 'He/him'
+    else answers.pronouns = 'They/them'
+  }
   if (typeof payload.gender_preference === 'string') answers.gender_preference = payload.gender_preference
   if (typeof payload.age_preference === 'string') answers.age_preference = payload.age_preference
   if (Array.isArray(payload.languages)) answers.languages = payload.languages

@@ -18,8 +18,10 @@ export type MatcherProfile = {
   lat: number | null
   lng: number | null
   birthdate: string | null
+  /** Legacy; pairing uses `pronouns` (with gender fallback in `effectivePronounsForMatching`). */
   gender: string | null
-  /** Legacy column; pairing uses same-gender-only (`checkPairEligibility`), not this field. */
+  pronouns: string | null
+  /** Legacy column; pairing uses pronoun-group matching (`checkPairEligibility`), not this field. */
   gender_preference: string | null
   /** Legacy column; age-based pairing is not used (`checkPairEligibility`). */
   age_preference: string | null
@@ -157,13 +159,54 @@ function pairDataConfidence(a: MatcherPerson, b: MatcherPerson): number {
   return 0.4
 }
 
-function sameGender(a: string, b: string): boolean {
-  const x = a.trim().toLowerCase()
-  const y = b.trim().toLowerCase()
-  if (x === y) return true
-  if ((x === 'female' || x === 'woman' || x === 'women') && (y === 'female' || y === 'woman' || y === 'women')) return true
-  if ((x === 'male' || x === 'man' || x === 'men') && (y === 'male' || y === 'man' || y === 'men')) return true
-  if ((x === 'non-binary' || x === 'nonbinary') && (y === 'non-binary' || y === 'nonbinary')) return true
+function primarySubjectTokenFromPronouns(raw: string): string | null {
+  const t = raw.trim().toLowerCase()
+  if (!t) return null
+  const seg = t
+    .split(/[/,\s]+/)
+    .map((s) => s.trim())
+    .find((s) => s.replace(/[^a-z]/g, '').length > 0)
+  if (!seg) return null
+  return seg.replace(/[^a-z]/g, '')
+}
+
+function normalizedPronounsKey(raw: string): string {
+  return raw.trim().toLowerCase().replace(/\s+/g, '')
+}
+
+/** When `pronouns` is empty, infer from legacy onboarding `gender` (pre–pronouns-only). */
+function inferredPronounsFromGender(gender: string | null | undefined): string | null {
+  const g = (gender ?? '').trim().toLowerCase()
+  if (!g) return null
+  if (g === 'female' || g === 'woman' || g === 'women') return 'she/her'
+  if (g === 'male' || g === 'man' || g === 'men') return 'he/him'
+  if (g === 'non-binary' || g === 'nonbinary') return 'they/them'
+  return 'they/them'
+}
+
+function effectivePronounsForMatching(profile: MatcherProfile): string | null {
+  const pr = profile.pronouns?.trim()
+  if (pr) return pr
+  return inferredPronounsFromGender(profile.gender)
+}
+
+/** Same “group” as legacy same-gender-only: she/her/she/they, he/him/he/they, they/them, or exact custom match. */
+function samePronounMatchingGroup(a: string, b: string): boolean {
+  const ka = normalizedPronounsKey(a)
+  const kb = normalizedPronounsKey(b)
+  if (!ka || !kb) return false
+  if (ka === kb) return true
+  const ta = primarySubjectTokenFromPronouns(a)
+  const tb = primarySubjectTokenFromPronouns(b)
+  if (!ta || !tb) return false
+  const fem = new Set(['she', 'her'])
+  const masc = new Set(['he', 'him'])
+  const they = new Set(['they', 'them'])
+  if (fem.has(ta) && fem.has(tb)) return true
+  if (masc.has(ta) && masc.has(tb)) return true
+  if (they.has(ta) && they.has(tb)) return true
+  const isStandard = (tok: string) => fem.has(tok) || masc.has(tok) || they.has(tok)
+  if (!isStandard(ta) && !isStandard(tb) && ta === tb) return true
   return false
 }
 
@@ -204,12 +247,12 @@ export function checkPairEligibility(
   }
 
   if (!relaxed) {
-    const ga = a.profile.gender?.trim()
-    const gb = b.profile.gender?.trim()
-    if (!ga || !gb) {
-      reasons.push('gender_missing')
-    } else if (!sameGender(ga, gb)) {
-      reasons.push('same_gender_required')
+    const pa = effectivePronounsForMatching(a.profile)?.trim()
+    const pb = effectivePronounsForMatching(b.profile)?.trim()
+    if (!pa || !pb) {
+      reasons.push('pronouns_missing')
+    } else if (!samePronounMatchingGroup(pa, pb)) {
+      reasons.push('same_pronoun_group_required')
     }
   }
 

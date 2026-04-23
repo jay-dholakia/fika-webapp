@@ -84,6 +84,7 @@ import { getActiveMarketSlugs } from '@/lib/admin-markets'
 import { getMarketBySlug } from '@/lib/markets'
 import { sendConcierge, isSendblueConfigured } from '@/lib/sendblue'
 import { getIntakeRadiusKm } from '@/lib/intake-radius'
+import { getIntakeSingle } from '@/lib/intake-response-utils'
 import { getBestDefaultSlot } from '@/lib/availability-slots'
 import { candidateSlotIdsForProposalFromIntake, getTypicalFikaSelectionsFromResponses, nextAlternateProposalSlot } from '@/lib/intake-typical-times'
 import { getCurrentWeekAnchorMonday, isOnboardingComplete } from '@/lib/onboarding'
@@ -1419,13 +1420,8 @@ export async function POST(request: Request) {
         const copyReasons = ((reasons.copy as Record<string, unknown> | undefined) ?? reasons)
         const sharedInterests = (copyReasons.shared_interests as string[]) ?? (rawReasons.shared_interests as string[]) ?? []
         const conversationHooks = (rawReasons.conversation_hooks as string[]) ?? []
-        const curiosityOverlap = (rawReasons.curiosity_overlap as string[]) ?? []
-        const lifeChapterOverlap = (rawReasons.life_chapter_overlap as string[]) ?? []
-        const everydayAnchorOverlap = (rawReasons.everyday_anchor_overlap as string[]) ?? []
-        const textureOverlap = (rawReasons.texture_overlap as string[] | undefined) ?? []
         /** Shared `q_like_talking_about` chips; include in replenish / match-sim `reasons.raw`. */
         const fikaTalkOverlap = (rawReasons.fika_talk_overlap as string[] | undefined) ?? []
-        const topCopyDimensions = (copyReasons.top_copy_dimensions as string[]) ?? []
         const { data: pair } = await supabase
           .from('match_candidates')
           .select('user_a, user_b')
@@ -1435,11 +1431,15 @@ export async function POST(request: Request) {
         const { data: otherProfile } = otherId
           ? await supabase
               .from('profiles')
-              .select('first_name, birthdate, avatar_url')
+              .select('first_name, birthdate, avatar_url, pronouns')
               .eq('id', otherId)
               .maybeSingle()
-          : { data: null as { first_name?: string | null; birthdate?: string | null; avatar_url?: string | null } | null }
+          : { data: null as { first_name?: string | null; birthdate?: string | null; avatar_url?: string | null; pronouns?: string | null } | null }
+        const { data: otherIntakeRow } = otherId
+          ? await supabase.from('intake_responses_v5').select('responses').eq('user_id', otherId).maybeSingle()
+          : { data: null as { responses?: unknown } | null }
         const otherName = otherProfile?.first_name?.trim() ?? 'Someone'
+        const otherWorkLabel = getIntakeSingle(otherIntakeRow?.responses ?? null, 'q_work')
         const introCardUrl = buildIntroCardUrl({
           appBase,
           avatarUrl: otherProfile?.avatar_url ?? null,
@@ -1469,15 +1469,11 @@ export async function POST(request: Request) {
           fromNumber,
           formatMatchRevealSentence({
             otherFirstName: otherName,
+            otherPronouns: otherProfile?.pronouns ?? null,
+            otherWorkLabel,
             sharedInterests: sharedInterests.slice(0, 3),
             conversationHooks,
-            sectionScores: (rawReasons.sectionScores as Record<string, number> | undefined) ?? undefined,
-            curiosityOverlap,
-            lifeChapterOverlap,
-            everydayAnchorOverlap,
-            topCopyDimensions,
             fikaTalkOverlap: fikaTalkOverlap.slice(0, 3),
-            textureOverlap: textureOverlap.slice(0, 2),
           }),
           'v2_reveal_context',
           { userId, weekAnchorMonday, matchId }
@@ -1492,18 +1488,6 @@ export async function POST(request: Request) {
             { userId, weekAnchorMonday, matchId }
           )
         }
-        await sleepForSmsPacing(SMS_PACING_MS.context)
-        await sendConciergeAndLog(fromNumber, 'Want to meet this week?', 'v2_reveal_prompt', {
-          userId,
-          weekAnchorMonday,
-          matchId,
-        })
-        await sleepForSmsPacing(SMS_PACING_MS.quickAck)
-        await sendConciergeAndLog(fromNumber, "Send me a 👍 if you'd like to meet. Or reply PASS if this person doesn't feel like the right fit.", 'v2_reveal_cta', {
-          userId,
-          weekAnchorMonday,
-          matchId,
-        })
         await setPerMatchSmsState({
           userId,
           weekAnchorMonday,
