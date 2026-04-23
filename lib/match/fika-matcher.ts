@@ -28,6 +28,7 @@ export type MatcherProfile = {
   lng: number | null
   birthdate: string | null
   gender: string | null
+  /** Legacy column; pairing uses same-gender-only (`checkPairEligibility`), not this field. */
   gender_preference: string | null
   age_preference: string | null
   languages: string[] | null
@@ -203,14 +204,6 @@ function sameGender(a: string, b: string): boolean {
   return false
 }
 
-function preferenceAllows(pref: string, userGender: string, candidateGender: string): boolean {
-  const p = pref.trim().toLowerCase()
-  if (p === 'no preference') return true
-  if (p === 'same gender') return sameGender(userGender, candidateGender)
-  if (p === 'different gender') return !sameGender(userGender, candidateGender)
-  return true
-}
-
 function avoidTopicsPenaltySymmetric(a: MatcherPerson, b: MatcherPerson): number {
   const avoidA = getIntakeMulti(a.responses, 'q_avoid_topics').filter((x) => !AVOID_IGNORE.has(x))
   const avoidB = getIntakeMulti(b.responses, 'q_avoid_topics').filter((x) => !AVOID_IGNORE.has(x))
@@ -273,13 +266,14 @@ export function checkPairEligibility(
     }
   }
 
-  if (a.profile.gender && b.profile.gender && a.profile.gender_preference && b.profile.gender_preference) {
-    const aGender = a.profile.gender.trim().toLowerCase()
-    const bGender = b.profile.gender.trim().toLowerCase()
-    const aPref = a.profile.gender_preference.trim().toLowerCase()
-    const bPref = b.profile.gender_preference.trim().toLowerCase()
-    if (!preferenceAllows(aPref, aGender, bGender)) reasons.push('gender_pref')
-    if (!preferenceAllows(bPref, bGender, aGender)) reasons.push('gender_pref')
+  if (!relaxed) {
+    const ga = a.profile.gender?.trim()
+    const gb = b.profile.gender?.trim()
+    if (!ga || !gb) {
+      reasons.push('gender_missing')
+    } else if (!sameGender(ga, gb)) {
+      reasons.push('same_gender_required')
+    }
   }
 
   const preferAround = 'prefer around my age'
