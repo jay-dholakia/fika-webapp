@@ -55,6 +55,7 @@ export const SEVERE_MISMATCH_PENALTY_CAP = 0.06
 
 /** Fields counted for data_confidence (presence on both users helps feasibility). */
 export const DATA_CONFIDENCE_FIELD_IDS = [
+  'q_market_tenure',
   'q_interests',
   'q_what_makes_great_fika',
   'q_life_chapter',

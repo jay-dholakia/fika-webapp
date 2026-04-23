@@ -7,6 +7,7 @@ import { HOME_COUNTRY_UNITED_STATES } from '@/lib/countries-list'
 import {
   PROFILE_STEPS,
   INTAKE_STEPS,
+  MARKET_TENURE_OPTIONS,
   type ProfileStep,
 } from '@/lib/onboarding-data'
 import {
@@ -21,6 +22,7 @@ import { PersonaIdVerification } from '@/app/app/components/PersonaIdVerificatio
 import { VerifiedBadge } from '@/app/app/components/VerifiedBadge'
 import { SearchableMultiPicker } from '@/app/app/components/SearchableMultiPicker'
 import { SearchableSinglePicker } from '@/app/app/components/SearchableSinglePicker'
+import { MarketTenureSlider } from '@/app/app/components/MarketTenureSlider'
 
 function parseDate(s: string): string | null {
   const d = new Date(s)
@@ -42,13 +44,15 @@ const PERSONA_EMBED_CONFIGURED = Boolean(
     process.env.NEXT_PUBLIC_PERSONA_ENVIRONMENT_ID?.trim()
 )
 
-const BACKGROUND_INTAKE_IDS = new Set([
-  'q_home_country',
-  'q_home_state',
-  'q_college',
-  'q_ethnicity',
-  'q_relationship_status',
-])
+const BACKGROUND_INTAKE_IDS = new Set(['q_market_tenure', 'q_ethnicity', 'q_relationship_status'])
+
+function intakeQuestionLabel(step: ProfileStep, answers: AnswersState): string {
+  if (step.id !== 'q_market_tenure') return step.question
+  const loc = answers.location as { city?: string } | undefined
+  const city = loc && typeof loc.city === 'string' && loc.city.trim() ? loc.city.trim() : ''
+  if (!city || city === 'Unknown') return 'How long have you lived in this area?'
+  return `How long have you lived in ${city}?`
+}
 
 export default function SettingsProfilePage() {
   const [userId, setUserId] = useState<string | null>(null)
@@ -156,7 +160,7 @@ export default function SettingsProfilePage() {
       else existingResponses.push(newItem)
     }
     const filteredResponses = existingResponses.filter((r) => r.question_id !== 'gender_preference' && r.question_id !== 'age_preference')
-    const availabilityTimes = answers.q9_availability as string[] | undefined
+    const availabilityTimes = answers.q_typical_fika_times as string[] | undefined
     const payload: Record<string, unknown> = {
       user_id: userId,
       responses: filteredResponses,
@@ -193,9 +197,9 @@ export default function SettingsProfilePage() {
       setError('Location is required. Use "Change" to set your location.')
       return
     }
-    const availability = answers.q9_availability
+    const availability = answers.q_typical_fika_times
     if (Array.isArray(availability) && availability.length === 0) {
-      setError('Please choose at least one availability option (When are you usually up for a good conversation?).')
+      setError('Please choose at least one time slot for when you’re likely to be free for a Fika.')
       return
     }
     setSaving(true)
@@ -427,6 +431,21 @@ export default function SettingsProfilePage() {
         />
       )
     }
+    if (step.type === 'slider_snap' && step.options && step.id === 'q_market_tenure') {
+      return (
+        <MarketTenureSlider
+          id={`profile-${step.id}`}
+          options={step.options}
+          value={
+            typeof value === 'string' && value.trim()
+              ? value
+              : MARKET_TENURE_OPTIONS[0]
+          }
+          disabled={saving}
+          onChange={(next) => setAnswers((a) => ({ ...a, [step.id]: next }))}
+        />
+      )
+    }
     if (step.type === 'multi_select' && step.options) {
       const arr = (Array.isArray(value) ? value : []) as string[]
       const atMax = step.maxSelections != null && arr.length >= step.maxSelections
@@ -538,7 +557,7 @@ export default function SettingsProfilePage() {
             (step) => (
               <div key={step.id} className="profile-field">
                 <label htmlFor={`profile-${step.id}`} className="profile-label">
-                  {step.question}
+                  {intakeQuestionLabel(step, answers)}
                   {step.minSelections != null && (
                     <span className="profile-hint"> (at least {step.minSelections})</span>
                   )}
@@ -569,7 +588,7 @@ export default function SettingsProfilePage() {
             (step) => (
               <div key={step.id} className="profile-field">
                 <label htmlFor={`profile-${step.id}`} className="profile-label">
-                  {step.question}
+                  {intakeQuestionLabel(step, answers)}
                   {step.minSelections != null && (
                     <span className="profile-hint"> (at least {step.minSelections})</span>
                   )}

@@ -1,15 +1,8 @@
 // LA Beta onboarding: Profile + Intake (Final). No maxes on multi_select.
-// Types: text | date | chips_single | location_permission | multi_select | searchable_multi | searchable_single | select
+// Types: text | date | chips_single | location_permission | multi_select | searchable_multi | searchable_single | select | slider_snap
 
-import { COUNTRY_NAMES_FOR_SELECT } from '@/lib/countries-list'
-import collegeNames from '@/lib/data/colleges.json'
-import musicArtistNames from '@/lib/data/music-artists.json'
-import podcastTitles from '@/lib/data/podcasts.json'
-import sportsTeamNames from '@/lib/data/sports-teams.json'
-import tvStreamingTitles from '@/lib/data/tv-streaming-shows.json'
 import { ETHNICITY_OPTIONS } from '@/lib/ethnicity-options'
 import { RELATIONSHIP_STATUS_OPTIONS } from '@/lib/relationship-status-options'
-import { US_STATE_NAMES } from '@/lib/us-states-list'
 import { WORK_ROLE_LIFE_SITUATION_CHIPS, WORK_ROLE_OPTIONS } from '@/lib/work-role-options'
 
 export type StepType =
@@ -21,6 +14,7 @@ export type StepType =
   | 'searchable_multi'
   | 'searchable_single'
   | 'select'
+  | 'slider_snap'
 
 export type ProfileStep = {
   id: string
@@ -40,6 +34,19 @@ export type ProfileStep = {
   /** Short line above featured chips (e.g. work life-situation shortcuts). */
   featuredOptionsCaption?: string
 }
+
+/** Ordered stops for the “how long in this market” slider (left → right). */
+export const MARKET_TENURE_OPTIONS: string[] = [
+  'Just moved',
+  'Less than 6 months',
+  '6 months – under 1 year',
+  '1–2 years',
+  '3–5 years',
+  '6–10 years',
+  '11–20 years',
+  '20+ years',
+  'I grew up here',
+]
 
 // PROFILE: name, demographics, location
 export const PROFILE_STEPS: ProfileStep[] = [
@@ -121,11 +128,132 @@ export const PROFILE_STEPS: ProfileStep[] = [
   },
 ]
 
-// INTAKE (Final): Block 1 Life context → Block 2 Interests → Block 3 Topics → Block 4 Perspective → Block 5 Matching.
-// Block 1: background (roots) → life chapter → everyday anchor → work.
-// Block 2: interests → curiosity.
+// INTAKE: shown after location in onboarding; persisted on intake_responses_v5.
 export const INTAKE_STEPS: ProfileStep[] = [
-  // Block 1 — Background: where you're from — not current location
+  {
+    id: 'q_market_tenure',
+    question: 'How long have you lived in this area?',
+    body: 'Use the slider to pick what best describes your time here. Default is “Just moved” until you change it.',
+    type: 'slider_snap',
+    required: true,
+    options: [...MARKET_TENURE_OPTIONS],
+  },
+  {
+    id: 'q_ethnicity',
+    question: "What's your ethnicity?",
+    type: 'select',
+    required: false,
+    options: ETHNICITY_OPTIONS,
+  },
+  {
+    id: 'q_relationship_status',
+    question: "What's your relationship status?",
+    type: 'select',
+    required: false,
+    options: RELATIONSHIP_STATUS_OPTIONS,
+  },
+  {
+    id: 'q_work',
+    question: 'What do you do for work?',
+    body: 'Enter your job title, or search the list for a close match. If you’re unemployed, between roles, or on a career break, use a shortcut below.',
+    type: 'searchable_single',
+    required: false,
+    featuredOptions: [...WORK_ROLE_LIFE_SITUATION_CHIPS],
+    featuredOptionsCaption: 'Not in a job title right now?',
+    options: [...WORK_ROLE_OPTIONS],
+    customAnswerMaxLength: 100,
+    placeholder: 'Enter your job title',
+  },
+  {
+    id: 'q_interests',
+    question: 'What are some of your interests?',
+    body: 'Select all that apply.',
+    type: 'multi_select',
+    required: true,
+    options: [
+      'Reading',
+      'Music',
+      'Film & TV',
+      'Podcasts',
+      'Cooking',
+      'Travel',
+      'Fitness',
+      'Dance',
+      'Basketball',
+      'Football',
+      'Soccer',
+      'Baseball',
+      'Running',
+      'Hiking',
+      'Outdoors',
+      'Yoga / Pilates',
+      'Weightlifting',
+      'Cycling',
+      'Swimming',
+      'Tennis',
+      'Pickleball',
+      'Photography',
+      'Art & design',
+      'Writing',
+      'Gaming',
+      'Entrepreneurship & startups',
+      'Investing & finance',
+      'History',
+      'Science',
+      'Philosophy',
+      'Politics & current events',
+    ],
+  },
+  {
+    id: 'q_hoping_for',
+    question: 'What are you hoping for from Fika?',
+    type: 'chips_single',
+    required: true,
+    options: [
+      'Conversation with new people — not necessarily friendship',
+      'Meeting people nearby — open to friendship if it happens',
+      'Actively looking for new friends',
+    ],
+  },
+  {
+    id: 'q_radius',
+    question: 'How far are you willing to travel for a Fika?',
+    type: 'chips_single',
+    required: true,
+    options: ['5 miles', '10 miles', '25 miles', '50 miles'],
+  },
+  {
+    id: 'q_typical_fika_times',
+    question: 'When are you most likely to be free for a Fika?',
+    body: 'Select all that typically work — we use this to suggest times that fit both people.',
+    type: 'multi_select',
+    required: true,
+    options: [
+      'Weekday mornings',
+      'Weekday afternoons',
+      'Weekday evenings',
+      'Weekend mornings',
+      'Weekend afternoons',
+      'Weekend evenings',
+    ],
+  },
+  {
+    id: 'confirm_intent',
+    question: 'Before you continue',
+    body: "Fika is for meeting people in real life. Use good judgment: meet in public, and stop if anything feels off. We're here for respectful conversation; harassment can lead to removal. By continuing, you agree to show up with care for yourself and others.",
+    type: 'chips_single',
+    required: true,
+    options: ["I'm in"],
+  },
+]
+
+export const TOTAL_ONBOARDING_STEPS = PROFILE_STEPS.length + INTAKE_STEPS.length
+
+/*
+Previous INTAKE_STEPS snapshot (commented out of the active array; kept for reference).
+Re-enable by merging back into INTAKE_STEPS and restoring imports (countries, colleges, media JSON, etc.).
+
+export const INTAKE_STEPS_PREVIOUS_REFERENCE = [
   {
     id: 'q_home_country',
     question: 'Home country',
@@ -166,7 +294,6 @@ export const INTAKE_STEPS: ProfileStep[] = [
     required: false,
     options: RELATIONSHIP_STATUS_OPTIONS,
   },
-  // Block 1 — Life context: stage → daily reality
   {
     id: 'q_life_chapter',
     question: 'What life chapter are you in now?',
@@ -216,59 +343,6 @@ export const INTAKE_STEPS: ProfileStep[] = [
       'Faith or spiritual practice',
       'Travel',
       'Something else',
-    ],
-  },
-  {
-    id: 'q_work',
-    question: 'What do you do for work?',
-    body: 'Enter your job title, or search the list for a close match. If you’re unemployed, between roles, or on a career break, use a shortcut below.',
-    type: 'searchable_single',
-    required: false,
-    featuredOptions: [...WORK_ROLE_LIFE_SITUATION_CHIPS],
-    featuredOptionsCaption: 'Not in a job title right now?',
-    options: [...WORK_ROLE_OPTIONS],
-    customAnswerMaxLength: 100,
-    placeholder: 'Enter your job title',
-  },
-  // Block 2 — Interests: interests → curiosity → recs
-  {
-    id: 'q_interests',
-    question: 'What are some of your interests?',
-    body: 'Select all that apply.',
-    type: 'multi_select',
-    required: true,
-    options: [
-      'Reading',
-      'Music',
-      'Film & TV',
-      'Podcasts',
-      'Cooking',
-      'Travel',
-      'Fitness',
-      'Dance',
-      'Basketball',
-      'Football',
-      'Soccer',
-      'Baseball',
-      'Running',
-      'Hiking',
-      'Outdoors',
-      'Yoga / Pilates',
-      'Weightlifting',
-      'Cycling',
-      'Swimming',
-      'Tennis',
-      'Pickleball',
-      'Photography',
-      'Art & design',
-      'Writing',
-      'Gaming',
-      'Entrepreneurship & startups',
-      'Investing & finance',
-      'History',
-      'Science',
-      'Philosophy',
-      'Politics & current events',
     ],
   },
   {
@@ -370,7 +444,6 @@ export const INTAKE_STEPS: ProfileStep[] = [
       'Prefer not to say',
     ],
   },
-  // Matching preferences
   {
     id: 'q_openness',
     question: 'Who would you be open to meet for a Fika?',
@@ -439,5 +512,4 @@ export const INTAKE_STEPS: ProfileStep[] = [
     options: ["I'm in"],
   },
 ]
-
-export const TOTAL_ONBOARDING_STEPS = PROFILE_STEPS.length + INTAKE_STEPS.length
+*/

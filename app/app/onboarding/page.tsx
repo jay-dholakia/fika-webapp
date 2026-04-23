@@ -11,6 +11,7 @@ import { HOME_COUNTRY_UNITED_STATES } from '@/lib/countries-list'
 import {
   PROFILE_STEPS,
   INTAKE_STEPS,
+  MARKET_TENURE_OPTIONS,
   type ProfileStep,
 } from '@/lib/onboarding-data'
 import { buildOnboardingSessionPayload, payloadToAnswers } from '@/lib/onboarding-session-payload'
@@ -18,47 +19,22 @@ import { getMarketFromCityOrLatLngWithDb } from '@/lib/markets'
 import { checkProfilePhotoSingleFace } from '@/lib/avatar-face-check'
 import { SearchableMultiPicker } from '@/app/app/components/SearchableMultiPicker'
 import { SearchableSinglePicker } from '@/app/app/components/SearchableSinglePicker'
+import { MarketTenureSlider } from '@/app/app/components/MarketTenureSlider'
 import type { IntakeResponseItem } from '@/lib/db-types'
 import type { ProfileRow } from '@/lib/db-types'
 import type { IntakeResponsesV5Row } from '@/lib/db-types'
 
-const ABOUT_YOU_EXTRA_IDS = ['q_hoping_for']
-const BACKGROUND_STEP_IDS = [
-  'q_home_country',
-  'q_home_state',
-  'q_college',
-  'q_ethnicity',
-  'q_relationship_status',
-] as const
-const SECTION_2_IDS = [
-  ...BACKGROUND_STEP_IDS,
-  'q_life_chapter',
-  'q_everyday_anchor',
-  'q_work',
-  'q_interests',
-  'q_curiosity',
-  'q_tv_streaming_shows',
-  'q_podcasts',
-  'q_favorite_artists',
-  'q_favorite_teams',
-]
-const SECTION_3_IDS = [
-  'q_topics',
-  'q_avoid_topics',
-  'q_openness',
-  'gender_preference',
-  'age_preference',
-  'q_what_makes_great_fika',
-  'q_radius',
-  'q_typical_fika_times',
-]
-const ABOUT_YOU_EXTRA_STEPS = INTAKE_STEPS.filter((s) => ABOUT_YOU_EXTRA_IDS.includes(s.id))
-const SECTION_2_STEPS = INTAKE_STEPS.filter((s) => SECTION_2_IDS.includes(s.id))
+const BACKGROUND_STEP_IDS = ['q_market_tenure', 'q_ethnicity', 'q_relationship_status'] as const
+const SECTION_2_IDS = [...BACKGROUND_STEP_IDS, 'q_work', 'q_interests'] as const
+const SECTION_3_IDS = ['q_hoping_for', 'q_radius', 'q_typical_fika_times'] as const
+const SECTION_2_STEPS = INTAKE_STEPS.filter((s) => SECTION_2_IDS.includes(s.id as (typeof SECTION_2_IDS)[number]))
 const BACKGROUND_STEPS = SECTION_2_STEPS.filter((s) => BACKGROUND_STEP_IDS.includes(s.id as (typeof BACKGROUND_STEP_IDS)[number]))
 const LIFE_CONTEXT_STEPS = SECTION_2_STEPS.filter((s) => !BACKGROUND_STEP_IDS.includes(s.id as (typeof BACKGROUND_STEP_IDS)[number]))
-const SECTION_3_STEPS = INTAKE_STEPS.filter((s) => SECTION_3_IDS.includes(s.id))
+const SECTION_3_STEPS = INTAKE_STEPS.filter((s) => SECTION_3_IDS.includes(s.id as (typeof SECTION_3_IDS)[number]))
 const CONFIRM_STEP = INTAKE_STEPS.find((s) => s.id === 'confirm_intent')!
 const LOCATION_STEP = PROFILE_STEPS.find((s) => s.id === 'location')!
+const MARKET_TENURE_STEP = INTAKE_STEPS.find((s) => s.id === 'q_market_tenure')!
+const INTAKE_STEPS_AFTER_TENURE = INTAKE_STEPS.filter((s) => s.id !== 'q_market_tenure' && s.id !== 'confirm_intent')
 const PROFILE_STEPS_BEFORE_LOCATION = PROFILE_STEPS.filter((s) => s.id !== 'location')
 const AVATAR_STEP = {
   id: 'avatar_upload',
@@ -70,11 +46,9 @@ const AVATAR_STEP = {
 } as const
 const ONBOARDING_STEPS = [
   ...PROFILE_STEPS_BEFORE_LOCATION,
-  ...ABOUT_YOU_EXTRA_STEPS,
   LOCATION_STEP,
-  ...BACKGROUND_STEPS,
-  ...LIFE_CONTEXT_STEPS,
-  ...SECTION_3_STEPS,
+  MARKET_TENURE_STEP,
+  ...INTAKE_STEPS_AFTER_TENURE,
   AVATAR_STEP,
   CONFIRM_STEP,
 ] as const
@@ -84,8 +58,8 @@ type OnboardingRenderableStep = ProfileStep | typeof AVATAR_STEP
 function getStepSectionLabel(stepId: string): string {
   if (
     PROFILE_STEPS_BEFORE_LOCATION.some((step) => step.id === stepId) ||
-    ABOUT_YOU_EXTRA_STEPS.some((step) => step.id === stepId) ||
-    stepId === LOCATION_STEP.id
+    stepId === LOCATION_STEP.id ||
+    stepId === MARKET_TENURE_STEP.id
   ) {
     return 'About you'
   }
@@ -101,8 +75,8 @@ function getStepSectionLabel(stepId: string): string {
   return 'Onboarding'
 }
 
-function getVisibleStepsForAnswers(answers: AnswersState): OnboardingRenderableStep[] {
-  return ONBOARDING_STEPS.filter((step) => step.id !== 'q_home_state' || answers.q_home_country === HOME_COUNTRY_UNITED_STATES)
+function getVisibleStepsForAnswers(_answers: AnswersState): OnboardingRenderableStep[] {
+  return [...ONBOARDING_STEPS]
 }
 
 function hasStepAnswer(step: OnboardingRenderableStep, answers: AnswersState): boolean {
@@ -123,6 +97,9 @@ function hasStepAnswer(step: OnboardingRenderableStep, answers: AnswersState): b
     return Array.isArray(raw) && raw.length > 0
   }
   if (step.type === 'searchable_single') {
+    return typeof raw === 'string' && raw.trim() !== ''
+  }
+  if (step.type === 'slider_snap') {
     return typeof raw === 'string' && raw.trim() !== ''
   }
   return typeof raw === 'string' ? raw.trim() !== '' : raw != null
@@ -304,6 +281,13 @@ function normalizeBirthdatePaste(raw: string): string {
 }
 
 /** `isoYmd` must be YYYY-MM-DD from parseDate. */
+function marketTenureHeadline(answers: AnswersState): string {
+  const loc = answers.location as { city?: string } | undefined
+  const city = loc && typeof loc.city === 'string' && loc.city.trim() ? loc.city.trim() : ''
+  if (!city || city === 'Unknown') return 'How long have you lived in this area?'
+  return `How long have you lived in ${city}?`
+}
+
 function is18Plus(isoYmd: string): boolean {
   const m = isoYmd.match(/^(\d{4})-(\d{2})-(\d{2})$/)
   if (!m) return false
@@ -348,6 +332,13 @@ function AppOnboardingContent() {
   const lastMultiSelectRef = useRef<{ stepId: string; opt: string; t: number }>({ stepId: '', opt: '', t: 0 })
 
   const visibleSteps = useMemo(() => getVisibleStepsForAnswers(answers), [answers])
+
+  useEffect(() => {
+    if (currentStepId !== 'q_market_tenure') return
+    const raw = answers.q_market_tenure
+    if (typeof raw === 'string' && raw.trim()) return
+    setAnswers((a) => ({ ...a, q_market_tenure: MARKET_TENURE_OPTIONS[0] }))
+  }, [currentStepId, answers.q_market_tenure])
 
   const currentStepIndex = Math.max(0, visibleSteps.findIndex((step) => step.id === currentStepId))
   const currentStep = visibleSteps[currentStepIndex] ?? visibleSteps[0]
@@ -570,11 +561,6 @@ function AppOnboardingContent() {
         if (arr.length < s.minSelections) return `Please choose at least ${s.minSelections} for: ${s.question}`
       }
     }
-    for (const s of ABOUT_YOU_EXTRA_STEPS) {
-      const raw = answers[s.id]
-      if (s.required !== false && (raw === undefined || raw === '' || (Array.isArray(raw) && raw.length === 0)))
-        return `Please answer: ${s.question}`
-    }
     const confirmRaw = answers.confirm_intent
     if (!avatarFile) return 'Please upload a profile photo.'
     if (confirmRaw !== "I'm in") return "Please confirm you're in by selecting \"I'm in\"."
@@ -600,7 +586,12 @@ function AppOnboardingContent() {
         submitRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
         return
       }
-      setAnswers((a) => ({ ...a, location: locRes.location }))
+      setAnswers((a) => ({
+        ...a,
+        location: locRes.location,
+        q_market_tenure:
+          typeof a.q_market_tenure === 'string' && a.q_market_tenure.trim() ? a.q_market_tenure : MARKET_TENURE_OPTIONS[0],
+      }))
     }
 
     const nextStep = visibleSteps[currentStepIndex + 1]
@@ -753,7 +744,12 @@ function AppOnboardingContent() {
         submitRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
         return
       }
-      setAnswers((a) => ({ ...a, location: locRes.location }))
+      setAnswers((a) => ({
+        ...a,
+        location: locRes.location,
+        q_market_tenure:
+          typeof a.q_market_tenure === 'string' && a.q_market_tenure.trim() ? a.q_market_tenure : MARKET_TENURE_OPTIONS[0],
+      }))
 
       if (tokenMode && token) {
         if (!avatarFile) {
@@ -954,7 +950,9 @@ function AppOnboardingContent() {
     const value = answers[step.id]
     return (
       <div key={step.id} className="onboarding-field-wrap">
-        <h3 className="onboarding-question">{step.question}</h3>
+        <h3 className="onboarding-question">
+          {step.id === 'q_market_tenure' ? marketTenureHeadline(answers) : step.question}
+        </h3>
         {step.body && (
           <div className="onboarding-body">
             {step.body.split(/\n\n+/).map((p, i) => (
@@ -1180,6 +1178,19 @@ function AppOnboardingContent() {
               </button>
             ))}
           </div>
+        )}
+        {step.type === 'slider_snap' && step.options && step.id === 'q_market_tenure' && (
+          <MarketTenureSlider
+            id={`onboarding-${step.id}`}
+            options={step.options}
+            value={typeof value === 'string' ? value : undefined}
+            disabled={saving}
+            onChange={(next) => {
+              setAnswers((a) => ({ ...a, [step.id]: next }))
+              setError(null)
+              setAvatarPhotoError(null)
+            }}
+          />
         )}
         {step.type === 'location_permission' && (
           <div className="onboarding-location-wrap">

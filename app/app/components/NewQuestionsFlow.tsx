@@ -3,9 +3,10 @@
 import { useState, useMemo, useEffect } from 'react'
 import { getSupabase } from '@/lib/supabase'
 import { HOME_COUNTRY_UNITED_STATES } from '@/lib/countries-list'
-import type { ProfileStep } from '@/lib/onboarding-data'
+import { MARKET_TENURE_OPTIONS, type ProfileStep } from '@/lib/onboarding-data'
 import { SearchableMultiPicker } from '@/app/app/components/SearchableMultiPicker'
 import { SearchableSinglePicker } from '@/app/app/components/SearchableSinglePicker'
+import { MarketTenureSlider } from '@/app/app/components/MarketTenureSlider'
 import { INTAKE_ANSWER_SKIPPED } from '@/lib/intro-detail'
 import type { IntakeResponseItem } from '@/lib/db-types'
 import type { IntakeResponsesV5Row } from '@/lib/db-types'
@@ -97,7 +98,11 @@ export function NewQuestionsFlow({ orderedSteps, intake, userId, onComplete }: N
     if (!step) return
     setError(null)
 
-    const raw = answers[step.id]
+    let raw = answers[step.id]
+    if (step.id === 'q_market_tenure' && (raw === undefined || raw === '')) {
+      raw = MARKET_TENURE_OPTIONS[0]
+      setAnswers((a) => ({ ...a, [step.id]: MARKET_TENURE_OPTIONS[0] }))
+    }
     if (step.required && (raw === undefined || raw === '' || (Array.isArray(raw) && raw.length === 0))) {
       setError('Please answer this question.')
       return
@@ -162,12 +167,23 @@ export function NewQuestionsFlow({ orderedSteps, intake, userId, onComplete }: N
     ((step.type === 'chips_single' && step.options && step.options.length <= 4) ||
       (step.type === 'multi_select' && step.options && step.options.length <= 6) ||
       step.type === 'text' ||
-      step.type === 'select')
+      step.type === 'select' ||
+      step.type === 'slider_snap')
+
+  const tenureHeadline =
+    step.id === 'q_market_tenure'
+      ? (() => {
+          const loc = answers.location as { city?: string } | undefined
+          const city = loc && typeof loc.city === 'string' && loc.city.trim() ? loc.city.trim() : ''
+          if (!city || city === 'Unknown') return 'How long have you lived in this area?'
+          return `How long have you lived in ${city}?`
+        })()
+      : step.question
 
   return (
     <div className="app-card app-new-questions-flow">
       <h2 className="onboarding-question" style={{ marginTop: 0 }}>
-        {step.question}
+        {tenureHeadline}
       </h2>
 
       {step.body && (
@@ -176,6 +192,15 @@ export function NewQuestionsFlow({ orderedSteps, intake, userId, onComplete }: N
             <p key={i}>{p}</p>
           ))}
         </div>
+      )}
+
+      {step?.type === 'slider_snap' && step.options && step.id === 'q_market_tenure' && (
+        <MarketTenureSlider
+          options={step.options}
+          value={typeof value === 'string' ? value : undefined}
+          disabled={saving}
+          onChange={(next) => setAnswers((a) => ({ ...a, [step.id]: next }))}
+        />
       )}
 
       {step?.type === 'searchable_single' && step.options && (

@@ -346,18 +346,22 @@ export function scoreFikaPair(a: MatcherPerson, b: MatcherPerson, opts?: ScorePa
     FEASIBILITY_WEIGHTS.timeFit * timeFit +
     FEASIBILITY_WEIGHTS.dataConfidence * dataConfidence
 
-  const greatFikaFit = multiSelectChipOverlapScore(
-    getIntakeMulti(a.responses, 'q_what_makes_great_fika'),
-    getIntakeMulti(b.responses, 'q_what_makes_great_fika')
-  )
+  const greatFikaA = getIntakeMulti(a.responses, 'q_what_makes_great_fika')
+  const greatFikaB = getIntakeMulti(b.responses, 'q_what_makes_great_fika')
+  const greatFikaFit =
+    greatFikaA.length === 0 && greatFikaB.length === 0
+      ? 0.5
+      : multiSelectChipOverlapScore(greatFikaA, greatFikaB)
   const interestsFit = multiSelectChipOverlapScore(
     getIntakeMulti(a.responses, 'q_interests'),
     getIntakeMulti(b.responses, 'q_interests')
   )
-  const curiosityFit = multiSelectChipOverlapScore(
-    getIntakeMulti(a.responses, 'q_curiosity'),
-    getIntakeMulti(b.responses, 'q_curiosity')
-  )
+  const curiosityA = getIntakeMulti(a.responses, 'q_curiosity')
+  const curiosityB = getIntakeMulti(b.responses, 'q_curiosity')
+  const curiosityFit =
+    curiosityA.length === 0 && curiosityB.length === 0
+      ? 0.5
+      : multiSelectChipOverlapScore(curiosityA, curiosityB)
   const lifeChapterFit = lifeChapterMultiCompatibility(a.responses, b.responses, log)
   const everydayAnchorFit = everydayAnchorMultiCompatibility(a.responses, b.responses, log)
   const oa = getIntakeSingle(a.responses, 'q_openness')

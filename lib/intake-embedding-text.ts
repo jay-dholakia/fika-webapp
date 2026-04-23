@@ -16,6 +16,7 @@ export const INTAKE_EMBEDDING_EXCLUDED_IDS = new Set<string>([
   // Demographics / roots — keep out of similarity embedding
   'q_home_country',
   'q_home_state',
+  'q_market_tenure',
   'q_ethnicity',
   'q_relationship_status',
 ])
