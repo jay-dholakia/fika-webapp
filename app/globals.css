@@ -293,12 +293,18 @@ a {
   margin-bottom: 1.5rem;
   color: var(--color-text);
 }
+@media (max-width: 899px) {
+  .hero-title {
+    /* Larger than default clamp floor so both hero lines read bigger on phones */
+    font-size: clamp(2.5rem, 5.75vw + 0.35rem, 3.5rem);
+  }
+}
 .hero-title-accent {
   display: block;
   color: var(--color-secondary);
   font-style: italic;
-  /* Smaller than the first line, scales with the h1 (em), stays one line */
-  font-size: clamp(0.8125rem, 0.5em, 1.9rem);
+  /* Slightly smaller than first line; em tracks .hero-title; nowrap keeps one line */
+  font-size: clamp(0.875rem, 0.56em, 2.08rem);
   line-height: 1.12;
   letter-spacing: -0.02em;
   white-space: nowrap;
