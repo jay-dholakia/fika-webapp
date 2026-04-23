@@ -510,7 +510,7 @@ export default function SettingsProfilePage() {
           <section className="profile-section">
             <h3 className="profile-section-title">Get ID verified</h3>
             <p style={{ color: 'var(--color-textSecondary)', marginBottom: '0.75rem', fontSize: '0.95rem' }}>
-              Confirm your identity with Persona. When you&apos;re verified, a blue check appears next to your name for matches.
+              Confirm your identity with Persona. When you&apos;re verified, a blue check appears next to your name on intros.
             </p>
             {userId && (
               <PersonaIdVerification

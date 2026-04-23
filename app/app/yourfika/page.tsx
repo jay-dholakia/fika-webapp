@@ -131,7 +131,7 @@ function AppHomeContent() {
     setLoading(false)
   }, [userId])
 
-  // Load this week's match (one intro per week)
+  // Load this week’s active intro row(s) from match_candidates
   useEffect(() => {
     if (!userId) {
       setIntros([])
@@ -172,7 +172,7 @@ function AppHomeContent() {
           const optInsRes = optInsSettled.status === 'fulfilled' ? optInsSettled.value : { data: null, error: null }
           const intakeRes = intakeSettled.status === 'fulfilled' ? intakeSettled.value : { data: null, error: null }
           const statesRes = statesSettled.status === 'fulfilled' ? statesSettled.value : { data: null, error: null }
-          // Build list even when profiles fail (e.g. RLS) so we don't hide matches – use empty profile data
+          // Build list even when profiles fail (e.g. RLS) so we don't hide intros – use empty profile data
           const profiles = (profilesRes?.data ?? []) as {
             id: string
             first_name: string | null
@@ -445,7 +445,7 @@ function AppHomeContent() {
         <div className="app-card app-questionnaire-card">
           <h2>Complete intro questionnaire</h2>
           <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem', marginBottom: '1rem' }}>
-            Answer a few questions so we can match you with someone for your Fika. Takes about 5 minutes.
+            Answer a few questions so we can send you a strong intro for your Fika. Takes about 5 minutes.
           </p>
           <Link href="/app/onboarding" className="btn btn-primary btn-block auth-submit" style={{ display: 'inline-block', textAlign: 'center' }}>
             Start questionnaire

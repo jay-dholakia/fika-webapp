@@ -38,7 +38,7 @@ export function NewQuestionsSection({
         <div className="app-card app-new-questions-card">
           <h2>New intro questions added</h2>
           <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem', marginBottom: '1rem' }}>
-            We&apos;ve added a few new questions to help match you better. Complete them so your intro stays up to date.
+            We&apos;ve added a few new questions to help us line up better intros for you. Complete them so your intro stays up to date.
           </p>
           <button
             type="button"

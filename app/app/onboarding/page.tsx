@@ -67,7 +67,7 @@ function getStepSectionLabel(stepId: string): string {
     return 'Life & context'
   }
   if (SECTION_3_STEPS.some((step) => step.id === stepId)) {
-    return 'Conversation & matching'
+    return 'Conversation & intros'
   }
   if (stepId === AVATAR_STEP.id || stepId === CONFIRM_STEP.id) {
     return 'Confirm & finish'

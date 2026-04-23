@@ -72,7 +72,7 @@ export default function HowItWorksPage() {
       <div className="app-card app-how-it-works-page">
         {marketActive === false ? (
           <p className="app-welcome-card-text" style={{ marginTop: 0, marginBottom: '1rem' }}>
-            You&apos;re in. We&apos;re not matching in your area yet—we&apos;ll let you know when we are.
+            You&apos;re in. We&apos;re not sending intros in your area yet—we&apos;ll let you know when we are.
           </p>
         ) : null}
         <h1 className="app-how-it-works-title">How it works</h1>
@@ -91,7 +91,7 @@ export default function HowItWorksPage() {
             <div className="app-how-it-works-step-content">
               <span className="app-how-it-works-when">Complete your intro (~5 min)</span>
               <span className="app-how-it-works-what">
-                Short questionnaire so we can match you nearby—similar enough to click, different enough to keep it
+                Short questionnaire so we can find you a good intro nearby—similar enough to click, different enough to keep it
                 interesting.
               </span>
               {!questionnaireComplete && !onboardingLoading && (
@@ -112,7 +112,7 @@ export default function HowItWorksPage() {
               )}
             </span>
             <div className="app-how-it-works-step-content">
-              <span className="app-how-it-works-when">We text you when there&apos;s a match</span>
+              <span className="app-how-it-works-when">We text you when there&apos;s an intro for you</span>
               <span className="app-how-it-works-what">
                 {marketActive === false ? (
                   <>We&apos;re not growing here yet; we&apos;ll reach out when we are. Know someone who&apos;d like this?</>
@@ -164,9 +164,9 @@ export default function HowItWorksPage() {
       <section className="app-how-it-works-section" aria-labelledby="how-it-plays-out-heading">
         <h2 id="how-it-plays-out-heading" className="app-how-it-works-section-title">How it plays out</h2>
         <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.9375rem', marginBottom: '0.75rem' }}>
-          When we find a match:
+          When we find someone for you:
         </p>
-        <ol className="app-how-it-works-timeline" aria-label="How a match plays out">
+        <ol className="app-how-it-works-timeline" aria-label="How an intro plays out">
           <li className="app-how-it-works-step">
             <span className="app-how-it-works-step-marker" aria-hidden><span className="app-how-it-works-num">1</span></span>
             <div className="app-how-it-works-step-content">

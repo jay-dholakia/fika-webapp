@@ -172,7 +172,7 @@ export default function LocationGate() {
   if (status === 'la') {
     return (
       <div className="location-gate-result location-gate-la">
-        <p className="location-gate-result-title">You&apos;re in an area we&apos;re matching in.</p>
+        <p className="location-gate-result-title">You&apos;re in an area where we&apos;re sending intros.</p>
         <p className="location-gate-result-body">Text us at our number to get started. We&apos;ll send you a link to complete your profile.</p>
         <Link href="/" className="btn btn-primary">
           Go to home

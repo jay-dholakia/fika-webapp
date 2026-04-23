@@ -31,9 +31,9 @@ export default function PrivacyPage() {
         <h2>Information we collect</h2>
         <p><strong>Account and sign-in.</strong> You sign in to Fika via our website using Google or another method we offer. We collect your phone number separately so we can send SMS introductions, proposed times and places, scheduling updates, and meetup details. We do not use your phone number for sign-in verification.</p>
         <p><strong>Profile.</strong> We collect your name (if you provide it) and any profile details you add—such as photo, bio, interests, when you’re usually free for a Fika, and city or region—so we can run the service and personalize your experience. You set your profile on our web portal.</p>
-        <p><strong>Matching.</strong> We use your profile and preferences to find good Fika intros. When relevant, we use your SMS replies (e.g. accept/pass, YES/NO to a proposed time and place), your scheduling responses, and match status to provide introductions and improve matching.</p>
+        <p><strong>Intros.</strong> We use your profile and preferences to find good Fika intros. When relevant, we use your SMS replies (e.g. accept/pass, YES/NO to a proposed time and place), your scheduling responses, and intro status to provide introductions and improve who we suggest.</p>
         <p><strong>SMS with Fika.</strong> We store the content of your SMS conversations with Fika (e.g. intro responses and scheduling replies) and use it to run the service, send you intros and meetup details, and for safety and support where needed.</p>
-        <p><strong>Messaging with your match.</strong> If we offer a chat or messaging channel with people we introduce you to, we store that message content, who you message, and when, and use it to provide the feature and for safety and moderation.</p>
+        <p><strong>Messaging after an intro.</strong> If we offer a chat or messaging channel with people we introduce you to, we store that message content, who you message, and when, and use it to provide the feature and for safety and moderation.</p>
         <p><strong>Usage and device.</strong> We collect how you use the service (e.g. pages you view, actions you take on the web portal and in response to SMS), device type, and similar technical data to improve the product and fix issues.</p>
         <p><strong>Safety and reports.</strong> If you report or block someone, we collect and use that information to investigate and enforce our terms.</p>
 
@@ -41,7 +41,7 @@ export default function PrivacyPage() {
         <ul>
           <li>To authenticate you and run your account (sign-in to the web portal via Google or another method we offer)</li>
           <li>To run SMS introductions, scheduling (including proposed times and places), and meetup coordination—and to communicate with you via SMS for intros and coordination</li>
-          <li>To run matching and any messaging we offer with your match</li>
+          <li>To line up intros and any messaging we offer with someone you met through Fika</li>
           <li>To personalize your experience and introductions</li>
           <li>For safety, fraud prevention, and enforcing our Terms of Service</li>
           <li>To improve the product and analyze usage (in a way that doesn’t identify you where possible)</li>
@@ -52,7 +52,7 @@ export default function PrivacyPage() {
         <p>We use SMS to deliver the Fika experience: introductions, proposed times and places when we find a good Fika intro for you, scheduling confirmations, day-of reminders, and follow-ups. Message and data rates may apply. You can opt out of these messages at any time by replying STOP; reply HELP for help. If you opt out, we will not send further SMS messages to that number. You can still sign in to the web portal and manage your account (including deleting it); you will not receive intros or coordination via SMS until you opt back in. We use an SMS provider to deliver these messages; they process your phone number and message delivery on our behalf. We store and process the content of your SMS conversations to provide the service and as described in this policy.</p>
 
         <h2>Sharing your information</h2>
-        <p><strong>With other users.</strong> Your profile and other details you choose to share are visible to people we introduce you to. We do not share your phone number or the content of your SMS conversations with other users. If we offer messaging with your match, that message content is visible to the person you’re messaging.</p>
+        <p><strong>With other users.</strong> Your profile and other details you choose to share are visible to people we introduce you to. We do not share your phone number or the content of your SMS conversations with other users. If we offer messaging after an intro, that message content is visible to the person you’re messaging.</p>
         <p><strong>Service providers.</strong> We use trusted partners for hosting, authentication, SMS delivery, analytics, and similar services. They process data on our behalf under strict agreements.</p>
         <p><strong>Legal and safety.</strong> We may disclose information when required by law or to protect you, other users, or the public.</p>
         <p><strong>Business transfers.</strong> If we sell or merge the company, your information may be transferred as part of that transaction.</p>

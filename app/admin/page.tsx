@@ -110,7 +110,7 @@ export default function AdminMarketsPage() {
         <h1 className="admin-title">Markets</h1>
         <p className="admin-description">
           Markets are added automatically when users sign up or set their location (onboarding or settings).
-          Each row is a city group (e.g. LA, SF, NYC). Turn a market <strong>Active</strong> so people in that city can receive Fika intros. Match offers are sent by SMS to both people when an intro is released for them.
+          Each row is a city group (e.g. LA, SF, NYC). Turn a market <strong>Active</strong> so people in that city can receive Fika intros. Intro offers are sent by SMS to both people when an intro is released for them.
         </p>
 
         {markets.length === 0 ? (

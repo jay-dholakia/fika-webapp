@@ -46,18 +46,18 @@ export default function TermsPage() {
         <p>This applies to your profile, your SMS replies to Fika, your use of the web portal, any messaging with other users, and any other use of the service. We may remove content or suspend or terminate accounts that violate these rules.</p>
 
         <h2>The service</h2>
-        <p>Fika provides introductions and helps you coordinate meetups in real life. Much of your interaction—receiving intros, getting proposed times and places by text when we find a good Fika intro for you, and confirming by reply—happens via SMS. You can also use our web portal to set your profile, view intros, and manage your account. We may offer messaging with your match; see our <Link href="/privacy">Privacy Policy</Link> for how we handle that data. We don’t guarantee matches or any particular outcome. The service is provided “as is” to the extent permitted by law.</p>
+        <p>Fika provides introductions and helps you coordinate meetups in real life. Much of your interaction—receiving intros, getting proposed times and places by text when we find a good Fika intro for you, and confirming by reply—happens via SMS. You can also use our web portal to set your profile, view intros, and manage your account. We may offer messaging after an intro; see our <Link href="/privacy">Privacy Policy</Link> for how we handle that data. We don’t guarantee intros or any particular outcome. The service is provided “as is” to the extent permitted by law.</p>
 
         <h2>SMS and messaging</h2>
         <p><strong>SMS.</strong> By providing your phone number, you agree to receive SMS from Fika (intros, scheduling, reminders). Message and data rates may apply. You can reply STOP to opt out of these messages. See our <Link href="/privacy">Privacy Policy</Link> for details.</p>
-        <p><strong>Messaging with your match.</strong> If we offer a chat or messaging channel with people we introduce you to, it is for genuine, respectful conversation. Don’t send harassing, illegal, or otherwise prohibited content. We may review messages for safety and to enforce these terms. Message content may be retained as described in our <Link href="/privacy">Privacy Policy</Link>.</p>
+        <p><strong>Messaging after an intro.</strong> If we offer a chat or messaging channel with people we introduce you to, it is for genuine, respectful conversation. Don’t send harassing, illegal, or otherwise prohibited content. We may review messages for safety and to enforce these terms. Message content may be retained as described in our <Link href="/privacy">Privacy Policy</Link>.</p>
 
         <h2>Meeting in person &amp; safety</h2>
         <p>When you meet someone from Fika in person, you do so at your own risk. We encourage you to <strong>meet in public, well-lit places</strong> (e.g. a café or park) and to tell a friend where you’re going. You are responsible for your own safety. We are not responsible for what happens during in-person meetings.</p>
         <p>You can report or block users via the web portal or by contacting us. We may take action based on reports, but we don’t guarantee any particular outcome. We may use technology and human review to help keep the community safe.</p>
 
         <h2>Your content</h2>
-        <p>You keep ownership of the content you post. You give us a license to use, display, and store it as needed to run the service (e.g. showing your profile to matches, storing messages).</p>
+        <p>You keep ownership of the content you post. You give us a license to use, display, and store it as needed to run the service (e.g. showing your profile to people we introduce you to, storing messages).</p>
 
         <h2>Our intellectual property</h2>
         <p>Fika’s name, logo, design, and the service itself are owned by us. You may not copy or use them without our permission.</p>
