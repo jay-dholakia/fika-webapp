@@ -43,7 +43,7 @@ export function buildIntroCardFallback(responses: IntakeResponseItem[]): IntroCa
   const anchor = getAnswer(safe, 'q_everyday_anchor')
   const interests = getAnswer(safe, 'q_interests')
   const curiosity = getAnswer(safe, 'q_curiosity')
-  const hoping = getAnswer(safe, 'q_hoping_for')
+  const talkAbout = getAnswer(safe, 'q_like_talking_about')
   const openness = getAnswer(safe, 'q_openness')
 
   const paragraphParts: string[] = []
@@ -67,7 +67,7 @@ export function buildIntroCardFallback(responses: IntakeResponseItem[]): IntroCa
   if (anchor) bullets.push(`Day-to-day: ${anchor}`)
   if (interests) bullets.push(`Interests: ${interests}`)
   if (curiosity) bullets.push(`Curious about: ${curiosity}`)
-  if (hoping) bullets.push(`Hoping for: ${hoping}`)
+  if (talkAbout) bullets.push(`Feels like talking about: ${talkAbout}`)
   if (openness) bullets.push(`Open to: ${openness}`)
   if (life && bullets.length < 4) bullets.unshift(`Life chapter: ${life}`)
 

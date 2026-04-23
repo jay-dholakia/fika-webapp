@@ -1423,6 +1423,8 @@ export async function POST(request: Request) {
         const lifeChapterOverlap = (rawReasons.life_chapter_overlap as string[]) ?? []
         const everydayAnchorOverlap = (rawReasons.everyday_anchor_overlap as string[]) ?? []
         const textureOverlap = (rawReasons.texture_overlap as string[] | undefined) ?? []
+        /** Shared `q_like_talking_about` chips; include in replenish / match-sim `reasons.raw`. */
+        const fikaTalkOverlap = (rawReasons.fika_talk_overlap as string[] | undefined) ?? []
         const topCopyDimensions = (copyReasons.top_copy_dimensions as string[]) ?? []
         const { data: pair } = await supabase
           .from('match_candidates')
@@ -1474,6 +1476,7 @@ export async function POST(request: Request) {
             lifeChapterOverlap,
             everydayAnchorOverlap,
             topCopyDimensions,
+            fikaTalkOverlap: fikaTalkOverlap.slice(0, 3),
             textureOverlap: textureOverlap.slice(0, 2),
           }),
           'v2_reveal_context',
@@ -1574,6 +1577,7 @@ export async function POST(request: Request) {
           const sharedInterests = (copyReasons.shared_interests as string[]) ?? (rawReasons.shared_interests as string[]) ?? []
           const hooks = (rawReasons.conversation_hooks as string[]) ?? []
           const conversationThread = (hooks[0] as string) ?? ''
+          const fikaTalkOverlap = (rawReasons.fika_talk_overlap as string[] | undefined) ?? []
           const { data: pair } = await supabase
             .from('match_candidates')
             .select('user_a, user_b')
@@ -1665,6 +1669,7 @@ export async function POST(request: Request) {
               venueName: proposalFields.venueName,
               neighborhood: proposalFields.neighborhood,
               broadAvailabilityLabel,
+              fikaTalkOverlap: fikaTalkOverlap.slice(0, 3),
             }),
             'v2_mutual_yes_context',
             { userId, weekAnchorMonday, matchId }
@@ -1680,6 +1685,7 @@ export async function POST(request: Request) {
                 venueName: proposalFields.venueName,
                 neighborhood: proposalFields.neighborhood,
                 broadAvailabilityLabel,
+                fikaTalkOverlap: fikaTalkOverlap.slice(0, 3),
               }),
               'v2_mutual_yes_context_other',
               { userId: otherId ?? undefined, weekAnchorMonday, matchId }

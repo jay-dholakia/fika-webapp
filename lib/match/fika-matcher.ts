@@ -1,5 +1,4 @@
 import { getIntakeMulti, getIntakeSingle } from '@/lib/intake-response-utils'
-import { hopingForCompatibilityScore } from '@/lib/match/compatibility-matrices'
 import { marketTenureFitScore, workFitScore } from '@/lib/match/tenure-work-fit'
 import {
   COMPATIBILITY_PORTION,
@@ -12,7 +11,6 @@ import {
   FEASIBILITY_PORTION,
   FEASIBILITY_WEIGHTS,
   MULTI_CHIP_BLEND,
-  SEVERE_MISMATCH_PENALTY_CAP,
   TIME_FIT_BLEND,
 } from '@/lib/match/weights'
 
@@ -51,7 +49,7 @@ export type FikaMatchBreakdown = {
     lifeChapterFit: number
     everydayAnchorFit: number
     opennessFit: number
-    hopingForFit: number
+    likeTalkingAboutFit: number
     marketTenureFit: number
     workFit: number
     textureFit: number
@@ -119,7 +117,7 @@ function distanceFitScore(distanceKm: number | null, combinedRadiusKm: number): 
 }
 
 function intakeFieldPresent(responses: unknown, questionId: string): boolean {
-  const multi = ['q_interests', 'q_typical_fika_times']
+  const multi = ['q_interests', 'q_like_talking_about', 'q_typical_fika_times']
   if (multi.includes(questionId)) {
     return getIntakeMulti(responses, questionId).length > 0
   }
@@ -167,12 +165,6 @@ function sameGender(a: string, b: string): boolean {
   if ((x === 'male' || x === 'man' || x === 'men') && (y === 'male' || y === 'man' || y === 'men')) return true
   if ((x === 'non-binary' || x === 'nonbinary') && (y === 'non-binary' || y === 'nonbinary')) return true
   return false
-}
-
-/** Soft penalty when hoping-for signals are very discordant (`q_openness` retired from intake). */
-function severeMismatchPenalty(hopingFit: number): number {
-  if (hopingFit >= 0.48) return 0
-  return Math.min(SEVERE_MISMATCH_PENALTY_CAP, 0.48 - hopingFit)
 }
 
 export type EligibilityOptions = {
@@ -242,7 +234,6 @@ export type ScorePairOptions = EligibilityOptions & {
 }
 
 export function scoreFikaPair(a: MatcherPerson, b: MatcherPerson, opts?: ScorePairOptions): FikaMatchBreakdown {
-  const log = opts?.logMatrixUnknown
   const { eligible, rejectReasons, distanceKm, combinedRadiusKm } = checkPairEligibility(a, b, opts)
 
   const distanceFit = distanceFitScore(distanceKm, combinedRadiusKm)
@@ -259,9 +250,10 @@ export function scoreFikaPair(a: MatcherPerson, b: MatcherPerson, opts?: ScorePa
     getIntakeMulti(a.responses, 'q_interests'),
     getIntakeMulti(b.responses, 'q_interests')
   )
-  const ha = getIntakeSingle(a.responses, 'q_hoping_for')
-  const hb = getIntakeSingle(b.responses, 'q_hoping_for')
-  const hopingForFit = hopingForCompatibilityScore(ha, hb, log)
+  const likeTalkingAboutFit = multiSelectChipOverlapScore(
+    getIntakeMulti(a.responses, 'q_like_talking_about'),
+    getIntakeMulti(b.responses, 'q_like_talking_about')
+  )
   const marketTenureFit = marketTenureFitScore(a.responses, b.responses)
   const workFit = workFitScore(a.responses, b.responses)
 
@@ -270,10 +262,10 @@ export function scoreFikaPair(a: MatcherPerson, b: MatcherPerson, opts?: ScorePa
     w.interests * interestsFit +
     w.marketTenure * marketTenureFit +
     w.work * workFit +
-    w.hopingFor * hopingForFit
+    w.likeTalkingAbout * likeTalkingAboutFit
 
   const avoidTopicsPenalty = 0
-  const severeMismatch = severeMismatchPenalty(hopingForFit)
+  const severeMismatch = 0
   const penaltyTotal = avoidTopicsPenalty + severeMismatch
 
   const adjustedCompat = Math.max(0, compatibilityTotal - penaltyTotal)
@@ -298,7 +290,7 @@ export function scoreFikaPair(a: MatcherPerson, b: MatcherPerson, opts?: ScorePa
       lifeChapterFit: 0,
       everydayAnchorFit: 0,
       opennessFit: 0,
-      hopingForFit,
+      likeTalkingAboutFit,
       marketTenureFit,
       workFit,
       textureFit: 0,

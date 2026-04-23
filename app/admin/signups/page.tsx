@@ -69,7 +69,7 @@ type FikaMatchBreakdown = {
     lifeChapterFit: number
     everydayAnchorFit: number
     opennessFit: number
-    hopingForFit: number
+    likeTalkingAboutFit: number
     marketTenureFit: number
     workFit: number
     textureFit: number
@@ -97,9 +97,10 @@ type SimPair = {
   score: number
   distanceKm: number | null
   sharedLanguages: string[]
-  hopingA: string | null
-  hopingB: string | null
+  likeTalkingAboutA: string | null
+  likeTalkingAboutB: string | null
   overlapGreatFika: string[]
+  overlapLikeTalkingAbout: string[]
   overlapInterests: string[]
   overlapCuriosity: string[]
   overlapLifeChapter: string[]
@@ -136,6 +137,7 @@ function adminSimRevealSentence(p: SimPair, viewerIsUserA: boolean): string {
     lifeChapterOverlap: p.overlapLifeChapter.slice(0, 2),
     everydayAnchorOverlap: p.overlapEverydayAnchor.slice(0, 2),
     topCopyDimensions: p.topCopyDimensions.slice(0, 3),
+    fikaTalkOverlap: p.overlapLikeTalkingAbout.slice(0, 3),
     textureOverlap: p.textureOverlap ?? [],
   })
 }
@@ -308,6 +310,7 @@ export default function AdminSignupsPage() {
                 matchBreakdown: p.matchBreakdown ?? null,
                 shared_interests: p.overlapInterests.slice(0, 3),
                 conversation_hooks: p.overlapGreatFika.slice(0, 2),
+                fika_talk_overlap: p.overlapLikeTalkingAbout.slice(0, 5),
                 curiosity_overlap: p.overlapCuriosity.slice(0, 3),
                 life_chapter_overlap: p.overlapLifeChapter.slice(0, 2),
                 everyday_anchor_overlap: p.overlapEverydayAnchor.slice(0, 2),
@@ -316,7 +319,11 @@ export default function AdminSignupsPage() {
               copy: {
                 top_copy_dimensions: p.topCopyDimensions.slice(0, 3),
                 shared_interests: p.overlapInterests.slice(0, 3),
-                shared_topics: [...p.overlapCuriosity.slice(0, 3), ...p.overlapGreatFika.slice(0, 2)].slice(0, 4),
+                shared_topics: [
+                  ...p.overlapLikeTalkingAbout.slice(0, 2),
+                  ...p.overlapCuriosity.slice(0, 3),
+                  ...p.overlapGreatFika.slice(0, 2),
+                ].slice(0, 5),
                 shared_fika_style: p.overlapGreatFika.slice(0, 2),
                 shared_life_context: p.overlapLifeChapter.slice(0, 2),
                 shared_everyday_anchor: p.overlapEverydayAnchor.slice(0, 2),
@@ -533,7 +540,7 @@ export default function AdminSignupsPage() {
                       const topFactors = bd
                         ? [
                             ['interests', bd.compatibility.interestsFit],
-                            ['hoping for', bd.compatibility.hopingForFit],
+                            ['talk topics', bd.compatibility.likeTalkingAboutFit],
                             ['market tenure', bd.compatibility.marketTenureFit],
                             ['work', bd.compatibility.workFit],
                             ['great Fika', bd.compatibility.greatFikaFit],
@@ -800,14 +807,14 @@ export default function AdminSignupsPage() {
                     <h4 className="admin-modal-meta" style={{ marginTop: '0.75rem', fontWeight: 600 }}>Compatibility</h4>
                     <dl className="admin-modal-dl">
                       <span><dt>Interests</dt><dd>{simPairModal.matchBreakdown.compatibility.interestsFit.toFixed(3)}</dd></span>
-                      <span><dt>Hoping for</dt><dd>{simPairModal.matchBreakdown.compatibility.hopingForFit.toFixed(3)}</dd></span>
+                      <span><dt>Talk topics</dt><dd>{simPairModal.matchBreakdown.compatibility.likeTalkingAboutFit.toFixed(3)}</dd></span>
                       <span><dt>Market tenure</dt><dd>{simPairModal.matchBreakdown.compatibility.marketTenureFit.toFixed(3)}</dd></span>
                       <span><dt>Work</dt><dd>{simPairModal.matchBreakdown.compatibility.workFit.toFixed(3)}</dd></span>
                       <span><dt>Total (pre-penalty)</dt><dd>{simPairModal.matchBreakdown.compatibility.total.toFixed(3)}</dd></span>
                     </dl>
                     <h4 className="admin-modal-meta" style={{ marginTop: '0.75rem', fontWeight: 600 }}>Penalties</h4>
                     <dl className="admin-modal-dl">
-                      <span><dt>Hoping mismatch</dt><dd>{simPairModal.matchBreakdown.penalties.severeMismatchPenalty.toFixed(3)}</dd></span>
+                      <span><dt>Severe mismatch</dt><dd>{simPairModal.matchBreakdown.penalties.severeMismatchPenalty.toFixed(3)}</dd></span>
                       <span><dt>Total</dt><dd>{simPairModal.matchBreakdown.penalties.total.toFixed(3)}</dd></span>
                     </dl>
                   </>
@@ -828,8 +835,14 @@ export default function AdminSignupsPage() {
               <div className="admin-modal-section">
                 <h3 className="admin-modal-section-title">Context</h3>
                 <p className="admin-modal-meta">Shared languages: {simPairModal.sharedLanguages?.length ? simPairModal.sharedLanguages.join(', ') : '—'}</p>
-                <p className="admin-modal-meta">Hoping for: {simPairModal.hopingA ?? '—'} ↔ {simPairModal.hopingB ?? '—'}</p>
+                <p className="admin-modal-meta">Talk topics: {simPairModal.likeTalkingAboutA ?? '—'} ↔ {simPairModal.likeTalkingAboutB ?? '—'}</p>
                 <p className="admin-modal-meta">Shared interests: {simPairModal.overlapInterests?.length ? simPairModal.overlapInterests.slice(0, 8).join(', ') : '—'}</p>
+                <p className="admin-modal-meta">
+                  Shared Fika talk topics:{' '}
+                  {simPairModal.overlapLikeTalkingAbout?.length
+                    ? simPairModal.overlapLikeTalkingAbout.slice(0, 8).join(', ')
+                    : '—'}
+                </p>
                 <p className="admin-modal-meta">Great Fika overlap: {simPairModal.overlapGreatFika?.length ? simPairModal.overlapGreatFika.slice(0, 6).join(', ') : '—'}</p>
               </div>
 

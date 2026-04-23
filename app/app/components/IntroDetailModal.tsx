@@ -30,6 +30,8 @@ export type IntroMatch = {
     sharedInterests?: string[]
     conversation_hooks?: string[]
     shared_interests?: string[]
+    /** Shared `q_like_talking_about` chips from `reasons.raw` (set by replenish / admin sim). */
+    fika_talk_overlap?: string[]
     /** Overlapping 30-min slot IDs for intro card; summarize with summarizeAvailabilitySlots() */
     overlappingAvailabilitySlots?: string[]
   } | null
@@ -252,6 +254,14 @@ export function IntroDetailModal({
   }
   const displayInterests = sharedInterestsFromReasons.length > 0 ? sharedInterestsFromReasons : Array.from(new Set(parsedInterests))
 
+  const displayFikaTalkOverlap = (
+    (rawReasons?.fika_talk_overlap as string[] | undefined) ??
+    intro.reasons?.fika_talk_overlap ??
+    []
+  )
+    .map((s) => String(s).trim())
+    .filter(Boolean)
+
   const schedulingStatus = intro.schedulingStatus ?? null
   const defaultSlotId = intro.defaultSlotId ?? intro.reasons?.overlappingAvailabilitySlots?.[0] ?? null
   const slots = intro.overlappingSlotIds ?? intro.reasons?.overlappingAvailabilitySlots ?? []
@@ -412,6 +422,17 @@ export function IntroDetailModal({
                   <div className="app-intro-pills">
                     {displayInterests.map((interest, i) => (
                       <span key={i} className="app-intro-pill">{interest.trim()}</span>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+
+              {displayFikaTalkOverlap.length > 0 ? (
+                <section className="app-intro-detail-section">
+                  <h3 className="app-intro-detail-section-title">Up for talking about (this Fika)</h3>
+                  <div className="app-intro-pills">
+                    {displayFikaTalkOverlap.map((topic, i) => (
+                      <span key={i} className="app-intro-pill">{topic}</span>
                     ))}
                   </div>
                 </section>

@@ -204,6 +204,7 @@ export const INTAKE_STEPS: ProfileStep[] = [
       'Politics & current events',
     ],
   },
+  /*
   {
     id: 'q_hoping_for',
     question: 'What are you hoping for from Fika?',
@@ -213,6 +214,34 @@ export const INTAKE_STEPS: ProfileStep[] = [
       'Conversation with new people — not necessarily friendship',
       'Meeting people nearby — open to friendship if it happens',
       'Actively looking for new friends',
+    ],
+  },
+  */
+  {
+    id: 'q_like_talking_about',
+    question: 'What do you feel like talking about on your Fika?',
+    body: 'Choose up to 5 — we use this to suggest people you may click with.',
+    type: 'multi_select',
+    required: true,
+    maxSelections: 5,
+    options: [
+      'Something fun I did recently',
+      'A hobby I just took up',
+      'A recent win (big or small)',
+      "Something I'm working on right now",
+      'Something that made me laugh lately',
+      "A show I'm currently watching",
+      "What I've been listening to lately (music/podcasts)",
+      'How my fave sports team is doing this season',
+      'Modern dating (the good, bad, ugly)',
+      'My social life these days',
+      'Something in the news I have thoughts on',
+      'Something trending online right now',
+      'What a meaningful life looks like to me',
+      'A recent trip I took or am taking',
+      "Local spots I've been loving lately (food, bars, activities)",
+      'Random theories & "what if" ideas',
+      'What my routine looks like lately (gym, habits, etc.)',
     ],
   },
   {

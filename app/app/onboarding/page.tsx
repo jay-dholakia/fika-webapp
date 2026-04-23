@@ -26,7 +26,7 @@ import type { IntakeResponsesV5Row } from '@/lib/db-types'
 
 const BACKGROUND_STEP_IDS = ['q_market_tenure', 'q_ethnicity', 'q_relationship_status'] as const
 const SECTION_2_IDS = [...BACKGROUND_STEP_IDS, 'q_work', 'q_interests'] as const
-const SECTION_3_IDS = ['q_hoping_for', 'q_radius', 'q_typical_fika_times'] as const
+const SECTION_3_IDS = ['q_like_talking_about', 'q_radius', 'q_typical_fika_times'] as const
 const SECTION_2_STEPS = INTAKE_STEPS.filter((s) => SECTION_2_IDS.includes(s.id as (typeof SECTION_2_IDS)[number]))
 const BACKGROUND_STEPS = SECTION_2_STEPS.filter((s) => BACKGROUND_STEP_IDS.includes(s.id as (typeof BACKGROUND_STEP_IDS)[number]))
 const LIFE_CONTEXT_STEPS = SECTION_2_STEPS.filter((s) => !BACKGROUND_STEP_IDS.includes(s.id as (typeof BACKGROUND_STEP_IDS)[number]))
@@ -343,8 +343,21 @@ function AppOnboardingContent() {
   const currentStepIndex = Math.max(0, visibleSteps.findIndex((step) => step.id === currentStepId))
   const currentStep = visibleSteps[currentStepIndex] ?? visibleSteps[0]
   const totalSteps = visibleSteps.length
-  const progressPercent = totalSteps > 0 ? ((currentStepIndex + 1) / totalSteps) * 100 : 0
-  const isFirstStep = currentStepIndex === 0
+  /** SMS token flow: Google sign-in is the final onboarding step and counts toward 0–100%. */
+  const includesFinalGoogleAuthStep = tokenMode && Boolean(token)
+  const isOnGoogleAuthStep = includesFinalGoogleAuthStep && showGoogleSignIn
+  const totalProgressSteps = includesFinalGoogleAuthStep ? visibleSteps.length + 1 : visibleSteps.length
+  const progressPercent =
+    totalProgressSteps <= 0
+      ? 0
+      : isOnGoogleAuthStep
+        ? 100
+        : includesFinalGoogleAuthStep
+          ? ((currentStepIndex + 1) / totalProgressSteps) * 100
+          : totalSteps > 0
+            ? ((currentStepIndex + 1) / totalSteps) * 100
+            : 0
+  const isFirstStep = currentStepIndex === 0 && !isOnGoogleAuthStep
 
   useEffect(() => {
     authLog('onboarding:mount')
@@ -606,6 +619,13 @@ function AppOnboardingContent() {
   function handleBackStep() {
     setError(null)
     setAvatarPhotoError(null)
+    if (isOnGoogleAuthStep) {
+      setShowGoogleSignIn(false)
+      try {
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+      } catch {}
+      return
+    }
     const prevStep = visibleSteps[currentStepIndex - 1]
     if (!prevStep) return
     setCurrentStepId(prevStep.id)
@@ -899,26 +919,6 @@ function AppOnboardingContent() {
         <Link href="/" className="btn btn-primary" style={{ marginTop: '1rem' }}>
           Go to home
         </Link>
-      </div>
-    )
-  }
-
-  if (showGoogleSignIn && token) {
-    return (
-      <div className="onboarding-wrap">
-        <h2 className="onboarding-question">You&apos;re all set</h2>
-        <p className="onboarding-body" style={{ marginTop: '0.5rem' }}>
-          Complete onboarding with Google sign-in
-        </p>
-        <button
-          type="button"
-          className="btn-google"
-          onClick={() => handleSignInWithGoogle(token)}
-          style={{ marginTop: '1.5rem', maxWidth: '22rem' }}
-        >
-          <GoogleIcon className="auth-google-icon" />
-          <span>Sign in with Google</span>
-        </button>
       </div>
     )
   }
@@ -1380,10 +1380,31 @@ function AppOnboardingContent() {
       <div className="onboarding-single-page">
         <section className="onboarding-section onboarding-section-card onboarding-step onboarding-step-enter">
           <div className="onboarding-step-meta">
-            <p className="onboarding-step-label">{currentStep ? getStepSectionLabel(currentStep.id) : 'Onboarding'}</p>
+            <p className="onboarding-step-label">
+              {isOnGoogleAuthStep ? 'Sign in' : currentStep ? getStepSectionLabel(currentStep.id) : 'Onboarding'}
+            </p>
           </div>
 
-          {currentStep ? renderField(currentStep) : null}
+          {isOnGoogleAuthStep && token ? (
+            <div className="onboarding-field-wrap">
+              <h3 className="onboarding-question">Last step: sign in with Google</h3>
+              <p className="onboarding-body" style={{ marginTop: '0.5rem' }}>
+                Your answers are saved. Sign in with the Google account you want to use for Fika — then we&apos;ll take you
+                into the app.
+              </p>
+              <button
+                type="button"
+                className="btn-google"
+                onClick={() => void handleSignInWithGoogle(token)}
+                style={{ marginTop: '1.5rem', maxWidth: '22rem' }}
+              >
+                <GoogleIcon className="auth-google-icon" />
+                <span>Sign in with Google</span>
+              </button>
+            </div>
+          ) : (
+            currentStep ? renderField(currentStep) : null
+          )}
 
           {error ? (
             <div className="onboarding-confirm-errors" role="alert">
@@ -1392,16 +1413,17 @@ function AppOnboardingContent() {
           ) : null}
 
           <div ref={submitRef} className="onboarding-actions">
-            {currentStepIndex > 0 ? (
+            {currentStepIndex > 0 || isOnGoogleAuthStep ? (
               <button type="button" className="onboarding-nav-link" onClick={handleBackStep} disabled={saving || avatarFaceChecking}>
                 Back
               </button>
             ) : null}
-            {currentStepIndex < totalSteps - 1 ? (
+            {!isOnGoogleAuthStep && currentStepIndex < totalSteps - 1 ? (
               <button type="button" className="onboarding-nav-link onboarding-nav-link-primary" onClick={() => void handleNextStep()} disabled={saving || avatarFaceChecking}>
                 Next
               </button>
-            ) : (
+            ) : null}
+            {!isOnGoogleAuthStep && currentStepIndex >= totalSteps - 1 ? (
               <button
                 type="button"
                 className="onboarding-nav-link onboarding-nav-link-primary"
@@ -1417,7 +1439,7 @@ function AppOnboardingContent() {
                   'Submit'
                 )}
               </button>
-            )}
+            ) : null}
           </div>
         </section>
       </div>

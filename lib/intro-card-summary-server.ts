@@ -17,7 +17,7 @@ function factsPayloadForPrompt(responses: IntakeResponseItem[]): Record<string, 
     everyday_anchor: str('q_everyday_anchor'),
     interests: str('q_interests'),
     curiosity: str('q_curiosity'),
-    hoping_for: str('q_hoping_for'),
+    like_talking_about: str('q_like_talking_about'),
     openness: str('q_openness'),
     what_makes_great_fika: str('q_what_makes_great_fika'),
   }

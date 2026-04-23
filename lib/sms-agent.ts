@@ -366,11 +366,22 @@ export function messageWeeklyOptInFollowUp(): string {
 }
 
 /** Rich “you both care about …” line from overlap + optional hook text. */
-export function formatMatchIntroSharedContext(sharedInterests: string[], conversationThread: string): string {
+export function formatMatchIntroSharedContext(
+  sharedInterests: string[],
+  conversationThread: string,
+  fikaTalkOverlap?: string[]
+): string {
   const cleaned = sharedInterests.map((s) => String(s).trim()).filter(Boolean).slice(0, 6)
   const thread = conversationThread.trim()
   if (cleaned.length === 0) {
-    return thread || "You're both pointed in a similar direction — we think it could be a rich conversation."
+    let line = thread || "You're both pointed in a similar direction — we think it could be a rich conversation."
+    const fikaOnly = (fikaTalkOverlap ?? []).map((s) => String(s).trim()).filter(Boolean).slice(0, 2)
+    if (fikaOnly.length > 0) {
+      const fikaPart =
+        fikaOnly.length === 1 ? fikaOnly[0]! : `${fikaOnly[0]} and ${fikaOnly[1]}`
+      line += ` For this Fika you're both up for talking about ${fikaPart}.`
+    }
+    return line
   }
   let interestPart: string
   if (cleaned.length === 1) interestPart = cleaned[0]!
@@ -380,6 +391,11 @@ export function formatMatchIntroSharedContext(sharedInterests: string[], convers
   if (thread) {
     const t = thread.length > 220 ? `${thread.slice(0, 217)}…` : thread
     line += ` ${t}`
+  }
+  const fika = (fikaTalkOverlap ?? []).map((s) => String(s).trim()).filter(Boolean).slice(0, 2)
+  if (fika.length > 0) {
+    const fikaPart = fika.length === 1 ? fika[0]! : `${fika[0]} and ${fika[1]}`
+    line += ` For this Fika you're both up for talking about ${fikaPart}.`
   }
   return line
 }
@@ -427,10 +443,11 @@ export function messageMatchRevealPrompt(firstName?: string | null): string {
 }
 
 /** After 👍: 2–3 factual sentences (overlaps only); meet-ask is sent in the next SMS. */
-type RevealClauseKey = 'interests' | 'curiosity' | 'conversation' | 'life' | 'anchor' | 'texture'
+type RevealClauseKey = 'interests' | 'fikaTalk' | 'curiosity' | 'conversation' | 'life' | 'anchor' | 'texture'
 
 const REVEAL_CLAUSE_ORDER: RevealClauseKey[] = [
   'interests',
+  'fikaTalk',
   'curiosity',
   'conversation',
   'life',
@@ -438,8 +455,15 @@ const REVEAL_CLAUSE_ORDER: RevealClauseKey[] = [
   'texture',
 ]
 
-/** When more than five clauses would appear, drop these first (keep interests when present). */
-const REVEAL_CLAUSE_DROP_ORDER: RevealClauseKey[] = ['anchor', 'life', 'conversation', 'curiosity', 'texture']
+/** When more than five clauses would appear, drop these first (interests are never dropped). */
+const REVEAL_CLAUSE_DROP_ORDER: RevealClauseKey[] = [
+  'anchor',
+  'life',
+  'texture',
+  'conversation',
+  'curiosity',
+  'fikaTalk',
+]
 
 type TextureOverlapKind = 'tv' | 'podcast' | 'artist' | 'team' | 'unknown'
 
@@ -555,6 +579,8 @@ export function formatMatchRevealSentence(params: {
   lifeChapterOverlap?: string[]
   everydayAnchorOverlap?: string[]
   topCopyDimensions?: string[]
+  /** Shared `q_like_talking_about` chip labels (exact overlap strings). */
+  fikaTalkOverlap?: string[]
   /** Shared shows, podcasts, artists, or teams (exact overlap strings), max ~2 used in copy. */
   textureOverlap?: string[]
 }): string {
@@ -566,6 +592,7 @@ export function formatMatchRevealSentence(params: {
     lifeChapterOverlap = [],
     everydayAnchorOverlap = [],
     topCopyDimensions = [],
+    fikaTalkOverlap = [],
     textureOverlap: textureOverlapRaw = [],
   } = params
   const textureOverlapTokens = textureOverlapRaw
@@ -716,9 +743,16 @@ export function formatMatchRevealSentence(params: {
   }
 
   const topicTeaser = remainingHooks
-    .map((topic) => /^[A-Z0-9]{2,}$/.test(topic) ? topic : topic.charAt(0).toLowerCase() + topic.slice(1))
+    .map((topic) => (/^[A-Z0-9]{2,}$/.test(topic) ? topic : topic.charAt(0).toLowerCase() + topic.slice(1)))
     .filter((topic, index, list) => list.indexOf(topic) === index)
     .slice(0, 3)
+  const cleanedFikaTalk = fikaTalkOverlap
+    .map((s) => normalizeSmartPunctuation(String(s)).trim())
+    .filter(Boolean)
+    .filter((s, i, arr) => arr.indexOf(s) === i)
+  const fikaTeaser = cleanedFikaTalk
+    .map((topic) => (/^[A-Z0-9]{2,}$/.test(topic) ? topic : topic.charAt(0).toLowerCase() + topic.slice(1)))
+    .slice(0, 2)
   const curiosityTeaser = cleanedCuriosity
     .map((topic) => /^[A-Z0-9]{2,}$/.test(topic) ? topic : topic.charAt(0).toLowerCase() + topic.slice(1))
     .filter((topic, index, list) => list.indexOf(topic) === index)
@@ -747,6 +781,9 @@ export function formatMatchRevealSentence(params: {
     const interests =
       interestTeaser.length === 1 ? interestTeaser[0]! : `${interestTeaser[0]} and ${interestTeaser[1]}`
     clauses.interests = `you're both into ${interests}`
+  }
+  if (fikaTeaser.length > 0) {
+    clauses.fikaTalk = `for this Fika you're both up for talking about ${formatTopicList(fikaTeaser)}`
   }
   if (useCuriosityClause) {
     clauses.curiosity = `you're both curious about ${formatTopicList(curiosityTeaser)}`
@@ -800,9 +837,12 @@ export function messageMutualYesContext(params: {
   venueName: string
   neighborhood?: string | null
   broadAvailabilityLabel?: string | null
+  /** Shared `q_like_talking_about` chips; surfaced after 👍 in reveal and here when both said yes. */
+  fikaTalkOverlap?: string[]
 }): string {
-  const { sharedInterests, conversationThread, venueName, neighborhood, broadAvailabilityLabel } = params
-  const context = formatMatchIntroSharedContext(sharedInterests, conversationThread)
+  const { sharedInterests, conversationThread, venueName, neighborhood, broadAvailabilityLabel, fikaTalkOverlap } =
+    params
+  const context = formatMatchIntroSharedContext(sharedInterests, conversationThread, fikaTalkOverlap)
   const venueLine = neighborhood?.trim()
     ? `A likely spot for this one would be ${venueName} in ${neighborhood}.`
     : `A likely spot for this one would be ${venueName}.`

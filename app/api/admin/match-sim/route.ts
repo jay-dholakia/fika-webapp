@@ -56,6 +56,7 @@ type SelectedPairInput = {
 
 type CopyDimensionKey =
   | 'q_interests'
+  | 'q_like_talking_about'
   | 'q_curiosity'
   | 'q_what_makes_great_fika'
   | 'q_life_chapter'
@@ -145,6 +146,7 @@ function rankCopyDimensions(breakdown: FikaMatchBreakdown): CopyDimensionKey[] {
   const c = breakdown.compatibility
   const copySafe: CopyDimensionKey[] = [
     'q_interests',
+    'q_like_talking_about',
     'q_curiosity',
     'q_what_makes_great_fika',
     'q_life_chapter',
@@ -152,6 +154,7 @@ function rankCopyDimensions(breakdown: FikaMatchBreakdown): CopyDimensionKey[] {
   ]
   const scores: Record<CopyDimensionKey, number> = {
     q_interests: c.interestsFit,
+    q_like_talking_about: c.likeTalkingAboutFit,
     q_curiosity: c.curiosityFit,
     q_what_makes_great_fika: c.greatFikaFit,
     q_life_chapter: c.lifeChapterFit,
@@ -183,7 +186,7 @@ function buildComparisonRows(a: SimCandidate, b: SimCandidate): CompareRow[] {
     { label: 'Relationship', a: asDisplay(getResponseValue(a.intake, 'q_relationship_status')), b: asDisplay(getResponseValue(b.intake, 'q_relationship_status')) },
     { label: 'Work', a: asDisplay(getResponseValue(a.intake, 'q_work')), b: asDisplay(getResponseValue(b.intake, 'q_work')) },
     { label: 'Interests', a: asDisplay(getResponseValue(a.intake, 'q_interests')), b: asDisplay(getResponseValue(b.intake, 'q_interests')) },
-    { label: 'Hoping for', a: asDisplay(getResponseValue(a.intake, 'q_hoping_for')), b: asDisplay(getResponseValue(b.intake, 'q_hoping_for')) },
+    { label: 'Fika talk topics', a: asDisplay(getResponseValue(a.intake, 'q_like_talking_about')), b: asDisplay(getResponseValue(b.intake, 'q_like_talking_about')) },
     { label: 'Travel radius', a: asDisplay(getResponseValue(a.intake, 'q_radius')), b: asDisplay(getResponseValue(b.intake, 'q_radius')) },
     { label: 'Typical Fika times', a: asDisplay(getResponseValue(a.intake, 'q_typical_fika_times')), b: asDisplay(getResponseValue(b.intake, 'q_typical_fika_times')) },
     { label: 'Safety confirm', a: asDisplay(getResponseValue(a.intake, 'confirm_intent')), b: asDisplay(getResponseValue(b.intake, 'confirm_intent')) },
@@ -206,7 +209,7 @@ function sectionScoresFromBreakdown(bd: FikaMatchBreakdown): Record<string, numb
     q_life_chapter: bd.compatibility.lifeChapterFit,
     q_everyday_anchor: bd.compatibility.everydayAnchorFit,
     q_openness_fit: bd.compatibility.opennessFit,
-    q_hoping_for_fit: bd.compatibility.hopingForFit,
+    q_like_talking_about_fit: bd.compatibility.likeTalkingAboutFit,
     q_market_tenure_fit: bd.compatibility.marketTenureFit,
     q_work_fit: bd.compatibility.workFit,
     texture_fit: bd.compatibility.textureFit,
@@ -559,9 +562,10 @@ export async function POST(request: Request) {
     score: number
     distanceKm: number | null
     sharedLanguages: string[]
-    hopingA: string | null
-    hopingB: string | null
+    likeTalkingAboutA: string | null
+    likeTalkingAboutB: string | null
     overlapGreatFika: string[]
+    overlapLikeTalkingAbout: string[]
     overlapInterests: string[]
     overlapCuriosity: string[]
     overlapLifeChapter: string[]
@@ -595,10 +599,15 @@ export async function POST(request: Request) {
       const bLang = Array.isArray(cb.profile.languages) ? cb.profile.languages : []
       const langSet = new Set(aLang.map((x) => x.trim().toLowerCase()))
       const sharedLanguages = bLang.filter((x) => langSet.has(x.trim().toLowerCase()))
-      const hopingA = getMulti(ca.intake, 'q_hoping_for')[0] ?? null
-      const hopingB = getMulti(cb.intake, 'q_hoping_for')[0] ?? null
+      const talkA = getMulti(ca.intake, 'q_like_talking_about')
+      const talkB = getMulti(cb.intake, 'q_like_talking_about')
+      const likeTalkingAboutA = talkA.length ? talkA.join(', ') : null
+      const likeTalkingAboutB = talkB.length ? talkB.join(', ') : null
       const overlapGreatFika = getMulti(ca.intake, 'q_what_makes_great_fika').filter((x) =>
         getMulti(cb.intake, 'q_what_makes_great_fika').includes(x)
+      )
+      const overlapLikeTalkingAbout = getMulti(ca.intake, 'q_like_talking_about').filter((x) =>
+        getMulti(cb.intake, 'q_like_talking_about').includes(x)
       )
       const overlapInterests = getMulti(ca.intake, 'q_interests').filter((x) =>
         getMulti(cb.intake, 'q_interests').includes(x)
@@ -628,9 +637,10 @@ export async function POST(request: Request) {
         score: breakdown.finalScore,
         distanceKm,
         sharedLanguages,
-        hopingA,
-        hopingB,
+        likeTalkingAboutA,
+        likeTalkingAboutB,
         overlapGreatFika,
+        overlapLikeTalkingAbout,
         overlapInterests,
         overlapCuriosity,
         overlapLifeChapter,

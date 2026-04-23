@@ -17,7 +17,7 @@ export const SAFE_INTAKE_QUESTION_IDS = new Set([
   'q_place_recommendation',
   'q_avoid_topics',
   'q_role_model',
-  'q_hoping_for',
+  'q_like_talking_about',
   'q_what_makes_great_fika',
   'q_openness',
   'q_typical_fika_times',
@@ -56,7 +56,7 @@ export function buildIntroSummary(responses: IntakeResponseItem[]): string | nul
     return s || null
   }
   const life = str('q_life_chapter')
-  const hopingFor = str('q_hoping_for')
+  const talkAbout = str('q_like_talking_about')
   const who = str('q_openness')
 
   const parts: string[] = []
@@ -64,7 +64,7 @@ export function buildIntroSummary(responses: IntakeResponseItem[]): string | nul
     parts.push(`Right now they're in a chapter of ${life.toLowerCase()}.`)
   }
   const connectParts: string[] = []
-  if (hopingFor) connectParts.push(`hoping for ${hopingFor.toLowerCase()}`)
+  if (talkAbout) connectParts.push(`feel like talking about ${talkAbout.toLowerCase()}`)
   if (who) connectParts.push(`open to ${who.toLowerCase()}`)
   if (connectParts.length > 0) {
     parts.push(`They ${connectParts.join(', ')}.`)

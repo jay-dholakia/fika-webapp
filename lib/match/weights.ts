@@ -4,7 +4,7 @@
  */
 
 /** Reported in admin match-sim API `summary.scoring`. */
-export const MATCH_SCORING_VERSION = 'fika_structured_v7' as const
+export const MATCH_SCORING_VERSION = 'fika_structured_v9' as const
 
 /** final = clamp(0,1, FEASIBILITY_PORTION * feasibility + COMPATIBILITY_PORTION * (compatibility - penaltyTotal)) */
 export const FEASIBILITY_PORTION = 0.4
@@ -18,13 +18,13 @@ export const FEASIBILITY_WEIGHTS = {
 
 /**
  * Per-dimension weights inside compatibility_score (sum = 1).
- * Active intake only: interests, hoping-for, market tenure, work.
+ * Active intake only: interests, talk topics, market tenure, work.
  */
 export const COMPATIBILITY_WEIGHTS = {
-  interests: 0.45,
+  interests: 0.43,
   marketTenure: 0.18,
   work: 0.15,
-  hopingFor: 0.22,
+  likeTalkingAbout: 0.24,
 } as const
 
 /** Multi-select chip overlap: blend of Jaccard and overlap coefficient. */
@@ -52,7 +52,7 @@ export const SEVERE_MISMATCH_PENALTY_CAP = 0.06
 export const DATA_CONFIDENCE_FIELD_IDS = [
   'q_market_tenure',
   'q_interests',
-  'q_hoping_for',
+  'q_like_talking_about',
   'q_typical_fika_times',
   'q_radius',
   'confirm_intent',
