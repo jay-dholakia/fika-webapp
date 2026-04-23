@@ -8,6 +8,7 @@ import {
   PROFILE_STEPS,
   INTAKE_STEPS,
   MARKET_TENURE_OPTIONS,
+  Q_RADIUS_MILES_OPTIONS,
   type ProfileStep,
 } from '@/lib/onboarding-data'
 import {
@@ -430,17 +431,20 @@ export default function SettingsProfilePage() {
         />
       )
     }
-    if (step.type === 'slider_snap' && step.options && step.id === 'q_market_tenure') {
+    if (step.type === 'slider_snap' && step.options && (step.id === 'q_market_tenure' || step.id === 'q_radius')) {
+      const defaultOpt =
+        step.id === 'q_market_tenure' ? MARKET_TENURE_OPTIONS[0] : Q_RADIUS_MILES_OPTIONS[0]
+      const resolved =
+        typeof value === 'string' && value.trim() && step.options.includes(value) ? value : defaultOpt
       return (
         <MarketTenureSlider
           id={`profile-${step.id}`}
           options={step.options}
-          value={
-            typeof value === 'string' && value.trim()
-              ? value
-              : MARKET_TENURE_OPTIONS[0]
-          }
+          value={resolved}
           disabled={saving}
+          ariaLabel={
+            step.id === 'q_radius' ? 'How far you are willing to travel for a Fika' : undefined
+          }
           onChange={(next) => setAnswers((a) => ({ ...a, [step.id]: next }))}
         />
       )

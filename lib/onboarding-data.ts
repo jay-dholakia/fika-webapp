@@ -35,6 +35,9 @@ export type ProfileStep = {
   featuredOptionsCaption?: string
 }
 
+/** Intake `q_radius` labels (miles); `getIntakeRadiusKm` parses the number from these strings. */
+export const Q_RADIUS_MILES_OPTIONS: string[] = ['5 miles', '10 miles', '25 miles', '50 miles']
+
 /** Ordered stops for the “how long in this market” slider (left → right). */
 export const MARKET_TENURE_OPTIONS: string[] = [
   'Just moved',
@@ -68,8 +71,7 @@ export const PROFILE_STEPS: ProfileStep[] = [
   },
   {
     id: 'pronouns',
-    question: 'What pronouns do you use?',
-    body: 'We use this in SMS intros — for example, “they’re a teacher who loves …”.',
+    question: 'What are your pronouns?',
     type: 'chips_single',
     required: true,
     options: ['She/her', 'He/him', 'They/them', 'She/they', 'He/they'],
@@ -220,11 +222,11 @@ export const INTAKE_STEPS: ProfileStep[] = [
   */
   {
     id: 'q_like_talking_about',
-    question: 'What do you feel like talking about on your Fika?',
-    body: 'Choose up to 5 — we use this to suggest people you may click with.',
+    question: "What are some things you'd like to talk about?",
+    body: 'Choose up to 7 — we use this to suggest people you may click with.',
     type: 'multi_select',
     required: true,
-    maxSelections: 5,
+    maxSelections: 7,
     options: [
       'Something fun I did recently',
       'A hobby I just took up',
@@ -248,9 +250,9 @@ export const INTAKE_STEPS: ProfileStep[] = [
   {
     id: 'q_radius',
     question: 'How far are you willing to travel for a Fika?',
-    type: 'chips_single',
+    type: 'slider_snap',
     required: true,
-    options: ['5 miles', '10 miles', '25 miles', '50 miles'],
+    options: [...Q_RADIUS_MILES_OPTIONS],
   },
   {
     id: 'q_typical_fika_times',

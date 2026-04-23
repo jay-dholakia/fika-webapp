@@ -8,9 +8,11 @@ type MarketTenureSliderProps = {
   onChange: (next: string) => void
   disabled?: boolean
   id?: string
+  /** Overrides default aria-label (e.g. market tenure vs. travel radius). */
+  ariaLabel?: string
 }
 
-export function MarketTenureSlider({ options, value, onChange, disabled, id }: MarketTenureSliderProps) {
+export function MarketTenureSlider({ options, value, onChange, disabled, id, ariaLabel }: MarketTenureSliderProps) {
   const max = Math.max(0, options.length - 1)
   const index = useMemo(() => {
     const i = value != null ? options.indexOf(value) : -1
@@ -34,7 +36,7 @@ export function MarketTenureSlider({ options, value, onChange, disabled, id }: M
         aria-valuemax={max}
         aria-valuenow={index}
         aria-valuetext={label}
-        aria-label="How long you have lived in this area"
+        aria-label={ariaLabel ?? 'How long you have lived in this area'}
         onChange={(e) => {
           const nextIdx = Number(e.target.value)
           const opt = options[nextIdx]

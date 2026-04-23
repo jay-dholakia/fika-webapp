@@ -12,6 +12,7 @@ import {
   PROFILE_STEPS,
   INTAKE_STEPS,
   MARKET_TENURE_OPTIONS,
+  Q_RADIUS_MILES_OPTIONS,
   type ProfileStep,
 } from '@/lib/onboarding-data'
 import { buildOnboardingSessionPayload, payloadToAnswers } from '@/lib/onboarding-session-payload'
@@ -349,6 +350,13 @@ function AppOnboardingContent() {
     if (typeof raw === 'string' && raw.trim()) return
     setAnswers((a) => ({ ...a, q_market_tenure: MARKET_TENURE_OPTIONS[0] }))
   }, [currentStepId, answers.q_market_tenure])
+
+  useEffect(() => {
+    if (currentStepId !== 'q_radius') return
+    const raw = answers.q_radius
+    if (typeof raw === 'string' && raw.trim() && Q_RADIUS_MILES_OPTIONS.includes(raw)) return
+    setAnswers((a) => ({ ...a, q_radius: Q_RADIUS_MILES_OPTIONS[0] }))
+  }, [currentStepId, answers.q_radius])
 
   const currentStepIndex = Math.max(0, visibleSteps.findIndex((step) => step.id === currentStepId))
   const currentStep = visibleSteps[currentStepIndex] ?? visibleSteps[0]
@@ -1190,12 +1198,21 @@ function AppOnboardingContent() {
             ))}
           </div>
         )}
-        {step.type === 'slider_snap' && step.options && step.id === 'q_market_tenure' && (
+        {step.type === 'slider_snap' && step.options && (step.id === 'q_market_tenure' || step.id === 'q_radius') && (
           <MarketTenureSlider
             id={`onboarding-${step.id}`}
             options={step.options}
-            value={typeof value === 'string' ? value : undefined}
+            value={
+              typeof value === 'string' && value.trim() && step.options.includes(value)
+                ? value
+                : step.options[0]
+            }
             disabled={saving}
+            ariaLabel={
+              step.id === 'q_radius'
+                ? 'How far you are willing to travel for a Fika'
+                : undefined
+            }
             onChange={(next) => {
               setAnswers((a) => ({ ...a, [step.id]: next }))
               setError(null)
