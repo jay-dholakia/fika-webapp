@@ -210,17 +210,11 @@ function samePronounMatchingGroup(a: string, b: string): boolean {
   return false
 }
 
-export type EligibilityOptions = {
-  relaxedEligibility?: boolean
-}
-
 export function checkPairEligibility(
   a: MatcherPerson,
-  b: MatcherPerson,
-  opts?: EligibilityOptions
+  b: MatcherPerson
 ): { eligible: boolean; rejectReasons: string[]; distanceKm: number | null; combinedRadiusKm: number } {
   const reasons: string[] = []
-  const relaxed = opts?.relaxedEligibility === true
   const combinedRadiusKm = a.radiusKm + b.radiusKm
 
   let distanceKm: number | null = null
@@ -236,32 +230,26 @@ export function checkPairEligibility(
     }
   }
 
-  if (!relaxed) {
-    const la = Array.isArray(a.profile.languages) ? a.profile.languages : []
-    const lb = Array.isArray(b.profile.languages) ? b.profile.languages : []
-    if (la.length > 0 && lb.length > 0) {
-      const setA = new Set(la.map((x) => x.trim().toLowerCase()))
-      const overlap = lb.some((x) => setA.has(x.trim().toLowerCase()))
-      if (!overlap) reasons.push('languages')
-    }
+  const la = Array.isArray(a.profile.languages) ? a.profile.languages : []
+  const lb = Array.isArray(b.profile.languages) ? b.profile.languages : []
+  if (la.length > 0 && lb.length > 0) {
+    const setA = new Set(la.map((x) => x.trim().toLowerCase()))
+    const overlap = lb.some((x) => setA.has(x.trim().toLowerCase()))
+    if (!overlap) reasons.push('languages')
   }
 
-  if (!relaxed) {
-    const pa = effectivePronounsForMatching(a.profile)?.trim()
-    const pb = effectivePronounsForMatching(b.profile)?.trim()
-    if (!pa || !pb) {
-      reasons.push('pronouns_missing')
-    } else if (!samePronounMatchingGroup(pa, pb)) {
-      reasons.push('same_pronoun_group_required')
-    }
+  const pa = effectivePronounsForMatching(a.profile)?.trim()
+  const pb = effectivePronounsForMatching(b.profile)?.trim()
+  if (!pa || !pb) {
+    reasons.push('pronouns_missing')
+  } else if (!samePronounMatchingGroup(pa, pb)) {
+    reasons.push('same_pronoun_group_required')
   }
 
-  if (!relaxed) {
-    const ca = getIntakeSingle(a.responses, 'confirm_intent')
-    const cb = getIntakeSingle(b.responses, 'confirm_intent')
-    if (ca !== CONFIRM_INTENT_REQUIRED_VALUE || cb !== CONFIRM_INTENT_REQUIRED_VALUE) {
-      reasons.push('confirm_intent')
-    }
+  const ca = getIntakeSingle(a.responses, 'confirm_intent')
+  const cb = getIntakeSingle(b.responses, 'confirm_intent')
+  if (ca !== CONFIRM_INTENT_REQUIRED_VALUE || cb !== CONFIRM_INTENT_REQUIRED_VALUE) {
+    reasons.push('confirm_intent')
   }
 
   return {
@@ -272,12 +260,12 @@ export function checkPairEligibility(
   }
 }
 
-export type ScorePairOptions = EligibilityOptions & {
+export type ScorePairOptions = {
   logMatrixUnknown?: (msg: string) => void
 }
 
 export function scoreFikaPair(a: MatcherPerson, b: MatcherPerson, opts?: ScorePairOptions): FikaMatchBreakdown {
-  const { eligible, rejectReasons, distanceKm, combinedRadiusKm } = checkPairEligibility(a, b, opts)
+  const { eligible, rejectReasons, distanceKm, combinedRadiusKm } = checkPairEligibility(a, b)
 
   const distanceFit = distanceFitScore(distanceKm, combinedRadiusKm)
   const timesA = getIntakeMulti(a.responses, 'q_typical_fika_times')

@@ -3,44 +3,27 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase-server'
 import { isAdminByUserId } from '@/lib/admin-markets'
-import { getIntakeRadiusKm } from '@/lib/intake-radius'
-import { getIntakeMulti, getIntakeAnswer, getIntakeSingle } from '@/lib/intake-response-utils'
+import { getIntakeAnswer, getIntakeSingle } from '@/lib/intake-response-utils'
 import type { FikaMatchBreakdown } from '@/lib/match/fika-matcher'
-import { scoreFikaPair, type MatcherPerson } from '@/lib/match/fika-matcher'
+import {
+  ADMIN_MATCH_PROFILE_SELECT,
+  type AdminCopyDimensionKey,
+  type AdminMatchIntakeRow,
+  type AdminMatchProfileRow,
+  type AdminSimCandidate,
+  adminSimCandidateFromProfileRow,
+  computeAdminPairPayload,
+  loadAdminSimCandidatesForCanonicalPair,
+} from '@/lib/match/admin-match-pair'
 import { MATCH_SCORING_VERSION } from '@/lib/match/weights'
 import { fetchUserIdsWithUpcomingConfirmedFika } from '@/lib/upcoming-confirmed-fika'
 
 /** Admin simulation: config-driven structured matcher (eligibility + feasibility + compatibility). */
 export const dynamic = 'force-dynamic'
 
-type ProfileRow = {
-  id: string
-  first_name: string | null
-  market: string | null
-  city: string | null
-  lat: number | null
-  lng: number | null
-  birthdate: string | null
-  gender: string | null
-  pronouns: string | null
-  gender_preference: string | null
-  age_preference: string | null
-  languages: string[] | null
-  in_match_bowl: boolean | null
-  is_active: boolean | null
-}
-
-type IntakeRow = {
-  user_id: string
-  responses: unknown
-}
-
-type SimCandidate = {
-  profile: ProfileRow
-  intake: IntakeRow
-  age: number | null
-  radiusKm: number
-}
+type ProfileRow = AdminMatchProfileRow
+type IntakeRow = AdminMatchIntakeRow
+type SimCandidate = AdminSimCandidate
 
 type CompareRow = {
   label: string
@@ -55,118 +38,10 @@ type SelectedPairInput = {
   reasons?: Record<string, unknown>
 }
 
-type CopyDimensionKey =
-  | 'q_interests'
-  | 'q_like_talking_about'
-  | 'q_curiosity'
-  | 'q_what_makes_great_fika'
-  | 'q_life_chapter'
-  | 'q_everyday_anchor'
-
-function ageFromBirthdate(birthdate: string | null | undefined): number | null {
-  if (!birthdate || typeof birthdate !== 'string') return null
-  const date = new Date(birthdate.trim())
-  if (Number.isNaN(date.getTime())) return null
-  const today = new Date()
-  let age = today.getFullYear() - date.getFullYear()
-  const monthDiff = today.getMonth() - date.getMonth()
-  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < date.getDate())) age--
-  return age >= 0 ? age : null
-}
-
-function calculateDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const r = 6371
-  const dLat = (lat2 - lat1) * Math.PI / 180
-  const dLng = (lng2 - lng1) * Math.PI / 180
-  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-    Math.sin(dLng / 2) * Math.sin(dLng / 2)
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-  return r * c
-}
+type CopyDimensionKey = AdminCopyDimensionKey
 
 function getResponseValue(intake: IntakeRow, questionId: string): unknown {
   return getIntakeAnswer(intake.responses, questionId)
-}
-
-function getMulti(intake: IntakeRow, questionId: string): string[] {
-  return getIntakeMulti(intake.responses, questionId)
-}
-
-const TEXTURE_QUESTION_IDS = [
-  'q_tv_streaming_shows',
-  'q_podcasts',
-  'q_favorite_artists',
-  'q_favorite_teams',
-] as const
-
-/** Prefix + label; overlap tokens for admin UI / debugging (not used in reveal SMS copy). */
-const TEXTURE_Q_KIND: Record<(typeof TEXTURE_QUESTION_IDS)[number], 'tv' | 'podcast' | 'artist' | 'team'> = {
-  q_tv_streaming_shows: 'tv',
-  q_podcasts: 'podcast',
-  q_favorite_artists: 'artist',
-  q_favorite_teams: 'team',
-}
-
-/** Exact string overlap on fandom/media fields (for reveal SMS texture line). */
-function textureOverlapsBetweenIntakes(a: IntakeRow, b: IntakeRow): string[] {
-  const out: string[] = []
-  for (const q of TEXTURE_QUESTION_IDS) {
-    const kind = TEXTURE_Q_KIND[q]
-    const ai = getMulti(a, q)
-    const bi = getMulti(b, q)
-    for (const x of ai) {
-      const token = `${kind}:${x}`
-      if (bi.includes(x) && !out.includes(token)) {
-        out.push(token)
-        if (out.length >= 2) return out
-      }
-    }
-  }
-  return out
-}
-
-function toMatcherPerson(c: SimCandidate): MatcherPerson {
-  return {
-    profile: {
-      lat: c.profile.lat,
-      lng: c.profile.lng,
-      birthdate: c.profile.birthdate,
-      gender: c.profile.gender,
-      pronouns: c.profile.pronouns ?? null,
-      gender_preference: c.profile.gender_preference,
-      age_preference: c.profile.age_preference,
-      languages: c.profile.languages,
-    },
-    responses: c.intake.responses,
-    age: c.age,
-    radiusKm: c.radiusKm,
-  }
-}
-
-function rankCopyDimensions(breakdown: FikaMatchBreakdown): CopyDimensionKey[] {
-  const c = breakdown.compatibility
-  const copySafe: CopyDimensionKey[] = [
-    'q_interests',
-    'q_like_talking_about',
-    'q_curiosity',
-    'q_what_makes_great_fika',
-    'q_life_chapter',
-    'q_everyday_anchor',
-  ]
-  const scores: Record<CopyDimensionKey, number> = {
-    q_interests: c.interestsFit,
-    q_like_talking_about: c.likeTalkingAboutFit,
-    q_curiosity: c.curiosityFit,
-    q_what_makes_great_fika: c.greatFikaFit,
-    q_life_chapter: c.lifeChapterFit,
-    q_everyday_anchor: c.everydayAnchorFit,
-  }
-  return [...copySafe].sort((a, b) => {
-    const scoreDiff = (scores[b] ?? 0) - (scores[a] ?? 0)
-    if (scoreDiff !== 0) return scoreDiff
-    return copySafe.indexOf(a) - copySafe.indexOf(b)
-  })
 }
 
 function asDisplay(value: unknown): string {
@@ -196,29 +71,6 @@ function buildComparisonRows(a: SimCandidate, b: SimCandidate): CompareRow[] {
     { label: 'Pronouns (pairing)', a: asDisplay(a.profile.pronouns ?? a.profile.gender), b: asDisplay(b.profile.pronouns ?? b.profile.gender) },
     { label: 'Age', a: a.age != null ? String(a.age) : '—', b: b.age != null ? String(b.age) : '—' },
   ]
-}
-
-function sectionScoresFromBreakdown(bd: FikaMatchBreakdown): Record<string, number> {
-  return {
-    feasibility_total: bd.feasibility.total,
-    distance_fit: bd.feasibility.distanceFit,
-    time_fit: bd.feasibility.timeFit,
-    data_confidence: bd.feasibility.dataConfidence,
-    compatibility_total: bd.compatibility.total,
-    q_what_makes_great_fika: bd.compatibility.greatFikaFit,
-    q_interests: bd.compatibility.interestsFit,
-    q_curiosity: bd.compatibility.curiosityFit,
-    q_life_chapter: bd.compatibility.lifeChapterFit,
-    q_everyday_anchor: bd.compatibility.everydayAnchorFit,
-    q_openness_fit: bd.compatibility.opennessFit,
-    q_like_talking_about_fit: bd.compatibility.likeTalkingAboutFit,
-    q_market_tenure_fit: bd.compatibility.marketTenureFit,
-    q_work_fit: bd.compatibility.workFit,
-    texture_fit: bd.compatibility.textureFit,
-    avoid_topics_penalty: bd.penalties.avoidTopicsPenalty,
-    severe_mismatch_penalty: bd.penalties.severeMismatchPenalty,
-    penalty_total: bd.penalties.total,
-  }
 }
 
 async function getAdminUserId(request: Request): Promise<string | null> {
@@ -401,16 +253,34 @@ export async function POST(request: Request) {
       for (const pair of selectedPairs) {
         const userA = pair.userAId < pair.userBId ? pair.userAId : pair.userBId
         const userB = pair.userAId < pair.userBId ? pair.userBId : pair.userAId
-        const score = typeof pair.score === 'number' && Number.isFinite(pair.score) ? pair.score : 0
-        const reasons = (pair.reasons && typeof pair.reasons === 'object') ? pair.reasons : {}
+
+        const loaded = await loadAdminSimCandidatesForCanonicalPair(supabase, userA, userB)
+        if ('error' in loaded) {
+          return NextResponse.json(
+            { error: loaded.error, code: 'INTRO_PAIR_LOAD' },
+            { status: 400 }
+          )
+        }
+        const payload = computeAdminPairPayload(loaded.ca, loaded.cb)
+        if (!payload.breakdown.eligible) {
+          return NextResponse.json(
+            {
+              error:
+                'This pair does not pass intro matcher eligibility (geography, languages when both set, same pronoun group, platonic confirm). Pick another pair or fix profile/intake gaps.',
+              code: 'PAIR_NOT_INTRO_ELIGIBLE',
+              rejectReasons: payload.breakdown.rejectReasons,
+            },
+            { status: 400 }
+          )
+        }
 
         const result = await insertOrUpdateMatchCandidateForTrigger(supabase, {
           userA,
           userB,
           weekAnchorMonday,
           expiresAt,
-          score,
-          reasons,
+          score: payload.score,
+          reasons: payload.reasons,
         })
         if (!result.ok) {
           return NextResponse.json({ error: result.error, code: 'MATCH_CANDIDATE_UPSERT' }, { status: 500 })
@@ -444,7 +314,6 @@ export async function POST(request: Request) {
 
   const market = typeof body.market === 'string' ? body.market.trim() : null
   const optedInOnly = body.optedInOnly === true
-  const relaxedFilters = body.relaxedFilters === true
   const maxUsers = Math.min(300, Math.max(20, typeof body.maxUsers === 'number' ? Math.floor(body.maxUsers) : 120))
   const topN = Math.min(300, Math.max(10, typeof body.topN === 'number' ? Math.floor(body.topN) : 100))
 
@@ -468,9 +337,7 @@ export async function POST(request: Request) {
     candidateIds = (optIns ?? []).map((x: { user_id: string }) => x.user_id)
   }
 
-  let profilesQuery = supabase
-    .from('profiles')
-    .select('id, first_name, market, city, lat, lng, birthdate, gender, pronouns, gender_preference, age_preference, languages, in_match_bowl, is_active')
+  let profilesQuery = supabase.from('profiles').select(ADMIN_MATCH_PROFILE_SELECT)
     .eq('in_match_bowl', true)
     .eq('is_active', true)
     .limit(maxUsers)
@@ -498,7 +365,6 @@ export async function POST(request: Request) {
         pairsScored: 0,
         filteredOut: 0,
         optedInOnly,
-        relaxedFilters,
         market,
         scoring: MATCH_SCORING_VERSION,
       },
@@ -522,12 +388,7 @@ export async function POST(request: Request) {
       usersSkippedNoIntake++
       continue
     }
-    candidates.push({
-      profile: p,
-      intake,
-      age: ageFromBirthdate(p.birthdate),
-      radiusKm: getIntakeRadiusKm(intake.responses),
-    })
+    candidates.push(adminSimCandidateFromProfileRow(p, intake))
   }
 
   if (candidates.length < 2) {
@@ -541,7 +402,6 @@ export async function POST(request: Request) {
         pairsScored: 0,
         filteredOut: 0,
         optedInOnly,
-        relaxedFilters,
         market,
         scoring: MATCH_SCORING_VERSION,
       },
@@ -587,47 +447,12 @@ export async function POST(request: Request) {
     for (let j = i + 1; j < candidates.length; j++) {
       const ca = candidates[i]
       const cb = candidates[j]
-      const ma = toMatcherPerson(ca)
-      const mb = toMatcherPerson(cb)
-      const breakdown = scoreFikaPair(ma, mb, {
-        relaxedEligibility: relaxedFilters,
-        logMatrixUnknown: logMatrix,
-      })
-      if (!breakdown.eligible) {
+      const scoreOpts = logMatrix ? { logMatrixUnknown: logMatrix } : undefined
+      const p = computeAdminPairPayload(ca, cb, scoreOpts)
+      if (!p.breakdown.eligible) {
         filteredOut++
         continue
       }
-      const distanceKm =
-        ca.profile.lat != null && ca.profile.lng != null && cb.profile.lat != null && cb.profile.lng != null
-          ? calculateDistance(ca.profile.lat, ca.profile.lng, cb.profile.lat, cb.profile.lng)
-          : null
-      const aLang = Array.isArray(ca.profile.languages) ? ca.profile.languages : []
-      const bLang = Array.isArray(cb.profile.languages) ? cb.profile.languages : []
-      const langSet = new Set(aLang.map((x) => x.trim().toLowerCase()))
-      const sharedLanguages = bLang.filter((x) => langSet.has(x.trim().toLowerCase()))
-      const talkA = getMulti(ca.intake, 'q_like_talking_about')
-      const talkB = getMulti(cb.intake, 'q_like_talking_about')
-      const likeTalkingAboutA = talkA.length ? talkA.join(', ') : null
-      const likeTalkingAboutB = talkB.length ? talkB.join(', ') : null
-      const overlapGreatFika = getMulti(ca.intake, 'q_what_makes_great_fika').filter((x) =>
-        getMulti(cb.intake, 'q_what_makes_great_fika').includes(x)
-      )
-      const overlapLikeTalkingAbout = getMulti(ca.intake, 'q_like_talking_about').filter((x) =>
-        getMulti(cb.intake, 'q_like_talking_about').includes(x)
-      )
-      const overlapInterests = getMulti(ca.intake, 'q_interests').filter((x) =>
-        getMulti(cb.intake, 'q_interests').includes(x)
-      )
-      const overlapCuriosity = getMulti(ca.intake, 'q_curiosity').filter((x) =>
-        getMulti(cb.intake, 'q_curiosity').includes(x)
-      )
-      const overlapLifeChapter = getMulti(ca.intake, 'q_life_chapter').filter((x) =>
-        getMulti(cb.intake, 'q_life_chapter').includes(x)
-      )
-      const overlapEverydayAnchor = getMulti(ca.intake, 'q_everyday_anchor').filter((x) =>
-        getMulti(cb.intake, 'q_everyday_anchor').includes(x)
-      )
-      const textureOverlap = textureOverlapsBetweenIntakes(ca.intake, cb.intake)
       const compareRows = buildComparisonRows(ca, cb)
       const userAWorkLabel = getIntakeSingle(ca.intake.responses, 'q_work')
       const userBWorkLabel = getIntakeSingle(cb.intake.responses, 'q_work')
@@ -646,22 +471,22 @@ export async function POST(request: Request) {
         userBPronouns: cb.profile.pronouns ?? null,
         userBWorkLabel,
         userBCity: cb.profile.city ?? null,
-        score: breakdown.finalScore,
-        distanceKm,
-        sharedLanguages,
-        likeTalkingAboutA,
-        likeTalkingAboutB,
-        overlapGreatFika,
-        overlapLikeTalkingAbout,
-        overlapInterests,
-        overlapCuriosity,
-        overlapLifeChapter,
-        overlapEverydayAnchor,
-        textureOverlap,
-        topCopyDimensions: rankCopyDimensions(breakdown),
+        score: p.score,
+        distanceKm: p.distanceKm,
+        sharedLanguages: p.sharedLanguages,
+        likeTalkingAboutA: p.likeTalkingAboutA,
+        likeTalkingAboutB: p.likeTalkingAboutB,
+        overlapGreatFika: p.overlapGreatFika,
+        overlapLikeTalkingAbout: p.overlapLikeTalkingAbout,
+        overlapInterests: p.overlapInterests,
+        overlapCuriosity: p.overlapCuriosity,
+        overlapLifeChapter: p.overlapLifeChapter,
+        overlapEverydayAnchor: p.overlapEverydayAnchor,
+        textureOverlap: p.textureOverlap,
+        topCopyDimensions: p.topCopyDimensions,
         compareRows,
-        sectionScores: sectionScoresFromBreakdown(breakdown),
-        matchBreakdown: breakdown,
+        sectionScores: p.sectionScores,
+        matchBreakdown: p.breakdown,
       })
     }
   }
@@ -679,7 +504,6 @@ export async function POST(request: Request) {
       pairsScored: pairs.length,
       filteredOut,
       optedInOnly,
-      relaxedFilters,
       market,
       scoring: MATCH_SCORING_VERSION,
     },

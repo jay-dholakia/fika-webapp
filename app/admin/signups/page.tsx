@@ -49,7 +49,6 @@ type SimSummary = {
   pairsScored: number
   filteredOut: number
   optedInOnly: boolean
-  relaxedFilters?: boolean
   market: string | null
   scoring?: string
 }
@@ -158,7 +157,6 @@ export default function AdminSignupsPage() {
   const [simPairs, setSimPairs] = useState<SimPair[]>([])
   const [simPairModal, setSimPairModal] = useState<SimPair | null>(null)
   const [simOptedInOnly, setSimOptedInOnly] = useState(false)
-  const [simRelaxedFilters, setSimRelaxedFilters] = useState(true)
   const [simMaxUsers, setSimMaxUsers] = useState(260)
   const [simTopN, setSimTopN] = useState(220)
   const [selectedSimPairs, setSelectedSimPairs] = useState<Record<string, boolean>>({})
@@ -261,7 +259,6 @@ export default function AdminSignupsPage() {
           action: 'simulate',
           market: filterMarket || null,
           optedInOnly: simOptedInOnly,
-          relaxedFilters: simRelaxedFilters,
           maxUsers: simMaxUsers,
           topN: simTopN,
         }),
@@ -413,13 +410,10 @@ export default function AdminSignupsPage() {
           )}
 
           <div className="admin-dashboard" style={{ marginTop: '1rem', marginBottom: '1.25rem' }}>
-            <h2 className="admin-dashboard-title">Match preview (no availability, no SMS)</h2>
+            <h2 className="admin-dashboard-title">Match preview</h2>
             <p className="admin-description" style={{ marginBottom: '0.75rem' }}>
-              Ranks pairs with a <strong>config-driven structured matcher</strong>: eligibility (true blockers only), then{' '}
-              <strong>feasibility</strong> (distance, typical Fika times overlap, profile completeness) and{' '}
-              <strong>compatibility</strong> (chips + matrices for single-select fields). Embeddings are not used for ranking.
-              Hard eligibility: gender/age prefs, shared language when both listed, distance beyond combined travel radii + buffer, and platonic confirmation.
-              Sending an intro SMS creates the live match.
+              Same intro matcher as production—no embeddings and no calendar availability on this screen. Pairs must pass geography, same pronoun group (legacy gender only fills in empty pronouns), overlapping languages when both people list them, and platonic confirm on intake. Everything else is scored from distance, typical Fika times, how complete each profile is, and overlapping intake answers (interests, topics to talk about, etc.).{' '}
+              <strong>Send intro SMS</strong> re-runs the matcher for each selection, then creates the match row.
             </p>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
               <label className="admin-toggle" style={{ marginRight: '0.25rem' }}>
@@ -430,15 +424,6 @@ export default function AdminSignupsPage() {
                   disabled={simLoading || triggeringSms}
                 />
                 <span className="admin-toggle-label">Only users opted in this week</span>
-              </label>
-              <label className="admin-toggle" style={{ marginRight: '0.25rem' }}>
-                <input
-                  type="checkbox"
-                  checked={simRelaxedFilters}
-                  onChange={(e) => setSimRelaxedFilters(e.target.checked)}
-                  disabled={simLoading || triggeringSms}
-                />
-                <span className="admin-toggle-label">Relax eligibility (skip language overlap + confirm intent)</span>
               </label>
               <label className="admin-toggle" style={{ marginRight: '0.25rem' }}>
                 <span className="admin-toggle-label">Max users</span>
@@ -484,7 +469,7 @@ export default function AdminSignupsPage() {
               </button>
             </div>
             <p className="admin-dashboard-filter" style={{ marginTop: '0.5rem' }}>
-              Select pairs below, then send the intro SMS only for those selections.
+              Select rows in the table, then send intro SMS only for the pairs you want.
             </p>
             {simSummary && (
               <p className="admin-dashboard-filter" style={{ marginTop: '0.75rem' }}>
@@ -499,7 +484,6 @@ export default function AdminSignupsPage() {
                   ? `${simSummary.usersSkippedUpcomingConfirmed} upcoming confirmed Fika (excluded from sim) · `
                   : ''}
                 {simSummary.usersConsidered} with intake · Pairs: {simSummary.pairsScored} · Filtered out: {simSummary.filteredOut}
-                {simSummary.relaxedFilters ? ' · relaxed filters' : ' · strict filters'}
                 {simSummary.scoring ? ` · ${simSummary.scoring.replace(/_/g, ' ')}` : ''}
               </p>
             )}
