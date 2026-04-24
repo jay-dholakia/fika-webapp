@@ -72,6 +72,7 @@ type FikaMatchBreakdown = {
     marketTenureFit: number
     workFit: number
     textureFit: number
+    ageFit: number
     total: number
   }
   penalties: {
@@ -412,7 +413,7 @@ export default function AdminSignupsPage() {
           <div className="admin-dashboard" style={{ marginTop: '1rem', marginBottom: '1.25rem' }}>
             <h2 className="admin-dashboard-title">Match preview</h2>
             <p className="admin-description" style={{ marginBottom: '0.75rem' }}>
-              Same intro matcher as production—no embeddings and no calendar availability on this screen. Pairs must pass geography, same pronoun group (legacy gender only fills in empty pronouns), overlapping languages when both people list them, and platonic confirm on intake. Everything else is scored from distance, typical Fika times, how complete each profile is, and overlapping intake answers (interests, topics to talk about, etc.).{' '}
+              Same intro matcher as production—no embeddings and no calendar availability on this screen. Pairs must pass geography, same pronoun group (legacy gender only fills in empty pronouns), overlapping languages when both people list them, and platonic confirm on intake. Everything else is scored from distance, typical Fika times, how complete each profile is, overlapping intake answers (interests, topics to talk about, etc.), and how close their ages are when both birthdates resolve to an age.{' '}
               <strong>Send intro SMS</strong> re-runs the matcher for each selection, then creates the match row.
             </p>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
@@ -527,6 +528,7 @@ export default function AdminSignupsPage() {
                             ['talk topics', bd.compatibility.likeTalkingAboutFit],
                             ['market tenure', bd.compatibility.marketTenureFit],
                             ['work', bd.compatibility.workFit],
+                            ['age', bd.compatibility.ageFit],
                             ['great Fika', bd.compatibility.greatFikaFit],
                             ['life chapter', bd.compatibility.lifeChapterFit],
                             ['feasibility', bd.feasibility.total],
@@ -792,6 +794,7 @@ export default function AdminSignupsPage() {
                       <span><dt>Talk topics</dt><dd>{simPairModal.matchBreakdown.compatibility.likeTalkingAboutFit.toFixed(3)}</dd></span>
                       <span><dt>Market tenure</dt><dd>{simPairModal.matchBreakdown.compatibility.marketTenureFit.toFixed(3)}</dd></span>
                       <span><dt>Work</dt><dd>{simPairModal.matchBreakdown.compatibility.workFit.toFixed(3)}</dd></span>
+                      <span><dt>Age fit</dt><dd>{simPairModal.matchBreakdown.compatibility.ageFit.toFixed(3)}</dd></span>
                       <span><dt>Total (pre-penalty)</dt><dd>{simPairModal.matchBreakdown.compatibility.total.toFixed(3)}</dd></span>
                     </dl>
                     <h4 className="admin-modal-meta" style={{ marginTop: '0.75rem', fontWeight: 600 }}>Penalties</h4>

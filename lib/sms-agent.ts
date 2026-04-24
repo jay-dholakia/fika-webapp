@@ -8,6 +8,7 @@ import { haversineKm } from '@/lib/distance'
 import { searchNearbyCafesGooglePlaces, upsertVenueFromGooglePlace } from '@/lib/google-places-venues'
 import { DEFAULT_RADIUS_KM } from '@/lib/intake-radius'
 import { SMS_PACING_MS } from '@/lib/sms-pacing'
+import { isSensitiveWorkIntakeLabel, normalizeWorkIntakeLabel } from '@/lib/work-sensitive-intake'
 
 export const SMS_STATES = {
   GLOBAL_READY: 'global_ready',
@@ -494,6 +495,14 @@ function truncateRevealWorkLabel(raw: string, max = 52): string {
   return `${t.slice(0, max - 1)}…`
 }
 
+/** Natural phrasing after pronoun contraction (avoid "He's a On sabbatical"). */
+function revealWorkIntroFragment(pack: RevealPronounPack, workDisplay: string, rawForKey: string): string {
+  const key = normalizeWorkIntakeLabel(rawForKey)
+  if (key === 'on sabbatical') return `${pack.contractLead} on sabbatical`
+  if (key === 'taking a career break') return `${pack.contractLead} taking a career break`
+  return `${pack.contractLead} a ${workDisplay}`
+}
+
 /**
  * Reveal bubble (after user replies YES to see intro): Meet → job + loves → shared talk chips → meet ask.
  * Example: Meet Maya. She's a Graphic Designer and loves typography and film photography.
@@ -640,14 +649,15 @@ export function formatMatchRevealSentence(params: {
 
   const talkTeaser = [...fikaTeaser, ...hookTalkFillers].slice(0, 3)
 
-  const work = truncateRevealWorkLabel(String(otherWorkLabel ?? ''))
+  const rawWork = String(otherWorkLabel ?? '').trim()
+  const workDisplay = isSensitiveWorkIntakeLabel(rawWork) ? '' : truncateRevealWorkLabel(rawWork)
 
   const profileSentence = (() => {
-    if (work && interestsPhrase) {
-      return `${pronounPack.contractLead} a ${work} and ${pronounPack.loveVerbAfterAnd} ${interestsPhrase}.`
+    if (workDisplay && interestsPhrase) {
+      return `${revealWorkIntroFragment(pronounPack, workDisplay, rawWork)} and ${pronounPack.loveVerbAfterAnd} ${interestsPhrase}.`
     }
-    if (work) {
-      return `${pronounPack.contractLead} a ${work}.`
+    if (workDisplay) {
+      return `${revealWorkIntroFragment(pronounPack, workDisplay, rawWork)}.`
     }
     if (interestsPhrase) {
       return `${pronounPack.standaloneLoveLead} ${interestsPhrase}.`

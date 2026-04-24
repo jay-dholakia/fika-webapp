@@ -194,6 +194,7 @@ function sectionScoresFromBreakdown(bd: FikaMatchBreakdown): Record<string, numb
     q_like_talking_about_fit: bd.compatibility.likeTalkingAboutFit,
     q_market_tenure_fit: bd.compatibility.marketTenureFit,
     q_work_fit: bd.compatibility.workFit,
+    age_fit: bd.compatibility.ageFit,
     texture_fit: bd.compatibility.textureFit,
     avoid_topics_penalty: bd.penalties.avoidTopicsPenalty,
     severe_mismatch_penalty: bd.penalties.severeMismatchPenalty,

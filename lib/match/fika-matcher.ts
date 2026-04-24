@@ -1,6 +1,7 @@
 import { getIntakeMulti, getIntakeSingle } from '@/lib/intake-response-utils'
 import { marketTenureFitScore, workFitScore } from '@/lib/match/tenure-work-fit'
 import {
+  AGE_FIT_SCALE_YEARS,
   COMPATIBILITY_PORTION,
   COMPATIBILITY_WEIGHTS,
   CONFIRM_INTENT_REQUIRED_VALUE,
@@ -55,6 +56,8 @@ export type FikaMatchBreakdown = {
     marketTenureFit: number
     workFit: number
     textureFit: number
+    /** 0–1 from calendar-age gap; neutral 0.5 if either age unknown. */
+    ageFit: number
     total: number
   }
   penalties: {
@@ -109,6 +112,14 @@ function timeOverlapFeasibilityScore(timesA: string[], timesB: string[]): number
   return TIME_FIT_BLEND.jaccard * jaccard + TIME_FIT_BLEND.overlapCoeff * overlapCoeff
 }
 
+/** Closer calendar ages score higher; both ages required, else neutral. */
+export function ageFitScore(ageA: number | null, ageB: number | null): number {
+  if (ageA == null || ageB == null || !Number.isFinite(ageA) || !Number.isFinite(ageB)) return 0.5
+  const d = Math.abs(ageA - ageB)
+  const raw = 1 / (1 + d / AGE_FIT_SCALE_YEARS)
+  return Math.max(0, Math.min(1, raw))
+}
+
 function distanceFitScore(distanceKm: number | null, combinedRadiusKm: number): number {
   if (distanceKm == null || combinedRadiusKm <= 0) return DISTANCE_FIT_MISSING_COORDS
   const ratio = distanceKm / combinedRadiusKm
@@ -122,10 +133,6 @@ function intakeFieldPresent(responses: unknown, questionId: string): boolean {
   const multi = ['q_interests', 'q_like_talking_about', 'q_typical_fika_times']
   if (multi.includes(questionId)) {
     return getIntakeMulti(responses, questionId).length > 0
-  }
-  if (questionId === 'confirm_intent') {
-    const v = getIntakeSingle(responses, 'confirm_intent')
-    return v === CONFIRM_INTENT_REQUIRED_VALUE
   }
   const s = getIntakeSingle(responses, questionId)
   return s != null && s.length > 0
@@ -287,13 +294,15 @@ export function scoreFikaPair(a: MatcherPerson, b: MatcherPerson, opts?: ScorePa
   )
   const marketTenureFit = marketTenureFitScore(a.responses, b.responses)
   const workFit = workFitScore(a.responses, b.responses)
+  const ageFit = ageFitScore(a.age, b.age)
 
   const w = COMPATIBILITY_WEIGHTS
   const compatibilityTotal =
     w.interests * interestsFit +
     w.marketTenure * marketTenureFit +
     w.work * workFit +
-    w.likeTalkingAbout * likeTalkingAboutFit
+    w.likeTalkingAbout * likeTalkingAboutFit +
+    w.ageFit * ageFit
 
   const avoidTopicsPenalty = 0
   const severeMismatch = 0
@@ -325,6 +334,7 @@ export function scoreFikaPair(a: MatcherPerson, b: MatcherPerson, opts?: ScorePa
       marketTenureFit,
       workFit,
       textureFit: 0,
+      ageFit,
       total: compatibilityTotal,
     },
     penalties: {

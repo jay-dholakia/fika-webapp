@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { IntakeResponseItem } from '@/lib/db-types'
 import { buildIntroCardFallback, type IntroCardSummary } from '@/lib/intro-card-summary'
 import { formatIntakeAnswer } from '@/lib/intro-detail'
+import { isSensitiveWorkIntakeLabel } from '@/lib/work-sensitive-intake'
 
 function factsPayloadForPrompt(responses: IntakeResponseItem[]): Record<string, string | null> {
   const byId = new Map(responses.map((r) => [r.question_id, r]))
@@ -11,9 +12,10 @@ function factsPayloadForPrompt(responses: IntakeResponseItem[]): Record<string, 
     const s = formatIntakeAnswer(r.answer).trim()
     return s || null
   }
+  const workRaw = str('q_work')
   return {
     life_chapter: str('q_life_chapter'),
-    work: str('q_work'),
+    work: workRaw && !isSensitiveWorkIntakeLabel(workRaw) ? workRaw : null,
     everyday_anchor: str('q_everyday_anchor'),
     interests: str('q_interests'),
     curiosity: str('q_curiosity'),
@@ -43,6 +45,7 @@ async function fetchOpenAiIntroSummary(
           content: `You write short intro cards for people meeting in person. Rules:
 - Use ONLY facts present in the user JSON. Never invent employer, job title, city, education, or relationship details.
 - If a field is null or missing, omit it; do not guess.
+- If work describes unemployment, between jobs, caregiving, career break, visa limits, or similar sensitive employment situations, omit work entirely from paragraph and bullets — never lead with job loss or judgmental framing.
 - Output valid JSON with keys: paragraph (string, max 2 short sentences), bullets (array of 2-4 short strings, each one scannable line).
 - Friendly, warm, third person ("they"). No marketing hype.`,
         },

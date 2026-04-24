@@ -1,5 +1,6 @@
 import type { IntakeResponseItem } from '@/lib/db-types'
 import { formatIntakeAnswer, filterSafeIntakeResponses } from '@/lib/intro-detail'
+import { isSensitiveWorkIntakeLabel } from '@/lib/work-sensitive-intake'
 
 /** Stored on intake_responses_v5.intro_card_summary and used by IntroDetailModal. */
 export type IntroCardSummary = {
@@ -39,7 +40,8 @@ function getAnswer(responses: IntakeResponseItem[], id: string): string | null {
 export function buildIntroCardFallback(responses: IntakeResponseItem[]): IntroCardSummary {
   const safe = filterSafeIntakeResponses(responses)
   const life = getAnswer(safe, 'q_life_chapter')
-  const work = getAnswer(safe, 'q_work')
+  const workRaw = getAnswer(safe, 'q_work')
+  const work = workRaw && !isSensitiveWorkIntakeLabel(workRaw) ? workRaw : null
   const anchor = getAnswer(safe, 'q_everyday_anchor')
   const interests = getAnswer(safe, 'q_interests')
   const curiosity = getAnswer(safe, 'q_curiosity')
