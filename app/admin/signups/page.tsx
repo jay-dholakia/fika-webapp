@@ -48,7 +48,6 @@ type SimSummary = {
   usersSkippedUpcomingConfirmed?: number
   pairsScored: number
   filteredOut: number
-  optedInOnly: boolean
   market: string | null
   scoring?: string
 }
@@ -157,7 +156,6 @@ export default function AdminSignupsPage() {
   const [simSummary, setSimSummary] = useState<SimSummary | null>(null)
   const [simPairs, setSimPairs] = useState<SimPair[]>([])
   const [simPairModal, setSimPairModal] = useState<SimPair | null>(null)
-  const [simOptedInOnly, setSimOptedInOnly] = useState(false)
   const [simMaxUsers, setSimMaxUsers] = useState(260)
   const [simTopN, setSimTopN] = useState(220)
   const [selectedSimPairs, setSelectedSimPairs] = useState<Record<string, boolean>>({})
@@ -259,7 +257,6 @@ export default function AdminSignupsPage() {
         body: JSON.stringify({
           action: 'simulate',
           market: filterMarket || null,
-          optedInOnly: simOptedInOnly,
           maxUsers: simMaxUsers,
           topN: simTopN,
         }),
@@ -417,15 +414,6 @@ export default function AdminSignupsPage() {
               <strong>Send intro SMS</strong> re-runs the matcher for each selection, then creates the match row.
             </p>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-              <label className="admin-toggle" style={{ marginRight: '0.25rem' }}>
-                <input
-                  type="checkbox"
-                  checked={simOptedInOnly}
-                  onChange={(e) => setSimOptedInOnly(e.target.checked)}
-                  disabled={simLoading || triggeringSms}
-                />
-                <span className="admin-toggle-label">Only users opted in this week</span>
-              </label>
               <label className="admin-toggle" style={{ marginRight: '0.25rem' }}>
                 <span className="admin-toggle-label">Max users</span>
                 <input

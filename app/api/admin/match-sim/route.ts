@@ -313,7 +313,6 @@ export async function POST(request: Request) {
   }
 
   const market = typeof body.market === 'string' ? body.market.trim() : null
-  const optedInOnly = body.optedInOnly === true
   const maxUsers = Math.min(300, Math.max(20, typeof body.maxUsers === 'number' ? Math.floor(body.maxUsers) : 120))
   const topN = Math.min(300, Math.max(10, typeof body.topN === 'number' ? Math.floor(body.topN) : 100))
 
@@ -326,16 +325,6 @@ export async function POST(request: Request) {
 
   const { data: activeMarkets } = await supabase.from('markets').select('slug').eq('active', true)
   const activeSlugs = (activeMarkets ?? []).map((m: { slug: string }) => m.slug)
-  let candidateIds: string[] | null = null
-
-  if (optedInOnly) {
-    const weekAnchorMonday = getWeekAnchorMonday(new Date())
-    const { data: optIns } = await supabase
-      .from('weekly_match_opt_ins')
-      .select('user_id')
-      .eq('week_anchor_monday', weekAnchorMonday)
-    candidateIds = (optIns ?? []).map((x: { user_id: string }) => x.user_id)
-  }
 
   let profilesQuery = supabase.from('profiles').select(ADMIN_MATCH_PROFILE_SELECT)
     .eq('in_match_bowl', true)
@@ -344,7 +333,6 @@ export async function POST(request: Request) {
 
   if (activeSlugs.length > 0) profilesQuery = profilesQuery.in('market', activeSlugs)
   if (market) profilesQuery = profilesQuery.eq('market', market)
-  if (candidateIds && candidateIds.length > 0) profilesQuery = profilesQuery.in('id', candidateIds)
 
   const { data: profiles, error: profilesErr } = await profilesQuery
   if (profilesErr) return NextResponse.json({ error: profilesErr.message }, { status: 500 })
@@ -364,7 +352,6 @@ export async function POST(request: Request) {
         usersSkippedUpcomingConfirmed,
         pairsScored: 0,
         filteredOut: 0,
-        optedInOnly,
         market,
         scoring: MATCH_SCORING_VERSION,
       },
@@ -401,7 +388,6 @@ export async function POST(request: Request) {
         usersSkippedUpcomingConfirmed,
         pairsScored: 0,
         filteredOut: 0,
-        optedInOnly,
         market,
         scoring: MATCH_SCORING_VERSION,
       },
@@ -503,7 +489,6 @@ export async function POST(request: Request) {
       usersSkippedUpcomingConfirmed,
       pairsScored: pairs.length,
       filteredOut,
-      optedInOnly,
       market,
       scoring: MATCH_SCORING_VERSION,
     },
