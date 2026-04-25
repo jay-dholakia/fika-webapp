@@ -79,6 +79,7 @@ import {
   messageMutualYesContext,
   messageAwaitingAvailabilityReady,
   messageMatchOfferedUnrecognized,
+  messageSeeIntroWaitingForOther,
 } from '@/lib/sms-agent'
 import { getActiveMarketSlugs } from '@/lib/admin-markets'
 import { getMarketBySlug } from '@/lib/markets'
@@ -387,6 +388,8 @@ function generateProposalCandidates(params: {
 
 const OPT_IN_DECISION = 'opt_in'
 const PASS_DECISION = 'pass'
+/** User said YES to the teaser — wants the full intro SMS once both sides agree. */
+const SEE_INTRO_DECISION = 'see_intro'
 
 function isOptInDecision(decision: string | null | undefined): boolean {
   return decision === OPT_IN_DECISION || decision === 'yes'
@@ -394,6 +397,10 @@ function isOptInDecision(decision: string | null | undefined): boolean {
 
 function isPassDecision(decision: string | null | undefined): boolean {
   return decision === PASS_DECISION || decision === 'no'
+}
+
+function isSeeIntroDecision(decision: string | null | undefined): boolean {
+  return decision === SEE_INTRO_DECISION
 }
 
 function isDuplicateKeyError(error: unknown): boolean {
@@ -703,6 +710,226 @@ export async function POST(request: Request) {
     return phase !== 'reveal_pending'
   }
 
+  async function fulfillMatchCandidatePass(params: {
+    fromNumber: string
+    userId: string
+    matchId: string
+    weekAnchorMonday: string
+    selfSmsStateRowId: string
+    passLedgerContext: string
+  }): Promise<{ ok: true } | { ok: false; errorMessage: string }> {
+    const { fromNumber, userId, matchId, weekAnchorMonday, selfSmsStateRowId, passLedgerContext } = params
+    const { error: passUpsertError } = await supabase.from('opt_ins').upsert(
+      { match_id: matchId, user_id: userId, decision: PASS_DECISION },
+      { onConflict: 'match_id,user_id' }
+    )
+    if (passUpsertError) {
+      console.error('[sendblue-webhook] pass upsert failed', { userId, matchId, error: passUpsertError })
+      return { ok: false, errorMessage: passUpsertError.message }
+    }
+    await sendConciergeAndLog(fromNumber, messagePassConfirmation(), passLedgerContext, {
+      userId,
+      weekAnchorMonday,
+      matchId,
+    })
+    const { data: matchRow } = await supabase.from('match_candidates').select('user_a, user_b').eq('id', matchId).single()
+    const otherId = matchRow ? (matchRow.user_a === userId ? matchRow.user_b : matchRow.user_a) : null
+    if (matchRow?.user_a != null && matchRow?.user_b != null) {
+      const exA = matchRow.user_a < matchRow.user_b ? matchRow.user_a : matchRow.user_b
+      const exB = matchRow.user_a < matchRow.user_b ? matchRow.user_b : matchRow.user_a
+      await supabase.from('match_exclusions').upsert({ user_a: exA, user_b: exB }, { onConflict: 'user_a,user_b' })
+    }
+    if (otherId) {
+      const { data: otherStateRow } = await supabase
+        .from('sms_conversation_states')
+        .select('state, payload')
+        .eq('user_id', otherId)
+        .eq('match_id', matchId)
+        .maybeSingle()
+      const { data: otherOpt } = await supabase
+        .from('opt_ins')
+        .select('decision')
+        .eq('match_id', matchId)
+        .eq('user_id', otherId)
+        .maybeSingle()
+      const shouldNotifyOther =
+        isOptInDecision(otherOpt?.decision) ||
+        isSeeIntroDecision(otherOpt?.decision) ||
+        shouldNotifyOtherUserOfPass(
+          otherStateRow?.state,
+          (otherStateRow?.payload as Record<string, unknown> | undefined) ?? {}
+        )
+      if (shouldNotifyOther) {
+        const { data: otherProf } = await supabase.from('profiles').select('phone').eq('id', otherId).maybeSingle()
+        if (otherProf?.phone) {
+          await sendConciergeAndLog(otherProf.phone, messageMatchPassed(), 'match_passed_to_other', {
+            userId: otherId,
+            weekAnchorMonday,
+            matchId,
+          })
+        }
+        await supabase.from('sms_conversation_states').delete().eq('user_id', otherId).eq('match_id', matchId)
+      } else {
+        await setPerMatchSmsState({
+          userId: otherId,
+          weekAnchorMonday,
+          matchId,
+          state: SMS_STATES.MATCH_CLOSED,
+          payload: {
+            closed_reason: 'other_user_passed',
+            closed_at: new Date().toISOString(),
+          },
+        })
+      }
+    }
+    await supabase.from('sms_conversation_states').delete().eq('id', selfSmsStateRowId)
+    return { ok: true }
+  }
+
+  async function deliverMutualIntroRevealForMatch(params: {
+    appBase: string
+    matchId: string
+    weekAnchorMonday: string
+    userA: string
+    userB: string
+    reasons: Record<string, unknown>
+    introPreviewVenueId: string | null
+    matchPayloadTemplate: Record<string, unknown>
+    messageHandle: string | null
+    triggeringUserId: string
+  }): Promise<void> {
+    const {
+      appBase,
+      matchId,
+      weekAnchorMonday,
+      userA,
+      userB,
+      reasons,
+      introPreviewVenueId,
+      matchPayloadTemplate,
+      messageHandle,
+      triggeringUserId,
+    } = params
+
+    const reasonsRoot = (reasons as Record<string, unknown>) ?? {}
+    const rawReasons =
+      ((reasonsRoot.raw as Record<string, unknown> | undefined) ?? reasonsRoot) as Record<string, unknown>
+    const copyReasons =
+      ((reasonsRoot.copy as Record<string, unknown> | undefined) ?? reasonsRoot) as Record<string, unknown>
+    const sharedInterests =
+      (copyReasons.shared_interests as string[]) ?? (rawReasons.shared_interests as string[]) ?? []
+    const conversationHooks = (rawReasons.conversation_hooks as string[]) ?? []
+    const fikaTalkOverlap = (rawReasons.fika_talk_overlap as string[] | undefined) ?? []
+
+    let previewVenue: {
+      name?: string | null
+      neighborhood?: string | null
+      city?: string | null
+      address?: string | null
+      lat?: number | null
+      lng?: number | null
+    } | null = null
+    if (introPreviewVenueId?.trim()) {
+      const { data } = await supabase
+        .from('venues')
+        .select('name, neighborhood, city, address, lat, lng')
+        .eq('id', introPreviewVenueId)
+        .maybeSingle()
+      previewVenue = data
+    }
+
+    const revealedPayload: Record<string, unknown> = { ...matchPayloadTemplate, phase: 'revealed' }
+
+    async function sendRevealSequenceToViewer(viewerUserId: string, viewerPhone: string) {
+      const otherId = viewerUserId === userA ? userB : userA
+      const { data: otherProfile } = await supabase
+        .from('profiles')
+        .select('first_name, birthdate, avatar_url, pronouns')
+        .eq('id', otherId)
+        .maybeSingle()
+      const { data: otherIntakeRow } = await supabase
+        .from('intake_responses_v5')
+        .select('responses')
+        .eq('user_id', otherId)
+        .maybeSingle()
+      const otherName = otherProfile?.first_name?.trim() ?? 'Someone'
+      const otherWorkLabel = getIntakeSingle(otherIntakeRow?.responses ?? null, 'q_work')
+      const introCardUrl = buildIntroCardUrl({
+        appBase,
+        avatarUrl: otherProfile?.avatar_url ?? null,
+        firstName: otherName,
+        age: ageFromBirthdateLabel(otherProfile?.birthdate ?? null),
+      })
+      if (introCardUrl) {
+        await sendConciergeAndLog(viewerPhone, ' ', 'v2_mutual_reveal_image', {
+          userId: viewerUserId,
+          weekAnchorMonday,
+          matchId,
+          mediaUrl: introCardUrl,
+        })
+        await sleepForSmsPacing(SMS_PACING_MS.media)
+      }
+      await sendConciergeAndLog(
+        viewerPhone,
+        formatMatchRevealSentence({
+          otherFirstName: otherName,
+          otherPronouns: otherProfile?.pronouns ?? null,
+          otherWorkLabel,
+          sharedInterests: sharedInterests.slice(0, 3),
+          conversationHooks,
+          fikaTalkOverlap: fikaTalkOverlap.slice(0, 3),
+        }),
+        'v2_mutual_reveal_context',
+        { userId: viewerUserId, weekAnchorMonday, matchId }
+      )
+      if (previewVenue?.name?.trim()) {
+        await sleepForSmsPacing(SMS_PACING_MS.beat)
+        const mapsUrl = buildVenuePreviewUrl(appBase, introPreviewVenueId)
+        await sendConciergeAndLog(
+          viewerPhone,
+          `${previewVenue.name} looks like a good middle spot${mapsUrl ? `: ${mapsUrl}` : '.'}`,
+          'v2_mutual_reveal_venue',
+          { userId: viewerUserId, weekAnchorMonday, matchId }
+        )
+      }
+      await setPerMatchSmsState({
+        userId: viewerUserId,
+        weekAnchorMonday,
+        matchId,
+        state: SMS_STATES.MATCH_OFFERED,
+        payload: revealedPayload,
+        lastSendblueMessageHandle: viewerUserId === triggeringUserId ? messageHandle : undefined,
+      })
+    }
+
+    const { data: profA } = await supabase.from('profiles').select('phone').eq('id', userA).maybeSingle()
+    const { data: profB } = await supabase.from('profiles').select('phone').eq('id', userB).maybeSingle()
+    const phoneA = profA?.phone?.trim()
+    const phoneB = profB?.phone?.trim()
+    if (phoneA) await sendRevealSequenceToViewer(userA, phoneA)
+    else {
+      await setPerMatchSmsState({
+        userId: userA,
+        weekAnchorMonday,
+        matchId,
+        state: SMS_STATES.MATCH_OFFERED,
+        payload: revealedPayload,
+      })
+    }
+    if (phoneB) {
+      if (phoneA) await sleepForSmsPacing(SMS_PACING_MS.beat)
+      await sendRevealSequenceToViewer(userB, phoneB)
+    } else {
+      await setPerMatchSmsState({
+        userId: userB,
+        weekAnchorMonday,
+        matchId,
+        state: SMS_STATES.MATCH_OFFERED,
+        payload: revealedPayload,
+      })
+    }
+  }
+
   try {
   const isConcierge = isConciergeNumber(toNumber)
   console.log('[sendblue-webhook] route', { isConcierge, toNumber: toNumber ? 'set' : 'empty' })
@@ -849,7 +1076,7 @@ export async function POST(request: Request) {
       if (yesNo === null) {
         await sendConciergeAndLog(
           fromNumber,
-          'Reply YES or NO — want us to try this intro again another time?',
+          'Reply Yes or No — want us to try this intro again another time?',
           'cancel_retry_prompt_yes_or_no',
           { userId, matchId: cancelRetryRow.id }
         )
@@ -1312,7 +1539,7 @@ export async function POST(request: Request) {
   const isMatchYesSignal = isMatchYesKeyword(content) || keyword === 'YES' || reactionDecision === 'yes'
   const isMatchPassSignal = isMatchPassKeyword(content) || keyword === 'PASS' || reactionDecision === 'pass'
 
-  // Recovery path: if a user replies YES/PASS but match state row is missing,
+  // Recovery path: if a user replies YES/NO/PASS but match state row is missing,
   // resolve their latest active match so we still treat the reply as a match response.
   if (!matchId && (isMatchYesSignal || isMatchPassSignal)) {
     const { data: recentMatches } = await supabase
@@ -1332,7 +1559,10 @@ export async function POST(request: Request) {
         .in('match_id', candidateMatchIds)
       const optedMatchIds = new Set(
         (myOptIns ?? [])
-          .filter((o: { decision?: string | null }) => isOptInDecision(o.decision) || isPassDecision(o.decision))
+          .filter(
+            (o: { decision?: string | null }) =>
+              isOptInDecision(o.decision) || isPassDecision(o.decision) || isSeeIntroDecision(o.decision)
+          )
           .map((o: { match_id: string }) => o.match_id)
       )
       const recovered = (recentMatches ?? []).find((m: { id: string }) => !optedMatchIds.has(m.id)) ??
@@ -1400,13 +1630,44 @@ export async function POST(request: Request) {
   if (matchState === SMS_STATES.MATCH_OFFERED && matchId) {
     const offerPhase = (matchPayload.phase as string | undefined) ?? 'revealed'
     if (offerPhase === 'reveal_pending') {
+      if (isMatchPassSignal) {
+        const passResult = await fulfillMatchCandidatePass({
+          fromNumber,
+          userId,
+          matchId,
+          weekAnchorMonday,
+          selfSmsStateRowId: matchStateRow!.id,
+          passLedgerContext: 'reveal_pending_pass_confirmation',
+        })
+        if (!passResult.ok) {
+          return smsFail('pass_upsert_failed', { userId, matchId, message: passResult.errorMessage })
+        }
+        return NextResponse.json({ ok: true })
+      }
+
       if (isMatchYesSignal) {
-        const { data: match } = await supabase
+        const { data: otherOptEarly } = await supabase
+          .from('opt_ins')
+          .select('decision')
+          .eq('match_id', matchId)
+          .neq('user_id', userId)
+          .maybeSingle()
+        if (isPassDecision(otherOptEarly?.decision)) {
+          await sendConciergeAndLog(fromNumber, messageMatchPassed(), 'match_passed_other_already_passed', {
+            userId,
+            weekAnchorMonday,
+            matchId,
+          })
+          await supabase.from('sms_conversation_states').delete().eq('id', matchStateRow!.id)
+          return NextResponse.json({ ok: true })
+        }
+
+        const { data: matchRowCheck } = await supabase
           .from('match_candidates')
-          .select('id, reasons')
+          .select('id')
           .eq('id', matchId)
           .maybeSingle()
-        if (!match) {
+        if (!matchRowCheck) {
           await sendConciergeAndLog(
             fromNumber,
             "That match is no longer available. We'll send you another soon.",
@@ -1415,95 +1676,87 @@ export async function POST(request: Request) {
           )
           return NextResponse.json({ ok: true })
         }
-        const reasons = (match.reasons as Record<string, unknown>) ?? {}
-        const rawReasons = ((reasons.raw as Record<string, unknown> | undefined) ?? reasons)
-        const copyReasons = ((reasons.copy as Record<string, unknown> | undefined) ?? reasons)
-        const sharedInterests = (copyReasons.shared_interests as string[]) ?? (rawReasons.shared_interests as string[]) ?? []
-        const conversationHooks = (rawReasons.conversation_hooks as string[]) ?? []
-        /** Shared `q_like_talking_about` chips; include in replenish / match-sim `reasons.raw`. */
-        const fikaTalkOverlap = (rawReasons.fika_talk_overlap as string[] | undefined) ?? []
-        const { data: pair } = await supabase
-          .from('match_candidates')
-          .select('user_a, user_b')
-          .eq('id', matchId)
-          .maybeSingle()
-        const otherId = pair ? (pair.user_a === userId ? pair.user_b : pair.user_a) : null
-        const { data: otherProfile } = otherId
-          ? await supabase
-              .from('profiles')
-              .select('first_name, birthdate, avatar_url, pronouns')
-              .eq('id', otherId)
-              .maybeSingle()
-          : { data: null as { first_name?: string | null; birthdate?: string | null; avatar_url?: string | null; pronouns?: string | null } | null }
-        const { data: otherIntakeRow } = otherId
-          ? await supabase.from('intake_responses_v5').select('responses').eq('user_id', otherId).maybeSingle()
-          : { data: null as { responses?: unknown } | null }
-        const otherName = otherProfile?.first_name?.trim() ?? 'Someone'
-        const otherWorkLabel = getIntakeSingle(otherIntakeRow?.responses ?? null, 'q_work')
-        const introCardUrl = buildIntroCardUrl({
-          appBase,
-          avatarUrl: otherProfile?.avatar_url ?? null,
-          firstName: otherName,
-          age: ageFromBirthdateLabel(otherProfile?.birthdate ?? null),
-        })
-        const previewVenueId = typeof matchPayload.intro_preview_venue_id === 'string'
-          ? matchPayload.intro_preview_venue_id
-          : null
-        const { data: previewVenue } = previewVenueId
-          ? await supabase
-              .from('venues')
-              .select('name, neighborhood, city, address, lat, lng')
-              .eq('id', previewVenueId)
-              .maybeSingle()
-          : { data: null as { name?: string | null; neighborhood?: string | null; city?: string | null; address?: string | null; lat?: number | null; lng?: number | null } | null }
-        if (introCardUrl) {
-          await sendConciergeAndLog(fromNumber, ' ', 'v2_reveal_image', {
+
+        const { error: seeIntroErr } = await supabase.from('opt_ins').upsert(
+          { match_id: matchId, user_id: userId, decision: SEE_INTRO_DECISION },
+          { onConflict: 'match_id,user_id' }
+        )
+        if (seeIntroErr) {
+          console.error('[sendblue-webhook] see_intro upsert failed', { userId, matchId, error: seeIntroErr })
+          return smsFail('see_intro_upsert_failed', { userId, matchId, message: seeIntroErr.message })
+        }
+
+        const { data: seeIntroRows } = await supabase
+          .from('opt_ins')
+          .select('user_id')
+          .eq('match_id', matchId)
+          .eq('decision', SEE_INTRO_DECISION)
+
+        const previewVenueId =
+          typeof matchPayload.intro_preview_venue_id === 'string' ? matchPayload.intro_preview_venue_id : null
+        const matchPayloadTemplate: Record<string, unknown> = {
+          protocol_version: (matchPayload.protocol_version as string | undefined) ?? 'v2',
+          ...(previewVenueId ? { intro_preview_venue_id: previewVenueId } : {}),
+        }
+
+        if ((seeIntroRows ?? []).length < 2) {
+          await sendConciergeAndLog(fromNumber, messageSeeIntroWaitingForOther(), 'see_intro_waiting_for_other', {
             userId,
             weekAnchorMonday,
             matchId,
-            mediaUrl: introCardUrl,
           })
-          await sleepForSmsPacing(SMS_PACING_MS.media)
+          await setPerMatchSmsState({
+            userId,
+            weekAnchorMonday,
+            matchId,
+            state: SMS_STATES.MATCH_OFFERED,
+            payload: { ...matchPayload, phase: 'reveal_pending' },
+            lastSendblueMessageHandle: messageHandle,
+          })
+          return NextResponse.json({ ok: true })
         }
-        await sendConciergeAndLog(
-          fromNumber,
-          formatMatchRevealSentence({
-            otherFirstName: otherName,
-            otherPronouns: otherProfile?.pronouns ?? null,
-            otherWorkLabel,
-            sharedInterests: sharedInterests.slice(0, 3),
-            conversationHooks,
-            fikaTalkOverlap: fikaTalkOverlap.slice(0, 3),
-          }),
-          'v2_reveal_context',
-          { userId, weekAnchorMonday, matchId }
-        )
-        if (previewVenue?.name?.trim()) {
-          await sleepForSmsPacing(SMS_PACING_MS.beat)
-          const mapsUrl = buildVenuePreviewUrl(appBase, previewVenueId)
-          await sendConciergeAndLog(
-            fromNumber,
-            `${previewVenue.name} looks like a good middle spot${mapsUrl ? `: ${mapsUrl}` : '.'}`,
-            'v2_reveal_venue',
-            { userId, weekAnchorMonday, matchId }
-          )
+
+        const { data: claimed } = await supabase
+          .from('match_candidates')
+          .update({ mutual_intro_revealed_at: new Date().toISOString() })
+          .eq('id', matchId)
+          .is('mutual_intro_revealed_at', null)
+          .select('id, user_a, user_b, reasons')
+          .maybeSingle()
+
+        if (!claimed?.id) {
+          await setPerMatchSmsState({
+            userId,
+            weekAnchorMonday,
+            matchId,
+            state: SMS_STATES.MATCH_OFFERED,
+            payload: { ...matchPayload, phase: 'revealed' },
+            lastSendblueMessageHandle: messageHandle,
+          })
+          return NextResponse.json({ ok: true })
         }
-        await setPerMatchSmsState({
-          userId,
-          weekAnchorMonday,
+
+        await deliverMutualIntroRevealForMatch({
+          appBase,
           matchId,
-          state: SMS_STATES.MATCH_OFFERED,
-          payload: { ...matchPayload, phase: 'revealed' },
-          lastSendblueMessageHandle: messageHandle,
+          weekAnchorMonday,
+          userA: claimed.user_a as string,
+          userB: claimed.user_b as string,
+          reasons: (claimed.reasons as Record<string, unknown>) ?? {},
+          introPreviewVenueId: previewVenueId,
+          matchPayloadTemplate,
+          messageHandle,
+          triggeringUserId: userId,
         })
-      } else {
-        await sendConciergeAndLog(
-          fromNumber,
-          messageMatchOfferedUnrecognized('reveal_pending'),
-          'match_offer_reveal_pending_nudge',
-          { userId, weekAnchorMonday, matchId }
-        )
+        return NextResponse.json({ ok: true })
       }
+
+      await sendConciergeAndLog(
+        fromNumber,
+        messageMatchOfferedUnrecognized('reveal_pending'),
+        'match_offer_reveal_pending_nudge',
+        { userId, weekAnchorMonday, matchId }
+      )
       return NextResponse.json({ ok: true })
     }
 
@@ -1870,56 +2123,17 @@ export async function POST(request: Request) {
         }
       }
     } else if (isMatchPassSignal) {
-      const { error: passUpsertError } = await supabase.from('opt_ins').upsert(
-        { match_id: matchId, user_id: userId, decision: PASS_DECISION },
-        { onConflict: 'match_id,user_id' }
-      )
-      if (passUpsertError) {
-        console.error('[sendblue-webhook] pass upsert failed', { userId, matchId, error: passUpsertError })
-        return smsFail('pass_upsert_failed', { userId, matchId, message: passUpsertError.message })
+      const passResult = await fulfillMatchCandidatePass({
+        fromNumber,
+        userId,
+        matchId,
+        weekAnchorMonday,
+        selfSmsStateRowId: matchStateRow!.id,
+        passLedgerContext: 'pass_confirmation',
+      })
+      if (!passResult.ok) {
+        return smsFail('pass_upsert_failed', { userId, matchId, message: passResult.errorMessage })
       }
-      await sendConciergeAndLog(fromNumber, messagePassConfirmation(), 'pass_confirmation', { userId, weekAnchorMonday, matchId })
-      const { data: matchRow } = await supabase.from('match_candidates').select('user_a, user_b').eq('id', matchId).single()
-      const otherId = matchRow ? (matchRow.user_a === userId ? matchRow.user_b : matchRow.user_a) : null
-      if (matchRow?.user_a != null && matchRow?.user_b != null) {
-        const exA = matchRow.user_a < matchRow.user_b ? matchRow.user_a : matchRow.user_b
-        const exB = matchRow.user_a < matchRow.user_b ? matchRow.user_b : matchRow.user_a
-        await supabase.from('match_exclusions').upsert(
-          { user_a: exA, user_b: exB },
-          { onConflict: 'user_a,user_b' }
-        )
-      }
-      if (otherId) {
-        const { data: otherStateRow } = await supabase
-          .from('sms_conversation_states')
-          .select('state, payload')
-          .eq('user_id', otherId)
-          .eq('match_id', matchId)
-          .maybeSingle()
-        const { data: otherOpt } = await supabase.from('opt_ins').select('decision').eq('match_id', matchId).eq('user_id', otherId).maybeSingle()
-        const shouldNotifyOther =
-          isOptInDecision(otherOpt?.decision) ||
-          shouldNotifyOtherUserOfPass(otherStateRow?.state, (otherStateRow?.payload as Record<string, unknown> | undefined) ?? {})
-        if (shouldNotifyOther) {
-          const { data: otherProf } = await supabase.from('profiles').select('phone').eq('id', otherId).maybeSingle()
-          if (otherProf?.phone) {
-            await sendConciergeAndLog(otherProf.phone, messageMatchPassed(), 'match_passed_to_other', { userId: otherId, weekAnchorMonday, matchId })
-          }
-          await supabase.from('sms_conversation_states').delete().eq('user_id', otherId).eq('match_id', matchId)
-        } else {
-          await setPerMatchSmsState({
-            userId: otherId,
-            weekAnchorMonday,
-            matchId,
-            state: SMS_STATES.MATCH_CLOSED,
-            payload: {
-              closed_reason: 'other_user_passed',
-              closed_at: new Date().toISOString(),
-            },
-          })
-        }
-      }
-      await supabase.from('sms_conversation_states').delete().eq('id', matchStateRow!.id)
     } else {
       await sendConciergeAndLog(fromNumber, messageMatchOfferedUnrecognized(), 'match_offered_unrecognized_nudge', {
         userId,
@@ -2169,7 +2383,7 @@ export async function POST(request: Request) {
         console.error('[sendblue-webhook] v2 pass upsert failed', { userId, matchId, error: passUpsertError })
         await sendConciergeAndLog(
           fromNumber,
-          "Got your PASS — we're syncing this update now. We'll text you in a moment.",
+          "Got it — we're syncing this update now. We'll text you in a moment.",
           'v2_pass_sync_retry_optin_write_failed',
           { userId, weekAnchorMonday, matchId }
         )
@@ -2201,6 +2415,7 @@ export async function POST(request: Request) {
           .maybeSingle()
         const shouldNotifyOther =
           isOptInDecision(otherOpt?.decision) ||
+          isSeeIntroDecision(otherOpt?.decision) ||
           shouldNotifyOtherUserOfPass(otherStateRow?.state, (otherStateRow?.payload as Record<string, unknown> | undefined) ?? {})
         if (shouldNotifyOther) {
           const { data: otherProf } = await supabase

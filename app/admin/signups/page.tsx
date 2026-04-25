@@ -128,7 +128,7 @@ function formatDate(iso: string | null): string {
 
 /**
  * Same inputs as `match_candidates.reasons` when admin triggers SMS (raw slices + top_copy_dimensions).
- * Matches production `v2_reveal_context` after the user replies YES to see the intro.
+ * Matches production `v2_reveal_context` after the user replies Yes to see the intro.
  */
 function adminSimRevealSentence(p: SimPair, viewerIsUserA: boolean): string {
   return formatMatchRevealSentence({
@@ -820,11 +820,11 @@ export default function AdminSignupsPage() {
               </div>
 
               <div className="admin-modal-section">
-                <h3 className="admin-modal-section-title">Intro reveal SMS (after YES)</h3>
+                <h3 className="admin-modal-section-title">Intro reveal SMS (after Yes)</h3>
                 <p className="admin-modal-meta">
-                  Single message sent as <code style={{ fontSize: '0.85em' }}>v2_reveal_context</code> after the user
-                  replies YES to the teaser; it ends with whether they want to meet (YES/NO). There is no separate 👍/PASS
-                  line after that. Uses the same fields as <code style={{ fontSize: '0.85em' }}>reasons.raw</code> when
+                  Single message sent as <code style={{ fontSize: '0.85em' }}>v2_reveal_context</code> after both people
+                  say Yes to the teaser (same line as production), then Yes or No to meet. PASS still works if someone
+                  types it. Uses the same fields as <code style={{ fontSize: '0.85em' }}>reasons.raw</code> when
                   you trigger SMS from here. <code style={{ fontSize: '0.85em' }}>texture_overlap</code> on the sim is
                   for debugging only (not used in this reveal copy).
                 </p>

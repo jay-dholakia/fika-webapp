@@ -94,7 +94,7 @@ const SENDBLUE_URL = 'https://api.sendblue.co/api/send-message'
 
 const MSG_BOTH_YES = `Got it — we'll reach back out with a new time.`
 const MSG_CLOSED = `No worries — we'll close this one out here.`
-const MSG_NUDGE = `Quick check — want to try this intro again another time?\nReply YES or NO.`
+const MSG_NUDGE = `Quick check — want to try this intro again another time?\nReply Yes or No.`
 
 async function sendConciergeDeno(
   apiKeyId: string,

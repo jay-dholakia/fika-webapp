@@ -491,26 +491,26 @@ export function IntroDetailModal({
           ) : (
             <>
               <p className="app-intro-sms-cta" style={{ marginBottom: '0.75rem', fontSize: '0.95rem', color: 'var(--color-textSecondary)' }}>
-                To accept or pass on this intro, reply by text.
+                To accept or decline this intro, reply by text.
               </p>
               <div className="app-scheduling-actions" style={{ flexWrap: 'wrap', gap: '0.5rem' }}>
                 {CONCIERGE_NUMBER ? (
                   <>
                     <a
-                      href={`sms:${CONCIERGE_NUMBER}?body=YES`}
+                      href={`sms:${CONCIERGE_NUMBER}?body=Yes`}
                       className="app-intro-btn app-intro-btn-primary"
                     >
-                      Accept (reply YES)
+                      Accept (reply Yes)
                     </a>
                     <a
-                      href={`sms:${CONCIERGE_NUMBER}?body=PASS`}
+                      href={`sms:${CONCIERGE_NUMBER}?body=No`}
                       className="app-intro-btn app-intro-btn-secondary"
                     >
-                      Pass (reply PASS)
+                      Decline (reply No)
                     </a>
                   </>
                 ) : (
-                  <span className="app-intro-status">Text YES or PASS to the number we use to text you.</span>
+                  <span className="app-intro-status">Text Yes or No to the number we use to text you.</span>
                 )}
               </div>
               <p style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: 'var(--color-textSecondary)' }}>

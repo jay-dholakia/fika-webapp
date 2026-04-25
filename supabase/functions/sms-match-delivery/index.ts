@@ -31,8 +31,10 @@ type MatchUserLocation = {
 
 function buildRevealPrompt(firstName: string | null | undefined): string {
   const trimmed = firstName?.trim()
-  if (trimmed) return `Hey ${trimmed} - we found a good Fika intro for you. Want to see it? Reply YES.`
-  return 'We found a good Fika intro for you. Want to see it? Reply YES.'
+  if (trimmed) {
+    return `Hey ${trimmed} - we found a good Fika intro for you. Want to see it? Reply Yes or No.`
+  }
+  return 'We found a good Fika intro for you. Want to see it? Reply Yes or No.'
 }
 
 function hasValidLatLng(user: MatchUserLocation): boolean {

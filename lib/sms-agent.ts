@@ -199,7 +199,7 @@ export async function pickVenueForMatch(
 }
 
 // ---------- Message templates ----------
-// After intake, we text when we have a good Fika intro; scheduling proposes a time and place by SMS for YES/NO confirmation.
+// After intake, we text when we have a good Fika intro; scheduling proposes a time and place by SMS for Yes/No confirmation.
 
 /** One-line hint so users save the concierge number and don't miss intros. */
 export function messageSaveAsContactHint(): string {
@@ -310,7 +310,7 @@ export function messageTextFikaToGetLink(): string {
 
 /** Reminder to set availability when a match is in progress. Text only; send availability link as separate message. */
 export function messageAvailabilityReminder(_availabilityUrl: string): string {
-  return `Quick reminder: when we have a time and place for your Fika, we'll text it to you.\n\nReply YES or NO to confirm.`
+  return `Quick reminder: when we have a time and place for your Fika, we'll text it to you.\n\nReply Yes or No to confirm.`
 }
 
 /** Availability received — scheduling next. */
@@ -426,21 +426,21 @@ export function messageMatchOffer(params: {
     `We found someone we think you should meet.\n\n` +
     `${whoLine}\n\n` +
     `${contextBlock}\n\n` +
-    `If you're into it, reply YES or PASS.`
+    `If you're into it, reply Yes or No.`
   )
 }
 
 /** Phase 1 (new protocol): simple simultaneous offer, no profile details yet. */
 export function messageStrongIntroOffer(): string {
-  return `We found someone we think you should meet.\n\nReply YES or PASS.`
+  return `We found someone we think you should meet.\n\nReply Yes or No.`
 }
 
 export function messageMatchRevealPrompt(firstName?: string | null): string {
   const name = firstName?.trim()
   if (name) {
-    return `Hey ${name} - we found a good Fika intro for you. Want to see it? Reply YES.`
+    return `Hey ${name} - we found a good Fika intro for you. Want to see it? Reply Yes or No.`
   }
-  return `We found a good Fika intro for you. Want to see it? Reply YES.`
+  return `We found a good Fika intro for you. Want to see it? Reply Yes or No.`
 }
 
 type RevealPronounPack = {
@@ -675,9 +675,9 @@ export function formatMatchRevealSentence(params: {
 /** User text didn’t match the current intro phase. */
 export function messageMatchOfferedUnrecognized(phase: 'reveal_pending' | 'revealed' = 'revealed'): string {
   if (phase === 'reveal_pending') {
-    return `Reply YES if you want to see the intro, or PASS to skip for now.`
+    return `Reply Yes if you want to see the intro, or No to skip for now.`
   }
-  return `Reply YES if you'd like to meet, or NO or PASS if this doesn't feel like the right fit.`
+  return `Reply Yes if you'd like to meet, or No if this doesn't feel like the right fit.`
 }
 
 /** Phase 2 teaser after both users say YES. */
@@ -712,10 +712,10 @@ export function messageMutualYesContext(params: {
 
 /** Nudge when state is still AWAITING_AVAILABILITY (legacy state name; scheduling is proposal-first). */
 export function messageAwaitingAvailabilityReady(): string {
-  return `You're almost set.\n\nWhen we send a time and place, send me a 👍 if it works for you, or reply NO if you'd like a different time. Reply Help anytime.`
+  return `You're almost set.\n\nWhen we send a time and place, reply Yes if it works for you, or No if you'd like a different time. Reply Help anytime.`
 }
 
-/** Tuesday intro with full plan (one proposed time + venue). Reply YES by 9 PM tonight. */
+/** Tuesday intro with full plan (one proposed time + venue). Reply Yes by 9 PM tonight. */
 export function messageIntroWithPlan(params: {
   otherFirstName: string
   areaLabel: string
@@ -790,6 +790,11 @@ export function messageYesWaitingForOther(): string {
   return `Love it.\n\nIf they're in too, I'll line it up and text you both a time and place.`
 }
 
+/** First person said YES to *seeing* the intro — waiting for the other before we send names / full intro. */
+export function messageSeeIntroWaitingForOther(): string {
+  return `Love it.\n\nWaiting on them — we'll send the full intro here once they say Yes too.`
+}
+
 /** Notify the person who said YES when the other passed or intro didn't get confirmed. */
 export function messageMatchPassed(): string {
   return `This one didn't come together — we'll send another intro soon.`
@@ -832,13 +837,13 @@ export function messageProposalDeclinedToOther(): string {
 /** Re-propose a new time to the person who declined (attempt 2). */
 export function messageReProposalToDecliner(params: { meetingDateLabel: string; time: string; venueName: string; neighborhood: string }): string {
   const { meetingDateLabel, time } = params
-  return `No worries.\n\nHow about ${meetingDateLabel} at ${time}?\n\nReply YES or NO.`
+  return `No worries.\n\nHow about ${meetingDateLabel} at ${time}?\n\nReply Yes or No.`
 }
 
 /** Notify the other person we're trying a different time. */
 export function messageReProposalToOther(params: { meetingDateLabel: string; time: string; venueName: string; neighborhood: string }): string {
   const { meetingDateLabel, time } = params
-  return `No worries.\n\nHow about ${meetingDateLabel} at ${time}?\n\nReply YES or NO.`
+  return `No worries.\n\nHow about ${meetingDateLabel} at ${time}?\n\nReply Yes or No.`
 }
 
 export type ProposalConfirmFields = {
@@ -851,13 +856,13 @@ export type ProposalConfirmFields = {
 /** Same proposal for both parties (symmetric time confirmation). */
 export function messageProposalToConfirmSymmetric(params: ProposalConfirmFields): string {
   const { meetingDateLabel, time } = params
-  return `Looks like this could work:\n\n${meetingDateLabel} at ${time}\n\nSend me a 👍 if this time works for you. Reply NO if you'd like a different time.`
+  return `Looks like this could work:\n\n${meetingDateLabel} at ${time}\n\nReply Yes if this time works for you. Reply No if you'd like a different time.`
 }
 
 /** User who said YES first — the other person just completed the pair. */
 export function messageProposalToConfirmFirstYes(params: ProposalConfirmFields & { otherFirstName: string }): string {
   const { otherFirstName, meetingDateLabel, time } = params
-  return `${otherFirstName} is in.\n\n${meetingDateLabel} at ${time}\n\nSend me a 👍 if this time works for you. Reply NO if you'd like a different time.`
+  return `${otherFirstName} is in.\n\n${meetingDateLabel} at ${time}\n\nReply Yes if this time works for you. Reply No if you'd like a different time.`
 }
 
 /** User who said YES second — they just triggered the proposal. */
@@ -988,12 +993,12 @@ export function messageCancelAck(): string {
 
 /** Canceller: cancel + optional retry (no rescheduling). */
 export function messageCancelRetryInitiator(): string {
-  return `Got it.\n\nWe'll let them know.\n\nWant us to try this intro again another time?\nReply YES or NO.`
+  return `Got it.\n\nWe'll let them know.\n\nWant us to try this intro again another time?\nReply Yes or No.`
 }
 
 /** Other participant after someone cancelled a confirmed Fika. */
 export function messageCancelRetryOtherUser(): string {
-  return `Your Fika won't happen at the original time.\n\nWant us to try this intro again another time?\nReply YES or NO.`
+  return `Your Fika won't happen at the original time.\n\nWant us to try this intro again another time?\nReply Yes or No.`
 }
 
 export function messageCancelRetryBothYes(): string {
@@ -1005,20 +1010,20 @@ export function messageCancelRetryClosed(): string {
 }
 
 export function messageCancelRetryNudge(): string {
-  return `Quick check — want to try this intro again another time?\nReply YES or NO.`
+  return `Quick check — want to try this intro again another time?\nReply Yes or No.`
 }
 
 export function messageCancelRetryHelp(): string {
-  return `Reply YES if you'd like us to try this intro again another time, or NO if not. We can't propose new times by text.`
+  return `Reply Yes if you'd like us to try this intro again another time, or No if not. We can't propose new times by text.`
 }
 
 export function messageCancelAlreadyInCancelRetryFlow(): string {
-  return `We already have your cancel — reply YES or NO about trying this intro again another time.`
+  return `We already have your cancel — reply Yes or No about trying this intro again another time.`
 }
 
 /** HELP: one static reply (no state-based routing). */
 export function messageSmsHelp(): string {
-  return `Reply YES or PASS when we send an intro.\n\nIf you need anything else, text us here.`
+  return `Reply Yes or No when we send an intro.\n\nIf you need anything else, text us here.`
 }
 
 // ---------- Broadened keywords (normalize then match) ----------
