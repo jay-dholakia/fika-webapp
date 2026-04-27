@@ -2,6 +2,8 @@
 
 > **Purpose:** Single checklist to read **before** coding. Aligns engineering on scope, dependencies, and open decisions. Canonical product specs are linked below — this file **summarizes** and **sequences** work.
 
+> **Status (2026-04):** Legacy **`weekly_match_opt_ins`**, **`weekly_availability`**, and **`weekly_pool`** are **dropped** from the DB (`20260430200000`). Hybrid weekly uses **`weekly_fika_sessions`** / **`weekly_fika_session_opt_ins`**. `profiles.sms_intro_mode` is **`match_first` only**. Section 3–6 below mix **history** (“today” at time of writing) with **targets** — use schema docs for current tables.
+
 ---
 
 ## 1. What we’re building (one paragraph)
@@ -26,7 +28,7 @@ Replace the **weekly `pg_cron` batch** (opt-in blast → replenish → Tuesday i
 | 4 | [`FIKA_CRON_REPLACEMENT.md`](./FIKA_CRON_REPLACEMENT.md) | Which `pg_cron` jobs go away vs reminder sweeps |
 | 5 | [`FIKA_PRE_IMPLEMENTATION_REVIEW.md`](./FIKA_PRE_IMPLEMENTATION_REVIEW.md) | Build sequence, risks, and open decisions |
 
-Legacy weekly/match-first docs were removed to avoid conflicting guidance.
+Operational docs were updated for the hybrid weekly schema; older paragraphs in this file may still read as “plan” rather than “done” — see the **Status** note above.
 
 ---
 
@@ -35,9 +37,9 @@ Legacy weekly/match-first docs were removed to avoid conflicting guidance.
 | Area | Today (simplified) |
 |------|---------------------|
 | **Crons** | Six+ jobs hitting Edge Functions: weekly opt-in, follow-up, opt-in expiration, replenish, match delivery, match expiration; plus onboarding, day/3h/post-fika reminders. **Plan:** weekly batch jobs **unscheduled**; reminder jobs **TBD** (see §9.3). |
-| **Webhook** | `sendblue-webhook`: concierge routing, `sms_intro_mode`, weekly_pool FIKA path, **per-match** YES/PASS/scheduling. |
-| **Matching** | Historically `replenish-matches` used `weekly_match_opt_ins` + overlap. **Admin-only plan:** **no** automated replenish; pairs come from **admin simulation** → `match_candidates` → trigger `sms-match-delivery`. |
-| **Modes** | Legacy `profiles.sms_intro_mode` split existed (`weekly_pool` vs `match_first`). **Target:** converge on a single weekly_pool-style event-driven funnel. |
+| **Webhook** | `sendblue-webhook`: concierge routing, **per-match** YES/PASS/scheduling; weekly hybrid lane should write **`weekly_fika_session_opt_ins`** (not removed pool tables). |
+| **Matching** | Legacy `replenish-matches` + pool tables **removed**. **Admin-only plan:** pairs from **admin simulation** or **`weekly_fika_sessions` matcher** → `match_candidates` → trigger **`sms-match-delivery`** with explicit `match_ids`. |
+| **Modes** | `profiles.sms_intro_mode`: **`match_first` only** in DB; legacy `weekly_pool` label retired. |
 | **Phase 0** | Manual via **admin match simulation** (user-confirmed). **This is the only Phase 0 path for now.** |
 
 ---
@@ -93,9 +95,9 @@ Define **per user × match** (and possibly **global** weekly row) states. Minimu
 | Store | Likely changes |
 |-------|----------------|
 | `match_candidates` | `created_at` as anchor for sliding 4-day window; possibly `offer_phase`, `first_grid_day`, SLA timestamps. |
-| `weekly_match_opt_ins` | May **shrink** or **change meaning** if old weekly opt-in dies — **migration plan** required. |
-| `weekly_availability` | Must support **dynamic 4-day window** per match week (not only Mon-batch `batch_week` grid) — **schema or query** review. |
-| `profiles.sms_intro_mode` | Deprecate `match_first` when ready; default `weekly_pool` or single value. |
+| `weekly_fika_sessions` / `weekly_fika_session_opt_ins` | **Current** hybrid weekly session model; see `docs/MEETWITHMOAI_SCHEMA.md`. |
+| `match_availability` | Per-match availability + READY flow for ad hoc intros (replaces old global weekly availability table). |
+| `profiles.sms_intro_mode` | **`match_first` only** (constraint); weekly cohort label removed. |
 | `message_ledger` | Already used for outbound; good for audit. |
 | New? | Optional `match_offer_events` for Phase 1/5 sends if you need idempotency. |
 
@@ -124,7 +126,7 @@ Define **per user × match** (and possibly **global** weekly row) states. Minimu
 | **T_nudge** | Who gets a **Phase 1–style** eligibility message from an **automated** list. **Deferred.** |
 | **T_final** | Pair still valid for **automated** assignment after both YES + availability. **Deferred.** |
 
-When we add automation, revisit scoring storage, `replenish-matches` logic (or a slimmer replacement), and weekly caps.
+When we add automation, revisit scoring storage, matcher / batch job design (replenish-style logic is gone), and weekly caps.
 
 ---
 

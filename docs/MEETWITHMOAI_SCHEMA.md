@@ -59,6 +59,7 @@ User profile (extends `auth.users` via `id`).
 | `is_paused` | boolean | YES | |
 | `created_at` | timestamptz | YES | |
 | `updated_at` | timestamptz | YES | |
+| `sms_intro_mode` | text | YES | Check: **`match_first` only** (legacy `weekly_pool` cohort and DB values removed in `20260430200000_drop_legacy_weekly_pool_tables.sql`). |
 
 **RLS:** Users can SELECT own profile; SELECT other profiles only if they share a `match_candidates` row; INSERT/UPDATE own profile only.  
 To allow the intro modal to read a matched user’s profile, apply `docs/RLS_PROFILES_MATCHED_USERS.sql` in the SQL Editor (same pattern as `docs/RLS_INTAKE_MATCHED_USERS.sql` for intake).
@@ -101,7 +102,12 @@ Pre-computed pairs of users (matches), with score and reasons (similarities/diff
 | `expires_at` | timestamptz | YES | |
 | `last_shown_to_a` | timestamptz | YES | |
 | `last_shown_to_b` | timestamptz | YES | |
-| `batch_week` | date | YES | Weekly batch |
+| `week_anchor_monday` | date | YES | Anchor week (replaces legacy `batch_week`) |
+| `weekly_fika_session_id` | uuid | YES | When set, this row belongs to hybrid **weekly Fika** admin flow |
+| `admin_approval_status` | text | YES | e.g. `pending`, `approved`, `rejected` (weekly lane); ad hoc rows often `approved` |
+| `admin_approval_at` | timestamptz | YES | |
+| `weekly_intro_sms_sent_at` | timestamptz | YES | Step-2 intro SMS for approved weekly rows |
+| *(scheduling)* | various | YES | `overlapping_slot_ids`, `default_slot_id`, `confirmed_slot_id`, `scheduling_status`, venues, reminders — see live DB |
 
 **RLS:** Users can SELECT only rows where they are `user_a` or `user_b`; “system” (e.g. service_role) can manage all rows.
 
@@ -185,44 +191,19 @@ Prevents re-matching the same pair too soon.
 
 ---
 
-### `weekly_match_opt_ins`
+### `weekly_fika_sessions` (replaces removed weekly pool tables)
 
-Opt-in to receive matches for a given week. Row exists only when the user has opted in.
+Admin-defined **hybrid weekly** Fika for one market + venue + week. See `20260430150000_weekly_fika_sessions_schema.sql`. Full column list: use Supabase Table Editor or `information_schema` — key fields include `market_slug`, `venue_id`, `week_anchor_monday`, `radius_miles`, `iana_tz`, `fika_starts_at`, `status`, and ops timestamps (`sunday_blast_sent_at`, `opt_in_closes_at`, etc.).
 
-| Column | Type | Nullable | Notes |
-|--------|------|----------|--------|
-| `id` | uuid | NO | PK |
-| `user_id` | uuid | NO | FK profiles |
-| `batch_week` | date | NO | Start of week |
-| `opted_in_at` | timestamptz | NO | When the user opted in for this week's run |
+### `weekly_fika_session_opt_ins`
 
-**RLS:** Users can SELECT/INSERT/DELETE own rows (and UPDATE if needed).
-
----
-
-### `weekly_availability`
-
-When a user is free for the week (batch_week). Used for matching; independent of opt-in.
-
-| Column | Type | Nullable | Notes |
-|--------|------|----------|--------|
-| `id` | uuid | NO | PK |
-| `user_id` | uuid | NO | FK auth.users |
-| `batch_week` | date | NO | Monday of the week |
-| `availability_slots` | text[] | YES | Slot ids e.g. mon_09_00, tue_14_30 (30-min 9am–7pm) |
-| `updated_at` | timestamptz | YES | |
-
-Unique on `(user_id, batch_week)`.
-
-**RLS:** Users can SELECT/INSERT/UPDATE/DELETE own rows.
+Per-session YES opt-ins; unique `(user_id, week_anchor_monday)`. **Removed:** `weekly_match_opt_ins`, `weekly_availability` (`20260430200000_drop_legacy_weekly_pool_tables.sql`).
 
 ---
 
 ### Other tables
 
-- **blocks** – User blocks (blocker_id, blocked_id, etc.).
-- **reports** – User reports (reporter_id, etc.).
-- **ai_chat_history** – AI chat history per user (`user_id`); RLS restricts to own row.
+Core product tables (`waitlist`, `venues`, `markets`, SMS state, etc.) are listed above or in migrations. Legacy **`blocks`**, **`reports`**, **`intro_ledger`**, **`coach_invites`**, and **`ai_chat_history`** were removed in `20260430240000_drop_unused_legacy_tables.sql` (unused by this codebase).
 
 ---
 
@@ -244,8 +225,8 @@ Use these from the Fika app (via RPC or by wrapping in Edge Functions) for match
 
 1. **Profiles** – User identity and location (city, lat/lng), bio, demographics.
 2. **Intake (intake_responses_v5)** – Preferences and open-ended answers; `embed_vector` drives similarity.
-3. **Matching** – Backend (cron/service) fills **match_candidates** with score and `reasons` (similarities/differences).
-4. **Weekly opt-in** – **weekly_match_opt_ins** for who gets matches each week.
+3. **Matching** – Ad hoc: admin simulation + **`sms-match-delivery`** with explicit `match_ids`. Weekly: admin **`weekly_fika_sessions`** lifecycle + matcher writes **`match_candidates`** with `weekly_fika_session_id` and `admin_approval_status`.
+4. **Weekly session opt-in** – **`weekly_fika_session_opt_ins`** (per published session), not the removed global weekly pool tables.
 5. **Opt-in to a match** – User accepts/declines via **opt_ins** (and optional payment).
 6. **Conversation** – When both opt in, create **conversations** with `conversation_type = 'match'` and `match_id`; **messages** for chat.
 7. **Cooldowns** – **cooldowns** table used so the same pair isn’t re-matched too soon.

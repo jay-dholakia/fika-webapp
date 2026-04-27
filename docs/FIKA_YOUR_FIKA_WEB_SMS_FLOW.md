@@ -76,7 +76,7 @@ The **four** Fika days are **not** fixed to calendar Wed–Sat in absolute terms
 
 ## 4. After user saves availability on web
 
-**Implemented (baseline):** `POST /api/availability` sets `weekly_availability.pending_sms_ready_confirmation = true` and clears `sms_ready_confirmed_at` when the user saves **with at least one slot**. Response includes `sms_ready: { pending, keyword: 'READY', message }`. A short concierge SMS says to text **READY** to confirm.
+**Implemented (baseline):** `POST /api/availability` upserts **`match_availability`** for the given `match_id`: sets `pending_sms_ready_confirmation = true` and clears `sms_ready_confirmed_at` when the user saves **with at least one slot**. Response includes `sms_ready: { pending, keyword: 'READY', message }`. A short concierge SMS says to text **READY** to confirm. (Legacy **`weekly_availability`** was removed with the old weekly pool.)
 
 **Webhook:** Inbound **READY** (see `isAvailabilityReadyKeyword` in `lib/sms-agent.ts`) → if **`pending_sms_ready_confirmation`** and slots exist → clear pending, set **`sms_ready_confirmed_at`**, send **`messageAvailabilityLockAllSet()`** (`context: availability_ready_confirmed`).
 

@@ -30,7 +30,7 @@ export type IntroMatch = {
     sharedInterests?: string[]
     conversation_hooks?: string[]
     shared_interests?: string[]
-    /** Shared `q_like_talking_about` chips from `reasons.raw` (set by replenish / admin sim). */
+    /** Shared `q_like_talking_about` chips from `reasons.raw` (set by admin sim / matchers). */
     fika_talk_overlap?: string[]
     /** Overlapping 30-min slot IDs for intro card; summarize with summarizeAvailabilitySlots() */
     overlappingAvailabilitySlots?: string[]

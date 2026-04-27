@@ -108,13 +108,6 @@ import {
   getSmsAiMaxPer24h,
   CONFIRMED_FIKA_CONCIERGE_AI_CONTEXT,
 } from '@/lib/sms-concierge-ai'
-import {
-  formatApprovedEventsForSms,
-  isEventKeyword,
-  listApprovedUpcomingEvents,
-  messageEventKeywordPrompt,
-  parseEventCategoryFromKeyword,
-} from '@/lib/events'
 import { formatYoureAllSetDateLine, formatYoureAllSetVenueLine } from '@/lib/youre-all-set-format'
 import {
   CANCEL_RETRY_SCHEDULING_STATUS,
@@ -1584,33 +1577,6 @@ export async function POST(request: Request) {
 
   if (isHelpKeyword(content)) {
     await sendConciergeAndLog(fromNumber, messageSmsHelp(), 'help', { userId, weekAnchorMonday, matchId: matchId ?? undefined })
-    return NextResponse.json({ ok: true })
-  }
-
-  if (state === SMS_STATES.GLOBAL_READY && !matchId && isEventKeyword(content)) {
-    const category = parseEventCategoryFromKeyword(content)
-    if (!category) {
-      await sendConciergeAndLog(fromNumber, messageEventKeywordPrompt(), 'events_prompt', {
-        userId,
-        weekAnchorMonday,
-      })
-      return NextResponse.json({ ok: true })
-    }
-
-    const events = await listApprovedUpcomingEvents({
-      supabase,
-      category,
-      limit: 3,
-    })
-
-    await sendConciergeAndLog(
-      fromNumber,
-      events.length
-        ? `Here are a few ${category} picks this week:\n\n${formatApprovedEventsForSms(events)}`
-        : `I don't have any approved ${category} picks ready right now. Try EVENTS for other categories.`,
-      'events_results',
-      { userId, weekAnchorMonday }
-    )
     return NextResponse.json({ ok: true })
   }
 

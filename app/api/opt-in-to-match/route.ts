@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
+import { EDGE_FUNCTIONS } from '@/lib/edge-functions'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
-const FN_NAME = 'opt-in-match'
+const FN_NAME = EDGE_FUNCTIONS.OPT_IN_TO_MATCH
 
 export async function POST(request: Request) {
   const authHeader = request.headers.get('Authorization')

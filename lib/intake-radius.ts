@@ -1,6 +1,6 @@
 /**
  * Derive "willing to travel" radius in km from intake responses.
- * Used by venue selection and aligned with replenish-matches logic (q_radius in miles → km).
+ * Used by venue selection and matcher logic (q_radius in miles → km).
  */
 
 import { getIntakeAnswer } from '@/lib/intake-response-utils'

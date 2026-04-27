@@ -1,25 +1,23 @@
-# Deploy replenish-matches Edge Function
+# Edge Functions (Fika)
 
-The function source lives in **`supabase/functions/replenish-matches/index.ts`**.
+The legacy **`replenish-matches`** function and its deploy payload were **removed** from this repo (old weekly pool pipeline).
 
-## Deploy with Supabase CLI
+**Current path:** admin **`/api/admin/match-sim`** (Trigger SMS) → **`sms-match-delivery`** with explicit `match_ids`.
 
-From the repo root, with Supabase CLI installed and linked to your project:
-
-```bash
-supabase functions deploy replenish-matches
-```
-
-If the function requires secrets (e.g. `OPENAI_API_KEY`), set them in the Supabase dashboard (Project → Edge Functions → replenish-matches → Secrets) or via:
+Deploy the delivery function from the repo root:
 
 ```bash
-supabase secrets set OPENAI_API_KEY=your_key
+supabase functions deploy sms-match-delivery
 ```
 
-## What was last updated
+Historical scoring notes for the old replenisher live in **`docs/SCORING_AND_RECALIBRATION.md`** and git history.
 
-- **Score weights:** q5 32%, q10 14%, q2 10%, q4 7%, q6 6%, distance 6%, q3_work_or_study 5%, q3_profession/university/major 4%, q13 2%, q14 2%. Embed 8% max. q15 removed.
-- **Filters:** Filter 7 (q13: don't match "Moving in the right direction" with "In need of major change").
-- **Reasons fallback:** Uses q10 and q2 (and q5) only. q13, q14 are not included in reasons (private).
+## Stale Edge Functions (already cleaned on meetwithmoai)
 
-See **`docs/SCORING_AND_RECALIBRATION.md`** for the full spec.
+Legacy slugs (`replenish-matches`, weekly-pool SMS, Bookmanager ingest, `archive-inactive-chats`, `ask-liv`, etc.) were **removed** from the linked project. If another environment’s Dashboard still shows a deleted function, remove it with:
+
+```bash
+supabase functions delete <function-slug> --project-ref <your-project-ref>
+```
+
+Migrations **`20260430210000_unschedule_removed_weekly_pool_edge_crons.sql`** and **`20260430220000_unschedule_bookmanager_archive_chats_ask_liv.sql`** unschedule matching `cron.job` rows after `db push`.

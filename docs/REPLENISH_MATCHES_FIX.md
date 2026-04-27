@@ -1,6 +1,8 @@
 # Fix for `response.answer.trim is not a function` in replenish-matches
 
-The error happens because `response.answer` can be an **array** (e.g. multi-select) or other non-string type. Apply these changes in **meetwithmoai** `supabase/functions/replenish-matches/index.ts`.
+> **Archive:** The **`replenish-matches`** Edge Function was **removed** from this repo with the legacy weekly pool. Keep this note for **`answerToText()`**-style handling anywhere intake `responses` are normalized (e.g. admin matcher, future edge jobs).
+
+The error happens because `response.answer` can be an **array** (e.g. multi-select) or other non-string type. Historically this was applied in **`supabase/functions/replenish-matches/index.ts`** (no longer in tree).
 
 ---
 
@@ -76,4 +78,4 @@ The error happens because `response.answer` can be an **array** (e.g. multi-sele
 
 ---
 
-After applying, redeploy the Edge Function (e.g. `supabase functions deploy replenish-matches`) and run replenish again.
+If you maintain a forked matcher function, redeploy that function after code changes. The **`replenish-matches`** slug is **not** used in this repo anymore.

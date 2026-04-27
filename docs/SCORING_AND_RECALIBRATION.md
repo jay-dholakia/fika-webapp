@@ -24,7 +24,7 @@ This doc describes the **structured-only** design: embed = q12 only (low weight)
 
 1. **Embedding (vector)** — Built in the Fika webapp from **q12 only**. Stored in `intake_responses_v5.embed_vector`. Used for a small share of the match score (8% max, conditional on both having substantive q12 text).
 
-2. **Percentage / numeric score** — Computed in the backend (replenish-matches) from **structured weights only** (plus the small embed term). Written to `match_candidates.score`. No other questions are added to the embed so each signal is counted once.
+2. **Percentage / numeric score** — Computed in the backend (matcher / admin tooling — **not** the removed `replenish-matches` function) from **structured weights only** (plus the small embed term). Written to `match_candidates.score`. No other questions are added to the embed so each signal is counted once.
 
 ---
 

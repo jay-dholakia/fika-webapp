@@ -1,6 +1,6 @@
-# Matching spec for replenish-matches (Fika backend)
+# Matching spec — scoring rules for `match_candidates` (Fika backend)
 
-This doc specifies how the **replenish-matches** Edge Function (or any job that fills `match_candidates`) should use **gender + gender preference** and the **new intake questions** for filtering and scoring. Apply these rules in the meetwithmoai backend.
+The **`replenish-matches`** Edge Function was **removed** with the legacy weekly pool. This doc still specifies how **any job that fills `match_candidates`** (admin simulation, **`lib/weekly-fika-matcher.ts`**, or a future automated matcher) should use **gender + gender preference** and the **new intake questions** for filtering and scoring. Apply these rules in the meetwithmoai backend.
 
 ---
 

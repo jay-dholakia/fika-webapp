@@ -1,10 +1,10 @@
 /**
- * Edge function names for the meetwithmoai backend.
- * Change these if your Supabase project uses different names.
+ * Deployed Edge Function slugs on meetwithmoai (must match Dashboard names).
+ * Next routes `app/api/opt-in-to-match` and `app/api/pass-on-match` proxy to these.
  */
 export const EDGE_FUNCTIONS = {
-  /** Opt in to a match (writes opt_ins; creates conversation when mutual). Returns { conversation_id?: string }. */
-  OPT_IN_TO_MATCH: 'opt-in-to-match',
+  /** Opt in to a match (writes opt_ins; creates conversation when mutual). */
+  OPT_IN_TO_MATCH: 'opt-in-match',
   /** Pass on a match (writes opt_ins with decision no). */
-  PASS_ON_MATCH: 'pass-on-match',
+  PASS_ON_MATCH: 'pass-match',
 } as const

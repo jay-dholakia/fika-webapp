@@ -1,5 +1,7 @@
 # Replacing scheduled crons with the new Fika protocol
 
+> **Status (2026-04):** Legacy weekly-pool Edge URLs are **unscheduled** on meetwithmoai prod (`20260430210000`); related Edge slugs were **deleted** from the project. Other environments: run the same migrations + remove any leftover function from the Dashboard.
+
 > **Intent:** The **event-driven** flow in [`FIKA_MATCH_PROTOCOL.md`](./FIKA_MATCH_PROTOCOL.md) + [`FIKA_YOUR_FIKA_WEB_SMS_FLOW.md`](./FIKA_YOUR_FIKA_WEB_SMS_FLOW.md) should **replace the old weekly batch cadence** driven by `pg_cron`. This doc inventories current jobs and what replaces them **conceptually**. Implementation = new migration to `cron.unschedule` + webhook/queue work.
 
 > **Current engineering plan:** **Admin-only** Phase 0/1 — **`match_candidates`** and intro SMS via **admin match simulation** + **Trigger SMS** (`sms-match-delivery` with `match_ids`). No automated **`T_nudge`** list, no **`replenish-matches`** cron. Optional **weekend scoring** in the table below is **out of scope** until automation ships; see [`FIKA_PRE_IMPLEMENTATION_REVIEW.md`](./FIKA_PRE_IMPLEMENTATION_REVIEW.md) §1.
@@ -17,9 +19,9 @@ So: **zero** `pg_cron` is possible only if you use **another scheduler** (Innges
 
 ---
 
-## Weekly pool pipeline — `pg_cron` jobs to sunset
+## Historical: weekly pool `pg_cron` inventory (removed on meetwithmoai)
 
-Defined in e.g. `supabase/migrations/20260425180000_reenable_weekly_pool_sms_crons.sql`:
+The jobs below are **retired**: tables and Edge URLs were removed or unscheduled (`20260426130000`, `20260430210000`, legacy weekly pool drops). This section stays as a **design-time** record of what used to exist. It was originally defined in e.g. `supabase/migrations/20260425180000_reenable_weekly_pool_sms_crons.sql`:
 
 | Job name | Edge Function | Role today | Replacement (new protocol) |
 |----------|---------------|------------|----------------------------|
@@ -49,7 +51,7 @@ These are **not** “weekly pool” crons but they **are** schedulers. If the go
 
 | Category | Action |
 |----------|--------|
-| **Weekly batch SMS + replenish + Tue delivery + Wed expiration** | **Remove** from `pg_cron` when the new protocol ships; behavior **replaced** by admin Phase 0, scoring, webhook state machine, and **on-demand** delivery. |
+| **Weekly batch SMS + replenish + Tue delivery + Wed expiration** | **Removed** from meetwithmoai `pg_cron` (see migrations above); behavior **replaced** by admin Phase 0, webhook state machine, and **on-demand** `sms-match-delivery`. |
 | **Reminder / post-Fika / onboarding** | **Redesign** to match protocol phases; may still use **hourly or daily sweep** unless you introduce a job queue. |
 
 ---

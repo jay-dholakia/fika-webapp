@@ -1,5 +1,7 @@
 // Minimal types for Supabase tables used by onboarding and portal.
-// Align with your actual schema (profiles, intake_responses_v5, weekly_match_opt_ins).
+// Align with your actual schema (profiles, intake_responses_v5, weekly_fika_*).
+
+import type { WeeklyFikaSessionStatus } from '@/lib/weekly-fika-session'
 
 export type ProfileRow = {
   id: string
@@ -14,8 +16,8 @@ export type ProfileRow = {
   lat: number | null
   lng: number | null
   market: string | null // City market slug for progress/opt-in (la, sf, nyc)
-  /** weekly_pool = legacy DB value; inbound weekly FIKA path removed (admin-only). match_first = generic first contact */
-  sms_intro_mode?: 'weekly_pool' | 'match_first' | null
+  /** SMS intro lane; DB allows match_first only. */
+  sms_intro_mode?: 'match_first' | null
   phone: string | null // E.164 for SMS (Sendblue)
   sms_opted_out_at?: string | null // ISO; when set, we don't send SMS until they text back
   languages?: string[] | null
@@ -51,26 +53,6 @@ export type IntakeResponsesV5Row = {
   created_at?: string
 }
 
-export type WeeklyMatchOptInRow = {
-  id?: string
-  user_id: string
-  week_anchor_monday: string // Monday date YYYY-MM-DD
-  opted_in_at: string // ISO timestamp; row exists only when opted in
-}
-
-/** When a user is free for the week; independent of opt-in. */
-export type WeeklyAvailabilityRow = {
-  id?: string
-  user_id: string
-  week_anchor_monday: string // Monday date YYYY-MM-DD
-  availability_slots?: string[] | null
-  /** True after app save with slots; cleared when user texts READY */
-  pending_sms_ready_confirmation?: boolean
-  /** Set when inbound READY confirmed for this week */
-  sms_ready_confirmed_at?: string | null
-  updated_at?: string
-}
-
 export type ConversationRow = {
   id: string
   user_a: string | null
@@ -102,6 +84,33 @@ export type SmsConversationStateRow = {
   last_sendblue_message_handle: string | null
   updated_at: string
   created_at: string
+}
+
+/** Admin weekly Fika session (Sun opt-in → Mon close → matcher → approvals → Tue intro). */
+export type WeeklyFikaSessionRow = {
+  id: string
+  market_slug: string
+  venue_id: string
+  week_anchor_monday: string
+  radius_miles: number
+  iana_tz: string
+  fika_starts_at: string
+  status: WeeklyFikaSessionStatus
+  sunday_blast_sent_at: string | null
+  opt_in_closes_at: string | null
+  opt_in_closed_at: string | null
+  match_run_at: string | null
+  intro_sms_sent_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type WeeklyFikaSessionOptInRow = {
+  id: string
+  session_id: string
+  user_id: string
+  week_anchor_monday: string
+  opted_in_at: string
 }
 
 /** Suggested meetup venue (e.g. coffee shop). */

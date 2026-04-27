@@ -35,7 +35,7 @@ export default function PrivacyPage() {
         <p><strong>SMS with Fika.</strong> We store the content of your SMS conversations with Fika (e.g. intro responses and scheduling replies) and use it to run the service, send you intros and meetup details, and for safety and support where needed.</p>
         <p><strong>Messaging after an intro.</strong> If we offer a chat or messaging channel with people we introduce you to, we store that message content, who you message, and when, and use it to provide the feature and for safety and moderation.</p>
         <p><strong>Usage and device.</strong> We collect how you use the service (e.g. pages you view, actions you take on the web portal and in response to SMS), device type, and similar technical data to improve the product and fix issues.</p>
-        <p><strong>Safety and reports.</strong> If you report or block someone, we collect and use that information to investigate and enforce our terms.</p>
+        <p><strong>Safety concerns.</strong> If you contact us about another user or a safety issue, we collect and use the information you provide to investigate and enforce our terms.</p>
 
         <h2>How we use your information</h2>
         <ul>

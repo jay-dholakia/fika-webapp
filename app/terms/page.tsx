@@ -54,7 +54,7 @@ export default function TermsPage() {
 
         <h2>Meeting in person &amp; safety</h2>
         <p>When you meet someone from Fika in person, you do so at your own risk. We encourage you to <strong>meet in public, well-lit places</strong> (e.g. a café or park) and to tell a friend where you’re going. You are responsible for your own safety. We are not responsible for what happens during in-person meetings.</p>
-        <p>You can report or block users via the web portal or by contacting us. We may take action based on reports, but we don’t guarantee any particular outcome. We may use technology and human review to help keep the community safe.</p>
+        <p>You can contact us about safety concerns or violations via the web portal or the contact information we provide. We may take action based on what you share, but we don’t guarantee any particular outcome. We may use technology and human review to help keep the community safe.</p>
 
         <h2>Your content</h2>
         <p>You keep ownership of the content you post. You give us a license to use, display, and store it as needed to run the service (e.g. showing your profile to people we introduce you to, storing messages).</p>
