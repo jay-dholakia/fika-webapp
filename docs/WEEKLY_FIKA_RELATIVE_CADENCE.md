@@ -22,7 +22,7 @@ Offsets should be defined in **policy** (defaults on `markets`, optional overrid
 | Area | Status |
 |------|--------|
 | `fika_socials`, `fika_social_opt_ins`, matcher, admin UI | Shipped |
-| Milestones | Admin sets `opt_in_closes_at` manually on publish; `sunday_blast_sent_at` is a **manual** timestamp; no automated sends |
+| Milestones | Admin sets `opt_in_closes_at` manually on publish; `opt_in_invite_sent_at` is an idempotent invite marker; automation sends on relative cadence |
 | Matcher | Maps `fika_starts_at` → **Mon–Sun 30m slot id** (`availabilitySlotIdFromUtcInTimezone` in `lib/availability-slots.ts`) for `match_candidates.default_slot_id` — **interim** until timestamp-first Phase 4 |
 | Webhook | No dedicated `fika_socials` SMS routing yet; no opt-in writes to `fika_social_opt_ins` from SMS |
 
@@ -36,7 +36,7 @@ Offsets should be defined in **policy** (defaults on `markets`, optional overrid
 
    Recommendation: **A** for cron and debugging; defaults from market JSON or columns `weekly_opt_in_blast_days_before` (numeric).
 
-2. **Rename** `sunday_blast_sent_at` → `opt_in_blast_sent_at` (or `first_nudge_sent_at`) in a migration; update admin action `record_sunday_blast` → `record_opt_in_blast` (API + UI).
+2. Rename complete: `opt_in_invite_sent_at` is the invite idempotency marker (formerly `sunday_blast_sent_at`).
 
 3. **Constraints:** `opt_in_opens_at < opt_in_closes_at < fika_starts_at`; reject publish if total lead time is too short for policy (v1: ≥49h).
 

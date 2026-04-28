@@ -19,7 +19,7 @@ type SessionRow = {
   fika_starts_at: string
   status: string
   opt_in_closes_at: string | null
-  sunday_blast_sent_at: string | null
+  opt_in_invite_sent_at: string | null
   opt_in_closed_at: string | null
   match_run_at: string | null
   intro_sms_sent_at: string | null
@@ -611,8 +611,8 @@ export default function AdminFikaSocialsPage() {
                 ) : null}
                 {detail.session.status === 'open_opt_in' ? (
                   <>
-                    <button type="button" className="admin-btn" onClick={() => void patchSession(detail.session.id, { action: 'record_sunday_blast' })}>
-                      Record opt-in blast sent
+                    <button type="button" className="admin-btn" onClick={() => void patchSession(detail.session.id, { action: 'record_opt_in_invite' })}>
+                      Record invite sent
                     </button>
                     <button type="button" className="admin-btn admin-btn-primary" onClick={() => void patchSession(detail.session.id, { action: 'close_opt_in' })}>
                       Close opt-in window

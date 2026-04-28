@@ -193,7 +193,7 @@ Prevents re-matching the same pair too soon.
 
 ### `fika_socials` (replaces removed weekly pool tables; renamed from `weekly_fika_sessions` in `20260501140000_rename_weekly_fika_to_fika_socials.sql`)
 
-Admin-defined in-person **fika social** for one market + venue + week anchor. Original schema: `20260430150000_weekly_fika_sessions_schema.sql`. Product direction for **relative cadence** (offsets from `fika_starts_at`, renaming `sunday_blast_sent_at`, automation) is in **`docs/WEEKLY_FIKA_RELATIVE_CADENCE.md`**. Key fields include `market_slug`, `venue_id`, `week_anchor_monday`, `radius_miles`, `iana_tz`, `fika_starts_at`, `status`, and ops timestamps (`sunday_blast_sent_at`, `opt_in_closes_at`, etc.).
+Admin-defined in-person **fika social** for one market + venue + week anchor. Original schema: `20260430150000_weekly_fika_sessions_schema.sql`. Product direction for **relative cadence** (offsets from `fika_starts_at`, renaming `opt_in_invite_sent_at`, automation) is in **`docs/WEEKLY_FIKA_RELATIVE_CADENCE.md`**. Key fields include `market_slug`, `venue_id`, `week_anchor_monday`, `radius_miles`, `iana_tz`, `fika_starts_at`, `status`, and ops timestamps (`opt_in_invite_sent_at`, `opt_in_closes_at`, etc.).
 
 ### `fika_social_opt_ins`
 

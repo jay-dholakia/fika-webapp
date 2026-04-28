@@ -426,14 +426,14 @@ async function handleAction(
     return NextResponse.json({ ok: true, session: updated })
   }
 
-  if (action === 'record_sunday_blast') {
+  if (action === 'record_opt_in_invite') {
     if (status !== 'open_opt_in') {
-      return NextResponse.json({ error: 'record_sunday_blast is only valid from open_opt_in' }, { status: 400 })
+      return NextResponse.json({ error: 'record_opt_in_invite is only valid from open_opt_in' }, { status: 400 })
     }
     const sentAt = typeof body.sent_at === 'string' && body.sent_at.trim() ? body.sent_at.trim() : new Date().toISOString()
     const { data: updated, error } = await supabase
       .from('fika_socials')
-      .update({ sunday_blast_sent_at: sentAt })
+      .update({ opt_in_invite_sent_at: sentAt })
       .eq('id', sessionId)
       .select('*')
       .single()

@@ -96,7 +96,7 @@ export type FikaSocialSessionRow = {
   iana_tz: string
   fika_starts_at: string
   status: FikaSocialSessionStatus
-  sunday_blast_sent_at: string | null
+  opt_in_invite_sent_at: string | null
   opt_in_closes_at: string | null
   opt_in_closed_at: string | null
   match_run_at: string | null

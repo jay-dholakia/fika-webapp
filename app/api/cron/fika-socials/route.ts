@@ -65,7 +65,7 @@ export async function GET(request: Request) {
 
   const { data: sessions, error: sErr } = await supabase
     .from('fika_socials')
-    .select('id, market_slug, venue_id, week_anchor_monday, radius_miles, iana_tz, fika_starts_at, status, sunday_blast_sent_at, opt_in_closes_at, opt_in_closed_at, match_run_at, intro_sms_sent_at')
+    .select('id, market_slug, venue_id, week_anchor_monday, radius_miles, iana_tz, fika_starts_at, status, opt_in_invite_sent_at, opt_in_closes_at, opt_in_closed_at, match_run_at, intro_sms_sent_at')
     .gte('fika_starts_at', lookback)
     .lte('fika_starts_at', lookahead)
     .order('fika_starts_at', { ascending: true })
@@ -84,7 +84,7 @@ export async function GET(request: Request) {
     const matchSendMs = Date.parse(cadence.matchSendDueAt)
 
     // 1) Send invite (T-48h) once, after publish (open_opt_in).
-    if (status === 'open_opt_in' && !(s as any).sunday_blast_sent_at) {
+    if (status === 'open_opt_in' && !(s as any).opt_in_invite_sent_at) {
       if (nowMs >= Date.parse(cadence.optInBlastDueAt)) {
         const { data: venue, error: vErr } = await supabase
           .from('venues')
@@ -133,7 +133,7 @@ export async function GET(request: Request) {
 
           await supabase
             .from('fika_socials')
-            .update({ sunday_blast_sent_at: nowIso })
+            .update({ opt_in_invite_sent_at: nowIso })
             .eq('id', sessionId)
 
           summary.push({ sessionId, step: 'invite', ok: true, sent })
