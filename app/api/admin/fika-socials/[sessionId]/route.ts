@@ -191,10 +191,7 @@ async function handleAction(
     if (status !== 'draft') {
       return NextResponse.json({ error: 'publish is only valid from draft' }, { status: 400 })
     }
-    const optInClosesAt = typeof body.opt_in_closes_at === 'string' ? body.opt_in_closes_at.trim() : ''
-    if (!optInClosesAt) {
-      return NextResponse.json({ error: 'opt_in_closes_at (ISO) is required to publish' }, { status: 400 })
-    }
+    const providedOptInClosesAt = typeof body.opt_in_closes_at === 'string' ? body.opt_in_closes_at.trim() : ''
 
     const fikaStartsAtIso = String(session.fika_starts_at ?? '').trim()
     const lead = assertFikaStartsAfter(fikaStartsAtIso, Date.now())
@@ -212,6 +209,7 @@ async function handleAction(
     }
 
     const cadence = computeSocialFikaCadenceInstants(fikaStartsAtIso)
+    const optInClosesAt = providedOptInClosesAt || cadence.optInClosesAt
     const closeMs = Date.parse(optInClosesAt)
     const matchMs = Date.parse(cadence.matchSendDueAt)
     if (!Number.isFinite(closeMs)) {

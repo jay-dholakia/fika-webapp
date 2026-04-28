@@ -33,6 +33,18 @@ export type FikaSocialMatcherResult = {
 
 export type FikaSocialMatcherError = { ok: false; error: string; code: string }
 
+export type FikaSocialMatchPreviewRow = {
+  user_a: string
+  user_b: string
+  score: number | null
+  eligible: boolean
+  reject_reasons: string[]
+}
+
+export type FikaSocialMatchPreviewResult =
+  | { ok: true; pairs: FikaSocialMatchPreviewRow[]; eligibleOptIns: number; skippedIneligiblePairs: number; notes: string[] }
+  | FikaSocialMatcherError
+
 function shuffleStable<T>(items: T[], seed: string): T[] {
   const arr = [...items]
   let h = 0
@@ -206,6 +218,122 @@ export async function runFikaSocialMatcher(
   return {
     ok: true,
     createdMatchIds,
+    skippedIneligiblePairs,
+    eligibleOptIns: ordered.length,
+    notes,
+  }
+}
+
+/**
+ * Dry-run variant of `runFikaSocialMatcher` for admin preview.
+ * Computes the same greedy adjacency pairs and scoring breakdowns without inserting rows.
+ */
+export async function previewFikaSocialMatcher(
+  supabase: SupabaseClient,
+  session: FikaSocialSessionRow
+): Promise<FikaSocialMatchPreviewResult> {
+  const notes: string[] = []
+
+  const { data: venue, error: venueErr } = await supabase
+    .from('venues')
+    .select('id, lat, lng')
+    .eq('id', session.venue_id)
+    .maybeSingle()
+
+  if (venueErr) return { ok: false, error: venueErr.message, code: 'VENUE_LOAD' }
+  const vLat = Number(venue?.lat)
+  const vLng = Number(venue?.lng)
+  if (!venue || !Number.isFinite(vLat) || !Number.isFinite(vLng)) {
+    return { ok: false, error: 'Venue must have lat/lng before previewing matches.', code: 'VENUE_NO_COORDS' }
+  }
+
+  const { data: optRows, error: optErr } = await supabase
+    .from('fika_social_opt_ins')
+    .select('user_id')
+    .eq('session_id', session.id)
+    .is('withdrawn_at', null)
+
+  if (optErr) return { ok: false, error: optErr.message, code: 'OPT_INS_LOAD' }
+
+  const userIds = Array.from(new Set((optRows ?? []).map((r: { user_id: string }) => r.user_id)))
+  if (userIds.length < 2) {
+    notes.push('Fewer than two opt-ins; no pairs to preview.')
+    return { ok: true, pairs: [], skippedIneligiblePairs: 0, eligibleOptIns: userIds.length, notes }
+  }
+
+  const upcomingConfirmed = await fetchUserIdsWithUpcomingConfirmedFika(supabase)
+  const blockedUpcoming = await fetchUserIdsBlockedFromNewIntro(supabase, {
+    upcomingConfirmed,
+  })
+
+  const { data: profiles, error: profErr } = await supabase
+    .from('profiles')
+    .select('id, market, lat, lng, is_active')
+    .in('id', userIds)
+
+  if (profErr) return { ok: false, error: profErr.message, code: 'PROFILES_LOAD' }
+
+  const byId = new Map((profiles ?? []).map((p) => [p.id as string, p]))
+
+  const eligible: string[] = []
+  for (const uid of userIds) {
+    if (blockedUpcoming.has(uid)) continue
+    const p = byId.get(uid) as
+      | { id: string; market: string | null; lat: unknown; lng: unknown; is_active: boolean | null }
+      | undefined
+    if (!p) continue
+    if (p.market !== session.market_slug) continue
+    const lat = Number(p.lat)
+    const lng = Number(p.lng)
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue
+    if (p.is_active === false) continue
+    if (haversineMiles(lat, lng, vLat, vLng) > session.radius_miles) continue
+    eligible.push(uid)
+  }
+
+  eligible.sort()
+  const ordered = shuffleStable(eligible, `${session.id}:${session.week_anchor_monday}`)
+
+  let skippedIneligiblePairs = 0
+  const pairs: FikaSocialMatchPreviewRow[] = []
+
+  for (let i = 0; i + 1 < ordered.length; i += 2) {
+    const rawA = ordered[i]!
+    const rawB = ordered[i + 1]!
+    const userA = rawA < rawB ? rawA : rawB
+    const userB = rawA < rawB ? rawB : rawA
+
+    const loaded = await loadAdminSimCandidatesForCanonicalPair(supabase, userA, userB)
+    if ('error' in loaded) {
+      skippedIneligiblePairs++
+      pairs.push({
+        user_a: userA,
+        user_b: userB,
+        score: null,
+        eligible: false,
+        reject_reasons: [loaded.error],
+      })
+      continue
+    }
+
+    const payload = computeAdminPairPayload(loaded.ca, loaded.cb)
+    const eligiblePair = Boolean(payload.breakdown.eligible)
+    if (!eligiblePair) skippedIneligiblePairs++
+
+    pairs.push({
+      user_a: userA,
+      user_b: userB,
+      score: payload.score ?? null,
+      eligible: eligiblePair,
+      reject_reasons: payload.breakdown.rejectReasons ?? [],
+    })
+  }
+
+  pairs.sort((a, b) => (b.score ?? -1) - (a.score ?? -1))
+
+  return {
+    ok: true,
+    pairs,
     skippedIneligiblePairs,
     eligibleOptIns: ordered.length,
     notes,

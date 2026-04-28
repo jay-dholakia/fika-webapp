@@ -8,6 +8,8 @@ import {
 import { getMarketFromCity } from '@/lib/markets'
 import { getIanaTimezoneForMarketSlug } from '@/lib/market-timezones'
 import { getSupabase } from '@/lib/supabase'
+import { computeSocialFikaCadenceInstants } from '@/lib/weekly-fika-cadence'
+import { localDateTimeInTzToUtcMs } from '@/lib/wall-time-to-utc'
 
 type SessionRow = {
   id: string
@@ -34,6 +36,25 @@ type MatchRow = {
   created_at: string | null
 }
 
+type OptInProfileRow = {
+  user_id: string
+  first_name: string | null
+  last_name: string | null
+  city: string | null
+  market: string | null
+  is_active: boolean | null
+  distance_miles: number | null
+  opted_in_at: string | null
+}
+
+type MatchPreviewRow = {
+  user_a: string
+  user_b: string
+  score: number | null
+  eligible: boolean
+  reject_reasons: string[]
+}
+
 type DetailResponse = {
   session: SessionRow
   venue: { id: string; name: string; neighborhood: string | null; city: string } | null
@@ -49,11 +70,38 @@ async function getAuthHeaders(): Promise<HeadersInit> {
   return headers
 }
 
-function toDateTimeLocalValue(ts: string): string {
+function toDateTimeLocalInTzValue(ts: string, ianaTz: string): string {
   const d = new Date(ts)
   if (Number.isNaN(d.getTime())) return ''
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: ianaTz,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(d)
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? ''
+  const y = get('year')
+  const mo = get('month')
+  const day = get('day')
+  const hh = get('hour')
+  const mm = get('minute')
+  if (!y || !mo || !day || !hh || !mm) return ''
+  return `${y}-${mo}-${day}T${hh}:${mm}`
+}
+
+function dateTimeLocalInTzToIso(raw: string, ianaTz: string): string | null {
+  const trimmed = raw.trim()
+  const m = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})$/.exec(trimmed)
+  if (!m) return null
+  const ymd = m[1]
+  const hh = Number(m[2])
+  const mm = Number(m[3])
+  const utcMs = localDateTimeInTzToUtcMs(ymd, hh, mm, ianaTz)
+  if (utcMs == null) return null
+  return new Date(utcMs).toISOString()
 }
 
 function todayYmdLocal(): string {
@@ -128,6 +176,12 @@ export default function AdminFikaSocialsPage() {
   const [error, setError] = useState<string | null>(null)
   const [detail, setDetail] = useState<DetailResponse | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
+  const [optInRows, setOptInRows] = useState<OptInProfileRow[] | null>(null)
+  const [optInLoading, setOptInLoading] = useState(false)
+  const [optInError, setOptInError] = useState<string | null>(null)
+  const [matchPreviewRows, setMatchPreviewRows] = useState<MatchPreviewRow[] | null>(null)
+  const [matchPreviewLoading, setMatchPreviewLoading] = useState(false)
+  const [matchPreviewError, setMatchPreviewError] = useState<string | null>(null)
 
   const [venueId, setVenueId] = useState('')
   const [fikaDate, setFikaDate] = useState('')
@@ -175,6 +229,10 @@ export default function AdminFikaSocialsPage() {
   const loadDetail = useCallback(async (sessionId: string) => {
     setDetailLoading(true)
     setError(null)
+    setOptInRows(null)
+    setOptInError(null)
+    setMatchPreviewRows(null)
+    setMatchPreviewError(null)
     try {
       const res = await fetch(`/api/admin/fika-socials/${encodeURIComponent(sessionId)}`, {
         credentials: 'include',
@@ -183,11 +241,53 @@ export default function AdminFikaSocialsPage() {
       const json = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(json?.error ?? 'Failed to load session')
       setDetail(json as DetailResponse)
-      setOptInClosesLocal(json.session?.opt_in_closes_at ? toDateTimeLocalValue(json.session.opt_in_closes_at) : '')
+      const session = (json as DetailResponse).session
+      const tz = session?.iana_tz || 'America/Los_Angeles'
+      const fallback = session?.fika_starts_at
+        ? computeSocialFikaCadenceInstants(session.fika_starts_at).optInClosesAt
+        : ''
+      const effective = session?.opt_in_closes_at || fallback
+      setOptInClosesLocal(effective ? toDateTimeLocalInTzValue(effective, tz) : '')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load session')
     } finally {
       setDetailLoading(false)
+    }
+  }, [])
+
+  const loadOptIns = useCallback(async (sessionId: string) => {
+    setOptInLoading(true)
+    setOptInError(null)
+    try {
+      const res = await fetch(`/api/admin/fika-socials/${encodeURIComponent(sessionId)}/opt-ins`, {
+        credentials: 'include',
+        headers: await getAuthHeaders(),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json?.error ?? 'Failed to load opt-ins')
+      setOptInRows(Array.isArray(json.opt_ins) ? (json.opt_ins as OptInProfileRow[]) : [])
+    } catch (e) {
+      setOptInError(e instanceof Error ? e.message : 'Failed to load opt-ins')
+    } finally {
+      setOptInLoading(false)
+    }
+  }, [])
+
+  const loadMatchPreview = useCallback(async (sessionId: string) => {
+    setMatchPreviewLoading(true)
+    setMatchPreviewError(null)
+    try {
+      const res = await fetch(`/api/admin/fika-socials/${encodeURIComponent(sessionId)}/match-preview`, {
+        credentials: 'include',
+        headers: await getAuthHeaders(),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json?.error ?? 'Failed to preview matches')
+      setMatchPreviewRows(Array.isArray(json.pairs) ? (json.pairs as MatchPreviewRow[]) : [])
+    } catch (e) {
+      setMatchPreviewError(e instanceof Error ? e.message : 'Failed to preview matches')
+    } finally {
+      setMatchPreviewLoading(false)
     }
   }, [])
 
@@ -652,7 +752,7 @@ export default function AdminFikaSocialsPage() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', marginBottom: '1rem' }}>
                 {detail.session.status === 'draft' ? (
                   <label style={{ fontSize: '0.85rem' }}>
-                    Opt-in closes (local)
+                    Opt-in closes (market local)
                     <input
                       type="datetime-local"
                       value={optInClosesLocal}
@@ -666,13 +766,12 @@ export default function AdminFikaSocialsPage() {
                     type="button"
                     className="admin-btn admin-btn-primary"
                     onClick={() => {
+                      const tz = detail.session.iana_tz || 'America/Los_Angeles'
                       const raw = optInClosesLocal.trim()
-                      if (!raw) {
-                        setError('Set opt-in closes (local) before publish')
-                        return
-                      }
-                      const iso = new Date(raw).toISOString()
-                      if (Number.isNaN(Date.parse(raw))) {
+                      const iso = raw
+                        ? dateTimeLocalInTzToIso(raw, tz)
+                        : computeSocialFikaCadenceInstants(detail.session.fika_starts_at).optInClosesAt
+                      if (!iso) {
                         setError('Invalid opt-in close date/time')
                         return
                       }
@@ -721,6 +820,115 @@ export default function AdminFikaSocialsPage() {
                   <button type="button" className="admin-btn" style={{ marginTop: '0.5rem' }} onClick={() => void patchSession(detail.session.id, { action: 'cancel' })}>
                     Cancel session
                   </button>
+                ) : null}
+              </div>
+
+              <div style={{ marginTop: '0.75rem', borderTop: '1px solid #eee', paddingTop: '0.75rem' }}>
+                <h3 style={{ fontSize: '0.95rem', margin: '0 0 0.35rem' }}>Opt-ins (who said YES)</h3>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center', marginBottom: '0.5rem' }}>
+                  <button
+                    type="button"
+                    className="admin-btn"
+                    onClick={() => void loadOptIns(detail.session.id)}
+                    disabled={optInLoading}
+                  >
+                    {optInRows ? 'Refresh opt-ins' : 'Load opt-ins'}
+                  </button>
+                  {optInLoading ? <span style={{ fontSize: '0.85rem', color: '#666' }}>Loading…</span> : null}
+                </div>
+                {optInError ? (
+                  <p style={{ color: '#b00020', marginTop: '0.35rem' }} role="alert">
+                    {optInError}
+                  </p>
+                ) : null}
+                {optInRows && optInRows.length === 0 ? (
+                  <p style={{ fontSize: '0.85rem', color: '#666', marginTop: '0.35rem' }}>No opt-ins yet.</p>
+                ) : null}
+                {optInRows && optInRows.length > 0 ? (
+                  <table style={{ width: '100%', fontSize: '0.85rem', borderCollapse: 'collapse', marginTop: '0.25rem' }}>
+                    <thead>
+                      <tr>
+                        <th style={{ textAlign: 'left', borderBottom: '1px solid #ddd', padding: '4px 0' }}>Name</th>
+                        <th style={{ textAlign: 'left', borderBottom: '1px solid #ddd', padding: '4px 0' }}>City</th>
+                        <th style={{ textAlign: 'left', borderBottom: '1px solid #ddd', padding: '4px 0' }}>Miles</th>
+                        <th style={{ textAlign: 'left', borderBottom: '1px solid #ddd', padding: '4px 0' }}>Opted-in</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {optInRows.map((r) => {
+                        const name =
+                          [r.first_name ?? '', r.last_name ?? ''].join(' ').trim() || `${r.user_id.slice(0, 8)}…`
+                        const miles = r.distance_miles == null ? '—' : r.distance_miles.toFixed(1)
+                        const opted = r.opted_in_at ? new Date(r.opted_in_at).toLocaleString() : '—'
+                        return (
+                          <tr key={r.user_id}>
+                            <td style={{ padding: '4px 0' }}>{name}</td>
+                            <td style={{ padding: '4px 0' }}>{r.city ?? '—'}</td>
+                            <td style={{ padding: '4px 0' }}>{miles}</td>
+                            <td style={{ padding: '4px 0' }}>{opted}</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                ) : null}
+              </div>
+
+              <div style={{ marginTop: '0.75rem', borderTop: '1px solid #eee', paddingTop: '0.75rem' }}>
+                <h3 style={{ fontSize: '0.95rem', margin: '0 0 0.35rem' }}>Proposed matches (preview)</h3>
+                <p style={{ fontSize: '0.82rem', color: '#555', marginTop: 0, marginBottom: '0.5rem' }}>
+                  Dry-run preview from current opt-ins; does not write anything. Sorted by score.
+                </p>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center', marginBottom: '0.5rem' }}>
+                  <button
+                    type="button"
+                    className="admin-btn"
+                    onClick={() => void loadMatchPreview(detail.session.id)}
+                    disabled={matchPreviewLoading}
+                  >
+                    {matchPreviewRows ? 'Refresh preview' : 'Preview matches'}
+                  </button>
+                  {matchPreviewLoading ? <span style={{ fontSize: '0.85rem', color: '#666' }}>Loading…</span> : null}
+                </div>
+                {matchPreviewError ? (
+                  <p style={{ color: '#b00020', marginTop: '0.35rem' }} role="alert">
+                    {matchPreviewError}
+                  </p>
+                ) : null}
+                {matchPreviewRows && matchPreviewRows.length === 0 ? (
+                  <p style={{ fontSize: '0.85rem', color: '#666', marginTop: '0.35rem' }}>Not enough opt-ins to preview pairs.</p>
+                ) : null}
+                {matchPreviewRows && matchPreviewRows.length > 0 ? (
+                  <table style={{ width: '100%', fontSize: '0.85rem', borderCollapse: 'collapse', marginTop: '0.25rem' }}>
+                    <thead>
+                      <tr>
+                        <th style={{ textAlign: 'left', borderBottom: '1px solid #ddd', padding: '4px 0' }}>Pair</th>
+                        <th style={{ textAlign: 'left', borderBottom: '1px solid #ddd', padding: '4px 0' }}>Score</th>
+                        <th style={{ textAlign: 'left', borderBottom: '1px solid #ddd', padding: '4px 0' }}>Eligible</th>
+                        <th style={{ textAlign: 'left', borderBottom: '1px solid #ddd', padding: '4px 0' }}>Notes</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {matchPreviewRows.slice(0, 50).map((p, idx) => {
+                        const score = p.score == null ? '—' : p.score.toFixed(2)
+                        const pair = `${p.user_a.slice(0, 8)}… / ${p.user_b.slice(0, 8)}…`
+                        const notes = p.eligible ? '' : (p.reject_reasons ?? []).slice(0, 2).join('; ')
+                        return (
+                          <tr key={`${p.user_a}:${p.user_b}:${idx}`}>
+                            <td style={{ padding: '4px 0', wordBreak: 'break-all' }}>{pair}</td>
+                            <td style={{ padding: '4px 0' }}>{score}</td>
+                            <td style={{ padding: '4px 0' }}>{p.eligible ? 'yes' : 'no'}</td>
+                            <td style={{ padding: '4px 0', color: p.eligible ? '#666' : '#b00020' }}>{notes || '—'}</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                ) : null}
+                {matchPreviewRows && matchPreviewRows.length > 50 ? (
+                  <p style={{ fontSize: '0.8rem', color: '#666', marginTop: '0.35rem' }}>
+                    Showing top 50 by score (of {matchPreviewRows.length}).
+                  </p>
                 ) : null}
               </div>
 
