@@ -1868,6 +1868,32 @@ export async function POST(request: Request) {
 
   if (matchState === SMS_STATES.MATCH_OFFERED && matchId) {
     const offerPhase = (matchPayload.phase as string | undefined) ?? 'revealed'
+
+    // Social Fika: confirmation is a 👍 reaction (primary) or a short confirmation reply (fallback).
+    if ((matchPayload.protocol_version as string | undefined) === 'social_v1' && offerPhase === 'social_revealed_waiting_confirm') {
+      const isConfirmReaction = reactionDecision === 'yes'
+      const t = content.trim().toLowerCase()
+      const isConfirmReply = t === '👍' || t === 'ok' || t === 'okay' || t === 'ready' || t === 'confirmed' || t === 'confirm'
+      if (isConfirmReaction || isConfirmReply) {
+        const nowIso = new Date().toISOString()
+        await setPerMatchSmsState({
+          userId,
+          weekAnchorMonday,
+          matchId,
+          state: SMS_STATES.MATCH_OFFERED,
+          payload: { ...matchPayload, phase: 'social_confirmed', social_confirmed_at: nowIso },
+          lastSendblueMessageHandle: messageHandle,
+        })
+        await sendConciergeAndLog(fromNumber, "Perfect — you're all set. See you soon.", 'fika_social_match_confirmed', {
+          userId,
+          weekAnchorMonday,
+          matchId,
+        })
+        return NextResponse.json({ ok: true })
+      }
+      // If they react/pass/other text, fall through to existing logic.
+    }
+
     if (offerPhase === 'reveal_pending') {
       if (isMatchPassSignal) {
         const passResult = await fulfillMatchCandidatePass({

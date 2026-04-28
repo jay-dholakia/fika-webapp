@@ -29,6 +29,44 @@ type MatchUserLocation = {
   lng?: number | null
 }
 
+type RevealCopyBits = {
+  otherFirstName: string
+  otherWorkLabel: string | null
+  sharedInterests: string[]
+}
+
+function buildSocialRevealLine2(bits: RevealCopyBits): string {
+  const interests = bits.sharedInterests.filter(Boolean).slice(0, 2)
+  const interestsLabel = interests.length > 0 ? ` who loves ${interests.join(' + ')}` : ''
+  const work = bits.otherWorkLabel?.trim()
+  const workLabel = work ? `a ${work}` : 'someone'
+  const overlap = interests.length > 0 ? `You both like talking about recent wins + local spots.` : `You both like talking about recent wins + local spots.`
+  return `${bits.otherFirstName} is ${workLabel}${interestsLabel}. ${overlap}`
+}
+
+function formatLocalShort(utcIso: string, ianaTz: string): string {
+  const d = new Date(utcIso)
+  if (Number.isNaN(d.getTime())) return utcIso
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: ianaTz,
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(d)
+}
+
+function buildSocialRevealLine1(params: { firstName?: string | null; whenLocal: string; venueName: string; otherName: string }) {
+  const name = params.firstName?.trim()
+  const who = name ? `Hey ${name}` : 'Hey'
+  return `${who} — for your Fika Social today at ${params.whenLocal} at ${params.venueName}, you’ll be meeting ${params.otherName}.`
+}
+
+function buildSocialRevealCta(): string {
+  return `React 👍 to this message to confirm you’re all set.`
+}
+
 function buildRevealPrompt(firstName: string | null | undefined): string {
   const trimmed = firstName?.trim()
   if (trimmed) {
@@ -273,7 +311,7 @@ serve(async (req: Request) => {
 
     let matchesQuery = supabase
       .from('match_candidates')
-      .select('id, user_a, user_b, reasons, status')
+      .select('id, user_a, user_b, reasons, status, fika_social_id')
       .eq('week_anchor_monday', weekAnchorMonday)
       .eq('status', 'active')
     if (requestedIds.length > 0) {
@@ -334,6 +372,100 @@ serve(async (req: Request) => {
         const offerSequence = buildSampleOfferSequence({
           firstName: myProfile.first_name as string | null | undefined,
         })
+
+        // Social Fika: at T−6h we send a single lightweight reveal (3 short texts) and await a 👍 reaction confirm.
+        if (match.fika_social_id) {
+          const otherId = userId === match.user_a ? match.user_b : match.user_a
+          const { data: otherProfile } = await supabase
+            .from('profiles')
+            .select('first_name')
+            .eq('id', otherId)
+            .maybeSingle()
+          const { data: otherIntakeRow } = await supabase
+            .from('intake_responses_v5')
+            .select('responses')
+            .eq('user_id', otherId)
+            .maybeSingle()
+
+          const { data: social } = await supabase
+            .from('fika_socials')
+            .select('id, fika_starts_at, iana_tz, venues:venues(name)')
+            .eq('id', match.fika_social_id)
+            .maybeSingle()
+
+          const otherName = otherProfile?.first_name?.trim() || 'Someone'
+          const venueName = (social?.venues?.name as string | undefined)?.trim() || 'the venue'
+          const tz = (social?.iana_tz as string | undefined)?.trim() || 'America/Los_Angeles'
+          const whenLocal = social?.fika_starts_at ? formatLocalShort(String(social.fika_starts_at), tz) : 'today'
+
+          const reasonsRoot = (match.reasons as Record<string, unknown>) ?? {}
+          const rawReasons = ((reasonsRoot.raw as Record<string, unknown> | undefined) ?? reasonsRoot) as Record<string, unknown>
+          const copyReasons = ((reasonsRoot.copy as Record<string, unknown> | undefined) ?? reasonsRoot) as Record<string, unknown>
+          const sharedInterests =
+            (copyReasons.shared_interests as string[]) ?? (rawReasons.shared_interests as string[]) ?? []
+          const otherWorkLabel = (() => {
+            const responses = (otherIntakeRow?.responses ?? null) as any
+            const raw = responses?.q_work
+            return typeof raw === 'string' ? raw : null
+          })()
+
+          const line1 = buildSocialRevealLine1({
+            firstName: myProfile.first_name as string | null | undefined,
+            whenLocal,
+            venueName,
+            otherName,
+          })
+          const line2 = buildSocialRevealLine2({
+            otherFirstName: otherName,
+            otherWorkLabel,
+            sharedInterests,
+          })
+          const line3 = buildSocialRevealCta()
+
+          const lines = [line1, line2, line3]
+          let started = false
+          for (let i = 0; i < lines.length; i++) {
+            const res = await sendSendblueMessage({
+              apiKeyId,
+              apiSecret,
+              phone,
+              content: lines[i]!,
+            })
+            if (!res.ok) {
+              const errText = await res.text().catch(() => '')
+              console.error('[sms-match-delivery] social reveal send failed', {
+                userId,
+                otherId,
+                matchId: match.id,
+                stepIndex: i,
+                status: res.status,
+                errText,
+              })
+              break
+            }
+            if (!started) {
+              started = true
+              sent++
+              if (isOutside24h) sent_outside_24h++
+              await setMatchOfferedState({
+                supabase,
+                userId,
+                weekAnchorMonday,
+                matchId: match.id,
+                payload: {
+                  protocol_version: 'social_v1',
+                  phase: 'social_revealed_waiting_confirm',
+                  fika_social_id: match.fika_social_id,
+                },
+              })
+            }
+            if (i < lines.length - 1) {
+              await new Promise((r) => setTimeout(r, SMS_PACING_MS.beat))
+            }
+          }
+          continue
+        }
+
         let sequenceStarted = false
         for (let i = 0; i < offerSequence.length; i++) {
           const step = offerSequence[i]
