@@ -80,6 +80,13 @@ type VenueOption = {
 
 type IanaOption = { value: string; label: string }
 
+type EligibleProfileRow = {
+  id: string
+  first_name: string | null
+  city: string | null
+  distance_miles: number
+}
+
 export default function AdminFikaSocialsPage() {
   const [sessions, setSessions] = useState<SessionRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -93,6 +100,12 @@ export default function AdminFikaSocialsPage() {
   const [radius, setRadius] = useState('4')
   const [optInClosesLocal, setOptInClosesLocal] = useState('')
   const [previewCount, setPreviewCount] = useState<number | null>(null)
+  const [eligibleOpen, setEligibleOpen] = useState(false)
+  const [eligibleLoading, setEligibleLoading] = useState(false)
+  const [eligibleError, setEligibleError] = useState<string | null>(null)
+  const [eligibleProfiles, setEligibleProfiles] = useState<EligibleProfileRow[]>([])
+  const [eligibleExcluded, setEligibleExcluded] = useState<Record<string, boolean>>({})
+  const [eligibleForSessionId, setEligibleForSessionId] = useState<string | null>(null)
 
   const [marketOptions, setMarketOptions] = useState<MarketOption[]>([])
   const [venueOptions, setVenueOptions] = useState<VenueOption[]>([])
@@ -233,6 +246,71 @@ export default function AdminFikaSocialsPage() {
       setPreviewCount(json.count ?? 0)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Preview failed')
+    }
+  }
+
+  async function openEligibleChecklist(params: { market_slug: string; venue_id: string; radius_miles: string; session_id?: string | null }) {
+    setEligibleOpen(true)
+    setEligibleLoading(true)
+    setEligibleError(null)
+    setEligibleProfiles([])
+    setEligibleExcluded({})
+    setEligibleForSessionId(params.session_id ?? null)
+    try {
+      const q = new URLSearchParams({
+        market_slug: params.market_slug,
+        venue_id: params.venue_id,
+        radius_miles: params.radius_miles,
+        limit: '400',
+      })
+      const res = await fetch(`/api/admin/fika-socials/eligibility-profiles?${q.toString()}`, {
+        credentials: 'include',
+        headers: await getAuthHeaders(),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json?.error ?? 'Failed to load profiles')
+      const rows = (json.profiles ?? []) as EligibleProfileRow[]
+      setEligibleProfiles(rows)
+
+      if (params.session_id) {
+        const exclRes = await fetch(`/api/admin/fika-socials/${encodeURIComponent(params.session_id)}/invite-exclusions`, {
+          credentials: 'include',
+          headers: await getAuthHeaders(),
+        })
+        const exclJson = await exclRes.json().catch(() => ({}))
+        if (!exclRes.ok) throw new Error(exclJson?.error ?? 'Failed to load exclusions')
+        const excludedIds = new Set<string>((exclJson.excluded_user_ids ?? []) as string[])
+        setEligibleExcluded(Object.fromEntries(rows.map((r) => [r.id, excludedIds.has(r.id)])))
+      } else {
+        setEligibleExcluded(Object.fromEntries(rows.map((r) => [r.id, false])))
+      }
+    } catch (e) {
+      setEligibleError(e instanceof Error ? e.message : 'Failed to load profiles')
+    } finally {
+      setEligibleLoading(false)
+    }
+  }
+
+  async function saveEligibleExclusions() {
+    if (!eligibleForSessionId) return
+    setEligibleLoading(true)
+    setEligibleError(null)
+    try {
+      const excluded_user_ids = Object.entries(eligibleExcluded)
+        .filter(([, v]) => v)
+        .map(([k]) => k)
+      const res = await fetch(`/api/admin/fika-socials/${encodeURIComponent(eligibleForSessionId)}/invite-exclusions`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: await getAuthHeaders(),
+        body: JSON.stringify({ excluded_user_ids }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json?.error ?? 'Failed to save exclusions')
+    } catch (e) {
+      setEligibleError(e instanceof Error ? e.message : 'Failed to save exclusions')
+    } finally {
+      setEligibleLoading(false)
     }
   }
 
@@ -398,7 +476,24 @@ export default function AdminFikaSocialsPage() {
             Preview pool count
           </button>
           {previewCount != null ? (
-            <span style={{ alignSelf: 'center', fontSize: '0.9rem' }}>~{previewCount} profiles in radius</span>
+            <button
+              type="button"
+              className="admin-btn"
+              onClick={() => {
+                if (!inferredMarket) {
+                  setError('Choose a venue we can map to a market first.')
+                  return
+                }
+                void openEligibleChecklist({
+                  market_slug: inferredMarket.slug,
+                  venue_id: venueId.trim(),
+                  radius_miles: radius.trim() || '4',
+                })
+              }}
+              style={{ alignSelf: 'center' }}
+            >
+              {previewCount} profiles in radius (review)
+            </button>
           ) : null}
           <button type="button" className="admin-btn admin-btn-primary" onClick={() => void createSession()}>
             Create draft
@@ -462,6 +557,24 @@ export default function AdminFikaSocialsPage() {
               <p style={{ fontSize: '0.9rem', marginBottom: '0.75rem' }}>
                 Opt-ins: {detail.counts.opt_ins} · Matches: {detail.counts.matches}
               </p>
+
+              <div style={{ marginBottom: '0.75rem' }}>
+                <button
+                  type="button"
+                  className="admin-btn"
+                  onClick={() => {
+                    const s = detail.session
+                    void openEligibleChecklist({
+                      market_slug: s.market_slug,
+                      venue_id: s.venue_id,
+                      radius_miles: String(s.radius_miles ?? 4),
+                      session_id: s.id,
+                    })
+                  }}
+                >
+                  Review invite pool (checklist)
+                </button>
+              </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', marginBottom: '1rem' }}>
                 {detail.session.status === 'draft' ? (
@@ -585,6 +698,112 @@ export default function AdminFikaSocialsPage() {
           ) : null}
         </section>
       </div>
+
+      {eligibleOpen ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.35)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1rem',
+            zIndex: 50,
+          }}
+          onClick={() => {
+            if (eligibleLoading) return
+            setEligibleOpen(false)
+          }}
+        >
+          <div
+            style={{
+              background: '#fff',
+              borderRadius: 10,
+              width: 'min(900px, 100%)',
+              maxHeight: '80vh',
+              overflow: 'auto',
+              border: '1px solid #ddd',
+              padding: '0.9rem',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem', alignItems: 'flex-start' }}>
+              <div>
+                <h2 style={{ fontSize: '1.05rem', margin: 0 }}>Profiles in radius</h2>
+                <p style={{ margin: '0.25rem 0 0', fontSize: '0.85rem', color: '#555' }}>
+                  Uncheck (exclude) people you don’t want invited to this Fika social.
+                </p>
+              </div>
+              <div style={{ display: 'inline-flex', gap: '0.5rem' }}>
+                {eligibleForSessionId ? (
+                  <button
+                    type="button"
+                    className="admin-btn admin-btn-primary"
+                    onClick={() => void saveEligibleExclusions()}
+                    disabled={eligibleLoading}
+                  >
+                    Save exclusions
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  className="admin-btn"
+                  onClick={() => setEligibleOpen(false)}
+                  disabled={eligibleLoading}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+
+            {eligibleError ? (
+              <p style={{ color: '#b00020', marginTop: '0.75rem' }} role="alert">
+                {eligibleError}
+              </p>
+            ) : null}
+            {eligibleLoading ? <p style={{ marginTop: '0.75rem' }}>Loading…</p> : null}
+
+            {!eligibleLoading && eligibleProfiles.length > 0 ? (
+              <table style={{ width: '100%', marginTop: '0.75rem', fontSize: '0.9rem', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr>
+                    <th style={{ textAlign: 'left', borderBottom: '1px solid #ddd', padding: '6px 0' }}>Include</th>
+                    <th style={{ textAlign: 'left', borderBottom: '1px solid #ddd', padding: '6px 0' }}>Name</th>
+                    <th style={{ textAlign: 'left', borderBottom: '1px solid #ddd', padding: '6px 0' }}>City</th>
+                    <th style={{ textAlign: 'left', borderBottom: '1px solid #ddd', padding: '6px 0' }}>Miles</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {eligibleProfiles.map((p) => {
+                    const excluded = Boolean(eligibleExcluded[p.id])
+                    return (
+                      <tr key={p.id}>
+                        <td style={{ padding: '6px 0' }}>
+                          <input
+                            type="checkbox"
+                            checked={!excluded}
+                            onChange={(e) => {
+                              const include = e.target.checked
+                              setEligibleExcluded((prev) => ({ ...prev, [p.id]: !include }))
+                            }}
+                            aria-label={`Include ${p.first_name ?? p.id}`}
+                          />
+                        </td>
+                        <td style={{ padding: '6px 0' }}>{p.first_name ?? '—'}</td>
+                        <td style={{ padding: '6px 0' }}>{p.city ?? '—'}</td>
+                        <td style={{ padding: '6px 0' }}>{p.distance_miles.toFixed(1)}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
     </main>
   )
 }
