@@ -13,6 +13,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const isSignups = pathname?.startsWith('/admin/signups')
   const isSmsControl = pathname?.startsWith('/admin/sms-control')
   const isFikaSocials = pathname?.startsWith('/admin/fika-socials')
+  const isVenues = pathname?.startsWith('/admin/venues')
 
   useEffect(() => {
     setMobileMenuOpen(false)
@@ -25,8 +26,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { href: '/admin/signups', label: 'People', active: isSignups },
     { href: '/admin/sms-control', label: 'SMS control', active: isSmsControl },
     { href: '/admin/fika-socials', label: 'Fika socials', active: isFikaSocials },
+    { href: '/admin/venues', label: 'Venues', active: isVenues },
     { href: '/app/yourfika', label: 'Back to app', active: false },
-  ]), [isMarkets, isMap, isFikas, isSignups, isSmsControl, isFikaSocials])
+  ]), [isMarkets, isMap, isFikas, isSignups, isSmsControl, isFikaSocials, isVenues])
 
   return (
     <div className="admin-layout">

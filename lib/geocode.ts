@@ -84,3 +84,36 @@ export async function geocodeZip(zip: string): Promise<{ city: string; lat: numb
     return null
   }
 }
+
+/** Forward geocode a US address line (admin venue tooling). Requires Google Geocoding API key. */
+export async function geocodeUsAddressLine(
+  address: string
+): Promise<{ lat: number; lng: number; formatted_address?: string } | null> {
+  const googleKey = process.env.GOOGLE_MAPS_API_KEY ?? process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+  const q = address.trim()
+  if (!googleKey || !q) return null
+  try {
+    const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(q)}&key=${googleKey}&region=us`
+    const res = await fetch(url)
+    if (!res.ok) return null
+    const data = (await res.json()) as {
+      status?: string
+      results?: Array<{
+        formatted_address?: string
+        geometry?: { location?: { lat: number; lng: number } }
+      }>
+    }
+    if (data.status !== 'OK' || !data.results?.length) return null
+    const first = data.results[0]
+    const lat = first.geometry?.location?.lat
+    const lng = first.geometry?.location?.lng
+    if (lat == null || lng == null || !Number.isFinite(lat) || !Number.isFinite(lng)) return null
+    return {
+      lat,
+      lng,
+      formatted_address: first.formatted_address,
+    }
+  } catch {
+    return null
+  }
+}
