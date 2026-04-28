@@ -80,7 +80,7 @@ export function computeSocialFikaCadenceInstants(
 export function assertFikaStartsAfter(
   fikaStartsAtIso: string,
   nowMs: number,
-  minimumLeadMs: number = 49 * MS_PER_HOUR
+  minimumLeadMs: number = 48 * MS_PER_HOUR
 ): { ok: true } | { ok: false; reason: string } {
   const end = new Date(fikaStartsAtIso).getTime()
   if (!Number.isFinite(end)) return { ok: false, reason: 'invalid_fika_starts_at' }

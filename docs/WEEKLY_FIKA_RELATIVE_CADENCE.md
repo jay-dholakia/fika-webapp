@@ -38,7 +38,7 @@ Offsets should be defined in **policy** (defaults on `markets`, optional overrid
 
 2. Rename complete: `opt_in_invite_sent_at` is the invite idempotency marker (formerly `sunday_blast_sent_at`).
 
-3. **Constraints:** `opt_in_opens_at < opt_in_closes_at < fika_starts_at`; reject publish if total lead time is too short for policy (v1: ≥49h).
+3. **Constraints:** `opt_in_opens_at < opt_in_closes_at < fika_starts_at`; reject publish if total lead time is too short for policy (v1: ≥48h).
 
 ---
 
