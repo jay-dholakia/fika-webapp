@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import { snapDatePickerValueToMondayYmd } from '@/lib/fika-social-draft-options'
 import { getSupabase } from '@/lib/supabase'
 
 type SessionRow = {
@@ -56,6 +57,30 @@ function fromDateTimeLocalValue(v: string): string {
   return Number.isNaN(d.getTime()) ? '' : d.toISOString()
 }
 
+function todayYmdLocal(): string {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+type MarketOption = {
+  slug: string
+  label: string
+  active: boolean
+  default_radius_miles: number
+}
+
+type VenueOption = {
+  id: string
+  name: string
+  neighborhood: string | null
+  city: string
+}
+
+type IanaOption = { value: string; label: string }
+
 export default function AdminFikaSocialsPage() {
   const [sessions, setSessions] = useState<SessionRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -71,6 +96,13 @@ export default function AdminFikaSocialsPage() {
   const [ianaTz, setIanaTz] = useState('America/Los_Angeles')
   const [optInClosesLocal, setOptInClosesLocal] = useState('')
   const [previewCount, setPreviewCount] = useState<number | null>(null)
+
+  const [marketOptions, setMarketOptions] = useState<MarketOption[]>([])
+  const [venueOptions, setVenueOptions] = useState<VenueOption[]>([])
+  const [venuesNote, setVenuesNote] = useState<string | null>(null)
+  const [ianaOptions, setIanaOptions] = useState<IanaOption[]>([])
+  const [radiusPresets, setRadiusPresets] = useState<number[]>([2, 3, 4, 5, 6, 8, 10, 12, 15])
+  const [draftOptionsLoading, setDraftOptionsLoading] = useState(false)
 
   const loadSessions = useCallback(async () => {
     setLoading(true)
@@ -117,6 +149,51 @@ export default function AdminFikaSocialsPage() {
     void loadSessions()
   }, [loadSessions])
 
+  useEffect(() => {
+    setWeekMonday(snapDatePickerValueToMondayYmd(todayYmdLocal()))
+  }, [])
+
+  const loadDraftOptions = useCallback(async () => {
+    setDraftOptionsLoading(true)
+    try {
+      const res = await fetch(
+        `/api/admin/fika-socials/draft-options?market_slug=${encodeURIComponent(marketSlug.trim())}`,
+        { credentials: 'include', headers: await getAuthHeaders() }
+      )
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json?.error ?? 'Failed to load draft options')
+      const markets = (json.markets ?? []) as MarketOption[]
+      const venues = (json.venues ?? []) as VenueOption[]
+      setMarketOptions(markets)
+      setVenueOptions(venues)
+      setVenuesNote(typeof json.venues_note === 'string' ? json.venues_note : null)
+      setIanaOptions(Array.isArray(json.iana_timezones) ? json.iana_timezones : [])
+      if (Array.isArray(json.radius_presets) && json.radius_presets.length > 0) {
+        setRadiusPresets(json.radius_presets.map((n: unknown) => Number(n)).filter((n: number) => Number.isFinite(n)))
+      }
+      if (json.selected_market_default_radius != null && Number.isFinite(Number(json.selected_market_default_radius))) {
+        setRadius(String(Number(json.selected_market_default_radius)))
+      }
+      setVenueId((prev) => (venues.some((v) => v.id === prev) ? prev : ''))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load draft options')
+    } finally {
+      setDraftOptionsLoading(false)
+    }
+  }, [marketSlug])
+
+  useEffect(() => {
+    void loadDraftOptions()
+  }, [loadDraftOptions])
+
+  useEffect(() => {
+    if (!marketOptions.length) return
+    if (!marketOptions.some((m) => m.slug === marketSlug)) {
+      const pick = marketOptions.find((m) => m.active) ?? marketOptions[0]
+      if (pick) setMarketSlug(pick.slug)
+    }
+  }, [marketOptions, marketSlug])
+
   async function previewEligibility() {
     setError(null)
     setPreviewCount(null)
@@ -142,8 +219,10 @@ export default function AdminFikaSocialsPage() {
     setError(null)
     try {
       const fikaIso = fromDateTimeLocalValue(fikaLocal)
-      if (!weekMonday.trim()) throw new Error('Set week_anchor_monday (YYYY-MM-DD)')
+      const weekAnchor = snapDatePickerValueToMondayYmd(weekMonday.trim())
+      if (!weekAnchor.trim()) throw new Error('Pick the week (anchor Monday)')
       if (!fikaIso) throw new Error('Set Fika start (local date/time)')
+      if (!venueId.trim()) throw new Error('Choose a venue')
       const res = await fetch('/api/admin/fika-socials', {
         method: 'POST',
         credentials: 'include',
@@ -151,7 +230,7 @@ export default function AdminFikaSocialsPage() {
         body: JSON.stringify({
           market_slug: marketSlug.trim(),
           venue_id: venueId.trim(),
-          week_anchor_monday: weekMonday.trim(),
+          week_anchor_monday: weekAnchor,
           fika_starts_at: fikaIso,
           radius_miles: Number(radius) || 4,
           iana_tz: ianaTz.trim() || 'America/Los_Angeles',
@@ -209,30 +288,80 @@ export default function AdminFikaSocialsPage() {
         }}
       >
         <h2 style={{ fontSize: '1.05rem', marginBottom: '0.75rem' }}>New draft</h2>
-        <div style={{ display: 'grid', gap: '0.65rem', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
+        {draftOptionsLoading ? (
+          <p style={{ fontSize: '0.9rem', color: '#666', marginBottom: '0.65rem' }}>Loading markets and venues…</p>
+        ) : null}
+        <div style={{ display: 'grid', gap: '0.65rem', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
           <label>
-            <span style={{ display: 'block', fontSize: '0.8rem', marginBottom: 2 }}>market_slug</span>
-            <input value={marketSlug} onChange={(e) => setMarketSlug(e.target.value)} style={{ width: '100%' }} />
+            <span style={{ display: 'block', fontSize: '0.8rem', marginBottom: 2 }}>Market</span>
+            <select
+              value={marketSlug}
+              onChange={(e) => setMarketSlug(e.target.value)}
+              style={{ width: '100%' }}
+              disabled={draftOptionsLoading || marketOptions.length === 0}
+            >
+              {marketOptions.map((m) => (
+                <option key={m.slug} value={m.slug}>
+                  {m.label}
+                  {!m.active ? ' (inactive)' : ''}
+                </option>
+              ))}
+            </select>
           </label>
-          <label>
-            <span style={{ display: 'block', fontSize: '0.8rem', marginBottom: 2 }}>venue_id (uuid)</span>
-            <input value={venueId} onChange={(e) => setVenueId(e.target.value)} style={{ width: '100%' }} />
+          <label style={{ gridColumn: 'span 2 / auto' }}>
+            <span style={{ display: 'block', fontSize: '0.8rem', marginBottom: 2 }}>Venue</span>
+            <select
+              value={venueId}
+              onChange={(e) => setVenueId(e.target.value)}
+              style={{ width: '100%', maxWidth: '100%' }}
+              disabled={draftOptionsLoading || venueOptions.length === 0}
+            >
+              <option value="">{draftOptionsLoading ? 'Loading…' : 'Choose a venue…'}</option>
+              {venueOptions.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.name}
+                  {v.neighborhood ? ` (${v.neighborhood})` : ''} — {v.city || '—'}
+                </option>
+              ))}
+            </select>
           </label>
+          {venuesNote ? (
+            <p style={{ gridColumn: '1 / -1', fontSize: '0.82rem', color: '#856404', margin: 0 }}>{venuesNote}</p>
+          ) : null}
           <label>
-            <span style={{ display: 'block', fontSize: '0.8rem', marginBottom: 2 }}>week_anchor_monday</span>
-            <input type="date" value={weekMonday} onChange={(e) => setWeekMonday(e.target.value)} style={{ width: '100%' }} />
+            <span style={{ display: 'block', fontSize: '0.8rem', marginBottom: 2 }}>Week (pick any day — stored as Monday)</span>
+            <input
+              type="date"
+              value={weekMonday}
+              onChange={(e) => setWeekMonday(snapDatePickerValueToMondayYmd(e.target.value))}
+              style={{ width: '100%' }}
+            />
           </label>
           <label>
             <span style={{ display: 'block', fontSize: '0.8rem', marginBottom: 2 }}>Fika starts (local)</span>
             <input type="datetime-local" value={fikaLocal} onChange={(e) => setFikaLocal(e.target.value)} style={{ width: '100%' }} />
           </label>
           <label>
-            <span style={{ display: 'block', fontSize: '0.8rem', marginBottom: 2 }}>radius_miles</span>
-            <input value={radius} onChange={(e) => setRadius(e.target.value)} style={{ width: '100%' }} />
+            <span style={{ display: 'block', fontSize: '0.8rem', marginBottom: 2 }}>Radius (miles)</span>
+            <select value={radius} onChange={(e) => setRadius(e.target.value)} style={{ width: '100%' }}>
+              {radiusPresets.map((n) => (
+                <option key={n} value={String(n)}>
+                  {n} mi
+                </option>
+              ))}
+            </select>
           </label>
           <label>
-            <span style={{ display: 'block', fontSize: '0.8rem', marginBottom: 2 }}>iana_tz</span>
-            <input value={ianaTz} onChange={(e) => setIanaTz(e.target.value)} style={{ width: '100%' }} />
+            <span style={{ display: 'block', fontSize: '0.8rem', marginBottom: 2 }}>Timezone</span>
+            <select value={ianaTz} onChange={(e) => setIanaTz(e.target.value)} style={{ width: '100%' }}>
+              {(ianaOptions.length > 0 ? ianaOptions : [{ value: 'America/Los_Angeles', label: 'Pacific — Los Angeles' }]).map(
+                (z) => (
+                  <option key={z.value} value={z.value}>
+                    {z.label}
+                  </option>
+                )
+              )}
+            </select>
           </label>
         </div>
         <div style={{ marginTop: '0.85rem', display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
