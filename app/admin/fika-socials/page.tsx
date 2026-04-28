@@ -56,7 +56,7 @@ function fromDateTimeLocalValue(v: string): string {
   return Number.isNaN(d.getTime()) ? '' : d.toISOString()
 }
 
-export default function AdminWeeklySessionsPage() {
+export default function AdminFikaSocialsPage() {
   const [sessions, setSessions] = useState<SessionRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -76,13 +76,13 @@ export default function AdminWeeklySessionsPage() {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch('/api/admin/weekly-sessions?limit=100', {
+      const res = await fetch('/api/admin/fika-socials?limit=100', {
         credentials: 'include',
         headers: await getAuthHeaders(),
       })
       const json = await res.json().catch(() => ({}))
       if (res.status === 403 && json?.code === 'NOT_ADMIN') {
-        window.location.href = '/login?next=/admin/weekly-sessions'
+        window.location.href = '/login?next=/admin/fika-socials'
         return
       }
       if (!res.ok) throw new Error(json?.error ?? 'Failed to load')
@@ -98,7 +98,7 @@ export default function AdminWeeklySessionsPage() {
     setDetailLoading(true)
     setError(null)
     try {
-      const res = await fetch(`/api/admin/weekly-sessions/${encodeURIComponent(sessionId)}`, {
+      const res = await fetch(`/api/admin/fika-socials/${encodeURIComponent(sessionId)}`, {
         credentials: 'include',
         headers: await getAuthHeaders(),
       })
@@ -126,7 +126,7 @@ export default function AdminWeeklySessionsPage() {
         venue_id: venueId.trim(),
         radius_miles: radius.trim() || '4',
       })
-      const res = await fetch(`/api/admin/weekly-sessions/eligibility-preview?${params}`, {
+      const res = await fetch(`/api/admin/fika-socials/eligibility-preview?${params}`, {
         credentials: 'include',
         headers: await getAuthHeaders(),
       })
@@ -144,7 +144,7 @@ export default function AdminWeeklySessionsPage() {
       const fikaIso = fromDateTimeLocalValue(fikaLocal)
       if (!weekMonday.trim()) throw new Error('Set week_anchor_monday (YYYY-MM-DD)')
       if (!fikaIso) throw new Error('Set Fika start (local date/time)')
-      const res = await fetch('/api/admin/weekly-sessions', {
+      const res = await fetch('/api/admin/fika-socials', {
         method: 'POST',
         credentials: 'include',
         headers: await getAuthHeaders(),
@@ -169,7 +169,7 @@ export default function AdminWeeklySessionsPage() {
   async function patchSession(sessionId: string, body: Record<string, unknown>) {
     setError(null)
     try {
-      const res = await fetch(`/api/admin/weekly-sessions/${encodeURIComponent(sessionId)}`, {
+      const res = await fetch(`/api/admin/fika-socials/${encodeURIComponent(sessionId)}`, {
         method: 'PATCH',
         credentials: 'include',
         headers: await getAuthHeaders(),
@@ -188,9 +188,10 @@ export default function AdminWeeklySessionsPage() {
 
   return (
     <main className="admin-markets-page" style={{ maxWidth: 960, margin: '0 auto', padding: '1.25rem 1rem 3rem' }}>
-      <h1 style={{ fontSize: '1.35rem', marginBottom: '0.35rem' }}>Weekly Fika sessions</h1>
+      <h1 style={{ fontSize: '1.35rem', marginBottom: '0.35rem' }}>Fika socials</h1>
       <p style={{ color: 'var(--color-textSecondary, #666)', marginBottom: '1.25rem', fontSize: '0.95rem' }}>
-        Draft sessions, publish with a Monday opt-in deadline, close opt-in, run the internal matcher, approve rows, then mark intro-ready for Tuesday SMS (send path wired separately).
+        Draft sessions: set Fika time and opt-in close, publish, record opt-in blast, close opt-in, run matcher, approve rows, then mark intro-ready (SMS send path still separate). Relative
+        blast/close/intro milestones from <code>fika_starts_at</code> are specified in <code>docs/WEEKLY_FIKA_RELATIVE_CADENCE.md</code> (automation not wired yet).
       </p>
 
       {error ? (
@@ -335,10 +336,10 @@ export default function AdminWeeklySessionsPage() {
                 {detail.session.status === 'open_opt_in' ? (
                   <>
                     <button type="button" className="admin-btn" onClick={() => void patchSession(detail.session.id, { action: 'record_sunday_blast' })}>
-                      Record Sunday blast sent
+                      Record opt-in blast sent
                     </button>
                     <button type="button" className="admin-btn admin-btn-primary" onClick={() => void patchSession(detail.session.id, { action: 'close_opt_in' })}>
-                      Close opt-in (Monday)
+                      Close opt-in window
                     </button>
                   </>
                 ) : null}

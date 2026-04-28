@@ -1,11 +1,11 @@
 /**
  * Map intake "typical Fika times" (q_typical_fika_times) to concrete availability slot IDs
- * (wed_09_00 … sat_18_30). Used for SMS proposals instead of legacy per-match availability grids.
+ * (mon_09_00 … sun_18_30). Used for SMS proposals instead of legacy per-match availability grids.
  */
 
 import { AVAILABILITY_SLOT_IDS, rankAvailabilitySlots } from '@/lib/availability-slots'
 
-const WEEKDAY = new Set(['wed', 'thu', 'fri'])
+const WEEKDAY = new Set(['mon', 'tue', 'wed', 'thu', 'fri'])
 
 function slotDay(slotId: string): string {
   return slotId.split('_')[0] ?? ''
@@ -39,7 +39,7 @@ function isEvening(slotId: string): boolean {
 function slotMatchesTypicalOption(slotId: string, option: string): boolean {
   const day = slotDay(slotId)
   const isWeekday = WEEKDAY.has(day)
-  const isWeekend = day === 'sat'
+  const isWeekend = day === 'sat' || day === 'sun'
 
   switch (option) {
     case 'Weekday mornings':
@@ -59,7 +59,7 @@ function slotMatchesTypicalOption(slotId: string, option: string): boolean {
   }
 }
 
-/** Expand intake selections to concrete slot IDs (Wed–Sat grid only). */
+/** Expand intake selections to concrete slot IDs (Mon–Sun grid). */
 export function expandTypicalFikaSelectionsToSlotIds(selections: string[]): string[] {
   if (!selections.length) return []
   const out = new Set<string>()
@@ -86,7 +86,7 @@ export function getTypicalFikaSelectionsFromResponses(responses: unknown): strin
 
 /**
  * Ordered candidate slots for proposals: intersection of both users' typical times,
- * then union if intersection is empty, then full Wed–Sat grid if both empty.
+ * then union if intersection is empty, then full week grid if both empty.
  */
 export function candidateSlotIdsForProposalFromIntake(
   responsesA: unknown,

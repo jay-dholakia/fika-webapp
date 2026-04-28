@@ -59,7 +59,7 @@ export function slotIdToDayAndWindow(slotId: string): { day: string; window: 'Mo
   return { day: SLOT_DAY_TO_LABEL[day], window }
 }
 
-/** Get unique days from overlapping slot IDs for SMS "When might you be free? WED THU SAT" */
+/** Get unique days from overlapping slot IDs for SMS day-pick prompts. */
 export function getDaysFromSlotIds(slotIds: string[]): string[] {
   const set = new Set<string>()
   for (const id of slotIds) {

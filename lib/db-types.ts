@@ -1,7 +1,7 @@
 // Minimal types for Supabase tables used by onboarding and portal.
-// Align with your actual schema (profiles, intake_responses_v5, weekly_fika_*).
+// Align with your actual schema (profiles, intake_responses_v5, fika_socials, etc.).
 
-import type { WeeklyFikaSessionStatus } from '@/lib/weekly-fika-session'
+import type { FikaSocialSessionStatus } from '@/lib/fika-social-session'
 
 export type ProfileRow = {
   id: string
@@ -86,8 +86,8 @@ export type SmsConversationStateRow = {
   created_at: string
 }
 
-/** Admin weekly Fika session (Sun opt-in → Mon close → matcher → approvals → Tue intro). */
-export type WeeklyFikaSessionRow = {
+/** Admin fika social session (opt-in → close → matcher → approvals → intro SMS). */
+export type FikaSocialSessionRow = {
   id: string
   market_slug: string
   venue_id: string
@@ -95,7 +95,7 @@ export type WeeklyFikaSessionRow = {
   radius_miles: number
   iana_tz: string
   fika_starts_at: string
-  status: WeeklyFikaSessionStatus
+  status: FikaSocialSessionStatus
   sunday_blast_sent_at: string | null
   opt_in_closes_at: string | null
   opt_in_closed_at: string | null
@@ -105,7 +105,7 @@ export type WeeklyFikaSessionRow = {
   updated_at: string
 }
 
-export type WeeklyFikaSessionOptInRow = {
+export type FikaSocialOptInRow = {
   id: string
   session_id: string
   user_id: string

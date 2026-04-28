@@ -2,7 +2,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase-server'
 import { isAdminByUserId } from '@/lib/admin-markets'
-import { runWeeklySessionMatcher, type WeeklySessionRow } from '@/lib/weekly-fika-matcher'
+import { runFikaSocialMatcher, type FikaSocialSessionRow } from '@/lib/fika-social-matcher'
 export const dynamic = 'force-dynamic'
 
 async function getAdminContext(request: Request): Promise<{ userId: string; supabase: SupabaseClient } | null> {
@@ -40,7 +40,7 @@ function isYmd(value: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(value.trim())
 }
 
-/** GET /api/admin/weekly-sessions/[sessionId] — session + venue + match queue summary. */
+/** GET /api/admin/fika-socials/[sessionId] — session + venue + match queue summary. */
 export async function GET(request: Request, { params }: { params: Promise<{ sessionId: string }> }) {
   try {
     const context = await getAdminContext(request)
@@ -52,7 +52,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ sess
     }
 
     const { data: session, error: sErr } = await context.supabase
-      .from('weekly_fika_sessions')
+      .from('fika_socials')
       .select('*')
       .eq('id', sessionId)
       .maybeSingle()
@@ -67,13 +67,13 @@ export async function GET(request: Request, { params }: { params: Promise<{ sess
         .eq('id', session.venue_id as string)
         .maybeSingle(),
       context.supabase
-        .from('weekly_fika_session_opt_ins')
+        .from('fika_social_opt_ins')
         .select('id', { count: 'exact', head: true })
         .eq('session_id', sessionId),
       context.supabase
         .from('match_candidates')
-        .select('id, user_a, user_b, admin_approval_status, score, created_at, weekly_intro_sms_sent_at')
-        .eq('weekly_fika_session_id', sessionId)
+        .select('id, user_a, user_b, admin_approval_status, score, created_at, fika_social_intro_sms_sent_at')
+        .eq('fika_social_id', sessionId)
         .order('created_at', { ascending: true }),
     ])
 
@@ -103,7 +103,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ se
     }
 
     const { data: session, error: sErr } = await context.supabase
-      .from('weekly_fika_sessions')
+      .from('fika_socials')
       .select('*')
       .eq('id', sessionId)
       .maybeSingle()
@@ -115,7 +115,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ se
     const action = typeof body.action === 'string' ? body.action.trim() : ''
 
     if (action) {
-      return handleAction(context.supabase, session as WeeklySessionRow & Record<string, unknown>, sessionId, action, body)
+      return handleAction(context.supabase, session as FikaSocialSessionRow & Record<string, unknown>, sessionId, action, body)
     }
 
     if ((session as { status?: string }).status !== 'draft') {
@@ -161,7 +161,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ se
     }
 
     const { data: updated, error: uErr } = await context.supabase
-      .from('weekly_fika_sessions')
+      .from('fika_socials')
       .update(patch)
       .eq('id', sessionId)
       .select('*')
@@ -179,7 +179,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ se
 
 async function handleAction(
   supabase: SupabaseClient,
-  session: WeeklySessionRow & Record<string, unknown>,
+  session: FikaSocialSessionRow & Record<string, unknown>,
   sessionId: string,
   action: string,
   body: Record<string, unknown>
@@ -195,7 +195,7 @@ async function handleAction(
       return NextResponse.json({ error: 'opt_in_closes_at (ISO) is required to publish' }, { status: 400 })
     }
     const { data: updated, error } = await supabase
-      .from('weekly_fika_sessions')
+      .from('fika_socials')
       .update({
         status: 'open_opt_in',
         opt_in_closes_at: optInClosesAt,
@@ -213,7 +213,7 @@ async function handleAction(
     }
     const now = new Date().toISOString()
     const { data: updated, error } = await supabase
-      .from('weekly_fika_sessions')
+      .from('fika_socials')
       .update({
         status: 'opt_in_closed',
         opt_in_closed_at: now,
@@ -233,7 +233,7 @@ async function handleAction(
       return NextResponse.json({ error: 'Matcher already ran for this session' }, { status: 409 })
     }
 
-    const row: WeeklySessionRow = {
+    const row: FikaSocialSessionRow = {
       id: sessionId,
       market_slug: session.market_slug as string,
       venue_id: session.venue_id as string,
@@ -244,14 +244,14 @@ async function handleAction(
       status: session.status as string,
     }
 
-    const result = await runWeeklySessionMatcher(supabase, row)
+    const result = await runFikaSocialMatcher(supabase, row)
     if (!result.ok) {
       return NextResponse.json({ error: result.error, code: result.code }, { status: 400 })
     }
 
     const now = new Date().toISOString()
     const { data: updated, error: uErr } = await supabase
-      .from('weekly_fika_sessions')
+      .from('fika_socials')
       .update({
         status: 'matching_pending_review',
         match_run_at: now,
@@ -285,12 +285,12 @@ async function handleAction(
 
     const { data: mc, error: mcErr } = await supabase
       .from('match_candidates')
-      .select('id, weekly_fika_session_id')
+      .select('id, fika_social_id')
       .eq('id', matchId)
       .maybeSingle()
 
     if (mcErr) return NextResponse.json({ error: mcErr.message }, { status: 500 })
-    if (!mc || mc.weekly_fika_session_id !== sessionId) {
+    if (!mc || mc.fika_social_id !== sessionId) {
       return NextResponse.json({ error: 'Match not found for this session' }, { status: 404 })
     }
 
@@ -313,7 +313,7 @@ async function handleAction(
     const { error: upErr } = await supabase
       .from('match_candidates')
       .update({ admin_approval_status: 'approved', admin_approval_at: now })
-      .eq('weekly_fika_session_id', sessionId)
+      .eq('fika_social_id', sessionId)
       .eq('admin_approval_status', 'pending')
 
     if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 })
@@ -327,7 +327,7 @@ async function handleAction(
     const { count, error: cErr } = await supabase
       .from('match_candidates')
       .select('id', { count: 'exact', head: true })
-      .eq('weekly_fika_session_id', sessionId)
+      .eq('fika_social_id', sessionId)
       .eq('admin_approval_status', 'pending')
 
     if (cErr) return NextResponse.json({ error: cErr.message }, { status: 500 })
@@ -336,7 +336,7 @@ async function handleAction(
     }
 
     const { data: updated, error } = await supabase
-      .from('weekly_fika_sessions')
+      .from('fika_socials')
       .update({ status: 'intro_send_ready' })
       .eq('id', sessionId)
       .select('*')
@@ -352,7 +352,7 @@ async function handleAction(
     }
     const now = new Date().toISOString()
     const { data: updated, error: introErr } = await supabase
-      .from('weekly_fika_sessions')
+      .from('fika_socials')
       .update({
         status: 'intro_sms_sent',
         intro_sms_sent_at: now,
@@ -370,7 +370,7 @@ async function handleAction(
       return NextResponse.json({ error: 'complete is only valid from intro_sms_sent' }, { status: 400 })
     }
     const { data: updated, error } = await supabase
-      .from('weekly_fika_sessions')
+      .from('fika_socials')
       .update({ status: 'completed' })
       .eq('id', sessionId)
       .select('*')
@@ -384,7 +384,7 @@ async function handleAction(
       return NextResponse.json({ error: 'Session is already terminal' }, { status: 400 })
     }
     const { data: updated, error } = await supabase
-      .from('weekly_fika_sessions')
+      .from('fika_socials')
       .update({ status: 'cancelled' })
       .eq('id', sessionId)
       .select('*')
@@ -399,7 +399,7 @@ async function handleAction(
     }
     const sentAt = typeof body.sent_at === 'string' && body.sent_at.trim() ? body.sent_at.trim() : new Date().toISOString()
     const { data: updated, error } = await supabase
-      .from('weekly_fika_sessions')
+      .from('fika_socials')
       .update({ sunday_blast_sent_at: sentAt })
       .eq('id', sessionId)
       .select('*')

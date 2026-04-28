@@ -2,7 +2,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase-server'
 import { isAdminByUserId } from '@/lib/admin-markets'
-import { isWeeklyFikaSessionStatus } from '@/lib/weekly-fika-session'
+import { isFikaSocialSessionStatus } from '@/lib/fika-social-session'
 
 export const dynamic = 'force-dynamic'
 
@@ -41,7 +41,7 @@ function isUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value.trim())
 }
 
-/** GET /api/admin/weekly-sessions — list sessions (optional market_slug, status). */
+/** GET /api/admin/fika-socials — list sessions (optional market_slug, status). */
 export async function GET(request: Request) {
   try {
     const context = await getAdminContext(request)
@@ -53,14 +53,14 @@ export async function GET(request: Request) {
     const limit = Math.min(200, Math.max(10, Number(searchParams.get('limit') ?? '80') || 80))
 
     let q = context.supabase
-      .from('weekly_fika_sessions')
+      .from('fika_socials')
       .select('*')
       .order('week_anchor_monday', { ascending: false })
       .order('created_at', { ascending: false })
       .limit(limit)
 
     if (marketSlug) q = q.eq('market_slug', marketSlug)
-    if (status && isWeeklyFikaSessionStatus(status)) q = q.eq('status', status)
+    if (status && isFikaSocialSessionStatus(status)) q = q.eq('status', status)
 
     const { data, error } = await q
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -74,7 +74,7 @@ export async function GET(request: Request) {
   }
 }
 
-/** POST /api/admin/weekly-sessions — create draft session. */
+/** POST /api/admin/fika-socials — create draft session. */
 export async function POST(request: Request) {
   try {
     const context = await getAdminContext(request)
@@ -121,13 +121,15 @@ export async function POST(request: Request) {
 
     const { data: mktDefaults, error: mdErr } = await context.supabase
       .from('markets')
-      .select('weekly_default_radius_miles')
+      .select('fika_socials_default_radius_miles')
       .eq('slug', marketSlug)
       .maybeSingle()
 
     if (mdErr) return NextResponse.json({ error: mdErr.message }, { status: 500 })
 
-    const defaultRadius = Number((mktDefaults as { weekly_default_radius_miles?: number } | null)?.weekly_default_radius_miles)
+    const defaultRadius = Number(
+      (mktDefaults as { fika_socials_default_radius_miles?: number } | null)?.fika_socials_default_radius_miles
+    )
     const resolvedRadius = radiusMiles ?? (Number.isFinite(defaultRadius) ? defaultRadius : 4)
 
     const insertRow = {
@@ -141,7 +143,7 @@ export async function POST(request: Request) {
     }
 
     const { data: row, error: insErr } = await context.supabase
-      .from('weekly_fika_sessions')
+      .from('fika_socials')
       .insert(insertRow)
       .select('*')
       .single()

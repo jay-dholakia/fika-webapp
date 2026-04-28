@@ -1,0 +1,59 @@
+/**
+ * Relative milestones backward from `fika_starts_at`.
+ * Used by the plan in `docs/WEEKLY_FIKA_RELATIVE_CADENCE.md`.
+ *
+ * v1 uses fixed **UTC day** lengths (86_400_000 ms) from the Fika instant — good for
+ * scheduling order; upgrade to calendar-day math in `iana_tz` when product requires it.
+ */
+const MS_PER_DAY = 86_400_000
+
+export type RelativeCadenceDaysBefore = {
+  /** First opt-in blast / open window comms */
+  optInBlast: number
+  /** Hard close for opt-in before matcher */
+  optInClose: number
+  /** Step-2 intro SMS for approved pairs */
+  introSms: number
+}
+
+/** Example from product discussion: blast T−3d, close T−2d, intro T−1d. */
+export const DEFAULT_RELATIVE_CADENCE_DAYS_BEFORE: RelativeCadenceDaysBefore = {
+  optInBlast: 3,
+  optInClose: 2,
+  introSms: 1,
+}
+
+export type RelativeCadenceInstants = {
+  optInBlastDueAt: string
+  optInClosesAt: string
+  introSmsDueAt: string
+}
+
+export function computeRelativeCadenceInstants(
+  fikaStartsAtIso: string,
+  days: RelativeCadenceDaysBefore = DEFAULT_RELATIVE_CADENCE_DAYS_BEFORE
+): RelativeCadenceInstants {
+  const t = new Date(fikaStartsAtIso).getTime()
+  if (!Number.isFinite(t)) {
+    throw new Error(`Invalid fika_starts_at: ${fikaStartsAtIso}`)
+  }
+  return {
+    optInBlastDueAt: new Date(t - days.optInBlast * MS_PER_DAY).toISOString(),
+    optInClosesAt: new Date(t - days.optInClose * MS_PER_DAY).toISOString(),
+    introSmsDueAt: new Date(t - days.introSms * MS_PER_DAY).toISOString(),
+  }
+}
+
+/** Minimum span (ms) from `now` to `fika_starts_at` so T−3/T−2/T−1 do not collide. */
+export function assertFikaStartsAfter(
+  fikaStartsAtIso: string,
+  nowMs: number,
+  minimumLeadMs: number = 4 * MS_PER_DAY
+): { ok: true } | { ok: false; reason: string } {
+  const end = new Date(fikaStartsAtIso).getTime()
+  if (!Number.isFinite(end)) return { ok: false, reason: 'invalid_fika_starts_at' }
+  if (end - nowMs < minimumLeadMs) {
+    return { ok: false, reason: 'fika_too_soon_for_configured_cadence' }
+  }
+  return { ok: true }
+}

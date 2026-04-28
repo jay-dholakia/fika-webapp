@@ -2,7 +2,7 @@
 
 > **Purpose:** Single checklist to read **before** coding. Aligns engineering on scope, dependencies, and open decisions. Canonical product specs are linked below — this file **summarizes** and **sequences** work.
 
-> **Status (2026-04):** Legacy **`weekly_match_opt_ins`**, **`weekly_availability`**, and **`weekly_pool`** are **dropped** from the DB (`20260430200000`). Hybrid weekly uses **`weekly_fika_sessions`** / **`weekly_fika_session_opt_ins`**. `profiles.sms_intro_mode` is **`match_first` only**. Section 3–6 below mix **history** (“today” at time of writing) with **targets** — use schema docs for current tables.
+> **Status (2026-04):** Legacy **`weekly_match_opt_ins`**, **`weekly_availability`**, and **`weekly_pool`** are **dropped** from the DB (`20260430200000`). Fika socials use **`fika_socials`** / **`fika_social_opt_ins`** (renamed from `weekly_fika_*` in `20260501140000_rename_weekly_fika_to_fika_socials.sql`). `profiles.sms_intro_mode` is **`match_first` only**. Section 3–6 below mix **history** (“today” at time of writing) with **targets** — use schema docs for current tables.
 
 ---
 
@@ -37,8 +37,8 @@ Operational docs were updated for the hybrid weekly schema; older paragraphs in 
 | Area | Today (simplified) |
 |------|---------------------|
 | **Crons** | Six+ jobs hitting Edge Functions: weekly opt-in, follow-up, opt-in expiration, replenish, match delivery, match expiration; plus onboarding, day/3h/post-fika reminders. **Plan:** weekly batch jobs **unscheduled**; reminder jobs **TBD** (see §9.3). |
-| **Webhook** | `sendblue-webhook`: concierge routing, **per-match** YES/PASS/scheduling; weekly hybrid lane should write **`weekly_fika_session_opt_ins`** (not removed pool tables). |
-| **Matching** | Legacy `replenish-matches` + pool tables **removed**. **Admin-only plan:** pairs from **admin simulation** or **`weekly_fika_sessions` matcher** → `match_candidates` → trigger **`sms-match-delivery`** with explicit `match_ids`. |
+| **Webhook** | `sendblue-webhook`: concierge routing, **per-match** YES/PASS/scheduling; fika-social lane should write **`fika_social_opt_ins`** (not removed pool tables). |
+| **Matching** | Legacy `replenish-matches` + pool tables **removed**. **Admin-only plan:** pairs from **admin simulation** or **`fika_socials` matcher** → `match_candidates` → trigger **`sms-match-delivery`** with explicit `match_ids`. |
 | **Modes** | `profiles.sms_intro_mode`: **`match_first` only** in DB; legacy `weekly_pool` label retired. |
 | **Phase 0** | Manual via **admin match simulation** (user-confirmed). **This is the only Phase 0 path for now.** |
 
@@ -95,7 +95,7 @@ Define **per user × match** (and possibly **global** weekly row) states. Minimu
 | Store | Likely changes |
 |-------|----------------|
 | `match_candidates` | `created_at` as anchor for sliding 4-day window; possibly `offer_phase`, `first_grid_day`, SLA timestamps. |
-| `weekly_fika_sessions` / `weekly_fika_session_opt_ins` | **Current** hybrid weekly session model; see `docs/MEETWITHMOAI_SCHEMA.md`. |
+| `fika_socials` / `fika_social_opt_ins` | **Current** admin session + opt-in model; see `docs/MEETWITHMOAI_SCHEMA.md`. |
 | `match_availability` | Per-match availability + READY flow for ad hoc intros (replaces old global weekly availability table). |
 | `profiles.sms_intro_mode` | **`match_first` only** (constraint); weekly cohort label removed. |
 | `message_ledger` | Already used for outbound; good for audit. |

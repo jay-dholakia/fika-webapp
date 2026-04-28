@@ -103,10 +103,10 @@ Pre-computed pairs of users (matches), with score and reasons (similarities/diff
 | `last_shown_to_a` | timestamptz | YES | |
 | `last_shown_to_b` | timestamptz | YES | |
 | `week_anchor_monday` | date | YES | Anchor week (replaces legacy `batch_week`) |
-| `weekly_fika_session_id` | uuid | YES | When set, this row belongs to hybrid **weekly Fika** admin flow |
-| `admin_approval_status` | text | YES | e.g. `pending`, `approved`, `rejected` (weekly lane); ad hoc rows often `approved` |
+| `fika_social_id` | uuid | YES | When set, this row belongs to admin **fika socials** matcher flow |
+| `admin_approval_status` | text | YES | e.g. `pending`, `approved`, `rejected` (fika-social lane); ad hoc rows often `approved` |
 | `admin_approval_at` | timestamptz | YES | |
-| `weekly_intro_sms_sent_at` | timestamptz | YES | Step-2 intro SMS for approved weekly rows |
+| `fika_social_intro_sms_sent_at` | timestamptz | YES | Step-2 intro SMS for approved fika-social rows |
 | *(scheduling)* | various | YES | `overlapping_slot_ids`, `default_slot_id`, `confirmed_slot_id`, `scheduling_status`, venues, reminders — see live DB |
 
 **RLS:** Users can SELECT only rows where they are `user_a` or `user_b`; “system” (e.g. service_role) can manage all rows.
@@ -191,11 +191,11 @@ Prevents re-matching the same pair too soon.
 
 ---
 
-### `weekly_fika_sessions` (replaces removed weekly pool tables)
+### `fika_socials` (replaces removed weekly pool tables; renamed from `weekly_fika_sessions` in `20260501140000_rename_weekly_fika_to_fika_socials.sql`)
 
-Admin-defined **hybrid weekly** Fika for one market + venue + week. See `20260430150000_weekly_fika_sessions_schema.sql`. Full column list: use Supabase Table Editor or `information_schema` — key fields include `market_slug`, `venue_id`, `week_anchor_monday`, `radius_miles`, `iana_tz`, `fika_starts_at`, `status`, and ops timestamps (`sunday_blast_sent_at`, `opt_in_closes_at`, etc.).
+Admin-defined in-person **fika social** for one market + venue + week anchor. Original schema: `20260430150000_weekly_fika_sessions_schema.sql`. Product direction for **relative cadence** (offsets from `fika_starts_at`, renaming `sunday_blast_sent_at`, automation) is in **`docs/WEEKLY_FIKA_RELATIVE_CADENCE.md`**. Key fields include `market_slug`, `venue_id`, `week_anchor_monday`, `radius_miles`, `iana_tz`, `fika_starts_at`, `status`, and ops timestamps (`sunday_blast_sent_at`, `opt_in_closes_at`, etc.).
 
-### `weekly_fika_session_opt_ins`
+### `fika_social_opt_ins`
 
 Per-session YES opt-ins; unique `(user_id, week_anchor_monday)`. **Removed:** `weekly_match_opt_ins`, `weekly_availability` (`20260430200000_drop_legacy_weekly_pool_tables.sql`).
 
@@ -225,8 +225,8 @@ Use these from the Fika app (via RPC or by wrapping in Edge Functions) for match
 
 1. **Profiles** – User identity and location (city, lat/lng), bio, demographics.
 2. **Intake (intake_responses_v5)** – Preferences and open-ended answers; `embed_vector` drives similarity.
-3. **Matching** – Ad hoc: admin simulation + **`sms-match-delivery`** with explicit `match_ids`. Weekly: admin **`weekly_fika_sessions`** lifecycle + matcher writes **`match_candidates`** with `weekly_fika_session_id` and `admin_approval_status`.
-4. **Weekly session opt-in** – **`weekly_fika_session_opt_ins`** (per published session), not the removed global weekly pool tables.
+3. **Matching** – Ad hoc: admin simulation + **`sms-match-delivery`** with explicit `match_ids`. Fika socials: admin **`fika_socials`** lifecycle + matcher writes **`match_candidates`** with `fika_social_id` and `admin_approval_status`.
+4. **Fika social opt-in** – **`fika_social_opt_ins`** (per published session), not the removed global weekly pool tables.
 5. **Opt-in to a match** – User accepts/declines via **opt_ins** (and optional payment).
 6. **Conversation** – When both opt in, create **conversations** with `conversation_type = 'match'` and `match_id`; **messages** for chat.
 7. **Cooldowns** – **cooldowns** table used so the same pair isn’t re-matched too soon.

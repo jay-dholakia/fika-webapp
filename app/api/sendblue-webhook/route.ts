@@ -11,7 +11,6 @@ import {
   getUserIdByPhone,
   normalizeIncomingPhone,
   SMS_STATES,
-  getDaysFromSlotIds,
   slotIdToDayAndWindow,
   slotIdToDisplayTime,
   messageEntry,
@@ -20,7 +19,6 @@ import {
   messageFikaUserInitiatedCommitment,
   messageFikaUserInitiatedLinkBody,
   messageTextFikaToGetLink,
-  messageSchedulingDay,
   messageSchedulingWindow,
   messageVenueProposed,
   messageYoureAllSet,
@@ -2490,7 +2488,7 @@ export async function POST(request: Request) {
   }
 
   if (matchState === SMS_STATES.ACCEPTED_SCHEDULING_DAY && matchId) {
-    const dayMatch = ['WED','THU','FRI','SAT'].find(d => keyword.includes(d))
+    const dayMatch = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'].find((d) => keyword.includes(d))
     if (dayMatch) {
       await supabase.from('sms_conversation_states').update({
         state: SMS_STATES.SCHEDULING_WINDOW,

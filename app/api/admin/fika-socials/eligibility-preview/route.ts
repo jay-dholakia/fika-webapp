@@ -2,7 +2,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase-server'
 import { isAdminByUserId } from '@/lib/admin-markets'
-import { haversineMiles } from '@/lib/weekly-fika-geo'
+import { haversineMiles } from '@/lib/fika-social-geo'
 
 export const dynamic = 'force-dynamic'
 
@@ -38,7 +38,7 @@ function isUuid(value: string): boolean {
 }
 
 /**
- * GET /api/admin/weekly-sessions/eligibility-preview
+ * GET /api/admin/fika-socials/eligibility-preview
  * ?market_slug=&venue_id=&radius_miles=
  * Counts active profiles in the market with lat/lng within radius of the venue.
  */

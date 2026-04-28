@@ -1,15 +1,13 @@
 /**
  * Doodle-style availability for the match week.
- * Slots: Wed–Sat only × 30-minute increments from 9am to 7pm (20 slots per day).
- * Slot id format: day_HH_MM (e.g. wed_09_00, sat_18_30).
+ * Slots: Mon–Sun × 30-minute increments from 9am to 6:30pm local (20 slots per day).
+ * Slot id format: day_HH_MM (e.g. mon_09_00, sat_18_30).
  */
-
-import { getOptInDeadlineForWeekAnchorMonday } from './onboarding'
 
 const DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const
 
-/** Days we collect availability for: Wed–Sat (opt-in window Sunday 12am PT – Monday 11am PT; lock Monday 11am PT; intros Tuesday 9am PT). */
-export const AVAILABILITY_DAYS = ['wed', 'thu', 'fri', 'sat'] as const
+/** Days included in the availability grid (full week). */
+export const AVAILABILITY_DAYS = DAYS
 
 // 9am to 7pm in 30-min increments (9:00, 9:30, ... 18:30; 7pm is end of last slot)
 const HALF_HOUR_SLOTS: { id: string; label: string }[] = (() => {
@@ -63,13 +61,13 @@ export function groupSlotsByDay(slotIds: string[]): { day: string; slots: string
   }))
 }
 
-/** Day labels for the availability grid (Wed–Sat only). */
+/** Day labels for the availability grid (Mon–Sun). */
 export const AVAILABILITY_DAY_LABELS: string[] = AVAILABILITY_DAYS.map((d) => DAY_LABELS[d] ?? d)
 
 /** Time-slot rows for the y-axis (9a–6:30p). */
 export const AVAILABILITY_TIME_ROWS: { id: string; label: string }[] = [...HALF_HOUR_SLOTS]
 
-/** Slot id for a grid cell: dayIndex 0–3 (Wed–Sat), timeIndex 0–19. */
+/** Slot id for a grid cell: dayIndex 0–6 (Mon–Sun), timeIndex 0–19. */
 export function getAvailabilitySlotId(dayIndex: number, timeIndex: number): string {
   const day = AVAILABILITY_DAYS[dayIndex]
   const time = HALF_HOUR_SLOTS[timeIndex]
@@ -87,11 +85,60 @@ function parseSlotId(slotId: string): { dayIndex: number; timeIndex: number } | 
   return { dayIndex, timeIndex }
 }
 
-/** True if slot id is Wed–Sat (valid for availability). */
+/** True if slot id is a valid Mon–Sun × 9:00–18:30 grid id. */
 export function isAvailabilitySlotId(slotId: string): boolean {
   const parsed = parseSlotId(slotId)
-  if (!parsed) return false
-  return parsed.dayIndex >= 2 && parsed.dayIndex <= 5 // wed=2, thu=3, fri=4, sat=5 (exclude sun=6)
+  return parsed != null
+}
+
+const AVAIL_DAY_SET = new Set<string>(AVAILABILITY_DAYS)
+
+/**
+ * Map a UTC instant to the nearest 30m slot id (9:00–18:30 local) in `ianaTz`.
+ * Used when denormalizing `fika_starts_at` into legacy `*_slot_id` fields on `match_candidates`.
+ */
+export function availabilitySlotIdFromUtcInTimezone(utcIso: string, ianaTz: string): string | null {
+  const d = new Date(utcIso)
+  if (Number.isNaN(d.getTime())) return null
+
+  const weekdayLong = new Intl.DateTimeFormat('en-US', {
+    timeZone: ianaTz,
+    weekday: 'long',
+  })
+    .format(d)
+    .toLowerCase()
+
+  const dayMap: Record<string, string> = {
+    monday: 'mon',
+    tuesday: 'tue',
+    wednesday: 'wed',
+    thursday: 'thu',
+    friday: 'fri',
+    saturday: 'sat',
+    sunday: 'sun',
+  }
+  const dayPrefix = dayMap[weekdayLong]
+  if (!dayPrefix || !AVAIL_DAY_SET.has(dayPrefix)) return null
+
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: ianaTz,
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(d)
+
+  const hour = Number(parts.find((p) => p.type === 'hour')?.value ?? 'NaN')
+  const minute = Number(parts.find((p) => p.type === 'minute')?.value ?? 'NaN')
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return null
+
+  let totalMinutes = hour * 60 + minute
+  totalMinutes = Math.floor(totalMinutes / 30) * 30
+  totalMinutes = Math.max(9 * 60, Math.min(18 * 60 + 30, totalMinutes))
+
+  const fh = Math.floor(totalMinutes / 60)
+  const fm = totalMinutes % 60
+  const block = `${String(fh).padStart(2, '0')}_${fm === 30 ? '30' : '00'}`
+  return `${dayPrefix}_${block}`
 }
 
 /**
@@ -157,39 +204,4 @@ export function summarizeAvailabilitySlots(slotIds: string[]): string[] {
     result.push(`${dayLabel} ${startLabel}–${endLabel}`)
   }
   return result
-}
-
-/** Monday of the week after the given anchor Monday (YYYY-MM-DD). */
-export function getNextWeekMonday(weekAnchorMonday: string): string {
-  const d = new Date(weekAnchorMonday + 'T12:00:00')
-  d.setDate(d.getDate() + 7)
-  return d.toISOString().slice(0, 10)
-}
-
-/** Wednesday of the availability week (anchor Monday; Wed = anchor + 2). Uses UTC so the returned date is consistent. */
-export function getAvailabilityWeekWednesday(weekAnchorMonday: string): string {
-  const d = new Date(weekAnchorMonday + 'T12:00:00Z')
-  d.setUTCDate(d.getUTCDate() + 2)
-  return d.toISOString().slice(0, 10)
-}
-
-/** Opt-in + availability lock = Monday 11am PT (same as getOptInDeadlineForWeekAnchorMonday). */
-export function getAvailabilityLockDate(weekAnchorMonday: string): Date {
-  return getOptInDeadlineForWeekAnchorMonday(weekAnchorMonday)
-}
-
-/** True when availability for that week can no longer be edited (Monday 11am PT has passed). */
-export function isAvailabilityLocked(weekAnchorMonday: string): boolean {
-  const lockAt = getAvailabilityLockDate(weekAnchorMonday)
-  return new Date() >= lockAt
-}
-
-/** Human-readable date range for the availability week: Wed–Sat (e.g. "Wed, Mar 5 – Sat, Mar 8"). */
-export function formatNextWeekRange(weekAnchorMonday: string): string {
-  const wed = new Date(getAvailabilityWeekWednesday(weekAnchorMonday) + 'T12:00:00Z')
-  const sat = new Date(wed)
-  sat.setUTCDate(sat.getUTCDate() + 3)
-  const wedStr = wed.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })
-  const satStr = sat.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })
-  return `${wedStr} – ${satStr}`
 }

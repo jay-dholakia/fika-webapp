@@ -1,5 +1,5 @@
 -- Remove legacy Sunday–Monday–Tuesday weekly *pool* tables and policies.
--- New weekly product uses weekly_fika_sessions / weekly_fika_session_opt_ins (separate migration).
+-- New product uses fika_socials / fika_social_opt_ins (see 20260430150000 + 20260501140000 migrations).
 -- Crons targeting removed Edge functions should already be unscheduled (20260426130000); re-check Dashboard if needed.
 
 -- sms_intro_mode: retire weekly_pool label (no longer a DB-backed cohort).

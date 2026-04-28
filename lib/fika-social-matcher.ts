@@ -1,10 +1,14 @@
+/**
+ * Greedy 1:1 pairing for fika social opt-ins: venue-radius + market filter, then intro eligibility.
+ * Denormalizes `fika_starts_at` into legacy 30m `*_slot_id` fields via `availabilitySlotIdFromUtcInTimezone`.
+ */
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { availabilitySlotIdFromUtcInTimezone } from '@/lib/availability-slots'
+import { haversineMiles } from '@/lib/fika-social-geo'
 import { computeAdminPairPayload, loadAdminSimCandidatesForCanonicalPair } from '@/lib/match/admin-match-pair'
 import { fetchUserIdsWithUpcomingConfirmedFika } from '@/lib/upcoming-confirmed-fika'
-import { haversineMiles } from '@/lib/weekly-fika-geo'
-import { availabilitySlotIdFromUtcInTimezone } from '@/lib/weekly-fika-slot'
 
-export type WeeklySessionRow = {
+export type FikaSocialSessionRow = {
   id: string
   market_slug: string
   venue_id: string
@@ -15,7 +19,7 @@ export type WeeklySessionRow = {
   status: string
 }
 
-export type WeeklyMatcherResult = {
+export type FikaSocialMatcherResult = {
   ok: true
   createdMatchIds: string[]
   skippedIneligiblePairs: number
@@ -23,7 +27,7 @@ export type WeeklyMatcherResult = {
   notes: string[]
 }
 
-export type WeeklyMatcherError = { ok: false; error: string; code: string }
+export type FikaSocialMatcherError = { ok: false; error: string; code: string }
 
 function shuffleStable<T>(items: T[], seed: string): T[] {
   const arr = [...items]
@@ -37,14 +41,10 @@ function shuffleStable<T>(items: T[], seed: string): T[] {
   return arr
 }
 
-/**
- * Greedy 1:1 pairing of weekly session opt-ins: venue-radius + market filter, then intro eligibility.
- * Creates `match_candidates` with `weekly_fika_session_id`, `admin_approval_status: pending`, pre-locked scheduling.
- */
-export async function runWeeklySessionMatcher(
+export async function runFikaSocialMatcher(
   supabase: SupabaseClient,
-  session: WeeklySessionRow
-): Promise<WeeklyMatcherResult | WeeklyMatcherError> {
+  session: FikaSocialSessionRow
+): Promise<FikaSocialMatcherResult | FikaSocialMatcherError> {
   const notes: string[] = []
 
   const { data: venue, error: venueErr } = await supabase
@@ -65,13 +65,13 @@ export async function runWeeklySessionMatcher(
     return {
       ok: false,
       error:
-        'Could not map fika_starts_at to a Wed–Sat availability slot in the session timezone. Pick a Fika time Wed–Sat between 9:00 and 6:30 PM local.',
+        'Could not map fika_starts_at to a 30m slot (9:00–6:30 PM local, Mon–Sun). Pick a Fika in that window or adjust scheduling.',
       code: 'FIKA_SLOT_INVALID',
     }
   }
 
   const { data: optRows, error: optErr } = await supabase
-    .from('weekly_fika_session_opt_ins')
+    .from('fika_social_opt_ins')
     .select('user_id')
     .eq('session_id', session.id)
 
@@ -119,7 +119,7 @@ export async function runWeeklySessionMatcher(
   const { data: existingRows } = await supabase
     .from('match_candidates')
     .select('user_a, user_b')
-    .eq('weekly_fika_session_id', session.id)
+    .eq('fika_social_id', session.id)
 
   const pairKeys = new Set<string>()
   for (const row of existingRows ?? []) {
@@ -163,11 +163,11 @@ export async function runWeeklySessionMatcher(
         user_a: userA,
         user_b: userB,
         score: payload.score,
-        reasons: { ...payload.reasons, weekly_session_matcher: 'adjacent_greedy_v1', weekly_fika_session_id: session.id },
+        reasons: { ...payload.reasons, fika_social_matcher: 'adjacent_greedy_v1', fika_social_id: session.id },
         status: 'active',
         week_anchor_monday: session.week_anchor_monday,
         expires_at: expiresAt,
-        weekly_fika_session_id: session.id,
+        fika_social_id: session.id,
         admin_approval_status: 'pending',
         suggested_venue_id: session.venue_id,
         confirmed_venue_id: session.venue_id,
