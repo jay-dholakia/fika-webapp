@@ -14,6 +14,7 @@ type VenueUserLocation = {
 }
 
 const PLACES_NEARBY_URL = 'https://places.googleapis.com/v1/places:searchNearby'
+const PLACES_TEXT_SEARCH_URL = 'https://places.googleapis.com/v1/places:searchText'
 
 /** Lowercase substrings — skip big chains (prefer local / indie). */
 const CHAIN_NAME_BLOCKLIST = [
@@ -37,7 +38,7 @@ function isBlockedChainName(name: string): boolean {
   return CHAIN_NAME_BLOCKLIST.some((b) => n.includes(b))
 }
 
-function getGoogleMapsApiKey(): string | null {
+export function getGoogleMapsApiKey(): string | null {
   const k =
     process.env.GOOGLE_MAPS_API_KEY?.trim() ||
     process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY?.trim() ||
@@ -275,6 +276,127 @@ export async function searchNearbyCafesGooglePlaces(params: {
     }
   } catch (e) {
     console.warn('[google-places-venues] searchNearby error', e)
+    return null
+  }
+}
+
+function mapPlacesApiPlaceToNearby(p: {
+  id?: string
+  displayName?: { text?: string }
+  formattedAddress?: string
+  location?: { latitude?: number; longitude?: number }
+  businessStatus?: string
+}): GoogleNearbyPlace | null {
+  const rawId = p.id?.trim() ?? ''
+  const placeId = rawId.replace(/^places\//, '')
+  const name = p.displayName?.text?.trim() ?? ''
+  const lat = p.location?.latitude
+  const lng = p.location?.longitude
+  const formattedAddress = p.formattedAddress?.trim() ?? ''
+  const businessStatus = p.businessStatus ?? null
+  if (!placeId || !name || lat == null || lng == null) return null
+  return {
+    placeId,
+    name,
+    lat,
+    lng,
+    formattedAddress: formattedAddress || name,
+    businessStatus,
+  }
+}
+
+/**
+ * Places API (New) Text Search — for admin venue picker (no chain filter; user picks explicitly).
+ */
+export async function searchPlacesForAdminVenue(textQuery: string): Promise<GoogleNearbyPlace[]> {
+  const apiKey = getGoogleMapsApiKey()
+  const q = textQuery.trim()
+  if (!apiKey || q.length < 2) return []
+
+  try {
+    const res = await fetch(PLACES_TEXT_SEARCH_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': apiKey,
+        'X-Goog-FieldMask':
+          'places.id,places.displayName,places.location,places.formattedAddress,places.businessStatus',
+      },
+      body: JSON.stringify({
+        textQuery: q,
+        maxResultCount: 15,
+        languageCode: 'en',
+        regionCode: 'US',
+      }),
+    })
+
+    if (!res.ok) {
+      console.warn('[google-places-venues] searchText HTTP', res.status, await res.text().catch(() => ''))
+      return []
+    }
+
+    const data = (await res.json()) as {
+      places?: Array<{
+        id?: string
+        displayName?: { text?: string }
+        formattedAddress?: string
+        location?: { latitude?: number; longitude?: number }
+        businessStatus?: string
+      }>
+    }
+
+    const out: GoogleNearbyPlace[] = []
+    for (const p of data.places ?? []) {
+      const row = mapPlacesApiPlaceToNearby(p)
+      if (row) out.push(row)
+    }
+    return out
+  } catch (e) {
+    console.warn('[google-places-venues] searchText error', e)
+    return []
+  }
+}
+
+/**
+ * Places API (New) Get Place — canonical details before upsert (preferred over client-side search hits alone).
+ */
+export async function fetchGooglePlaceAsVenueCandidate(placeIdRaw: string): Promise<GoogleNearbyPlace | null> {
+  const apiKey = getGoogleMapsApiKey()
+  const token = placeIdRaw.trim().replace(/^places\//, '')
+  if (!apiKey || !token) return null
+
+  try {
+    const url = `https://places.googleapis.com/v1/places/${encodeURIComponent(token)}`
+    const res = await fetch(url, {
+      headers: {
+        'X-Goog-Api-Key': apiKey,
+        'X-Goog-FieldMask':
+          'id,displayName,location,formattedAddress,businessStatus',
+      },
+    })
+
+    if (!res.ok) {
+      console.warn('[google-places-venues] getPlace HTTP', res.status, await res.text().catch(() => ''))
+      return null
+    }
+
+    const p = (await res.json()) as {
+      id?: string
+      displayName?: { text?: string }
+      formattedAddress?: string
+      location?: { latitude?: number; longitude?: number }
+      businessStatus?: string
+    }
+
+    return mapPlacesApiPlaceToNearby({
+      id: p.id ?? `places/${token}`,
+      displayName: p.displayName,
+      formattedAddress: p.formattedAddress,
+      location: p.location,
+      businessStatus: p.businessStatus,
+    })
+  } catch (e) {
+    console.warn('[google-places-venues] getPlace error', e)
     return null
   }
 }

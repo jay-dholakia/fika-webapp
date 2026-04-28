@@ -17,6 +17,15 @@ type VenueRow = {
   created_at: string | null
 }
 
+type GooglePlaceSearchRow = {
+  place_id: string
+  name: string
+  formatted_address: string
+  lat: number
+  lng: number
+  business_status: string | null
+}
+
 async function getAuthHeaders(): Promise<HeadersInit> {
   const supabase = getSupabase()
   const {
@@ -45,6 +54,13 @@ export default function AdminVenuesPage() {
   const [formSuccess, setFormSuccess] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [geocoding, setGeocoding] = useState(false)
+
+  const [placeSearchQ, setPlaceSearchQ] = useState('')
+  const [googlePlaceResults, setGooglePlaceResults] = useState<GooglePlaceSearchRow[]>([])
+  const [placeSearchLoading, setPlaceSearchLoading] = useState(false)
+  const [placeSearchError, setPlaceSearchError] = useState<string | null>(null)
+  const [placeSearchSuccess, setPlaceSearchSuccess] = useState<string | null>(null)
+  const [importingPlaceId, setImportingPlaceId] = useState<string | null>(null)
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 400)
@@ -79,6 +95,66 @@ export default function AdminVenuesPage() {
   useEffect(() => {
     void loadVenues()
   }, [loadVenues])
+
+  async function searchGooglePlaces() {
+    setPlaceSearchError(null)
+    setPlaceSearchSuccess(null)
+    const q = placeSearchQ.trim()
+    if (q.length < 2) {
+      setPlaceSearchError('Enter at least 2 characters.')
+      return
+    }
+    setPlaceSearchLoading(true)
+    try {
+      const res = await fetch('/api/admin/venues/google-text-search', {
+        method: 'POST',
+        credentials: 'include',
+        headers: await getAuthHeaders(),
+        body: JSON.stringify({ q }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (res.status === 403 && json?.code === 'NOT_ADMIN') {
+        window.location.href = '/login?next=/admin/venues'
+        return
+      }
+      if (!res.ok) throw new Error(json?.error ?? 'Search failed')
+      const rows = (json.places ?? []) as GooglePlaceSearchRow[]
+      setGooglePlaceResults(rows)
+      if (rows.length === 0) setPlaceSearchSuccess('No results. Try a fuller address or business name.')
+    } catch (e) {
+      setGooglePlaceResults([])
+      setPlaceSearchError(e instanceof Error ? e.message : 'Search failed')
+    } finally {
+      setPlaceSearchLoading(false)
+    }
+  }
+
+  async function importGooglePlace(placeId: string) {
+    setPlaceSearchError(null)
+    setPlaceSearchSuccess(null)
+    setImportingPlaceId(placeId)
+    try {
+      const res = await fetch('/api/admin/venues/import-google-place', {
+        method: 'POST',
+        credentials: 'include',
+        headers: await getAuthHeaders(),
+        body: JSON.stringify({ place_id: placeId }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (res.status === 403 && json?.code === 'NOT_ADMIN') {
+        window.location.href = '/login?next=/admin/venues'
+        return
+      }
+      if (!res.ok) throw new Error(json?.error ?? 'Import failed')
+      const v = json.venue as { id?: string; name?: string } | undefined
+      setPlaceSearchSuccess(`Saved: ${v?.name ?? 'venue'} (${v?.id ?? '—'})`)
+      await loadVenues()
+    } catch (e) {
+      setPlaceSearchError(e instanceof Error ? e.message : 'Import failed')
+    } finally {
+      setImportingPlaceId(null)
+    }
+  }
 
   async function fillLatLngFromGoogle() {
     setFormError(null)
@@ -156,8 +232,9 @@ export default function AdminVenuesPage() {
     <main className="admin-markets-page" style={{ maxWidth: 960, margin: '0 auto', padding: '1.25rem 1rem 3rem' }}>
       <h1 style={{ fontSize: '1.35rem', marginBottom: '0.35rem' }}>Venues</h1>
       <p style={{ color: 'var(--color-textSecondary, #666)', marginBottom: '1.25rem', fontSize: '0.95rem' }}>
-        Add rows to <code>public.venues</code> for SMS venue pick, admin map, and Fika socials session setup. Coordinates are
-        required for distance-based matching; use Google fill when an API key is configured.
+        Search by address or business name; Google Places fills name, address, latitude, longitude, and place id. Enable
+        Places API (New) on your Google Cloud project and set <code>GOOGLE_MAPS_API_KEY</code> (or{' '}
+        <code>NEXT_PUBLIC_GOOGLE_MAPS_API_KEY</code>).
       </p>
 
       <section
@@ -168,7 +245,90 @@ export default function AdminVenuesPage() {
           marginBottom: '1.5rem',
         }}
       >
-        <h2 style={{ fontSize: '1.05rem', marginBottom: '0.75rem' }}>Add venue</h2>
+        <h2 style={{ fontSize: '1.05rem', marginBottom: '0.75rem' }}>Add from Google Places</h2>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'flex-end', marginBottom: '0.75rem' }}>
+          <label style={{ flex: '1 1 240px', minWidth: 0 }}>
+            <span style={{ display: 'block', fontSize: '0.8rem', marginBottom: 2 }}>Search (address or place name)</span>
+            <input
+              value={placeSearchQ}
+              onChange={(e) => setPlaceSearchQ(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  void searchGooglePlaces()
+                }
+              }}
+              placeholder="e.g. Blue Bottle Venice CA"
+              style={{ width: '100%' }}
+            />
+          </label>
+          <button type="button" className="admin-btn admin-btn-primary" disabled={placeSearchLoading} onClick={() => void searchGooglePlaces()}>
+            {placeSearchLoading ? 'Searching…' : 'Search'}
+          </button>
+        </div>
+        {placeSearchError ? (
+          <p style={{ color: '#b00020', marginBottom: '0.75rem' }} role="alert">
+            {placeSearchError}
+          </p>
+        ) : null}
+        {placeSearchSuccess ? (
+          <p style={{ color: 'var(--color-success, #0a0)', marginBottom: '0.75rem' }}>{placeSearchSuccess}</p>
+        ) : null}
+        {googlePlaceResults.length > 0 ? (
+          <div className="admin-table-wrap">
+            <table className="admin-table" style={{ fontSize: '0.85rem' }}>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Address</th>
+                  <th className="admin-table-num">Lat</th>
+                  <th className="admin-table-num">Lng</th>
+                  <th>Status</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {googlePlaceResults.map((p) => (
+                  <tr key={p.place_id}>
+                    <td>{p.name}</td>
+                    <td style={{ maxWidth: 280 }}>{p.formatted_address}</td>
+                    <td className="admin-table-num">{String(p.lat).slice(0, 9)}</td>
+                    <td className="admin-table-num">{String(p.lng).slice(0, 10)}</td>
+                    <td>{p.business_status ?? '—'}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className="admin-btn admin-btn-primary"
+                        disabled={importingPlaceId !== null}
+                        onClick={() => void importGooglePlace(p.place_id)}
+                      >
+                        {importingPlaceId === p.place_id ? 'Saving…' : 'Add to database'}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
+      </section>
+
+      <section
+        style={{
+          border: '1px solid var(--color-border, #ddd)',
+          borderRadius: 8,
+          padding: '1rem',
+          marginBottom: '1.5rem',
+        }}
+      >
+        <details>
+          <summary style={{ cursor: 'pointer', fontSize: '1.05rem', fontWeight: 600, marginBottom: '0.75rem' }}>
+            Manual entry (advanced)
+          </summary>
+          <p style={{ color: 'var(--color-textSecondary, #666)', fontSize: '0.9rem', marginBottom: '0.75rem' }}>
+            Use when you need a row without Places, or to tweak fields. Coordinates are required for distance-based
+            matching.
+          </p>
         <form onSubmit={submitCreate}>
           <div style={{ display: 'grid', gap: '0.65rem', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
             <label>
@@ -229,6 +389,7 @@ export default function AdminVenuesPage() {
             <p style={{ color: 'var(--color-success, #0a0)', marginTop: '0.75rem', marginBottom: 0 }}>{formSuccess}</p>
           ) : null}
         </form>
+        </details>
       </section>
 
       <section
