@@ -87,6 +87,41 @@ type EligibleProfileRow = {
   distance_miles: number
 }
 
+function draftExclusionsStorageKey(params: {
+  venueId: string
+  fikaDate: string
+  fikaTime: string
+  radiusMiles: string
+  marketSlug: string | null
+}): string {
+  const venue = params.venueId.trim() || 'no-venue'
+  const date = params.fikaDate.trim() || 'no-date'
+  const time = params.fikaTime.trim() || 'no-time'
+  const radius = params.radiusMiles.trim() || 'no-radius'
+  const market = (params.marketSlug ?? '').trim() || 'no-market'
+  return `fika_social_draft_exclusions:v1:${market}:${venue}:${date}:${time}:${radius}`
+}
+
+function readExcludedIdsFromStorage(key: string): Set<string> {
+  try {
+    const raw = window.localStorage.getItem(key)
+    if (!raw) return new Set()
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed)) return new Set()
+    return new Set(parsed.filter((x): x is string => typeof x === 'string' && x.trim().length > 0))
+  } catch {
+    return new Set()
+  }
+}
+
+function writeExcludedIdsToStorage(key: string, ids: Set<string>) {
+  try {
+    window.localStorage.setItem(key, JSON.stringify(Array.from(ids)))
+  } catch {
+    // ignore
+  }
+}
+
 export default function AdminFikaSocialsPage() {
   const [sessions, setSessions] = useState<SessionRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -106,6 +141,7 @@ export default function AdminFikaSocialsPage() {
   const [eligibleProfiles, setEligibleProfiles] = useState<EligibleProfileRow[]>([])
   const [eligibleExcluded, setEligibleExcluded] = useState<Record<string, boolean>>({})
   const [eligibleForSessionId, setEligibleForSessionId] = useState<string | null>(null)
+  const [eligibleDraftStorageKey, setEligibleDraftStorageKey] = useState<string | null>(null)
 
   const [marketOptions, setMarketOptions] = useState<MarketOption[]>([])
   const [venueOptions, setVenueOptions] = useState<VenueOption[]>([])
@@ -253,9 +289,18 @@ export default function AdminFikaSocialsPage() {
     setEligibleOpen(true)
     setEligibleLoading(true)
     setEligibleError(null)
-    setEligibleProfiles([])
-    setEligibleExcluded({})
     setEligibleForSessionId(params.session_id ?? null)
+    const draftKey =
+      !params.session_id && typeof window !== 'undefined'
+        ? draftExclusionsStorageKey({
+            venueId: params.venue_id,
+            fikaDate,
+            fikaTime,
+            radiusMiles: params.radius_miles,
+            marketSlug: params.market_slug,
+          })
+        : null
+    setEligibleDraftStorageKey(draftKey)
     try {
       const q = new URLSearchParams({
         market_slug: params.market_slug,
@@ -282,7 +327,8 @@ export default function AdminFikaSocialsPage() {
         const excludedIds = new Set<string>((exclJson.excluded_user_ids ?? []) as string[])
         setEligibleExcluded(Object.fromEntries(rows.map((r) => [r.id, excludedIds.has(r.id)])))
       } else {
-        setEligibleExcluded(Object.fromEntries(rows.map((r) => [r.id, false])))
+        const excludedIds = draftKey ? readExcludedIdsFromStorage(draftKey) : new Set<string>()
+        setEligibleExcluded(Object.fromEntries(rows.map((r) => [r.id, excludedIds.has(r.id)])))
       }
     } catch (e) {
       setEligibleError(e instanceof Error ? e.message : 'Failed to load profiles')
@@ -344,7 +390,34 @@ export default function AdminFikaSocialsPage() {
       const json = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(json?.error ?? 'Create failed')
       await loadSessions()
-      if (json.session?.id) await loadDetail(json.session.id)
+      if (json.session?.id) {
+        const sessionId = String(json.session.id)
+        // If the admin excluded profiles while previewing before creation, persist them now.
+        if (typeof window !== 'undefined' && inferredMarket) {
+          const key = draftExclusionsStorageKey({
+            venueId: venueId.trim(),
+            fikaDate: fikaDate.trim(),
+            fikaTime: fikaTime.trim(),
+            radiusMiles: radius.trim() || '4',
+            marketSlug: inferredMarket.slug,
+          })
+          const excluded = Array.from(readExcludedIdsFromStorage(key))
+          if (excluded.length > 0) {
+            await fetch(`/api/admin/fika-socials/${encodeURIComponent(sessionId)}/invite-exclusions`, {
+              method: 'PATCH',
+              credentials: 'include',
+              headers: await getAuthHeaders(),
+              body: JSON.stringify({ excluded_user_ids: excluded }),
+            }).catch(() => null)
+          }
+          try {
+            window.localStorage.removeItem(key)
+          } catch {
+            // ignore
+          }
+        }
+        await loadDetail(sessionId)
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Create failed')
     }
@@ -787,7 +860,18 @@ export default function AdminFikaSocialsPage() {
                             checked={!excluded}
                             onChange={(e) => {
                               const include = e.target.checked
-                              setEligibleExcluded((prev) => ({ ...prev, [p.id]: !include }))
+                              setEligibleExcluded((prev) => {
+                                const next = { ...prev, [p.id]: !include }
+                                if (!eligibleForSessionId && eligibleDraftStorageKey) {
+                                  const ids = new Set<string>(
+                                    Object.entries(next)
+                                      .filter(([, v]) => v)
+                                      .map(([k]) => k)
+                                  )
+                                  writeExcludedIdsToStorage(eligibleDraftStorageKey, ids)
+                                }
+                                return next
+                              })
                             }}
                             aria-label={`Include ${p.first_name ?? p.id}`}
                           />
