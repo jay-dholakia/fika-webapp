@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase-server'
 import { isAdminByUserId } from '@/lib/admin-markets'
 import { runFikaSocialMatcher, type FikaSocialSessionRow } from '@/lib/fika-social-matcher'
+import { assertFikaStartsAfter, computeSocialFikaCadenceInstants } from '@/lib/weekly-fika-cadence'
 export const dynamic = 'force-dynamic'
 
 async function getAdminContext(request: Request): Promise<{ userId: string; supabase: SupabaseClient } | null> {
@@ -193,6 +194,38 @@ async function handleAction(
     const optInClosesAt = typeof body.opt_in_closes_at === 'string' ? body.opt_in_closes_at.trim() : ''
     if (!optInClosesAt) {
       return NextResponse.json({ error: 'opt_in_closes_at (ISO) is required to publish' }, { status: 400 })
+    }
+
+    const fikaStartsAtIso = String(session.fika_starts_at ?? '').trim()
+    const lead = assertFikaStartsAfter(fikaStartsAtIso, Date.now())
+    if (!lead.ok) {
+      const cadence = computeSocialFikaCadenceInstants(fikaStartsAtIso)
+      return NextResponse.json(
+        {
+          error:
+            'Fika social is scheduled too soon. Social Fika requires enough lead time for the 48h invite, 24h opt-in window, and match send 6h before.',
+          code: 'FIKA_SOCIAL_TOO_SOON',
+          cadence,
+        },
+        { status: 400 }
+      )
+    }
+
+    const cadence = computeSocialFikaCadenceInstants(fikaStartsAtIso)
+    const closeMs = Date.parse(optInClosesAt)
+    const matchMs = Date.parse(cadence.matchSendDueAt)
+    if (!Number.isFinite(closeMs)) {
+      return NextResponse.json({ error: 'Invalid opt_in_closes_at', code: 'INVALID_OPT_IN_CLOSE' }, { status: 400 })
+    }
+    if (closeMs > matchMs) {
+      return NextResponse.json(
+        {
+          error: 'opt_in_closes_at must be at or before the match send milestone (T−6h).',
+          code: 'OPT_IN_CLOSE_TOO_LATE',
+          cadence,
+        },
+        { status: 400 }
+      )
     }
     const { data: updated, error } = await supabase
       .from('fika_socials')

@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase-server'
 import { isAdminByUserId } from '@/lib/admin-markets'
 import { isFikaSocialSessionStatus } from '@/lib/fika-social-session'
+import { assertFikaStartsAfter, computeSocialFikaCadenceInstants } from '@/lib/weekly-fika-cadence'
 
 export const dynamic = 'force-dynamic'
 
@@ -92,6 +93,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'week_anchor_monday (YYYY-MM-DD) is required' }, { status: 400 })
     }
     if (!fikaStartsAt) return NextResponse.json({ error: 'fika_starts_at (ISO) is required' }, { status: 400 })
+
+    const lead = assertFikaStartsAfter(fikaStartsAt, Date.now())
+    if (!lead.ok) {
+      const cadence = computeSocialFikaCadenceInstants(fikaStartsAt)
+      return NextResponse.json(
+        {
+          error:
+            'Fika social is scheduled too soon. Social Fika requires enough lead time for the 48h invite, 24h opt-in window, and match send 6h before.',
+          code: 'FIKA_SOCIAL_TOO_SOON',
+          cadence,
+        },
+        { status: 400 }
+      )
+    }
 
     const { data: market, error: mErr } = await context.supabase
       .from('markets')

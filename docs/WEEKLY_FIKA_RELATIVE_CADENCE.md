@@ -8,9 +8,9 @@ Example (configurable per market, overridable per session):
 
 | Milestone | Offset from `fika_starts_at` | Purpose |
 |-----------|------------------------------|---------|
-| Opt-in **opens** / first blast | −3 calendar days (or −72h wall policy) | Ask users to opt in for *this* session |
-| Opt-in **closes** | −2 days | Lock pool for matcher |
-| **Intro** SMS (approved matches) | −1 day | Name + plan + 👍/SKIP |
+| Invite / opt-in ask | −48h | Ask users to opt in for *this* session |
+| Opt-in **closes** | −24h | Lock pool for matcher |
+| **Match / intro** SMS (approved matches) | −6h | Name + plan + 👍/SKIP |
 | **Fika** | 0 | In-person meetup |
 
 Offsets should be defined in **policy** (defaults on `markets`, optional overrides on `fika_socials`), not hard-coded in UI copy.
@@ -38,7 +38,7 @@ Offsets should be defined in **policy** (defaults on `markets`, optional overrid
 
 2. **Rename** `sunday_blast_sent_at` → `opt_in_blast_sent_at` (or `first_nudge_sent_at`) in a migration; update admin action `record_sunday_blast` → `record_opt_in_blast` (API + UI).
 
-3. **Constraints:** `opt_in_opens_at < opt_in_closes_at < fika_starts_at`; reject publish if total lead time &lt; minimum (e.g. 4 days) unless admin confirms override.
+3. **Constraints:** `opt_in_opens_at < opt_in_closes_at < fika_starts_at`; reject publish if total lead time is too short for policy (v1: ≥49h).
 
 ---
 
