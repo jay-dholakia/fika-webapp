@@ -1,7 +1,6 @@
 {
   "framework": "nextjs",
   "crons": [
-    { "path": "/api/cron/day-of-reminder", "schedule": "0 9 * * *" },
-    { "path": "/api/cron/fika-socials", "schedule": "*/10 * * * *" }
+    { "path": "/api/cron/day-of-reminder", "schedule": "0 9 * * *" }
   ]
 }
