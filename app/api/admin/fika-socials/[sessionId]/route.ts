@@ -178,6 +178,75 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ se
   }
 }
 
+/** DELETE — hard-delete a draft session (admin only). */
+export async function DELETE(request: Request, { params }: { params: Promise<{ sessionId: string }> }) {
+  try {
+    const context = await getAdminContext(request)
+    if (!context) return NextResponse.json({ error: 'Admin role required', code: 'NOT_ADMIN' }, { status: 403 })
+
+    const { sessionId } = await params
+    if (!sessionId || !isUuid(sessionId)) {
+      return NextResponse.json({ error: 'Invalid session id' }, { status: 400 })
+    }
+
+    const { data: session, error: sErr } = await context.supabase
+      .from('fika_socials')
+      .select('id, status')
+      .eq('id', sessionId)
+      .maybeSingle()
+
+    if (sErr) return NextResponse.json({ error: sErr.message }, { status: 500 })
+    if (!session) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    if ((session.status as string) !== 'draft') {
+      return NextResponse.json({ error: 'Only draft sessions can be deleted.' }, { status: 400 })
+    }
+
+    const [{ count: optInCount, error: oErr }, { count: matchCount, error: mErr }] = await Promise.all([
+      context.supabase
+        .from('fika_social_opt_ins')
+        .select('id', { count: 'exact', head: true })
+        .eq('session_id', sessionId),
+      context.supabase
+        .from('match_candidates')
+        .select('id', { count: 'exact', head: true })
+        .eq('fika_social_id', sessionId),
+    ])
+
+    if (oErr) return NextResponse.json({ error: oErr.message }, { status: 500 })
+    if (mErr) return NextResponse.json({ error: mErr.message }, { status: 500 })
+    if ((optInCount ?? 0) > 0 || (matchCount ?? 0) > 0) {
+      return NextResponse.json(
+        {
+          error: 'Cannot delete: session already has opt-ins or matches.',
+          code: 'DRAFT_NOT_EMPTY',
+          counts: { opt_ins: optInCount ?? 0, matches: matchCount ?? 0 },
+        },
+        { status: 400 }
+      )
+    }
+
+    // Clean up any persisted admin exclusions for this session.
+    const { error: xErr } = await context.supabase
+      .from('fika_social_invite_exclusions')
+      .delete()
+      .eq('session_id', sessionId)
+    if (xErr) return NextResponse.json({ error: xErr.message }, { status: 500 })
+
+    const { error: dErr } = await context.supabase
+      .from('fika_socials')
+      .delete()
+      .eq('id', sessionId)
+    if (dErr) return NextResponse.json({ error: dErr.message }, { status: 500 })
+
+    return NextResponse.json({ ok: true })
+  } catch (e) {
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : 'Failed to delete session' },
+      { status: 500 }
+    )
+  }
+}
+
 async function handleAction(
   supabase: SupabaseClient,
   session: FikaSocialSessionRow & Record<string, unknown>,

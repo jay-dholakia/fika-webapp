@@ -25,6 +25,8 @@ type SessionRow = {
   opt_in_closed_at: string | null
   match_run_at: string | null
   intro_sms_sent_at: string | null
+  venues?: { id: string; name: string; neighborhood: string | null; city: string } | null
+  counts?: { opt_ins: number; matches: number }
 }
 
 type MatchRow = {
@@ -168,6 +170,19 @@ function writeExcludedIdsToStorage(key: string, ids: Set<string>) {
   } catch {
     // ignore
   }
+}
+
+function formatFikaStartsCompact(iso: string, ianaTz: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: ianaTz,
+    weekday: 'short',
+    month: 'short',
+    day: '2-digit',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(d)
 }
 
 export default function AdminFikaSocialsPage() {
@@ -543,6 +558,23 @@ export default function AdminFikaSocialsPage() {
     }
   }
 
+  async function deleteDraftSession(sessionId: string) {
+    setError(null)
+    try {
+      const res = await fetch(`/api/admin/fika-socials/${encodeURIComponent(sessionId)}`, {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: await getAuthHeaders(),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json?.error ?? 'Delete failed')
+      setDetail(null)
+      await loadSessions()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Delete failed')
+    }
+  }
+
   return (
     <main className="admin-markets-page" style={{ maxWidth: 960, margin: '0 auto', padding: '1.25rem 1rem 3rem' }}>
       <h1 style={{ fontSize: '1.35rem', marginBottom: '0.35rem' }}>Fika socials</h1>
@@ -700,11 +732,19 @@ export default function AdminFikaSocialsPage() {
                     cursor: 'pointer',
                   }}
                 >
-                  <div style={{ fontWeight: 600 }}>{s.status}</div>
-                  <div style={{ fontSize: '0.8rem', color: '#555' }}>
-                    {s.market_slug} · week {s.week_anchor_monday}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                    <div style={{ fontWeight: 650, textTransform: 'capitalize' }}>{s.status.replaceAll('_', ' ')}</div>
+                    <div style={{ fontSize: '0.78rem', color: '#666', whiteSpace: 'nowrap' }}>{s.market_slug}</div>
                   </div>
-                  <div style={{ fontSize: '0.72rem', color: '#888' }}>{s.id}</div>
+                  <div style={{ fontSize: '0.86rem', color: '#222', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {s.venues?.name ?? 'Venue'}{s.venues?.neighborhood ? ` (${s.venues.neighborhood})` : ''}{s.venues?.city ? ` — ${s.venues.city}` : ''}
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: '0.78rem', color: '#666', marginTop: 2 }}>
+                    <span>{formatFikaStartsCompact(s.fika_starts_at, s.iana_tz || 'America/Los_Angeles')}</span>
+                    <span style={{ whiteSpace: 'nowrap' }}>
+                      opt-ins {s.counts?.opt_ins ?? 0} · matches {s.counts?.matches ?? 0}
+                    </span>
+                  </div>
                 </button>
               </li>
             ))}
@@ -819,6 +859,20 @@ export default function AdminFikaSocialsPage() {
                 {['draft', 'open_opt_in', 'opt_in_closed', 'matching_pending_review', 'intro_send_ready'].includes(detail.session.status) ? (
                   <button type="button" className="admin-btn" style={{ marginTop: '0.5rem' }} onClick={() => void patchSession(detail.session.id, { action: 'cancel' })}>
                     Cancel session
+                  </button>
+                ) : null}
+                {detail.session.status === 'draft' ? (
+                  <button
+                    type="button"
+                    className="admin-btn"
+                    style={{ marginTop: '0.25rem', borderColor: '#b00020', color: '#b00020' }}
+                    onClick={() => {
+                      const ok = window.confirm('Delete this draft? This cannot be undone.')
+                      if (!ok) return
+                      void deleteDraftSession(detail.session.id)
+                    }}
+                  >
+                    Delete draft
                   </button>
                 ) : null}
               </div>

@@ -55,7 +55,27 @@ export async function GET(request: Request) {
 
     let q = context.supabase
       .from('fika_socials')
-      .select('*')
+      .select(
+        `
+        id,
+        market_slug,
+        venue_id,
+        week_anchor_monday,
+        radius_miles,
+        iana_tz,
+        fika_starts_at,
+        status,
+        opt_in_closes_at,
+        opt_in_invite_sent_at,
+        opt_in_closed_at,
+        match_run_at,
+        intro_sms_sent_at,
+        created_at,
+        venues:venues(id, name, neighborhood, city),
+        fika_social_opt_ins(count),
+        match_candidates(count)
+      `
+      )
       .order('week_anchor_monday', { ascending: false })
       .order('created_at', { ascending: false })
       .limit(limit)
@@ -66,7 +86,18 @@ export async function GET(request: Request) {
     const { data, error } = await q
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-    return NextResponse.json({ sessions: data ?? [], summary: { limit, market_slug: marketSlug, status } })
+    const sessions = (data ?? []).map((row: any) => {
+      const optInCount = Array.isArray(row?.fika_social_opt_ins) ? Number(row.fika_social_opt_ins?.[0]?.count ?? 0) : 0
+      const matchCount = Array.isArray(row?.match_candidates) ? Number(row.match_candidates?.[0]?.count ?? 0) : 0
+      return {
+        ...row,
+        counts: { opt_ins: Number.isFinite(optInCount) ? optInCount : 0, matches: Number.isFinite(matchCount) ? matchCount : 0 },
+        fika_social_opt_ins: undefined,
+        match_candidates: undefined,
+      }
+    })
+
+    return NextResponse.json({ sessions, summary: { limit, market_slug: marketSlug, status } })
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : 'Failed to list sessions' },
