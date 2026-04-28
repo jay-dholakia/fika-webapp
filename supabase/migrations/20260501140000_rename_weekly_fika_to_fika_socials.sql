@@ -3,8 +3,28 @@
 -- ---------------------------------------------------------------------------
 -- markets
 -- ---------------------------------------------------------------------------
-alter table public.markets rename column weekly_hybrid_enabled to fika_socials_enabled;
-alter table public.markets rename column weekly_default_radius_miles to fika_socials_default_radius_miles;
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'markets' and column_name = 'weekly_hybrid_enabled'
+  ) and not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'markets' and column_name = 'fika_socials_enabled'
+  ) then
+    alter table public.markets rename column weekly_hybrid_enabled to fika_socials_enabled;
+  end if;
+
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'markets' and column_name = 'weekly_default_radius_miles'
+  ) and not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'markets' and column_name = 'fika_socials_default_radius_miles'
+  ) then
+    alter table public.markets rename column weekly_default_radius_miles to fika_socials_default_radius_miles;
+  end if;
+end $$;
 
 comment on column public.markets.fika_socials_enabled is
   'When true, market may participate in fika socials (SMS + matcher); still requires an active fika_socials row for that week when used.';
@@ -14,8 +34,22 @@ comment on column public.markets.fika_socials_default_radius_miles is
 -- ---------------------------------------------------------------------------
 -- Triggers / functions (before table renames)
 -- ---------------------------------------------------------------------------
-drop trigger if exists sync_weekly_session_opt_in_week_trigger on public.weekly_fika_session_opt_ins;
-drop trigger if exists set_weekly_fika_sessions_updated_at_trigger on public.weekly_fika_sessions;
+do $$
+begin
+  if exists (
+    select 1 from information_schema.tables
+    where table_schema = 'public' and table_name = 'weekly_fika_session_opt_ins'
+  ) then
+    execute 'drop trigger if exists sync_weekly_session_opt_in_week_trigger on public.weekly_fika_session_opt_ins';
+  end if;
+
+  if exists (
+    select 1 from information_schema.tables
+    where table_schema = 'public' and table_name = 'weekly_fika_sessions'
+  ) then
+    execute 'drop trigger if exists set_weekly_fika_sessions_updated_at_trigger on public.weekly_fika_sessions';
+  end if;
+end $$;
 
 drop function if exists public.sync_weekly_session_opt_in_week();
 drop function if exists public.set_weekly_fika_sessions_updated_at();
@@ -23,8 +57,28 @@ drop function if exists public.set_weekly_fika_sessions_updated_at();
 -- ---------------------------------------------------------------------------
 -- Tables
 -- ---------------------------------------------------------------------------
-alter table public.weekly_fika_sessions rename to fika_socials;
-alter table public.weekly_fika_session_opt_ins rename to fika_social_opt_ins;
+do $$
+begin
+  if exists (
+    select 1 from information_schema.tables
+    where table_schema = 'public' and table_name = 'weekly_fika_sessions'
+  ) and not exists (
+    select 1 from information_schema.tables
+    where table_schema = 'public' and table_name = 'fika_socials'
+  ) then
+    alter table public.weekly_fika_sessions rename to fika_socials;
+  end if;
+
+  if exists (
+    select 1 from information_schema.tables
+    where table_schema = 'public' and table_name = 'weekly_fika_session_opt_ins'
+  ) and not exists (
+    select 1 from information_schema.tables
+    where table_schema = 'public' and table_name = 'fika_social_opt_ins'
+  ) then
+    alter table public.weekly_fika_session_opt_ins rename to fika_social_opt_ins;
+  end if;
+end $$;
 
 comment on table public.fika_socials is
   'Admin-defined in-person fika social: market, venue, week anchor, fika_starts_at, lifecycle status and ops timestamps.';
@@ -44,6 +98,7 @@ begin
 end;
 $$;
 
+drop trigger if exists set_fika_socials_updated_at_trigger on public.fika_socials;
 create trigger set_fika_socials_updated_at_trigger
   before update on public.fika_socials
   for each row
@@ -74,6 +129,7 @@ begin
 end;
 $$;
 
+drop trigger if exists sync_fika_social_opt_in_week_trigger on public.fika_social_opt_ins;
 create trigger sync_fika_social_opt_in_week_trigger
   before insert or update of session_id on public.fika_social_opt_ins
   for each row
@@ -83,6 +139,7 @@ create trigger sync_fika_social_opt_in_week_trigger
 -- RLS (opt_ins policy name + table)
 -- ---------------------------------------------------------------------------
 drop policy if exists "Users can read own weekly session opt-ins" on public.fika_social_opt_ins;
+drop policy if exists "Users can read own fika social opt-ins" on public.fika_social_opt_ins;
 
 create policy "Users can read own fika social opt-ins"
   on public.fika_social_opt_ins
@@ -101,8 +158,28 @@ alter index if exists weekly_fika_session_opt_ins_one_per_user_week rename to fi
 -- ---------------------------------------------------------------------------
 -- match_candidates FK column + intro SMS column
 -- ---------------------------------------------------------------------------
-alter table public.match_candidates rename column weekly_fika_session_id to fika_social_id;
-alter table public.match_candidates rename column weekly_intro_sms_sent_at to fika_social_intro_sms_sent_at;
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'match_candidates' and column_name = 'weekly_fika_session_id'
+  ) and not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'match_candidates' and column_name = 'fika_social_id'
+  ) then
+    alter table public.match_candidates rename column weekly_fika_session_id to fika_social_id;
+  end if;
+
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'match_candidates' and column_name = 'weekly_intro_sms_sent_at'
+  ) and not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'match_candidates' and column_name = 'fika_social_intro_sms_sent_at'
+  ) then
+    alter table public.match_candidates rename column weekly_intro_sms_sent_at to fika_social_intro_sms_sent_at;
+  end if;
+end $$;
 
 comment on column public.match_candidates.fika_social_id is
   'Non-null = row produced by fika socials matcher; null = ad hoc or non–fika-social flow.';

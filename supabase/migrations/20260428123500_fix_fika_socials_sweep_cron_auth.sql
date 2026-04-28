@@ -1,11 +1,15 @@
--- Fika Socials sweep (every 10 minutes) via pg_cron → Edge Function fika-socials-sweep.
--- Requires: pg_cron, pg_net, vault secrets project_url + service_role_key.
+-- Fix pg_cron auth for fika-socials-sweep Edge Function.
+-- The Supabase Functions gateway requires a JWT in Authorization; prod Vault `publishable_key` is a Sendblue key.
+-- Use `service_role_key` (JWT) instead.
 
 create extension if not exists pg_cron with schema extensions;
 create extension if not exists pg_net with schema extensions;
 
--- Unschedule the old Next-route job if present.
-do $$ begin perform cron.unschedule('fika-socials-sweep'); exception when others then null; end $$;
+do $$ begin
+  perform cron.unschedule('fika-socials-sweep');
+exception when others then
+  null;
+end $$;
 
 select cron.schedule(
   'fika-socials-sweep',
