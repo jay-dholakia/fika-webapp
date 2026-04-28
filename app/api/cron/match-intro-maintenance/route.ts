@@ -6,9 +6,8 @@ export const dynamic = 'force-dynamic'
 export const maxDuration = 120
 
 /**
- * Runs intro-offer cleanup + mutual match opt-in expiry in one invocation (single Vercel cron slot).
- * Individual routes `/api/cron/expire-intro-offers` and `/api/cron/expire-match-opt-ins` remain for manual use.
- * Bearer CRON_SECRET optional (same as other cron routes).
+ * Same work as Edge Function `match-intro-maintenance` (production: pg_cron → that function).
+ * Use this route for manual/curl/Vercel triggers; optional Bearer CRON_SECRET when set.
  */
 export async function GET(request: Request) {
   const auth = request.headers.get('Authorization')
