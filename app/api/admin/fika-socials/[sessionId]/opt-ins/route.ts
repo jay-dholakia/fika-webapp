@@ -73,10 +73,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ sess
 
     const { data: optIns, error: oErr } = await context.supabase
       .from('fika_social_opt_ins')
-      .select('user_id, created_at')
+      .select('user_id, opted_in_at')
       .eq('session_id', sessionId)
       .is('withdrawn_at', null)
-      .order('created_at', { ascending: true })
+      .order('opted_in_at', { ascending: true })
     if (oErr) return NextResponse.json({ error: oErr.message }, { status: 500 })
 
     const userIds = Array.from(new Set((optIns ?? []).map((r) => r.user_id as string).filter(Boolean)))
@@ -84,7 +84,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ sess
 
     const { data: profiles, error: pErr } = await context.supabase
       .from('profiles')
-      .select('id, first_name, last_name, city, market, lat, lng, is_active')
+      .select('id, first_name, city, market, lat, lng, is_active')
       .in('id', userIds)
     if (pErr) return NextResponse.json({ error: pErr.message }, { status: 500 })
 
@@ -94,7 +94,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ sess
     const rows = userIds
       .map((uid) => {
         const p = byId.get(uid) as
-          | { id: string; first_name: string | null; last_name: string | null; city: string | null; market: string | null; lat: unknown; lng: unknown; is_active: boolean | null }
+          | { id: string; first_name: string | null; city: string | null; market: string | null; lat: unknown; lng: unknown; is_active: boolean | null }
           | undefined
         if (!p) return null
         const lat = Number(p.lat)
@@ -103,12 +103,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ sess
         return {
           user_id: uid,
           first_name: p.first_name,
-          last_name: p.last_name,
+          last_name: null,
           city: p.city,
           market: p.market,
           is_active: p.is_active,
           distance_miles,
-          opted_in_at: optInsByUser.get(uid)?.created_at ?? null,
+          opted_in_at: (optInsByUser.get(uid) as any)?.opted_in_at ?? null,
         }
       })
       .filter((x): x is NonNullable<typeof x> => Boolean(x))

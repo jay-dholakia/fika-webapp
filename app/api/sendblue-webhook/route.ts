@@ -715,6 +715,85 @@ export async function POST(request: Request) {
     return { ok: true as const }
   }
 
+  async function setGlobalSmsState(params: {
+    userId: string
+    weekAnchorMonday: string
+    state: string
+    payload?: Record<string, unknown>
+    lastSendblueMessageHandle?: string | null
+  }) {
+    const { userId, weekAnchorMonday, state, payload, lastSendblueMessageHandle } = params
+    const updatedAt = new Date().toISOString()
+    const stateRow = {
+      user_id: userId,
+      week_anchor_monday: weekAnchorMonday,
+      match_id: null,
+      state,
+      payload: payload ?? {},
+      updated_at: updatedAt,
+      ...(lastSendblueMessageHandle !== undefined ? { last_sendblue_message_handle: lastSendblueMessageHandle } : {}),
+    }
+
+    const { data: updatedRows, error: updateError } = await supabase
+      .from('sms_conversation_states')
+      .update({
+        state,
+        payload: payload ?? {},
+        updated_at: updatedAt,
+        ...(lastSendblueMessageHandle !== undefined ? { last_sendblue_message_handle: lastSendblueMessageHandle } : {}),
+      })
+      .eq('user_id', userId)
+      .eq('week_anchor_monday', weekAnchorMonday)
+      .is('match_id', null)
+      .select('id')
+      .limit(1)
+
+    if (updateError) {
+      console.error('[sendblue-webhook] global state update failed', {
+        userId,
+        weekAnchorMonday,
+        state,
+        error: updateError,
+      })
+      return { ok: false as const, error: updateError }
+    }
+    if ((updatedRows ?? []).length > 0) return { ok: true as const }
+
+    const { error: insertError } = await supabase.from('sms_conversation_states').insert(stateRow)
+    if (!insertError) return { ok: true as const }
+    if (!isDuplicateKeyError(insertError)) {
+      console.error('[sendblue-webhook] global state insert failed', {
+        userId,
+        weekAnchorMonday,
+        state,
+        error: insertError,
+      })
+      return { ok: false as const, error: insertError }
+    }
+
+    const { error: retryUpdateError } = await supabase
+      .from('sms_conversation_states')
+      .update({
+        state,
+        payload: payload ?? {},
+        updated_at: updatedAt,
+        ...(lastSendblueMessageHandle !== undefined ? { last_sendblue_message_handle: lastSendblueMessageHandle } : {}),
+      })
+      .eq('user_id', userId)
+      .eq('week_anchor_monday', weekAnchorMonday)
+      .is('match_id', null)
+    if (retryUpdateError) {
+      console.error('[sendblue-webhook] global state retry update failed', {
+        userId,
+        weekAnchorMonday,
+        state,
+        error: retryUpdateError,
+      })
+      return { ok: false as const, error: retryUpdateError }
+    }
+    return { ok: true as const }
+  }
+
   function shouldNotifyOtherUserOfPass(state: string | null | undefined, payload: Record<string, unknown> | null | undefined): boolean {
     if (!state) return false
     if (state !== SMS_STATES.MATCH_OFFERED) return true
@@ -1532,6 +1611,93 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true })
     }
 
+    // If this is a "YES" reply and there's an open Fika Social in their market, treat it as a social opt-in.
+    // This must run before the first-contact early return.
+    const keyword = content.toUpperCase().replace(/\s+/g, ' ').trim()
+    if (isFikaSocialOptInYes(content, keyword)) {
+      const market = (profile as { market?: string | null })?.market ?? null
+      const lat = Number((profile as { lat?: unknown })?.lat)
+      const lng = Number((profile as { lng?: unknown })?.lng)
+      if (market && Number.isFinite(lat) && Number.isFinite(lng)) {
+        const nowMs = Date.now()
+        const { data: sessions } = await supabase
+          .from('fika_socials')
+          .select('id, market_slug, venue_id, week_anchor_monday, radius_miles, iana_tz, fika_starts_at, status, opt_in_closes_at')
+          .eq('market_slug', market)
+          .eq('status', 'open_opt_in')
+          .not('opt_in_closes_at', 'is', null)
+          .order('fika_starts_at', { ascending: true })
+          .limit(5)
+
+        const open = (sessions ?? []).find((s: any) => {
+          const fikaStartsAt = String(s.fika_starts_at ?? '')
+          const cadence = computeSocialFikaCadenceInstants(fikaStartsAt)
+          const openMs = Date.parse(cadence.optInBlastDueAt)
+          const closeMs = Date.parse(String(s.opt_in_closes_at ?? cadence.optInClosesAt))
+          return Number.isFinite(openMs) && Number.isFinite(closeMs) && nowMs >= openMs && nowMs < closeMs
+        })
+
+        if (open) {
+          const sessionId = String(open.id)
+          const { data: venue } = await supabase
+            .from('venues')
+            .select('id, name, lat, lng')
+            .eq('id', String(open.venue_id))
+            .maybeSingle()
+
+          const vLat = Number((venue as any)?.lat)
+          const vLng = Number((venue as any)?.lng)
+          const radius = Number((open as any).radius_miles ?? 4)
+          if (Number.isFinite(vLat) && Number.isFinite(vLng) && haversineMiles(lat, lng, vLat, vLng) <= radius) {
+            const { data: excludedRows } = await supabase
+              .from('fika_social_invite_exclusions')
+              .select('user_id')
+              .eq('session_id', sessionId)
+              .eq('user_id', userId)
+              .limit(1)
+            if (excludedRows?.length) {
+              await sendConciergeAndLog(fromNumber, 'Got it — you’re not eligible for this Fika Social.', 'fika_social_opt_in_excluded', {
+                userId,
+              })
+              return NextResponse.json({ ok: true })
+            }
+
+            const { error: insErr } = await supabase
+              .from('fika_social_opt_ins')
+              .insert({
+                session_id: sessionId,
+                user_id: userId,
+                week_anchor_monday: String(open.week_anchor_monday),
+              })
+            if (insErr && insErr.code !== '23505') {
+              await sendConciergeAndLog(fromNumber, 'Sorry — something went wrong saving your RSVP. Try again.', 'fika_social_opt_in_error', {
+                userId,
+              })
+              return NextResponse.json({ ok: true })
+            }
+
+            await setGlobalSmsState({
+              userId,
+              weekAnchorMonday,
+              state: SMS_STATES.GLOBAL_READY,
+              payload: { last_fika_social_opt_in_session_id: sessionId },
+              lastSendblueMessageHandle: messageHandle ?? null,
+            })
+
+            const venueName = String((venue as any)?.name ?? 'the venue')
+            const whenLocal = formatLocalShort(String(open.fika_starts_at), String(open.iana_tz ?? 'America/Los_Angeles'))
+            await sendConciergeAndLog(
+              fromNumber,
+              `You’re in. We’ll text you your match about 6 hours before: ${whenLocal} at ${venueName}.`,
+              'fika_social_opt_in_ok',
+              { userId }
+            )
+            return NextResponse.json({ ok: true })
+          }
+        }
+      }
+    }
+
     await sendConciergeAndLog(fromNumber, messageEntry(), 'first_contact_ready_for_intro', { userId, weekAnchorMonday })
     return NextResponse.json({ ok: true })
   }
@@ -1619,6 +1785,14 @@ export async function POST(request: Request) {
             })
             return NextResponse.json({ ok: true })
           }
+
+          await setGlobalSmsState({
+            userId,
+            weekAnchorMonday,
+            state: stateRow?.state ?? SMS_STATES.GLOBAL_READY,
+            payload: { ...(stateRow?.payload as Record<string, unknown> | null | undefined), last_fika_social_opt_in_session_id: sessionId },
+            lastSendblueMessageHandle: messageHandle ?? null,
+          })
 
           const venueName = String((venue as any)?.name ?? 'the venue')
           const whenLocal = formatLocalShort(String(open.fika_starts_at), String(open.iana_tz ?? 'America/Los_Angeles'))
