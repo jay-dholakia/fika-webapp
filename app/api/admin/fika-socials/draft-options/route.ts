@@ -60,6 +60,7 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url)
     const marketSlug = searchParams.get('market_slug')?.trim() ?? ''
+    const allVenues = !marketSlug
 
     const { data: marketRows, error: mErr } = await supabase
       .from('markets')
@@ -87,7 +88,7 @@ export async function GET(request: Request) {
 
     let venues_note: string | null = null
 
-    if (marketSlug) {
+    if (allVenues || marketSlug) {
       const { data: venueRows, error: vErr } = await supabase
         .from('venues')
         .select('id, name, neighborhood, city, lat, lng, google_permanently_closed')
@@ -107,16 +108,22 @@ export async function GET(request: Request) {
         city: (v.city as string) ?? '',
       }))
 
-      const patterns = getMarketBySlug(marketSlug)
-      if (!patterns) {
+      if (allVenues) {
         venues = mapped
         venues_note =
-          'This market slug has no city-pattern map in app code; listing all venues with coordinates. Add patterns in lib/markets if you want a shorter list.'
+          'Pick a venue — market, timezone, and week anchor are inferred from venue city and Fika date/time below.'
       } else {
-        venues = mapped.filter((v) => venueCityLikelyInMarket(v.city, marketSlug))
-        if (venues.length === 0) {
+        const patterns = getMarketBySlug(marketSlug)
+        if (!patterns) {
+          venues = mapped
           venues_note =
-            'No venues matched this market’s city patterns. Check venue city strings in the database or extend patterns in lib/markets.'
+            'This market slug has no city-pattern map in app code; listing all venues with coordinates. Add patterns in lib/markets if you want a shorter list.'
+        } else {
+          venues = mapped.filter((v) => venueCityLikelyInMarket(v.city, marketSlug))
+          if (venues.length === 0) {
+            venues_note =
+              'No venues matched this market’s city patterns. Check venue city strings in the database or extend patterns in lib/markets.'
+          }
         }
       }
     }
