@@ -5,6 +5,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { availabilitySlotIdFromUtcInTimezone } from '@/lib/availability-slots'
 import { haversineMiles } from '@/lib/fika-social-geo'
+import {
+  MATCH_OPT_IN_DEADLINE_MS,
+  fetchUserIdsBlockedFromNewIntro,
+} from '@/lib/intro-eligibility'
 import { computeAdminPairPayload, loadAdminSimCandidatesForCanonicalPair } from '@/lib/match/admin-match-pair'
 import { fetchUserIdsWithUpcomingConfirmedFika } from '@/lib/upcoming-confirmed-fika'
 
@@ -74,6 +78,7 @@ export async function runFikaSocialMatcher(
     .from('fika_social_opt_ins')
     .select('user_id')
     .eq('session_id', session.id)
+    .is('withdrawn_at', null)
 
   if (optErr) return { ok: false, error: optErr.message, code: 'OPT_INS_LOAD' }
 
@@ -83,7 +88,10 @@ export async function runFikaSocialMatcher(
     return { ok: true, createdMatchIds: [], skippedIneligiblePairs: 0, eligibleOptIns: userIds.length, notes }
   }
 
-  const blockedUpcoming = await fetchUserIdsWithUpcomingConfirmedFika(supabase)
+  const upcomingConfirmed = await fetchUserIdsWithUpcomingConfirmedFika(supabase)
+  const blockedUpcoming = await fetchUserIdsBlockedFromNewIntro(supabase, {
+    upcomingConfirmed,
+  })
 
   const { data: profiles, error: profErr } = await supabase
     .from('profiles')
@@ -157,6 +165,7 @@ export async function runFikaSocialMatcher(
     }
 
     const nowIso = new Date().toISOString()
+    const matchOptInDeadlineAt = new Date(Date.now() + MATCH_OPT_IN_DEADLINE_MS).toISOString()
     const { data: inserted, error: insErr } = await supabase
       .from('match_candidates')
       .insert({
@@ -176,6 +185,7 @@ export async function runFikaSocialMatcher(
         overlapping_slot_ids: [slotId],
         scheduling_status: 'confirmed',
         confirmed_at: nowIso,
+        match_opt_in_deadline_at: matchOptInDeadlineAt,
       })
       .select('id')
       .maybeSingle()

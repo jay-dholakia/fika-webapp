@@ -6,7 +6,7 @@ declare const Deno: { env: { get(key: string): string | undefined } }
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 // @ts-ignore Deno
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { fetchUserIdsWithUpcomingConfirmedFika } from '../_shared/upcoming-confirmed-fika.ts'
+import { fetchUserIdsBlockedFromNewIntro } from '../_shared/intro-eligibility.ts'
 
 const SENDBLUE_URL = 'https://api.sendblue.co/api/send-message'
 const SMS_PACING_MS = {
@@ -169,6 +169,18 @@ async function setMatchOfferedState(params: {
 }): Promise<void> {
   const { supabase, userId, weekAnchorMonday, matchId, payload } = params
   const updatedAt = new Date().toISOString()
+
+  const { data: existing } = await supabase
+    .from('sms_conversation_states')
+    .select('intro_offer_sent_at')
+    .eq('user_id', userId)
+    .eq('week_anchor_monday', weekAnchorMonday)
+    .eq('match_id', matchId)
+    .maybeSingle()
+
+  const introOfferSentAt =
+    existing?.intro_offer_sent_at != null ? existing.intro_offer_sent_at : updatedAt
+
   const baseRow = {
     user_id: userId,
     week_anchor_monday: weekAnchorMonday,
@@ -176,6 +188,7 @@ async function setMatchOfferedState(params: {
     state: 'match_offered',
     payload,
     updated_at: updatedAt,
+    intro_offer_sent_at: introOfferSentAt,
   }
 
   const { data: updatedRows, error: updateError } = await supabase
@@ -184,6 +197,7 @@ async function setMatchOfferedState(params: {
       state: 'match_offered',
       payload,
       updated_at: updatedAt,
+      intro_offer_sent_at: introOfferSentAt,
     })
     .eq('user_id', userId)
     .eq('week_anchor_monday', weekAnchorMonday)
@@ -220,6 +234,7 @@ async function setMatchOfferedState(params: {
       state: 'match_offered',
       payload,
       updated_at: updatedAt,
+      intro_offer_sent_at: introOfferSentAt,
     })
     .eq('user_id', userId)
     .eq('week_anchor_monday', weekAnchorMonday)
@@ -273,14 +288,14 @@ serve(async (req: Request) => {
       .eq('state', 'match_offered')
     const offeredSet = new Set((alreadyOffered ?? []).map((r: { match_id: string }) => r.match_id))
 
-    const blockedFromNewIntro = await fetchUserIdsWithUpcomingConfirmedFika(supabase)
+    const blockedFromNewIntro = await fetchUserIdsBlockedFromNewIntro(supabase)
 
     let sent = 0
     let skipped_no_recent_inbound = 0
     let sent_outside_24h = 0
     let skipped_outside_24h_cap = 0
     let skipped_not_in_requested = 0
-    let skipped_upcoming_confirmed_fika = 0
+    let skipped_blocked_from_new_intro = 0
     for (const match of matches ?? []) {
       if (requestedIds.length > 0 && !requestedIds.includes(match.id)) {
         skipped_not_in_requested++
@@ -298,7 +313,7 @@ serve(async (req: Request) => {
         : null
       for (const userId of [match.user_a, match.user_b]) {
         if (blockedFromNewIntro.has(userId)) {
-          skipped_upcoming_confirmed_fika++
+          skipped_blocked_from_new_intro++
           continue
         }
         const otherId = userId === match.user_a ? match.user_b : match.user_a
@@ -374,7 +389,8 @@ serve(async (req: Request) => {
         skipped_no_recent_inbound,
         skipped_outside_24h_cap,
         skipped_not_in_requested,
-        skipped_upcoming_confirmed_fika,
+        skipped_blocked_from_new_intro,
+        skipped_upcoming_confirmed_fika: skipped_blocked_from_new_intro,
       })
     )
   } catch (e) {

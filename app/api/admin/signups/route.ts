@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase-server'
 import { isAdminByUserId } from '@/lib/admin-markets'
 import { getMarketBySlug } from '@/lib/markets'
+import { fetchUserIdsBlockedFromNewIntro } from '@/lib/intro-eligibility'
 import { fetchUserIdsWithUpcomingConfirmedFika } from '@/lib/upcoming-confirmed-fika'
 
 export const dynamic = 'force-dynamic'
@@ -87,6 +88,9 @@ export async function GET(request: Request) {
   })
 
   const upcomingConfirmedIds = await fetchUserIdsWithUpcomingConfirmedFika(supabase)
+  const blockedFromNewIntroIds = await fetchUserIdsBlockedFromNewIntro(supabase, {
+    upcomingConfirmed: upcomingConfirmedIds,
+  })
 
   const signups = (profiles ?? []).map((p) => ({
     id: p.id,
@@ -95,6 +99,7 @@ export async function GET(request: Request) {
     market: (p as { market?: string | null }).market ?? null,
     createdAt: (p as { created_at?: string }).created_at ?? null,
     hasUpcomingConfirmedFika: upcomingConfirmedIds.has(p.id),
+    blockedFromNewIntro: blockedFromNewIntroIds.has(p.id),
   }))
 
   return NextResponse.json({ signups, dashboard })

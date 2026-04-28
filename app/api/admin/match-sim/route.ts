@@ -15,6 +15,10 @@ import {
   computeAdminPairPayload,
   loadAdminSimCandidatesForCanonicalPair,
 } from '@/lib/match/admin-match-pair'
+import {
+  MATCH_OPT_IN_DEADLINE_MS,
+  fetchUserIdsBlockedFromNewIntro,
+} from '@/lib/intro-eligibility'
 import { MATCH_SCORING_VERSION } from '@/lib/match/weights'
 import { fetchUserIdsWithUpcomingConfirmedFika } from '@/lib/upcoming-confirmed-fika'
 
@@ -104,6 +108,7 @@ async function insertOrUpdateMatchCandidateForTrigger(
   }
 ): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
   const { userA, userB, weekAnchorMonday, expiresAt, score, reasons } = params
+  const matchOptInDeadlineAt = new Date(Date.now() + MATCH_OPT_IN_DEADLINE_MS).toISOString()
 
   const { data: inserted, error: insertErr } = await supabase
     .from('match_candidates')
@@ -115,6 +120,7 @@ async function insertOrUpdateMatchCandidateForTrigger(
       status: 'active',
       week_anchor_monday: weekAnchorMonday,
       expires_at: expiresAt,
+      match_opt_in_deadline_at: matchOptInDeadlineAt,
     })
     .select('id')
     .maybeSingle()
@@ -141,6 +147,7 @@ async function insertOrUpdateMatchCandidateForTrigger(
         score,
         reasons,
         expires_at: expiresAt,
+        match_opt_in_deadline_at: matchOptInDeadlineAt,
       })
       .eq('id', sameWeekId)
       .select('id')
@@ -171,6 +178,7 @@ async function insertOrUpdateMatchCandidateForTrigger(
       expires_at: expiresAt,
       week_anchor_monday: weekAnchorMonday,
       status: 'active',
+      match_opt_in_deadline_at: matchOptInDeadlineAt,
     })
     .eq('id', pairId)
     .select('id')
@@ -224,18 +232,21 @@ export async function POST(request: Request) {
         )
       })
 
-    const blockedUpcoming = await fetchUserIdsWithUpcomingConfirmedFika(supabase)
+    const upcomingConfirmed = await fetchUserIdsWithUpcomingConfirmedFika(supabase)
+    const blockedFromNewIntro = await fetchUserIdsBlockedFromNewIntro(supabase, {
+      upcomingConfirmed,
+    })
     if (selectedPairs.length > 0) {
       for (const pair of selectedPairs) {
         const userA = pair.userAId < pair.userBId ? pair.userAId : pair.userBId
         const userB = pair.userAId < pair.userBId ? pair.userBId : pair.userAId
-        if (blockedUpcoming.has(userA) || blockedUpcoming.has(userB)) {
-          const blockedIds = [userA, userB].filter((id) => blockedUpcoming.has(id))
+        if (blockedFromNewIntro.has(userA) || blockedFromNewIntro.has(userB)) {
+          const blockedIds = [userA, userB].filter((id) => blockedFromNewIntro.has(id))
           return NextResponse.json(
             {
               error:
-                'One or both users have a confirmed Fika that has not happened yet. They cannot receive a new intro until after that Fika.',
-              code: 'BLOCKED_UPCOMING_CONFIRMED',
+                'One or both users are blocked from a new intro: upcoming confirmed Fika not yet happened, or an intro offer is still within its 24-hour window.',
+              code: 'BLOCKED_FROM_NEW_INTRO',
               blockedUserIds: blockedIds,
             },
             { status: 400 }
@@ -338,9 +349,13 @@ export async function POST(request: Request) {
   if (profilesErr) return NextResponse.json({ error: profilesErr.message }, { status: 500 })
 
   const userProfiles = (profiles ?? []) as ProfileRow[]
-  const blockedUpcoming = await fetchUserIdsWithUpcomingConfirmedFika(supabase)
-  const usersSkippedUpcomingConfirmed = userProfiles.filter((p) => blockedUpcoming.has(p.id)).length
-  const filteredProfiles = userProfiles.filter((p) => !blockedUpcoming.has(p.id))
+  const upcomingConfirmed = await fetchUserIdsWithUpcomingConfirmedFika(supabase)
+  const blockedFromNewIntro = await fetchUserIdsBlockedFromNewIntro(supabase, {
+    upcomingConfirmed,
+  })
+  const usersSkippedBlockedIntro = userProfiles.filter((p) => blockedFromNewIntro.has(p.id)).length
+  const usersSkippedUpcomingConfirmed = userProfiles.filter((p) => upcomingConfirmed.has(p.id)).length
+  const filteredProfiles = userProfiles.filter((p) => !blockedFromNewIntro.has(p.id))
   const ids = filteredProfiles.map((p) => p.id)
   if (ids.length < 2) {
     return NextResponse.json({
@@ -349,6 +364,7 @@ export async function POST(request: Request) {
         usersConsidered: 0,
         usersSkippedNoIntake: 0,
         usersSkippedNoEmbedding: 0,
+        usersSkippedBlockedIntro,
         usersSkippedUpcomingConfirmed,
         pairsScored: 0,
         filteredOut: 0,
@@ -385,6 +401,7 @@ export async function POST(request: Request) {
         usersConsidered: candidates.length,
         usersSkippedNoIntake,
         usersSkippedNoEmbedding: 0,
+        usersSkippedBlockedIntro,
         usersSkippedUpcomingConfirmed,
         pairsScored: 0,
         filteredOut: 0,
@@ -486,6 +503,7 @@ export async function POST(request: Request) {
       usersConsidered: candidates.length,
       usersSkippedNoIntake,
       usersSkippedNoEmbedding: 0,
+      usersSkippedBlockedIntro,
       usersSkippedUpcomingConfirmed,
       pairsScored: pairs.length,
       filteredOut,

@@ -15,11 +15,13 @@ type SignupRow = {
   market: string | null
   createdAt: string | null
   hasUpcomingConfirmedFika?: boolean
+  blockedFromNewIntro?: boolean
 }
 type ProfileDetail = {
   id: string
   firstName: string | null
   hasUpcomingConfirmedFika?: boolean
+  blockedFromNewIntro?: boolean
   birthdate: string | null
   gender: string | null
   genderPreference: string | null
@@ -45,7 +47,9 @@ type SimSummary = {
   usersConsidered: number
   usersSkippedNoIntake?: number
   usersSkippedNoEmbedding?: number
+  /** @deprecated Prefer usersSkippedBlockedIntro */
   usersSkippedUpcomingConfirmed?: number
+  usersSkippedBlockedIntro?: number
   pairsScored: number
   filteredOut: number
   market: string | null
@@ -469,8 +473,9 @@ export default function AdminSignupsPage() {
                 {simSummary.usersSkippedNoEmbedding != null && simSummary.usersSkippedNoEmbedding > 0
                   ? `${simSummary.usersSkippedNoEmbedding} skipped (legacy) · `
                   : ''}
-                {simSummary.usersSkippedUpcomingConfirmed != null && simSummary.usersSkippedUpcomingConfirmed > 0
-                  ? `${simSummary.usersSkippedUpcomingConfirmed} upcoming confirmed Fika (excluded from sim) · `
+                {(simSummary.usersSkippedBlockedIntro ?? simSummary.usersSkippedUpcomingConfirmed) != null &&
+                (simSummary.usersSkippedBlockedIntro ?? simSummary.usersSkippedUpcomingConfirmed ?? 0) > 0
+                  ? `${simSummary.usersSkippedBlockedIntro ?? simSummary.usersSkippedUpcomingConfirmed} blocked from new intro (excluded from sim) · `
                   : ''}
                 {simSummary.usersConsidered} with intake · Pairs: {simSummary.pairsScored} · Filtered out: {simSummary.filteredOut}
                 {simSummary.scoring ? ` · ${simSummary.scoring.replace(/_/g, ' ')}` : ''}
@@ -597,12 +602,16 @@ export default function AdminSignupsPage() {
                       <td>{formatDate(s.createdAt)}</td>
                       <td>
                         <span>{s.firstName ?? '—'}</span>
-                        {s.hasUpcomingConfirmedFika ? (
+                        {s.blockedFromNewIntro ? (
                           <span
                             className="admin-badge admin-badge-upcoming-fika"
-                            title="Has a confirmed Fika that has not happened yet — not eligible for a new intro"
+                            title={
+                              s.hasUpcomingConfirmedFika
+                                ? 'Has a confirmed Fika that has not happened yet — not eligible for a new intro'
+                                : 'Within 24h of an intro SMS offer — not eligible for another intro yet'
+                            }
                           >
-                            Upcoming Fika
+                            {s.hasUpcomingConfirmedFika ? 'Upcoming Fika' : 'Intro window'}
                           </span>
                         ) : null}
                       </td>
@@ -678,13 +687,17 @@ export default function AdminSignupsPage() {
                           <dt>Name</dt>
                           <dd>
                             {modalProfile.firstName ?? '—'}
-                            {modalProfile.hasUpcomingConfirmedFika ? (
+                            {modalProfile.blockedFromNewIntro ? (
                               <span
                                 className="admin-badge admin-badge-upcoming-fika"
                                 style={{ marginLeft: '0.5rem', verticalAlign: 'middle' }}
-                                title="Has a confirmed Fika that has not happened yet — not eligible for a new intro"
+                                title={
+                                  modalProfile.hasUpcomingConfirmedFika
+                                    ? 'Has a confirmed Fika that has not happened yet — not eligible for a new intro'
+                                    : 'Within 24h of an intro SMS offer — not eligible for another intro yet'
+                                }
                               >
-                                Upcoming Fika
+                                {modalProfile.hasUpcomingConfirmedFika ? 'Upcoming Fika' : 'Intro window'}
                               </span>
                             ) : null}
                           </dd>
