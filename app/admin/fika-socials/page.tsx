@@ -29,6 +29,8 @@ type SessionRow = {
   counts?: { opt_ins: number; matches: number }
 }
 
+type UserConfirm = { confirmed: boolean; at: string | null }
+
 type MatchRow = {
   id: string
   user_a: string
@@ -36,6 +38,11 @@ type MatchRow = {
   admin_approval_status: string
   score: number | null
   created_at: string | null
+  fika_social_intro_sms_sent_at?: string | null
+  user_a_first_name?: string | null
+  user_b_first_name?: string | null
+  user_a_confirm?: UserConfirm
+  user_b_confirm?: UserConfirm
 }
 
 type OptInProfileRow = {
@@ -197,6 +204,7 @@ export default function AdminFikaSocialsPage() {
   const [matchPreviewRows, setMatchPreviewRows] = useState<MatchPreviewRow[] | null>(null)
   const [matchPreviewLoading, setMatchPreviewLoading] = useState(false)
   const [matchPreviewError, setMatchPreviewError] = useState<string | null>(null)
+  const [sendIntroLoading, setSendIntroLoading] = useState(false)
 
   const [venueId, setVenueId] = useState('')
   const [fikaDate, setFikaDate] = useState('')
@@ -558,6 +566,16 @@ export default function AdminFikaSocialsPage() {
     }
   }
 
+  async function sendMatchIntroSms(sessionId: string) {
+    setSendIntroLoading(true)
+    setError(null)
+    try {
+      await patchSession(sessionId, { action: 'send_match_intro_sms' })
+    } finally {
+      setSendIntroLoading(false)
+    }
+  }
+
   async function deleteDraftSession(sessionId: string) {
     setError(null)
     try {
@@ -579,8 +597,8 @@ export default function AdminFikaSocialsPage() {
     <main className="admin-markets-page" style={{ maxWidth: 960, margin: '0 auto', padding: '1.25rem 1rem 3rem' }}>
       <h1 style={{ fontSize: '1.35rem', marginBottom: '0.35rem' }}>Fika socials</h1>
       <p style={{ color: 'var(--color-textSecondary, #666)', marginBottom: '1.25rem', fontSize: '0.95rem' }}>
-        Draft sessions: set Fika time and opt-in close, publish, record opt-in blast, close opt-in, run matcher, approve rows, then mark intro-ready (SMS send path still separate). Relative
-        blast/close/intro milestones from <code>fika_starts_at</code> are specified in <code>docs/WEEKLY_FIKA_RELATIVE_CADENCE.md</code> (automation not wired yet).
+        Draft sessions: set Fika time and opt-in close, publish, record opt-in blast, close opt-in, run matcher, approve rows, mark intro-ready, then send intro texts from detail (or rely on the T−6h sweep). Relative
+        blast/close/intro milestones from <code>fika_starts_at</code> are specified in <code>docs/WEEKLY_FIKA_RELATIVE_CADENCE.md</code>.
       </p>
 
       {error ? (
@@ -986,49 +1004,142 @@ export default function AdminFikaSocialsPage() {
                 ) : null}
               </div>
 
-              {detail.matches.length > 0 ? (
-                <table style={{ width: '100%', fontSize: '0.85rem', borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr>
-                      <th style={{ textAlign: 'left', borderBottom: '1px solid #ddd', padding: '4px 0' }}>Pair</th>
-                      <th style={{ textAlign: 'left', borderBottom: '1px solid #ddd', padding: '4px 0' }}>Approval</th>
-                      <th style={{ textAlign: 'left', borderBottom: '1px solid #ddd', padding: '4px 0' }} />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {detail.matches.map((m) => (
-                      <tr key={m.id}>
-                        <td style={{ padding: '4px 0', wordBreak: 'break-all' }}>
-                          {m.user_a.slice(0, 8)}… / {m.user_b.slice(0, 8)}…
-                        </td>
-                        <td style={{ padding: '4px 0' }}>{m.admin_approval_status}</td>
-                        <td style={{ padding: '4px 0' }}>
-                          {m.admin_approval_status === 'pending' ? (
-                            <span style={{ display: 'inline-flex', gap: 4 }}>
-                              <button
-                                type="button"
-                                className="admin-btn"
-                                style={{ fontSize: '0.75rem', padding: '2px 6px' }}
-                                onClick={() => void patchSession(detail.session.id, { action: 'approve_match', match_id: m.id })}
-                              >
-                                Approve
-                              </button>
-                              <button
-                                type="button"
-                                className="admin-btn"
-                                style={{ fontSize: '0.75rem', padding: '2px 6px' }}
-                                onClick={() => void patchSession(detail.session.id, { action: 'reject_match', match_id: m.id })}
-                              >
-                                Reject
-                              </button>
-                            </span>
-                          ) : null}
-                        </td>
+              <div style={{ marginTop: '0.75rem', borderTop: '1px solid #eee', paddingTop: '0.75rem' }}>
+                <h3 style={{ fontSize: '0.95rem', margin: '0 0 0.35rem' }}>Match pairs & confirmations</h3>
+                <p style={{ fontSize: '0.82rem', color: '#555', marginTop: 0, marginBottom: '0.5rem' }}>
+                  Same intro/reveal SMS sequence as the automated job at T−6h. Confirmations are 👍 replies once intros went out (
+                  <code style={{ fontSize: '0.8rem' }}>social_confirmed</code>).
+                </p>
+                {(() => {
+                  const st = detail.session.status
+                  const pendingIntro = detail.matches.filter(
+                    (m) => m.admin_approval_status === 'approved' && !m.fika_social_intro_sms_sent_at
+                  ).length
+                  const canSend =
+                    (st === 'intro_send_ready' || st === 'intro_sms_sent') && pendingIntro > 0
+                  let confirmedPeople = 0
+                  let totalApprovedSlots = 0
+                  let pairsBoth = 0
+                  for (const m of detail.matches) {
+                    if (m.admin_approval_status !== 'approved') continue
+                    totalApprovedSlots += 2
+                    const ac = m.user_a_confirm?.confirmed
+                    const bc = m.user_b_confirm?.confirmed
+                    if (ac) confirmedPeople++
+                    if (bc) confirmedPeople++
+                    if (ac && bc) pairsBoth++
+                  }
+                  const approvedPairs = detail.matches.filter((m) => m.admin_approval_status === 'approved').length
+                  return (
+                    <>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center', marginBottom: '0.5rem' }}>
+                        <button
+                          type="button"
+                          className="admin-btn admin-btn-primary"
+                          disabled={!canSend || sendIntroLoading}
+                          onClick={() => {
+                            if (
+                              !window.confirm(
+                                `Send intro texts now for ${pendingIntro} approved pair(s)? This calls sms-match-delivery (real SMS).`
+                              )
+                            ) {
+                              return
+                            }
+                            void sendMatchIntroSms(detail.session.id)
+                          }}
+                        >
+                          {sendIntroLoading ? 'Sending…' : 'Send intro texts now'}
+                        </button>
+                        {!canSend && (st === 'intro_send_ready' || st === 'intro_sms_sent') ? (
+                          <span style={{ fontSize: '0.82rem', color: '#666' }}>No pending intro rows (already sent or none approved).</span>
+                        ) : null}
+                        {st !== 'intro_send_ready' && st !== 'intro_sms_sent' ? (
+                          <span style={{ fontSize: '0.82rem', color: '#666' }}>
+                            Available after status is intro send ready (or retry when intro_sms_sent with unsent rows).
+                          </span>
+                        ) : null}
+                      </div>
+                      {approvedPairs > 0 ? (
+                        <p style={{ fontSize: '0.82rem', color: '#444', marginTop: 0, marginBottom: '0.5rem' }}>
+                          <strong>{confirmedPeople}</strong> of {totalApprovedSlots} people confirmed ·{' '}
+                          <strong>{pairsBoth}</strong> of {approvedPairs} pairs both confirmed
+                        </p>
+                      ) : null}
+                    </>
+                  )
+                })()}
+                {detail.matches.length === 0 ? (
+                  <p style={{ fontSize: '0.85rem', color: '#666', marginTop: '0.25rem' }}>No match rows yet.</p>
+                ) : (
+                  <table style={{ width: '100%', fontSize: '0.85rem', borderCollapse: 'collapse', marginTop: '0.25rem' }}>
+                    <thead>
+                      <tr>
+                        <th style={{ textAlign: 'left', borderBottom: '1px solid #ddd', padding: '4px 0' }}>Pair</th>
+                        <th style={{ textAlign: 'left', borderBottom: '1px solid #ddd', padding: '4px 0' }}>Approval</th>
+                        <th style={{ textAlign: 'left', borderBottom: '1px solid #ddd', padding: '4px 0' }}>Intro sent</th>
+                        <th style={{ textAlign: 'left', borderBottom: '1px solid #ddd', padding: '4px 0' }}>A confirm</th>
+                        <th style={{ textAlign: 'left', borderBottom: '1px solid #ddd', padding: '4px 0' }}>B confirm</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ) : null}
+                    </thead>
+                    <tbody>
+                      {detail.matches.map((m) => {
+                        const labelA = m.user_a_first_name?.trim() || `${m.user_a.slice(0, 8)}…`
+                        const labelB = m.user_b_first_name?.trim() || `${m.user_b.slice(0, 8)}…`
+                        const introSent = m.fika_social_intro_sms_sent_at
+                          ? new Date(m.fika_social_intro_sms_sent_at).toLocaleString()
+                          : '—'
+                        const ca = m.user_a_confirm
+                        const cb = m.user_b_confirm
+                        const cellA =
+                          ca?.confirmed && ca.at
+                            ? `Yes · ${new Date(ca.at).toLocaleString()}`
+                            : ca?.confirmed
+                              ? 'Yes'
+                              : '—'
+                        const cellB =
+                          cb?.confirmed && cb.at
+                            ? `Yes · ${new Date(cb.at).toLocaleString()}`
+                            : cb?.confirmed
+                              ? 'Yes'
+                              : '—'
+                        return (
+                          <tr key={m.id}>
+                            <td style={{ padding: '4px 0', wordBreak: 'break-word' }}>
+                              {labelA} & {labelB}
+                            </td>
+                            <td style={{ padding: '4px 0', whiteSpace: 'nowrap' }}>
+                              {m.admin_approval_status}
+                              {m.admin_approval_status === 'pending' ? (
+                                <span style={{ display: 'inline-flex', gap: 4, marginLeft: 6 }}>
+                                  <button
+                                    type="button"
+                                    className="admin-btn"
+                                    style={{ fontSize: '0.75rem', padding: '2px 6px' }}
+                                    onClick={() => void patchSession(detail.session.id, { action: 'approve_match', match_id: m.id })}
+                                  >
+                                    Approve
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="admin-btn"
+                                    style={{ fontSize: '0.75rem', padding: '2px 6px' }}
+                                    onClick={() => void patchSession(detail.session.id, { action: 'reject_match', match_id: m.id })}
+                                  >
+                                    Reject
+                                  </button>
+                                </span>
+                              ) : null}
+                            </td>
+                            <td style={{ padding: '4px 0', fontSize: '0.8rem', color: '#333' }}>{introSent}</td>
+                            <td style={{ padding: '4px 0', fontSize: '0.8rem' }}>{cellA}</td>
+                            <td style={{ padding: '4px 0', fontSize: '0.8rem' }}>{cellB}</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
             </div>
           ) : null}
         </section>

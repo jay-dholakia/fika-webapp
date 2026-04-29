@@ -15,6 +15,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const SENDBLUE_URL = 'https://api.sendblue.co/api/send-message'
 const MS_PER_HOUR = 60 * 60 * 1000
+/** Close social SMS lanes this long after the scheduled start (session teardown). */
+const SOCIAL_SMS_TEARDOWN_AFTER_MS = 6 * MS_PER_HOUR
 
 function haversineMiles(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const toRad = (d: number) => (d * Math.PI) / 180
@@ -325,6 +327,46 @@ serve(async () => {
           }
         }
       }
+    }
+
+    // Remove per-match SMS state rows 6h after fika start (confirms live on match_candidates).
+    const teardownCutoffIso = new Date(nowMs - SOCIAL_SMS_TEARDOWN_AFTER_MS).toISOString()
+    const { data: teardownSessions, error: tdErr } = await supabase
+      .from('fika_socials')
+      .select('id, week_anchor_monday')
+      .lte('fika_starts_at', teardownCutoffIso)
+      .not('intro_sms_sent_at', 'is', null)
+      .limit(120)
+
+    let socialSmsTeardownUpdated = 0
+    if (!tdErr && teardownSessions?.length) {
+      for (const ts of teardownSessions) {
+        const sid = ts.id as string
+        const wa = String((ts as { week_anchor_monday?: string }).week_anchor_monday ?? '')
+        const { data: mRows } = await supabase.from('match_candidates').select('id').eq('fika_social_id', sid).limit(400)
+        const mids = (mRows ?? []).map((r: { id: string }) => r.id)
+        if (!wa || mids.length === 0) continue
+
+        const { data: deletedRows, error: delErr } = await supabase
+          .from('sms_conversation_states')
+          .delete()
+          .eq('week_anchor_monday', wa)
+          .in('match_id', mids)
+          .select('id')
+        if (delErr) {
+          summary.push({ step: 'social_sms_teardown', sessionId: sid, ok: false, error: delErr.message })
+        } else if (deletedRows?.length) {
+          socialSmsTeardownUpdated += deletedRows.length
+        }
+      }
+      summary.push({
+        step: 'social_sms_teardown',
+        ok: true,
+        sessions_scanned: teardownSessions.length,
+        rows_deleted: socialSmsTeardownUpdated,
+      })
+    } else if (tdErr) {
+      summary.push({ step: 'social_sms_teardown', ok: false, error: tdErr.message })
     }
 
     return new Response(JSON.stringify({ ok: true, now: nowIso, sessions: (sessions ?? []).length, summary }), {

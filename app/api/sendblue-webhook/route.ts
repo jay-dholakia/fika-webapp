@@ -78,6 +78,8 @@ import {
   messageAwaitingAvailabilityReady,
   messageMatchOfferedUnrecognized,
   messageSeeIntroWaitingForOther,
+  messageFikaSocialAwaitingEvent,
+  messageFikaSocialConfirmNudge,
 } from '@/lib/sms-agent'
 import { getActiveMarketSlugs } from '@/lib/admin-markets'
 import { getMarketBySlug } from '@/lib/markets'
@@ -1869,12 +1871,28 @@ export async function POST(request: Request) {
   if (matchState === SMS_STATES.MATCH_OFFERED && matchId) {
     const offerPhase = (matchPayload.phase as string | undefined) ?? 'revealed'
 
-    // Social Fika: confirmation is a 👍 reaction (primary) or a short confirmation reply (fallback).
+    // Social Fika: confirmation is 👍 / Yes / short replies (same keywords as match YES).
     if ((matchPayload.protocol_version as string | undefined) === 'social_v1' && offerPhase === 'social_revealed_waiting_confirm') {
+      if (isMatchPassSignal) {
+        const passResult = await fulfillMatchCandidatePass({
+          fromNumber,
+          userId,
+          matchId,
+          weekAnchorMonday,
+          selfSmsStateRowId: matchStateRow!.id,
+          passLedgerContext: 'fika_social_reveal_pass',
+        })
+        if (!passResult.ok) {
+          return smsFail('pass_upsert_failed', { userId, matchId, message: passResult.errorMessage })
+        }
+        return NextResponse.json({ ok: true })
+      }
       const isConfirmReaction = reactionDecision === 'yes'
       const t = content.trim().toLowerCase()
-      const isConfirmReply = t === '👍' || t === 'ok' || t === 'okay' || t === 'ready' || t === 'confirmed' || t === 'confirm'
-      if (isConfirmReaction || isConfirmReply) {
+      const isConfirmReply =
+        t === '👍' || t === 'ok' || t === 'okay' || t === 'ready' || t === 'confirmed' || t === 'confirm'
+      const isSocialConfirm = isConfirmReaction || isConfirmReply || isMatchYesKeyword(content) || keyword === 'YES'
+      if (isSocialConfirm) {
         const nowIso = new Date().toISOString()
         await setPerMatchSmsState({
           userId,
@@ -1884,6 +1902,24 @@ export async function POST(request: Request) {
           payload: { ...matchPayload, phase: 'social_confirmed', social_confirmed_at: nowIso },
           lastSendblueMessageHandle: messageHandle,
         })
+        const { data: mcRow } = await supabase
+          .from('match_candidates')
+          .select('user_a, user_b')
+          .eq('id', matchId)
+          .maybeSingle()
+        if (mcRow) {
+          const ua = mcRow.user_a as string
+          const ub = mcRow.user_b as string
+          const patch =
+            userId === ua
+              ? { fika_social_user_a_confirmed_at: nowIso }
+              : userId === ub
+                ? { fika_social_user_b_confirmed_at: nowIso }
+                : null
+          if (patch) {
+            await supabase.from('match_candidates').update(patch).eq('id', matchId)
+          }
+        }
         await sendConciergeAndLog(fromNumber, "Perfect — you're all set. See you soon.", 'fika_social_match_confirmed', {
           userId,
           weekAnchorMonday,
@@ -1891,7 +1927,22 @@ export async function POST(request: Request) {
         })
         return NextResponse.json({ ok: true })
       }
-      // If they react/pass/other text, fall through to existing logic.
+      await sendConciergeAndLog(fromNumber, messageFikaSocialConfirmNudge(), 'fika_social_confirm_nudge', {
+        userId,
+        weekAnchorMonday,
+        matchId,
+      })
+      return NextResponse.json({ ok: true })
+    }
+
+    // Confirmed for social — do not route into 1:1 opt-in / scheduling.
+    if ((matchPayload.protocol_version as string | undefined) === 'social_v1' && offerPhase === 'social_confirmed') {
+      await sendConciergeAndLog(fromNumber, messageFikaSocialAwaitingEvent(), 'fika_social_awaiting_event', {
+        userId,
+        weekAnchorMonday,
+        matchId,
+      })
+      return NextResponse.json({ ok: true })
     }
 
     if (offerPhase === 'reveal_pending') {

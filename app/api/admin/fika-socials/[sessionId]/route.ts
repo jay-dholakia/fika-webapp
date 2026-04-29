@@ -41,6 +41,37 @@ function isYmd(value: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(value.trim())
 }
 
+function socialConfirmFromPayload(payload: unknown): { confirmed: boolean; at: string | null } {
+  if (!payload || typeof payload !== 'object') return { confirmed: false, at: null }
+  const p = payload as Record<string, unknown>
+  if (p.protocol_version !== 'social_v1') return { confirmed: false, at: null }
+  const at = p.social_confirmed_at
+  if (typeof at !== 'string') return { confirmed: false, at: null }
+  return { confirmed: true, at }
+}
+
+function confirmFromPersistedOrSms(
+  atPersisted: unknown,
+  fromSms: { confirmed: boolean; at: string | null }
+): { confirmed: boolean; at: string | null } {
+  if (typeof atPersisted === 'string') return { confirmed: true, at: atPersisted }
+  return fromSms
+}
+
+async function invokeMatchDelivery(params: { supabaseUrl: string; serviceRoleKey: string; matchIds: string[] }) {
+  const fnUrl = `${params.supabaseUrl.replace(/\/$/, '')}/functions/v1/sms-match-delivery`
+  const res = await fetch(fnUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${params.serviceRoleKey}`,
+    },
+    body: JSON.stringify({ match_ids: params.matchIds }),
+  })
+  const text = await res.text().catch(() => '')
+  return { ok: res.ok, status: res.status, text }
+}
+
 /** GET /api/admin/fika-socials/[sessionId] — session + venue + match queue summary. */
 export async function GET(request: Request, { params }: { params: Promise<{ sessionId: string }> }) {
   try {
@@ -61,7 +92,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ sess
     if (sErr) return NextResponse.json({ error: sErr.message }, { status: 500 })
     if (!session) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-    const [{ data: venue }, { count: optInCount }, { data: matches }] = await Promise.all([
+    const [{ data: venue }, { count: optInCount }, { data: matchesRaw }] = await Promise.all([
       context.supabase
         .from('venues')
         .select('id, name, neighborhood, city, address, lat, lng')
@@ -73,16 +104,75 @@ export async function GET(request: Request, { params }: { params: Promise<{ sess
         .eq('session_id', sessionId),
       context.supabase
         .from('match_candidates')
-        .select('id, user_a, user_b, admin_approval_status, score, created_at, fika_social_intro_sms_sent_at')
+        .select(
+          'id, user_a, user_b, admin_approval_status, score, created_at, fika_social_intro_sms_sent_at, fika_social_user_a_confirmed_at, fika_social_user_b_confirmed_at'
+        )
         .eq('fika_social_id', sessionId)
         .order('created_at', { ascending: true }),
     ])
 
+    const matches = matchesRaw ?? []
+    const weekAnchor = String((session as { week_anchor_monday?: string }).week_anchor_monday ?? '')
+    const matchIds = matches.map((m) => m.id as string)
+
+    const userIds = new Set<string>()
+    for (const m of matches) {
+      if (m.user_a) userIds.add(m.user_a as string)
+      if (m.user_b) userIds.add(m.user_b as string)
+    }
+
+    const [{ data: smsRows }, { data: nameRows }] = await Promise.all([
+      matchIds.length > 0 && weekAnchor
+        ? context.supabase
+            .from('sms_conversation_states')
+            .select('user_id, match_id, payload')
+            .eq('week_anchor_monday', weekAnchor)
+            .in('match_id', matchIds)
+        : Promise.resolve({ data: [] as { user_id: string; match_id: string | null; payload: unknown }[] }),
+      userIds.size > 0
+        ? context.supabase.from('profiles').select('user_id, first_name').in('user_id', Array.from(userIds))
+        : Promise.resolve({ data: [] as { user_id: string; first_name: string | null }[] }),
+    ])
+
+    const nameByUser = new Map<string, string | null>()
+    for (const r of nameRows ?? []) {
+      nameByUser.set(r.user_id, r.first_name ?? null)
+    }
+
+    const confirmKey = (matchId: string, userId: string) => `${matchId}:${userId}`
+    const confirmMap = new Map<string, { confirmed: boolean; at: string | null }>()
+    for (const row of smsRows ?? []) {
+      const mid = row.match_id as string | null
+      if (!mid || !row.user_id) continue
+      confirmMap.set(confirmKey(mid, row.user_id), socialConfirmFromPayload(row.payload))
+    }
+
+    const matchesEnriched = matches.map((m) => {
+      const id = m.id as string
+      const ua = m.user_a as string
+      const ub = m.user_b as string
+      const smsA = confirmMap.get(confirmKey(id, ua)) ?? { confirmed: false, at: null }
+      const smsB = confirmMap.get(confirmKey(id, ub)) ?? { confirmed: false, at: null }
+      return {
+        ...m,
+        user_a_first_name: nameByUser.get(ua) ?? null,
+        user_b_first_name: nameByUser.get(ub) ?? null,
+        user_a_confirm: confirmFromPersistedOrSms(
+          (m as { fika_social_user_a_confirmed_at?: string | null }).fika_social_user_a_confirmed_at,
+          smsA
+        ),
+        user_b_confirm: confirmFromPersistedOrSms(
+          (m as { fika_social_user_b_confirmed_at?: string | null }).fika_social_user_b_confirmed_at,
+          smsB
+        ),
+      }
+    })
+
     return NextResponse.json({
       session,
       venue: venue ?? null,
-      counts: { opt_ins: optInCount ?? 0, matches: (matches ?? []).length },
-      matches: matches ?? [],
+      counts: { opt_ins: optInCount ?? 0, matches: matchesEnriched.length },
+      matches: matchesEnriched,
     })
   } catch (e) {
     return NextResponse.json(
@@ -506,6 +596,69 @@ async function handleAction(
       .single()
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json({ ok: true, session: updated })
+  }
+
+  if (action === 'send_match_intro_sms') {
+    const allowed = status === 'intro_send_ready' || status === 'intro_sms_sent'
+    if (!allowed) {
+      return NextResponse.json(
+        {
+          error:
+            'send_match_intro_sms is only valid when status is intro_send_ready or intro_sms_sent (retry unsent rows).',
+        },
+        { status: 400 }
+      )
+    }
+
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()
+    if (!supabaseUrl || !serviceRoleKey) {
+      return NextResponse.json({ error: 'Server not configured for edge functions' }, { status: 500 })
+    }
+
+    const { data: pendingRows, error: qErr } = await supabase
+      .from('match_candidates')
+      .select('id')
+      .eq('fika_social_id', sessionId)
+      .eq('admin_approval_status', 'approved')
+      .is('fika_social_intro_sms_sent_at', null)
+      .limit(400)
+
+    if (qErr) return NextResponse.json({ error: qErr.message }, { status: 500 })
+
+    const ids = (pendingRows ?? []).map((r) => r.id as string)
+    if (ids.length === 0) {
+      return NextResponse.json({ error: 'No approved matches pending intro SMS (all rows already marked sent).' }, { status: 400 })
+    }
+
+    const delivery = await invokeMatchDelivery({ supabaseUrl, serviceRoleKey, matchIds: ids })
+    if (!delivery.ok) {
+      return NextResponse.json(
+        {
+          error: `sms-match-delivery failed (${delivery.status})`,
+          detail: delivery.text.slice(0, 2000),
+        },
+        { status: 502 }
+      )
+    }
+
+    const nowIso = new Date().toISOString()
+    const { error: uMc } = await supabase.from('match_candidates').update({ fika_social_intro_sms_sent_at: nowIso }).in('id', ids)
+    if (uMc) return NextResponse.json({ error: uMc.message }, { status: 500 })
+
+    if (status === 'intro_send_ready') {
+      const { data: updatedSession, error: uS } = await supabase
+        .from('fika_socials')
+        .update({ intro_sms_sent_at: nowIso, status: 'intro_sms_sent' })
+        .eq('id', sessionId)
+        .select('*')
+        .single()
+      if (uS) return NextResponse.json({ error: uS.message }, { status: 500 })
+      return NextResponse.json({ ok: true, session: updatedSession, match_ids: ids })
+    }
+
+    const { data: refreshed } = await supabase.from('fika_socials').select('*').eq('id', sessionId).maybeSingle()
+    return NextResponse.json({ ok: true, session: refreshed, match_ids: ids })
   }
 
   return NextResponse.json({ error: `Unknown action: ${action}` }, { status: 400 })

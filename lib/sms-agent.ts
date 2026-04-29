@@ -680,6 +680,16 @@ export function messageMatchOfferedUnrecognized(phase: 'reveal_pending' | 'revea
   return `Reply Yes if you'd like to meet, or No if this doesn't feel like the right fit.`
 }
 
+/** User confirmed intro for Fika Social but isn't at the event time yet (or time unknown). */
+export function messageFikaSocialAwaitingEvent(): string {
+  return `You're all set for this Fika Social. See you at the venue. Reply HELP if you need anything.`
+}
+
+/** While waiting for 👍/Yes to confirm after social intro reveal. */
+export function messageFikaSocialConfirmNudge(): string {
+  return `Reply 👍 or Yes to confirm you're coming to this Fika Social. (Or reply HELP.)`
+}
+
 /** Phase 2 teaser after both users say YES. */
 export function messageTeaserPreview(params: {
   otherFirstName: string
