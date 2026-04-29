@@ -71,6 +71,21 @@ function sanitizeConciergeReply(text: string): string {
   return t
 }
 
+/** Tone down "Hey Name!" every turn — keep reply if stripping would empty it. */
+function dampNameCadenceInGlobalReply(text: string, firstName?: string | null): string {
+  if (!firstName?.trim()) return text
+  const n = firstName.trim()
+  const esc = n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  let t = text.trim()
+  t = t.replace(new RegExp(`^hey\\s+${esc}\\s*[!,.]*\\s+`, 'i'), '')
+  t = t.replace(new RegExp(`^${esc}\\s*,\\s+`, 'i'), '')
+  t = t.replace(new RegExp(`^${esc}\\s*[!.]\\s+`, 'i'), '')
+  // Trailing ", Name!" / ", Name! 😊" (name + optional punct + short tail to EOL)
+  t = t.replace(new RegExp(`,\\s*${esc}\\s*[!.,]*\\s*\\S{0,8}$`, 'i'), '').trim()
+  t = t.replace(new RegExp(`,\\s*${esc}\\s*$`, 'i'), '').trim()
+  return t.length > 0 ? t : text
+}
+
 export async function fetchConfirmedFikaConciergeReply(params: {
   apiKey: string
   userMessage: string
@@ -137,12 +152,16 @@ export async function fetchGlobalReadyConciergeReply(params: {
   appBaseUrl: string
 }): Promise<{ ok: true; text: string } | { ok: false; error: string }> {
   const { apiKey, userMessage, firstName, marketLabel, appBaseUrl } = params
-  const who = firstName ? `They go by ${firstName}.` : 'Name unknown; be warm and generic.'
+  const nameHint = firstName
+    ? `Their first name is ${firstName} — for context only; do NOT use it in every reply.`
+    : 'You do not know their name; never invent one.'
   const where = marketLabel
     ? `Their market is ${marketLabel} (Fika is live here; we text when we have a good intro).`
     : 'They are in a Fika market; we reach out by text when we have a good intro match.'
 
   const system = `You are the Fika SMS line: a friendly, casual text buddy — not a form letter. One short SMS bubble, max 300 characters, plain text, warm and human. You may use a light emoji only if the user did or the tone is celebratory.
+
+How real texting sounds: people rarely say each other's names every message. Do NOT open with "Hey [Name]!" or "[Name]!" on every turn — that reads like a bot. ${firstName ? `Use "${firstName}" at most occasionally (e.g. once after several messages, or for a warm beat — most replies should have no name at all.` : 'Do not use a name.'}
 
 What Fika is: we help people meet for a low-stakes coffee/walk (a "Fika") with someone we think they might click with. We are match-first: the user should not expect an intro on a fixed schedule.
 
@@ -155,7 +174,7 @@ Rules:
 - Stay kind and brief. If they're venting, acknowledge lightly; you are not a counselor.
 
 Context for this user:
-${who}
+${nameHint}
 ${where}`
 
   try {
@@ -167,7 +186,7 @@ ${where}`
       },
       body: JSON.stringify({
         model: 'gpt-4o-mini',
-        temperature: 0.55,
+        temperature: 0.45,
         max_tokens: 200,
         messages: [
           { role: 'system', content: system },
@@ -186,7 +205,8 @@ ${where}`
     if (typeof text !== 'string' || !text.trim()) {
       return { ok: false, error: 'empty_response' }
     }
-    return { ok: true, text: sanitizeConciergeReply(text) }
+    const cleaned = sanitizeConciergeReply(text)
+    return { ok: true, text: dampNameCadenceInGlobalReply(cleaned, firstName) }
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'fetch_failed' }
   }
