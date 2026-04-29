@@ -3,8 +3,11 @@ import { NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase-server'
 import { isAdminByUserId } from '@/lib/admin-markets'
 import { runFikaSocialMatcher, type FikaSocialSessionRow } from '@/lib/fika-social-matcher'
+import { invokeSmsMatchDelivery } from '@/lib/invoke-sms-match-delivery'
 import { assertFikaStartsAfter, computeSocialFikaCadenceInstants } from '@/lib/weekly-fika-cadence'
 export const dynamic = 'force-dynamic'
+/** Admin detail aggregates DB reads; allow enough time on cold starts + Supabase latency. */
+export const maxDuration = 60
 
 async function getAdminContext(request: Request): Promise<{ userId: string; supabase: SupabaseClient } | null> {
   const supabaseAuth = await createServerSupabase()
@@ -41,6 +44,14 @@ function isYmd(value: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(value.trim())
 }
 
+/** `week_anchor_monday` may be date or ISO string from PostgREST — normalize for sms_conversation_states join. */
+function normalizeWeekAnchorMonday(value: unknown): string {
+  if (value == null) return ''
+  const s = typeof value === 'string' ? value : String(value)
+  const m = /^(\d{4}-\d{2}-\d{2})/.exec(s.trim())
+  return m?.[1] ?? ''
+}
+
 function socialConfirmFromPayload(payload: unknown): { confirmed: boolean; at: string | null } {
   if (!payload || typeof payload !== 'object') return { confirmed: false, at: null }
   const p = payload as Record<string, unknown>
@@ -56,20 +67,6 @@ function confirmFromPersistedOrSms(
 ): { confirmed: boolean; at: string | null } {
   if (typeof atPersisted === 'string') return { confirmed: true, at: atPersisted }
   return fromSms
-}
-
-async function invokeMatchDelivery(params: { supabaseUrl: string; serviceRoleKey: string; matchIds: string[] }) {
-  const fnUrl = `${params.supabaseUrl.replace(/\/$/, '')}/functions/v1/sms-match-delivery`
-  const res = await fetch(fnUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${params.serviceRoleKey}`,
-    },
-    body: JSON.stringify({ match_ids: params.matchIds }),
-  })
-  const text = await res.text().catch(() => '')
-  return { ok: res.ok, status: res.status, text }
 }
 
 /** GET /api/admin/fika-socials/[sessionId] — session + venue + match queue summary. */
@@ -92,7 +89,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ sess
     if (sErr) return NextResponse.json({ error: sErr.message }, { status: 500 })
     if (!session) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-    const [{ data: venue }, { count: optInCount }, { data: matchesRaw }] = await Promise.all([
+    const [
+      { data: venue, error: venueErr },
+      { count: optInCount, error: optInErr },
+      { data: matchesRaw, error: matchesErr },
+    ] = await Promise.all([
       context.supabase
         .from('venues')
         .select('id, name, neighborhood, city, address, lat, lng')
@@ -111,8 +112,18 @@ export async function GET(request: Request, { params }: { params: Promise<{ sess
         .order('created_at', { ascending: true }),
     ])
 
+    if (venueErr) {
+      return NextResponse.json({ error: venueErr.message, code: 'VENUE_QUERY' }, { status: 500 })
+    }
+    if (optInErr) {
+      return NextResponse.json({ error: optInErr.message, code: 'OPT_IN_COUNT_QUERY' }, { status: 500 })
+    }
+    if (matchesErr) {
+      return NextResponse.json({ error: matchesErr.message, code: 'MATCHES_QUERY' }, { status: 500 })
+    }
+
     const matches = matchesRaw ?? []
-    const weekAnchor = String((session as { week_anchor_monday?: string }).week_anchor_monday ?? '')
+    const weekAnchor = normalizeWeekAnchorMonday((session as { week_anchor_monday?: unknown }).week_anchor_monday)
     const matchIds = matches.map((m) => m.id as string)
 
     const userIds = new Set<string>()
@@ -121,18 +132,33 @@ export async function GET(request: Request, { params }: { params: Promise<{ sess
       if (m.user_b) userIds.add(m.user_b as string)
     }
 
-    const [{ data: smsRows }, { data: nameRows }] = await Promise.all([
+    const smsQuery =
       matchIds.length > 0 && weekAnchor
         ? context.supabase
             .from('sms_conversation_states')
             .select('user_id, match_id, payload')
             .eq('week_anchor_monday', weekAnchor)
             .in('match_id', matchIds)
-        : Promise.resolve({ data: [] as { user_id: string; match_id: string | null; payload: unknown }[] }),
+        : Promise.resolve({
+            data: [] as { user_id: string; match_id: string | null; payload: unknown }[],
+            error: null,
+          })
+    const nameQuery =
       userIds.size > 0
         ? context.supabase.from('profiles').select('id, first_name').in('id', Array.from(userIds))
-        : Promise.resolve({ data: [] as { id: string; first_name: string | null }[] }),
+        : Promise.resolve({ data: [] as { id: string; first_name: string | null }[], error: null })
+
+    const [{ data: smsRows, error: smsErr }, { data: nameRows, error: nameErr }] = await Promise.all([
+      smsQuery,
+      nameQuery,
     ])
+
+    if (smsErr) {
+      return NextResponse.json({ error: smsErr.message, code: 'SMS_STATE_QUERY' }, { status: 500 })
+    }
+    if (nameErr) {
+      return NextResponse.json({ error: nameErr.message, code: 'PROFILES_QUERY' }, { status: 500 })
+    }
 
     const nameByUser = new Map<string, string | null>()
     for (const r of nameRows ?? []) {
@@ -667,7 +693,7 @@ async function handleAction(
       return NextResponse.json({ error: 'No approved matches pending intro SMS (all rows already marked sent).' }, { status: 400 })
     }
 
-    const delivery = await invokeMatchDelivery({ supabaseUrl, serviceRoleKey, matchIds: ids })
+    const delivery = await invokeSmsMatchDelivery({ supabaseUrl, serviceRoleKey, matchIds: ids })
     if (!delivery.ok) {
       return NextResponse.json(
         {

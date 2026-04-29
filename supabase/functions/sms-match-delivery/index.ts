@@ -298,7 +298,7 @@ serve(async (req: Request) => {
     const apiKeyId = Deno.env.get('SENDBLUE_API_KEY_ID')
     const apiSecret = Deno.env.get('SENDBLUE_API_SECRET_KEY')
     if (!apiKeyId || !apiSecret) {
-      return new Response(JSON.stringify({ error: 'Sendblue not configured' }), { status: 503 })
+      return new Response(JSON.stringify({ ok: false, error: 'Sendblue not configured' }), { status: 503 })
     }
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -536,7 +536,8 @@ serve(async (req: Request) => {
           skipped_not_in_requested,
           skipped_blocked_from_new_intro,
         }),
-        { status: 502, headers: { 'Content-Type': 'application/json' } }
+        /** Use 200 + ok:false so the gateway does not log EDGE_FUNCTION_ERROR for an expected business outcome. */
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
       )
     }
 
@@ -555,6 +556,6 @@ serve(async (req: Request) => {
       })
     )
   } catch (e) {
-    return new Response(JSON.stringify({ error: String(e) }), { status: 500 })
+    return new Response(JSON.stringify({ ok: false, error: String(e) }), { status: 500 })
   }
 })

@@ -120,7 +120,13 @@ async function invokeMatchDelivery(params: { supabaseUrl: string; serviceRoleKey
     body: JSON.stringify({ match_ids: params.matchIds }),
   })
   const text = await res.text().catch(() => '')
-  return { ok: res.ok, status: res.status, text }
+  if (!res.ok) return { ok: false, status: res.status, text }
+  try {
+    const parsed = JSON.parse(text) as { ok?: boolean }
+    return parsed.ok === true ? { ok: true, status: res.status, text } : { ok: false, status: res.status, text }
+  } catch {
+    return { ok: false, status: res.status, text }
+  }
 }
 
 serve(async () => {

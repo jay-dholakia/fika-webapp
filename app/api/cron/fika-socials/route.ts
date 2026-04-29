@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { haversineMiles } from '@/lib/fika-social-geo'
 import { computeSocialFikaCadenceInstants } from '@/lib/weekly-fika-cadence'
 import { runFikaSocialMatcher } from '@/lib/fika-social-matcher'
+import { invokeSmsMatchDelivery } from '@/lib/invoke-sms-match-delivery'
 import { sendConcierge } from '@/lib/sendblue'
 
 export const dynamic = 'force-dynamic'
@@ -35,19 +36,6 @@ function inviteMessage(params: { venueName: string; whenLocal: string }): string
   return `Fika in 2 days: ${params.whenLocal} at ${params.venueName}.\n\nWant to join this Fika Social? Reply YES in the next 24 hours.`
 }
 
-async function invokeMatchDelivery(params: { supabaseUrl: string; serviceRoleKey: string; matchIds: string[] }) {
-  const fnUrl = `${params.supabaseUrl.replace(/\/$/, '')}/functions/v1/sms-match-delivery`
-  const res = await fetch(fnUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${params.serviceRoleKey}`,
-    },
-    body: JSON.stringify({ match_ids: params.matchIds }),
-  })
-  const text = await res.text().catch(() => '')
-  return { ok: res.ok, status: res.status, text }
-}
 
 export async function GET(request: Request) {
   if (!requireCronAuth(request)) {
@@ -197,7 +185,7 @@ export async function GET(request: Request) {
       } else {
         const ids = (matches ?? []).map((r: any) => r.id as string)
         if (ids.length > 0) {
-          const delivery = await invokeMatchDelivery({ supabaseUrl: url, serviceRoleKey: key, matchIds: ids })
+          const delivery = await invokeSmsMatchDelivery({ supabaseUrl: url, serviceRoleKey: key, matchIds: ids })
           if (!delivery.ok) {
             summary.push({ sessionId, step: 'intro_send', ok: false, status: delivery.status, response: delivery.text })
           } else {
