@@ -83,7 +83,7 @@ import {
 } from '@/lib/sms-agent'
 import { getActiveMarketSlugs } from '@/lib/admin-markets'
 import { getMarketBySlug } from '@/lib/markets'
-import { sendConcierge, isSendblueConfigured } from '@/lib/sendblue'
+import { sendConcierge, isSendblueConfigured, prepareOutboundAiPresence } from '@/lib/sendblue'
 import { getIntakeRadiusKm } from '@/lib/intake-radius'
 import { getIntakeSingle } from '@/lib/intake-response-utils'
 import { getBestDefaultSlot } from '@/lib/availability-slots'
@@ -103,10 +103,14 @@ import {
 import { insertMessageLedger } from '@/lib/message-ledger'
 import {
   countConfirmedFikaAiRepliesLast24h,
+  countGlobalReadyAiRepliesLast24h,
   fetchConfirmedFikaConciergeReply,
+  fetchGlobalReadyConciergeReply,
   getOpenAiKeyForSms,
   getSmsAiMaxPer24h,
+  getSmsAiMaxGlobalReadyPer24h,
   CONFIRMED_FIKA_CONCIERGE_AI_CONTEXT,
+  GLOBAL_READY_CONCIERGE_AI_CONTEXT,
 } from '@/lib/sms-concierge-ai'
 import { formatYoureAllSetDateLine, formatYoureAllSetVenueLine } from '@/lib/youre-all-set-format'
 import {
@@ -1537,6 +1541,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true })
     }
 
+    await prepareOutboundAiPresence(fromNumber)
+
     const aiReply = await fetchConfirmedFikaConciergeReply({
       apiKey,
       userMessage: content,
@@ -2466,7 +2472,96 @@ export async function POST(request: Request) {
       state === SMS_STATES.AWAITING_OPT_IN ||
       state === SMS_STATES.OPTED_IN)
   ) {
-    await sendConciergeAndLog(fromNumber, messageEntryReminder(), 'global_ready_match_first', { userId, weekAnchorMonday })
+    const { data: profileForGlobal } = await supabase
+      .from('profiles')
+      .select('id, first_name, birthdate, city, avatar_url, intent_confirmed_at, lat, lng, market')
+      .eq('id', userId)
+      .maybeSingle()
+    const { data: intakeForGlobal } = await supabase
+      .from('intake_responses_v5')
+      .select('user_id, completed_at')
+      .eq('user_id', userId)
+      .maybeSingle()
+    if (!isOnboardingComplete((profileForGlobal ?? null) as ProfileRow | null, (intakeForGlobal ?? null) as IntakeResponsesV5Row | null)) {
+      const DEFAULT_APP_BASE = 'https://letsfika.vercel.app'
+      const appBaseOb = (process.env.APP_CANONICAL_URL ?? '').trim()
+        ? process.env.APP_CANONICAL_URL!.trim().replace(/\/$/, '')
+        : DEFAULT_APP_BASE
+      const onboardingUrl = `${appBaseOb}/app/onboarding`
+      await sendConciergeAndLog(fromNumber, messageOnboardingRequired(onboardingUrl), 'onboarding_required', { userId, weekAnchorMonday })
+      await sleepForSmsPacing(SMS_PACING_MS.quickAck)
+      await sendConciergeAndLog(fromNumber, onboardingUrl, 'onboarding_required_url', { userId, weekAnchorMonday })
+      return NextResponse.json({ ok: true })
+    }
+    const activeSlugsGr = await getActiveMarketSlugs(supabase)
+    const profileMarketGr = (profileForGlobal as { market?: string | null })?.market ?? null
+    if (profileMarketGr != null && activeSlugsGr.length > 0 && !activeSlugsGr.includes(profileMarketGr)) {
+      const placeLabel = getMarketBySlug(profileMarketGr)?.label ?? (profileForGlobal as { city?: string | null })?.city ?? profileMarketGr
+      await sendConciergeAndLog(fromNumber, messageInactiveMarketReply(placeLabel), 'inactive_market_reply_global', { userId, weekAnchorMonday })
+      return NextResponse.json({ ok: true })
+    }
+
+    const aiCountGr = await countGlobalReadyAiRepliesLast24h(supabase, userId)
+    if (aiCountGr >= getSmsAiMaxGlobalReadyPer24h()) {
+      const rateResult = await sendConciergeAndLog(fromNumber, messageEntryReminder(), 'global_ready_match_first', { userId, weekAnchorMonday })
+      await setGlobalSmsState({
+        userId,
+        weekAnchorMonday,
+        state,
+        payload,
+        lastSendblueMessageHandle: rateResult.message_handle ?? messageHandle ?? null,
+      })
+      return NextResponse.json({ ok: true })
+    }
+
+    const apiKeyGr = getOpenAiKeyForSms()
+    if (!apiKeyGr) {
+      const noKeyResult = await sendConciergeAndLog(fromNumber, messageEntryReminder(), 'global_ready_match_first', { userId, weekAnchorMonday })
+      await setGlobalSmsState({
+        userId,
+        weekAnchorMonday,
+        state,
+        payload,
+        lastSendblueMessageHandle: noKeyResult.message_handle ?? messageHandle ?? null,
+      })
+      return NextResponse.json({ ok: true })
+    }
+
+    await prepareOutboundAiPresence(fromNumber)
+
+    const appUrlGr = getAppBase()
+    const firstNameGr = (profileForGlobal as { first_name?: string | null })?.first_name?.trim() ?? ''
+    const marketLabelGr = profileMarketGr ? getMarketBySlug(profileMarketGr)?.label ?? profileMarketGr : undefined
+    const aiReplyGr = await fetchGlobalReadyConciergeReply({
+      apiKey: apiKeyGr,
+      userMessage: content,
+      firstName: firstNameGr || undefined,
+      marketLabel: marketLabelGr,
+      appBaseUrl: appUrlGr,
+    })
+    if (!aiReplyGr.ok) {
+      console.error('[sendblue-webhook] global ready concierge AI failed', aiReplyGr.error)
+      const errResult = await sendConciergeAndLog(fromNumber, messageEntryReminder(), 'global_ready_match_first', { userId, weekAnchorMonday })
+      await setGlobalSmsState({
+        userId,
+        weekAnchorMonday,
+        state,
+        payload,
+        lastSendblueMessageHandle: errResult.message_handle ?? messageHandle ?? null,
+      })
+      return NextResponse.json({ ok: true })
+    }
+    const sendResultGr = await sendConciergeAndLog(fromNumber, aiReplyGr.text, GLOBAL_READY_CONCIERGE_AI_CONTEXT, {
+      userId,
+      weekAnchorMonday,
+    })
+    await setGlobalSmsState({
+      userId,
+      weekAnchorMonday,
+      state,
+      payload,
+      lastSendblueMessageHandle: sendResultGr.message_handle ?? messageHandle ?? null,
+    })
     return NextResponse.json({ ok: true })
   }
 

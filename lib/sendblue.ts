@@ -88,6 +88,90 @@ export function isSendblueConfigured(): boolean {
   return getConfig() !== null
 }
 
+/** Base API host; Sendblue v1 send uses api.sendblue.co; typing/read use api.sendblue.com in docs. Override if your project uses one host for all. */
+function sendblueApiHostForPresence(): string {
+  return process.env.SENDBLUE_API_HOST?.trim() || 'https://api.sendblue.com'
+}
+
+/**
+ * Mark the user's thread as read (iMessage/RCS best-effort; not SMS). Call shortly after inbound.
+ * @see https://docs.sendblue.com/api-v2/read-receipts/index.md
+ */
+export async function markConversationRead(peerNumberE164: string): Promise<{ ok: boolean; error?: string }> {
+  if (process.env.SENDBLUE_CHAT_PRESENCE_ENABLED === 'false') return { ok: true }
+  const config = getConfig()
+  if (!config) return { ok: false, error: 'Sendblue not configured' }
+  const number = peerNumberE164.startsWith('+') ? peerNumberE164 : `+${peerNumberE164.replace(/\D/g, '')}`
+  const url = `${sendblueApiHostForPresence()}/api/mark-read`
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'sb-api-key-id': config.apiKeyId,
+        'sb-api-secret-key': config.apiSecretKey,
+      },
+      body: JSON.stringify({
+        number,
+        from_number: config.conciergeNumber,
+      }),
+    })
+    if (!res.ok) {
+      const t = await res.text().catch(() => '')
+      return { ok: false, error: t.slice(0, 200) }
+    }
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'mark_read_failed' }
+  }
+}
+
+/**
+ * Show typing indicator to the user before a slow reply (iMessage; best-effort).
+ * @see https://docs.sendblue.com/api-v2/typing-indicators/
+ */
+export async function sendTypingIndicatorToPeer(peerNumberE164: string): Promise<{ ok: boolean; error?: string }> {
+  if (process.env.SENDBLUE_CHAT_PRESENCE_ENABLED === 'false') return { ok: true }
+  const config = getConfig()
+  if (!config) return { ok: false, error: 'Sendblue not configured' }
+  const number = peerNumberE164.startsWith('+') ? peerNumberE164 : `+${peerNumberE164.replace(/\D/g, '')}`
+  const url = `${sendblueApiHostForPresence()}/api/send-typing-indicator`
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'sb-api-key-id': config.apiKeyId,
+        'sb-api-secret-key': config.apiSecretKey,
+      },
+      body: JSON.stringify({
+        number,
+        from_number: config.conciergeNumber,
+      }),
+    })
+    if (!res.ok) {
+      const t = await res.text().catch(() => '')
+      return { ok: false, error: t.slice(0, 200) }
+    }
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'typing_failed' }
+  }
+}
+
+/** Read receipt then typing before OpenAI / slow outbound (errors ignored). */
+export async function prepareOutboundAiPresence(peerNumberE164: string): Promise<void> {
+  if (process.env.SENDBLUE_CHAT_PRESENCE_ENABLED === 'false') return
+  const r1 = await markConversationRead(peerNumberE164)
+  if (!r1.ok && r1.error) {
+    console.warn('[sendblue] mark-read skipped', r1.error)
+  }
+  const r2 = await sendTypingIndicatorToPeer(peerNumberE164)
+  if (!r2.ok && r2.error) {
+    console.warn('[sendblue] typing indicator skipped', r2.error)
+  }
+}
+
 /** Send a message (concierge or match). Used by complete-intake and other callers. Returns message_handle when API provides it. */
 export async function sendMessage(
   to: string,

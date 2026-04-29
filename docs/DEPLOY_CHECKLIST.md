@@ -37,7 +37,7 @@ Deploy via **Vercel** (Git integration or CLI):
 npx vercel deploy --prod   # requires vercel login or VERCEL_TOKEN
 ```
 
-Ensure env vars match prod (e.g. `SUPABASE_SERVICE_ROLE_KEY`, Sendblue, webhooks).
+Ensure env vars match prod (e.g. `SUPABASE_SERVICE_ROLE_KEY`, Sendblue, webhooks). Optional: `OPENAI_API_KEY` for global-ready + confirmed-upcoming SMS AI; `SENDBLUE_CHAT_PRESENCE_ENABLED`, `SENDBLUE_API_HOST` for typing/read before AI replies (see `.env.example`).
 
 ---
 
