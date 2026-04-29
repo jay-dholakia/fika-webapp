@@ -695,12 +695,20 @@ async function handleAction(
 
     const delivery = await invokeSmsMatchDelivery({ supabaseUrl, serviceRoleKey, matchIds: ids })
     if (!delivery.ok) {
+      let message = `Intro SMS could not be sent (edge status ${delivery.status || 'n/a'}).`
+      try {
+        const p = JSON.parse(delivery.text) as { error?: string }
+        if (typeof p.error === 'string' && p.error.trim()) message = p.error.trim()
+      } catch {
+        /* use default */
+      }
       return NextResponse.json(
         {
-          error: `sms-match-delivery failed (${delivery.status})`,
+          error: message,
+          code: 'MATCH_DELIVERY_FAILED',
           detail: delivery.text.slice(0, 2000),
         },
-        { status: 502 }
+        { status: 422 }
       )
     }
 
