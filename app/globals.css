@@ -4400,8 +4400,13 @@ a {
   color: white;
   margin-bottom: 1rem;
 }
-.admin-btn-primary:hover {
+.admin-btn-primary:hover:not(:disabled) {
   opacity: 0.95;
+}
+.admin-btn:disabled,
+.admin-btn-primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 .admin-loading {
   text-align: center;

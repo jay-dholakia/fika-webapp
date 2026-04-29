@@ -205,6 +205,9 @@ export default function AdminFikaSocialsPage() {
   const [matchPreviewLoading, setMatchPreviewLoading] = useState(false)
   const [matchPreviewError, setMatchPreviewError] = useState<string | null>(null)
   const [sendIntroLoading, setSendIntroLoading] = useState(false)
+  const [sendIntroFeedback, setSendIntroFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(
+    null
+  )
 
   const [venueId, setVenueId] = useState('')
   const [fikaDate, setFikaDate] = useState('')
@@ -546,7 +549,10 @@ export default function AdminFikaSocialsPage() {
     }
   }
 
-  async function patchSession(sessionId: string, body: Record<string, unknown>) {
+  async function patchSession(
+    sessionId: string,
+    body: Record<string, unknown>
+  ): Promise<{ ok: true; data?: unknown } | { ok: false; error: string }> {
     setError(null)
     try {
       const res = await fetch(`/api/admin/fika-socials/${encodeURIComponent(sessionId)}`, {
@@ -559,18 +565,32 @@ export default function AdminFikaSocialsPage() {
       if (!res.ok) throw new Error(json?.error ?? 'Update failed')
       await loadSessions()
       await loadDetail(sessionId)
-      return json
+      return { ok: true, data: json }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Update failed')
-      return null
+      const msg = e instanceof Error ? e.message : 'Update failed'
+      setError(msg)
+      return { ok: false, error: msg }
     }
   }
 
   async function sendMatchIntroSms(sessionId: string) {
     setSendIntroLoading(true)
+    setSendIntroFeedback(null)
     setError(null)
     try {
-      await patchSession(sessionId, { action: 'send_match_intro_sms' })
+      const r = await patchSession(sessionId, { action: 'send_match_intro_sms' })
+      if (r.ok) {
+        const n = Array.isArray((r.data as { match_ids?: string[] })?.match_ids)
+          ? (r.data as { match_ids: string[] }).match_ids.length
+          : undefined
+        setSendIntroFeedback({
+          type: 'success',
+          message:
+            n != null ? `Sent intro SMS for ${n} match pair(s). Confirm below updates.` : 'Intro SMS request completed.',
+        })
+      } else {
+        setSendIntroFeedback({ type: 'error', message: r.error })
+      }
     } finally {
       setSendIntroLoading(false)
     }
@@ -739,7 +759,10 @@ export default function AdminFikaSocialsPage() {
               <li key={s.id} style={{ marginBottom: 6 }}>
                 <button
                   type="button"
-                  onClick={() => void loadDetail(s.id)}
+                  onClick={() => {
+                    setSendIntroFeedback(null)
+                    void loadDetail(s.id)
+                  }}
                   style={{
                     textAlign: 'left',
                     width: '100%',
@@ -1037,6 +1060,13 @@ export default function AdminFikaSocialsPage() {
                           type="button"
                           className="admin-btn admin-btn-primary"
                           disabled={!canSend || sendIntroLoading}
+                          title={
+                            canSend
+                              ? 'Sends the same intro/reveal sequence as the T−6h job (sms-match-delivery).'
+                              : st === 'intro_send_ready' || st === 'intro_sms_sent'
+                                ? 'No approved pairs are still waiting for intro SMS (or all are already marked sent).'
+                                : 'Set session to intro send ready first, and approve match rows with pending intro.'
+                          }
                           onClick={() => {
                             if (
                               !window.confirm(
@@ -1059,6 +1089,19 @@ export default function AdminFikaSocialsPage() {
                           </span>
                         ) : null}
                       </div>
+                      {sendIntroFeedback ? (
+                        <p
+                          style={{
+                            fontSize: '0.85rem',
+                            marginTop: '0.35rem',
+                            marginBottom: 0,
+                            color: sendIntroFeedback.type === 'success' ? '#1b5e20' : '#b00020',
+                          }}
+                          role={sendIntroFeedback.type === 'error' ? 'alert' : 'status'}
+                        >
+                          {sendIntroFeedback.message}
+                        </p>
+                      ) : null}
                       {approvedPairs > 0 ? (
                         <p style={{ fontSize: '0.82rem', color: '#444', marginTop: 0, marginBottom: '0.5rem' }}>
                           <strong>{confirmedPeople}</strong> of {totalApprovedSlots} people confirmed ·{' '}
