@@ -130,13 +130,13 @@ export async function GET(request: Request, { params }: { params: Promise<{ sess
             .in('match_id', matchIds)
         : Promise.resolve({ data: [] as { user_id: string; match_id: string | null; payload: unknown }[] }),
       userIds.size > 0
-        ? context.supabase.from('profiles').select('user_id, first_name').in('user_id', Array.from(userIds))
-        : Promise.resolve({ data: [] as { user_id: string; first_name: string | null }[] }),
+        ? context.supabase.from('profiles').select('id, first_name').in('id', Array.from(userIds))
+        : Promise.resolve({ data: [] as { id: string; first_name: string | null }[] }),
     ])
 
     const nameByUser = new Map<string, string | null>()
     for (const r of nameRows ?? []) {
-      nameByUser.set(r.user_id, r.first_name ?? null)
+      nameByUser.set(r.id, r.first_name ?? null)
     }
 
     const confirmKey = (matchId: string, userId: string) => `${matchId}:${userId}`
