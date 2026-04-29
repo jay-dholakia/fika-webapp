@@ -899,7 +899,27 @@ export default function AdminFikaSocialsPage() {
                     Mark completed
                   </button>
                 ) : null}
-                {['draft', 'open_opt_in', 'opt_in_closed', 'matching_pending_review', 'intro_send_ready'].includes(detail.session.status) ? (
+                {['matching_pending_review', 'intro_send_ready', 'intro_sms_sent'].includes(detail.session.status) ? (
+                  <button
+                    type="button"
+                    className="admin-btn"
+                    style={{ marginTop: '0.5rem', borderColor: '#b00020', color: '#b00020' }}
+                    onClick={() => {
+                      const st = detail.session.status
+                      const msg =
+                        st === 'intro_sms_sent'
+                          ? 'Delete ALL match rows for this session and rewind to “opt-in closed”? Intro SMS may already have been sent. Continue?'
+                          : 'Delete all match rows and rewind to “opt-in closed”? You can run the matcher again with the same opt-ins.'
+                      if (!window.confirm(msg)) return
+                      void patchSession(detail.session.id, { action: 'reset_matcher_state' })
+                    }}
+                  >
+                    Reset matcher (delete pairs)
+                  </button>
+                ) : null}
+                {['draft', 'open_opt_in', 'opt_in_closed', 'matching_pending_review', 'intro_send_ready', 'intro_sms_sent'].includes(
+                  detail.session.status
+                ) ? (
                   <button type="button" className="admin-btn" style={{ marginTop: '0.5rem' }} onClick={() => void patchSession(detail.session.id, { action: 'cancel' })}>
                     Cancel session
                   </button>

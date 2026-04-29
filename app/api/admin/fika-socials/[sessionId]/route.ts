@@ -598,6 +598,42 @@ async function handleAction(
     return NextResponse.json({ ok: true, session: updated })
   }
 
+  if (action === 'reset_matcher_state') {
+    const resettable =
+      status === 'matching_pending_review' || status === 'intro_send_ready' || status === 'intro_sms_sent'
+    if (!resettable) {
+      return NextResponse.json(
+        {
+          error:
+            'reset_matcher_state is only valid when status is matching_pending_review, intro_send_ready, or intro_sms_sent.',
+        },
+        { status: 400 }
+      )
+    }
+
+    const { error: delErr } = await supabase.from('match_candidates').delete().eq('fika_social_id', sessionId)
+    if (delErr) return NextResponse.json({ error: delErr.message }, { status: 500 })
+
+    const { data: updated, error: uErr } = await supabase
+      .from('fika_socials')
+      .update({
+        status: 'opt_in_closed',
+        match_run_at: null,
+        intro_sms_sent_at: null,
+      })
+      .eq('id', sessionId)
+      .select('*')
+      .single()
+
+    if (uErr) return NextResponse.json({ error: uErr.message }, { status: 500 })
+    return NextResponse.json({
+      ok: true,
+      session: updated,
+      message:
+        'Match rows removed; session is opt_in_closed. Run matcher again when ready (same opt-in pool).',
+    })
+  }
+
   if (action === 'send_match_intro_sms') {
     const allowed = status === 'intro_send_ready' || status === 'intro_sms_sent'
     if (!allowed) {
