@@ -11,7 +11,18 @@
 
 The Next route `GET /api/cron/fika-socials` duplicates sweep logic for optional manual/testing use with `CRON_SECRET`; **production cadence for socials is the Edge Function + pg_cron**.
 
-**Vercel crons** (`vercel.json`): only `day-of-reminder` at 9am UTC daily — not the Fika Social sweep.
+If the repo has **`vercel.json` crons**, those run only on **Vercel** — e.g. `day-of-reminder` — not the Fika Social sweep.
+
+---
+
+## What runs where
+
+| Code | Where it runs | How you ship it |
+|------|----------------|-----------------|
+| `supabase/functions/*` | **Supabase Edge Functions** | `supabase functions deploy <name> --project-ref <ref>` |
+| `app/api/*` (e.g. **Sendblue webhook**, global-ready AI, admin API routes) | Your **Next.js** host (not Edge) | Whatever you use for the web app (Git push to host, Docker, etc.) — **not** `supabase functions deploy` |
+
+**Edge Functions are deployed through Supabase**, not Vercel. Changes to `lib/sms-concierge-ai.ts` or `sendblue-webhook` only need a **Next app** deploy, not an Edge redeploy.
 
 ---
 
@@ -21,23 +32,19 @@ The Next route `GET /api/cron/fika-socials` duplicates sweep logic for optional 
 
 1. `supabase db push` (or link CI) so migrations apply on **meetwithmoai** / prod project.
 
-### Edge Function `fika-socials-sweep`
+### Edge Functions (Supabase CLI)
 
-Deploy whenever `supabase/functions/fika-socials-sweep/` changes (invite blast, matcher, intro send, **6h post-event SMS teardown**):
+Deploy any function under `supabase/functions/` that changed, e.g. **`fika-socials-sweep`** (invite blast, matcher, intro send, **6h post-event SMS teardown**):
 
 ```bash
 npx supabase functions deploy fika-socials-sweep --project-ref hgllvhohhyamsbljekrd
 ```
 
-### Next.js app (admin UI, sendblue-webhook, cron route parity)
+Repeat for other functions you changed (`sms-match-delivery`, etc.).
 
-Deploy via **Vercel** (Git integration or CLI):
+### Next.js app (webhook, admin UI, optional `/api/cron/fika-socials` parity)
 
-```bash
-npx vercel deploy --prod   # requires vercel login or VERCEL_TOKEN
-```
-
-Ensure env vars match prod (e.g. `SUPABASE_SERVICE_ROLE_KEY`, Sendblue, webhooks). Optional: `OPENAI_API_KEY` for global-ready + confirmed-upcoming SMS AI; `SENDBLUE_CHAT_PRESENCE_ENABLED`, `SENDBLUE_API_HOST` for typing/read before AI replies (see `.env.example`).
+Deploy using **your app’s normal pipeline** (not Supabase Edge). Ensure prod env has `SUPABASE_SERVICE_ROLE_KEY`, Sendblue keys, webhook URL, optional `OPENAI_API_KEY` (global-ready + confirmed-upcoming SMS AI), `SENDBLUE_CHAT_PRESENCE_ENABLED`, `SENDBLUE_API_HOST` (see `.env.example`).
 
 ---
 
