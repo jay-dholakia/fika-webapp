@@ -875,9 +875,15 @@ export default function AdminFikaSocialsPage() {
                   </>
                 ) : null}
                 {detail.session.status === 'opt_in_closed' ? (
-                  <button type="button" className="admin-btn admin-btn-primary" onClick={() => void patchSession(detail.session.id, { action: 'run_matcher' })}>
-                    Run matcher
-                  </button>
+                  <>
+                    <button type="button" className="admin-btn admin-btn-primary" onClick={() => void patchSession(detail.session.id, { action: 'run_matcher' })}>
+                      Run matcher
+                    </button>
+                    <p style={{ fontSize: '0.8rem', color: '#555', margin: '0.35rem 0 0', maxWidth: 520 }}>
+                      Creates <strong>match rows only</strong> (no SMS). Next: mark intro send ready, then{' '}
+                      <strong>Send intro texts</strong> below—or wait for the automated T−6h send.
+                    </p>
+                  </>
                 ) : null}
                 {detail.session.status === 'matching_pending_review' ? (
                   <>
@@ -1056,8 +1062,9 @@ export default function AdminFikaSocialsPage() {
               <div style={{ marginTop: '0.75rem', borderTop: '1px solid #eee', paddingTop: '0.75rem' }}>
                 <h3 style={{ fontSize: '0.95rem', margin: '0 0 0.35rem' }}>Match pairs & confirmations</h3>
                 <p style={{ fontSize: '0.82rem', color: '#555', marginTop: 0, marginBottom: '0.5rem' }}>
-                  Same intro/reveal SMS sequence as the automated job at T−6h. Confirmations are 👍 replies once intros went out (
-                  <code style={{ fontSize: '0.8rem' }}>social_confirmed</code>).
+                  Same intro/reveal SMS sequence as the automated job at T−6h. <strong>A confirm / B confirm</strong> are 👍 (
+                  <code style={{ fontSize: '0.8rem' }}>social_confirmed</code>
+                  ) after intros—they do <strong>not</strong> flip on send alone; they stay empty until each person replies in the SMS flow.
                 </p>
                 {(() => {
                   const st = detail.session.status

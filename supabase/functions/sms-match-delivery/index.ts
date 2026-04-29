@@ -290,7 +290,8 @@ async function setMatchOfferedState(params: {
 serve(async (req: Request) => {
   try {
     if (Deno.env.get('SMS_OUTBOUND_DISABLED') === 'true') {
-      return new Response(JSON.stringify({ ok: true, outbound_disabled: true }), {
+      return new Response(JSON.stringify({ ok: false, error: 'SMS_OUTBOUND_DISABLED' }), {
+        status: 503,
         headers: { 'Content-Type': 'application/json' },
       })
     }
@@ -309,13 +310,17 @@ serve(async (req: Request) => {
       ? (body.match_ids as unknown[]).filter((x) => typeof x === 'string' && x.trim().length > 0) as string[]
       : []
 
+    // Bulk/cron (no match_ids): scope to this calendar week's anchor only.
+    // Admin + Fika sweep pass explicit match_ids: rows use the *session* week_anchor_monday,
+    // which may differ from "today's" Monday in UTC — do not filter by week when ids are provided.
     let matchesQuery = supabase
       .from('match_candidates')
-      .select('id, user_a, user_b, reasons, status, fika_social_id')
-      .eq('week_anchor_monday', weekAnchorMonday)
+      .select('id, user_a, user_b, reasons, status, fika_social_id, week_anchor_monday')
       .eq('status', 'active')
     if (requestedIds.length > 0) {
       matchesQuery = matchesQuery.in('id', requestedIds)
+    } else {
+      matchesQuery = matchesQuery.eq('week_anchor_monday', weekAnchorMonday)
     }
     const { data: matches } = await matchesQuery
 
@@ -339,7 +344,11 @@ serve(async (req: Request) => {
         skipped_not_in_requested++
         continue
       }
-      if (offeredSet.has(match.id)) continue
+      const stateWeek = String(
+        (match as { week_anchor_monday?: string }).week_anchor_monday ?? weekAnchorMonday
+      )
+      // Only dedupe "already offered" for bulk runs; explicit match_ids = intentional resend path.
+      if (requestedIds.length === 0 && offeredSet.has(match.id)) continue
       const { data: profileRows } = await supabase
         .from('profiles')
         .select('id, city, lat, lng')
@@ -450,7 +459,7 @@ serve(async (req: Request) => {
               await setMatchOfferedState({
                 supabase,
                 userId,
-                weekAnchorMonday,
+                weekAnchorMonday: stateWeek,
                 matchId: match.id,
                 payload: {
                   protocol_version: 'social_v1',
@@ -495,7 +504,7 @@ serve(async (req: Request) => {
             await setMatchOfferedState({
               supabase,
               userId,
-              weekAnchorMonday,
+              weekAnchorMonday: stateWeek,
               matchId: match.id,
               payload: {
                 protocol_version: 'v2',
@@ -511,6 +520,26 @@ serve(async (req: Request) => {
       }
       offeredSet.add(match.id)
     }
+
+    if (requestedIds.length > 0 && sent === 0) {
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          error:
+            'No SMS segments sent for the requested match_ids (see skipped_* counts: wrong week was filtered before fix; missing phone; Sendblue failure; intro-eligibility block; or 24h outbound cap).',
+          week_anchor_monday_scope: weekAnchorMonday,
+          sent,
+          requested: requestedIds.length,
+          sent_outside_24h,
+          skipped_no_recent_inbound,
+          skipped_outside_24h_cap,
+          skipped_not_in_requested,
+          skipped_blocked_from_new_intro,
+        }),
+        { status: 502, headers: { 'Content-Type': 'application/json' } }
+      )
+    }
+
     return new Response(
       JSON.stringify({
         ok: true,
