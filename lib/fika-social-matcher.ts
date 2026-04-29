@@ -36,6 +36,9 @@ export type FikaSocialMatcherError = { ok: false; error: string; code: string }
 export type FikaSocialMatchPreviewRow = {
   user_a: string
   user_b: string
+  /** Profile first names when present (preview-only UX); omit if unset in DB. */
+  user_a_first_name?: string | null
+  user_b_first_name?: string | null
   score: number | null
   eligible: boolean
   reject_reasons: string[]
@@ -268,12 +271,18 @@ export async function previewFikaSocialMatcher(
 
   const { data: profiles, error: profErr } = await supabase
     .from('profiles')
-    .select('id, market, lat, lng, is_active')
+    .select('id, market, lat, lng, is_active, first_name')
     .in('id', userIds)
 
   if (profErr) return { ok: false, error: profErr.message, code: 'PROFILES_LOAD' }
 
   const byId = new Map((profiles ?? []).map((p) => [p.id as string, p]))
+
+  const previewFirstName = (uid: string): string | null => {
+    const p = byId.get(uid) as { first_name?: string | null } | undefined
+    const n = p?.first_name != null ? String(p.first_name).trim() : ''
+    return n.length > 0 ? n : null
+  }
 
   const eligible: string[] = []
   for (const uid of userIds) {
@@ -309,6 +318,8 @@ export async function previewFikaSocialMatcher(
       pairs.push({
         user_a: userA,
         user_b: userB,
+        user_a_first_name: previewFirstName(userA),
+        user_b_first_name: previewFirstName(userB),
         score: null,
         eligible: false,
         reject_reasons: [loaded.error],
@@ -323,6 +334,8 @@ export async function previewFikaSocialMatcher(
     pairs.push({
       user_a: userA,
       user_b: userB,
+      user_a_first_name: previewFirstName(userA),
+      user_b_first_name: previewFirstName(userB),
       score: payload.score ?? null,
       eligible: eligiblePair,
       reject_reasons: payload.breakdown.rejectReasons ?? [],

@@ -59,6 +59,8 @@ type OptInProfileRow = {
 type MatchPreviewRow = {
   user_a: string
   user_b: string
+  user_a_first_name?: string | null
+  user_b_first_name?: string | null
   score: number | null
   eligible: boolean
   reject_reasons: string[]
@@ -1006,11 +1008,15 @@ export default function AdminFikaSocialsPage() {
                     <tbody>
                       {matchPreviewRows.slice(0, 50).map((p, idx) => {
                         const score = p.score == null ? '—' : p.score.toFixed(2)
-                        const pair = `${p.user_a.slice(0, 8)}… / ${p.user_b.slice(0, 8)}…`
+                        const labelA = p.user_a_first_name?.trim() || `${p.user_a.slice(0, 8)}…`
+                        const labelB = p.user_b_first_name?.trim() || `${p.user_b.slice(0, 8)}…`
+                        const pair = `${labelA} & ${labelB}`
                         const notes = p.eligible ? '' : (p.reject_reasons ?? []).slice(0, 2).join('; ')
                         return (
                           <tr key={`${p.user_a}:${p.user_b}:${idx}`}>
-                            <td style={{ padding: '4px 0', wordBreak: 'break-all' }}>{pair}</td>
+                            <td style={{ padding: '4px 0', wordBreak: 'break-word' }} title={`${p.user_a} · ${p.user_b}`}>
+                              {pair}
+                            </td>
                             <td style={{ padding: '4px 0' }}>{score}</td>
                             <td style={{ padding: '4px 0' }}>{p.eligible ? 'yes' : 'no'}</td>
                             <td style={{ padding: '4px 0', color: p.eligible ? '#666' : '#b00020' }}>{notes || '—'}</td>
