@@ -11,8 +11,7 @@ export const FEASIBILITY_PORTION = 0.4
 export const COMPATIBILITY_PORTION = 0.6
 
 export const FEASIBILITY_WEIGHTS = {
-  distanceFit: 0.45,
-  timeFit: 0.45,
+  distanceFit: 0.9,
   dataConfidence: 0.1,
 } as const
 
@@ -33,9 +32,6 @@ export const AGE_FIT_SCALE_YEARS = 10
 
 /** Multi-select chip overlap: blend of Jaccard and overlap coefficient. */
 export const MULTI_CHIP_BLEND = { jaccard: 0.6, overlapCoeff: 0.4 } as const
-
-/** Typical Fika times (feasibility time_fit). */
-export const TIME_FIT_BLEND = { jaccard: 0.7, overlapCoeff: 0.3 } as const
 
 /**
  * Beyond combined radius, pairs remain eligible up to this ratio (e.g. 1.15 = +15%),
@@ -60,8 +56,6 @@ export const DATA_CONFIDENCE_FIELD_IDS = [
   'q_market_tenure',
   'q_interests',
   'q_like_talking_about',
-  'q_typical_fika_times',
-  'q_radius',
 ] as const
 
 export const CONFIRM_INTENT_REQUIRED_VALUE = "I'm in"

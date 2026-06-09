@@ -12,7 +12,6 @@ import {
   FEASIBILITY_PORTION,
   FEASIBILITY_WEIGHTS,
   MULTI_CHIP_BLEND,
-  TIME_FIT_BLEND,
 } from '@/lib/match/weights'
 
 export type MatcherProfile = {
@@ -41,7 +40,6 @@ export type FikaMatchBreakdown = {
   rejectReasons: string[]
   feasibility: {
     distanceFit: number
-    timeFit: number
     dataConfidence: number
     total: number
   }
@@ -97,21 +95,6 @@ export function multiSelectChipOverlapScore(a: string[], b: string[]): number {
   return MULTI_CHIP_BLEND.jaccard * jaccard + MULTI_CHIP_BLEND.overlapCoeff * overlapCoeff
 }
 
-function timeOverlapFeasibilityScore(timesA: string[], timesB: string[]): number {
-  const sa = Array.from(new Set(timesA.map((x) => x.trim()).filter(Boolean)))
-  const sb = Array.from(new Set(timesB.map((x) => x.trim()).filter(Boolean)))
-  if (sa.length === 0 || sb.length === 0) return 0.5
-  const setA = new Set(sa)
-  const setB = new Set(sb)
-  const inter = Array.from(setA).filter((x) => setB.has(x)).length
-  if (inter === 0) return 0
-  const union = setA.size + setB.size - inter
-  const jaccard = union > 0 ? inter / union : 0
-  const minSize = Math.min(setA.size, setB.size)
-  const overlapCoeff = minSize > 0 ? inter / minSize : 0
-  return TIME_FIT_BLEND.jaccard * jaccard + TIME_FIT_BLEND.overlapCoeff * overlapCoeff
-}
-
 /** Closer calendar ages score higher; both ages required, else neutral. */
 export function ageFitScore(ageA: number | null, ageB: number | null): number {
   if (ageA == null || ageB == null || !Number.isFinite(ageA) || !Number.isFinite(ageB)) return 0.5
@@ -130,7 +113,7 @@ function distanceFitScore(distanceKm: number | null, combinedRadiusKm: number): 
 }
 
 function intakeFieldPresent(responses: unknown, questionId: string): boolean {
-  const multi = ['q_interests', 'q_like_talking_about', 'q_typical_fika_times']
+  const multi = ['q_interests', 'q_like_talking_about']
   if (multi.includes(questionId)) {
     return getIntakeMulti(responses, questionId).length > 0
   }
@@ -275,13 +258,9 @@ export function scoreFikaPair(a: MatcherPerson, b: MatcherPerson, opts?: ScorePa
   const { eligible, rejectReasons, distanceKm, combinedRadiusKm } = checkPairEligibility(a, b)
 
   const distanceFit = distanceFitScore(distanceKm, combinedRadiusKm)
-  const timesA = getIntakeMulti(a.responses, 'q_typical_fika_times')
-  const timesB = getIntakeMulti(b.responses, 'q_typical_fika_times')
-  const timeFit = timeOverlapFeasibilityScore(timesA, timesB)
   const dataConfidence = pairDataConfidence(a, b)
   const feasibilityTotal =
     FEASIBILITY_WEIGHTS.distanceFit * distanceFit +
-    FEASIBILITY_WEIGHTS.timeFit * timeFit +
     FEASIBILITY_WEIGHTS.dataConfidence * dataConfidence
 
   const interestsFit = multiSelectChipOverlapScore(
@@ -319,7 +298,6 @@ export function scoreFikaPair(a: MatcherPerson, b: MatcherPerson, opts?: ScorePa
     rejectReasons,
     feasibility: {
       distanceFit,
-      timeFit,
       dataConfidence,
       total: feasibilityTotal,
     },

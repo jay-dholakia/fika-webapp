@@ -60,7 +60,6 @@ type FikaMatchBreakdown = {
   rejectReasons: string[]
   feasibility: {
     distanceFit: number
-    timeFit: number
     dataConfidence: number
     total: number
   }
@@ -785,7 +784,6 @@ export default function AdminSignupsPage() {
                     <h4 className="admin-modal-meta" style={{ marginTop: '0.75rem', fontWeight: 600 }}>Feasibility</h4>
                     <dl className="admin-modal-dl">
                       <span><dt>Distance fit</dt><dd>{simPairModal.matchBreakdown.feasibility.distanceFit.toFixed(3)}</dd></span>
-                      <span><dt>Time fit</dt><dd>{simPairModal.matchBreakdown.feasibility.timeFit.toFixed(3)}</dd></span>
                       <span><dt>Data confidence</dt><dd>{simPairModal.matchBreakdown.feasibility.dataConfidence.toFixed(3)}</dd></span>
                       <span><dt>Total</dt><dd>{simPairModal.matchBreakdown.feasibility.total.toFixed(3)}</dd></span>
                     </dl>

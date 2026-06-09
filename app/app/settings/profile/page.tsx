@@ -8,7 +8,6 @@ import {
   PROFILE_STEPS,
   INTAKE_STEPS,
   MARKET_TENURE_OPTIONS,
-  Q_RADIUS_MILES_OPTIONS,
   type ProfileStep,
 } from '@/lib/onboarding-data'
 import {
@@ -161,14 +160,12 @@ export default function SettingsProfilePage() {
       else existingResponses.push(newItem)
     }
     const filteredResponses = existingResponses.filter((r) => r.question_id !== 'gender_preference' && r.question_id !== 'age_preference')
-    const availabilityTimes = answers.q_typical_fika_times as string[] | undefined
     const payload: Record<string, unknown> = {
       user_id: userId,
       responses: filteredResponses,
       updated_at: new Date().toISOString(),
     }
     if (existing?.completed_at != null) payload.completed_at = existing.completed_at
-    if (Array.isArray(availabilityTimes)) payload.availability_times = availabilityTimes
     const { error: e } = await supabase.from('intake_responses_v5').upsert(payload, { onConflict: 'user_id' })
     if (e) throw new Error(e.message)
   }
@@ -195,11 +192,6 @@ export default function SettingsProfilePage() {
     const loc = answers.location
     if (!(typeof loc === 'object' && loc !== null && 'city' in loc)) {
       setError('Location is required. Use "Change" to set your location.')
-      return
-    }
-    const availability = answers.q_typical_fika_times
-    if (Array.isArray(availability) && availability.length === 0) {
-      setError('Please choose at least one time slot for when you’re likely to be free for a Fika.')
       return
     }
     setSaving(true)
@@ -431,20 +423,15 @@ export default function SettingsProfilePage() {
         />
       )
     }
-    if (step.type === 'slider_snap' && step.options && (step.id === 'q_market_tenure' || step.id === 'q_radius')) {
-      const defaultOpt =
-        step.id === 'q_market_tenure' ? MARKET_TENURE_OPTIONS[0] : Q_RADIUS_MILES_OPTIONS[0]
+    if (step.type === 'slider_snap' && step.options && step.id === 'q_market_tenure') {
       const resolved =
-        typeof value === 'string' && value.trim() && step.options.includes(value) ? value : defaultOpt
+        typeof value === 'string' && value.trim() && step.options.includes(value) ? value : MARKET_TENURE_OPTIONS[0]
       return (
         <MarketTenureSlider
           id={`profile-${step.id}`}
           options={step.options}
           value={resolved}
           disabled={saving}
-          ariaLabel={
-            step.id === 'q_radius' ? 'How far you are willing to travel for a Fika' : undefined
-          }
           onChange={(next) => setAnswers((a) => ({ ...a, [step.id]: next }))}
         />
       )

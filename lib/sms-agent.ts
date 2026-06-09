@@ -20,8 +20,6 @@ export const SMS_STATES = {
   AWAITING_AVAILABILITY: 'awaiting_availability',
   AWAITING_SECOND_CONFIRM: 'awaiting_second_confirm',
   AWAITING_FIRST_CONFIRM: 'awaiting_first_confirm',
-  ACCEPTED_SCHEDULING_DAY: 'accepted_scheduling_day',
-  SCHEDULING_WINDOW: 'scheduling_window',
   VENUE_PROPOSED: 'venue_proposed',
   CONFIRMED: 'confirmed',
 } as const
@@ -704,20 +702,15 @@ export function messageMutualYesContext(params: {
   conversationThread: string
   venueName: string
   neighborhood?: string | null
-  broadAvailabilityLabel?: string | null
   /** Shared `q_like_talking_about` chips; surfaced in reveal and here when both said yes. */
   fikaTalkOverlap?: string[]
 }): string {
-  const { sharedInterests, conversationThread, venueName, neighborhood, broadAvailabilityLabel, fikaTalkOverlap } =
-    params
+  const { sharedInterests, conversationThread, venueName, neighborhood, fikaTalkOverlap } = params
   const context = formatMatchIntroSharedContext(sharedInterests, conversationThread, fikaTalkOverlap)
   const venueLine = neighborhood?.trim()
     ? `A likely spot for this one would be ${venueName} in ${neighborhood}.`
     : `A likely spot for this one would be ${venueName}.`
-  const availabilityLine = broadAvailabilityLabel?.trim()
-    ? `You both have ${broadAvailabilityLabel.toLowerCase()} open. I'll suggest a time now.`
-    : `You both seem free at similar times this week. I'll suggest a time now.`
-  return `${context}\n\n${venueLine}\n${availabilityLine}`
+  return `${context}\n\n${venueLine}\nI'll suggest a time now.`
 }
 
 /** Nudge when state is still AWAITING_AVAILABILITY (legacy state name; scheduling is proposal-first). */
@@ -745,14 +738,6 @@ export function messageConversationContext(params: {
   const { sharedInterests, starterQuestion } = params
   let text = `Here's a little context for your Fika:\n\nYou both mentioned:\n${sharedInterests.join(' and ')}\n\nA question you could kick things off with:\n\n"${starterQuestion}"`
   return text
-}
-
-export function messageSchedulingDay(days: string[]): string {
-  return `When are you free for a quick coffee chat?\n\n${days.join('\n')}\n\nReply with one or more days that work.`
-}
-
-export function messageSchedulingWindow(): string {
-  return `What time works best?\n\nMorning\nAfternoon\nEvening\n\nReply with one.`
 }
 
 export function messageVenueProposed(day: string, time: string, venueName: string, neighborhood: string): string {

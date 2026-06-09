@@ -19,7 +19,6 @@ import {
   messageFikaUserInitiatedCommitment,
   messageFikaUserInitiatedLinkBody,
   messageTextFikaToGetLink,
-  messageSchedulingWindow,
   messageVenueProposed,
   messageYoureAllSet,
   messagePassConfirmation,
@@ -84,10 +83,9 @@ import {
 import { getActiveMarketSlugs } from '@/lib/admin-markets'
 import { getMarketBySlug } from '@/lib/markets'
 import { sendConcierge, isSendblueConfigured, prepareOutboundAiPresence } from '@/lib/sendblue'
-import { getIntakeRadiusKm } from '@/lib/intake-radius'
+import { DEFAULT_RADIUS_KM } from '@/lib/intake-radius'
 import { getIntakeSingle } from '@/lib/intake-response-utils'
-import { getBestDefaultSlot } from '@/lib/availability-slots'
-import { candidateSlotIdsForProposalFromIntake, getTypicalFikaSelectionsFromResponses, nextAlternateProposalSlot } from '@/lib/intake-typical-times'
+import { AVAILABILITY_SLOT_IDS, getBestDefaultSlot } from '@/lib/availability-slots'
 import { getCurrentWeekAnchorMonday, isOnboardingComplete } from '@/lib/onboarding'
 import {
   buildUserMarketMap,
@@ -289,117 +287,21 @@ function dayPrefixForYmdInTz(ymd: string, timeZone: string): 'mon' | 'tue' | 'we
   return 'sun'
 }
 
-type TypicalTimeKey =
-  | 'weekday_morning'
-  | 'weekday_afternoon'
-  | 'weekday_evening'
-  | 'weekend_morning'
-  | 'weekend_afternoon'
-  | 'weekend_evening'
-
-function typicalKeysFromSelections(selections: string[]): Set<TypicalTimeKey> {
-  const set = new Set<TypicalTimeKey>()
-  for (const opt of selections) {
-    switch (opt) {
-      case 'Weekday mornings':
-        set.add('weekday_morning')
-        break
-      case 'Weekday afternoons':
-        set.add('weekday_afternoon')
-        break
-      case 'Weekday evenings':
-        set.add('weekday_evening')
-        break
-      case 'Weekend mornings':
-        set.add('weekend_morning')
-        break
-      case 'Weekend afternoons':
-        set.add('weekend_afternoon')
-        break
-      case 'Weekend evenings':
-        set.add('weekend_evening')
-        break
-      default:
-        break
-    }
-  }
-  return set
-}
-
-function defaultTypicalKeys(): TypicalTimeKey[] {
-  return [
-    'weekday_morning',
-    'weekday_afternoon',
-    'weekday_evening',
-    'weekend_morning',
-    'weekend_afternoon',
-    'weekend_evening',
-  ]
-}
-
-function preferredBroadAvailabilityLabel(selectionsA: string[], selectionsB: string[]): string | null {
-  const union = Array.from(new Set([...selectionsA, ...selectionsB]))
-  const overlap = selectionsA.filter((opt) => selectionsB.includes(opt))
-  const ordered = [
-    'Weekday evenings',
-    'Weekday afternoons',
-    'Weekday mornings',
-    'Weekend afternoons',
-    'Weekend mornings',
-    'Weekend evenings',
-  ]
-  for (const label of ordered) {
-    if (overlap.includes(label)) return label
-  }
-  for (const label of ordered) {
-    if (union.includes(label)) return label
-  }
-  return null
-}
-
-const TIMES_BY_KEY: Record<TypicalTimeKey, Array<{ hour: number; min: number }>> = {
-  weekday_morning: [{ hour: 9, min: 30 }, { hour: 10, min: 30 }],
-  weekday_afternoon: [{ hour: 13, min: 0 }, { hour: 14, min: 30 }],
-  weekday_evening: [{ hour: 18, min: 0 }, { hour: 18, min: 30 }],
-  weekend_morning: [{ hour: 9, min: 30 }, { hour: 10, min: 30 }],
-  weekend_afternoon: [{ hour: 13, min: 0 }, { hour: 14, min: 30 }],
-  weekend_evening: [{ hour: 18, min: 0 }, { hour: 18, min: 30 }],
-}
-
 function generateProposalCandidates(params: {
-  responsesA: unknown
-  responsesB: unknown
   timeZone: string
 }): Array<{ ymd: string; weekAnchorMonday: string; slotId: string; meetingMsUtc: number }> {
-  const { responsesA, responsesB, timeZone } = params
-  const selA = getTypicalFikaSelectionsFromResponses(responsesA)
-  const selB = getTypicalFikaSelectionsFromResponses(responsesB)
-  const keysA = typicalKeysFromSelections(selA)
-  const keysB = typicalKeysFromSelections(selB)
-
-  const intersection: TypicalTimeKey[] = Array.from(keysA).filter((k) => keysB.has(k))
-  const union: TypicalTimeKey[] = Array.from(new Set([...Array.from(keysA), ...Array.from(keysB)]))
-  const keys: TypicalTimeKey[] = intersection.length ? intersection : union.length ? union : defaultTypicalKeys()
-
+  const { timeZone } = params
   const todayYmd = getTodayYmdInTimezone(timeZone)
   const startYmd = addDaysYmdInTimezone(todayYmd, 2, timeZone)
 
   const out: Array<{ ymd: string; weekAnchorMonday: string; slotId: string; meetingMsUtc: number }> = []
-  for (let i = 0; i < 7; i++) {
+  for (let i = 0; i < 14; i++) {
     const ymd = addDaysYmdInTimezone(startYmd, i, timeZone)
-    const dayPrefix = dayPrefixForYmdInTz(ymd, timeZone)
-    const isWeekend = dayPrefix === 'sat' || dayPrefix === 'sun'
-
-    for (const k of keys) {
-      const kWeekend = k.startsWith('weekend_')
-      if (kWeekend !== isWeekend) continue
-      for (const t of TIMES_BY_KEY[k]) {
-        const slotId = `${dayPrefix}_${t.hour.toString().padStart(2, '0')}_${t.min.toString().padStart(2, '0')}`
-        const meetingMsUtc = localDateTimeInTzToUtcMs(ymd, t.hour, t.min, timeZone)
-        if (meetingMsUtc == null) continue
-        out.push({ ymd, weekAnchorMonday: getWeekAnchorMondayForYmd(ymd), slotId, meetingMsUtc })
-      }
-    }
+    if (dayPrefixForYmdInTz(ymd, timeZone) !== 'wed') continue
+    const meetingMsUtc = localDateTimeInTzToUtcMs(ymd, 18, 0, timeZone)
+    if (meetingMsUtc == null) continue
+    out.push({ ymd, weekAnchorMonday: getWeekAnchorMondayForYmd(ymd), slotId: 'wed_18_00', meetingMsUtc })
+    if (out.length >= 2) break
   }
   return out
 }
@@ -2159,29 +2061,14 @@ export async function POST(request: Request) {
           const otherName = otherProfile?.first_name?.trim() ?? 'Someone'
 
           // Proposal-first scheduling: after both YES, propose a concrete time+place.
-          // Slot pool comes from intake q_typical_fika_times (intersection → union → full grid fallback).
           const firstYesUserId = yesUsers[0]?.user_id
           if (!firstYesUserId) {
             return smsFail('yes_users_empty_v2', { userId, weekAnchorMonday, matchId })
           }
           const { data: userA } = await supabase.from('profiles').select('city, lat, lng').eq('id', match.user_a).single()
           const { data: userB } = await supabase.from('profiles').select('city, lat, lng').eq('id', match.user_b).single()
-          const [intakeA, intakeB] = await Promise.all([
-            supabase.from('intake_responses_v5').select('responses').eq('user_id', match.user_a).maybeSingle(),
-            supabase.from('intake_responses_v5').select('responses').eq('user_id', match.user_b).maybeSingle(),
-          ])
-          const broadAvailabilityLabel = preferredBroadAvailabilityLabel(
-            getTypicalFikaSelectionsFromResponses(intakeA?.data?.responses ?? null),
-            getTypicalFikaSelectionsFromResponses(intakeB?.data?.responses ?? null)
-          )
-          const radiusA = getIntakeRadiusKm(intakeA?.data?.responses ?? null)
-          const radiusB = getIntakeRadiusKm(intakeB?.data?.responses ?? null)
           const matchTzV2 = await fetchMatchMarketTimezone(supabase, match.user_a, match.user_b)
-          const candidates = generateProposalCandidates({
-            responsesA: intakeA?.data?.responses ?? null,
-            responsesB: intakeB?.data?.responses ?? null,
-            timeZone: matchTzV2,
-          })
+          const candidates = generateProposalCandidates({ timeZone: matchTzV2 })
           const pick = candidates[0] ?? null
           if (!pick) {
             await sendConciergeAndLog(
@@ -2197,8 +2084,8 @@ export async function POST(request: Request) {
           const meetingMsV2 = pick.meetingMsUtc
           const venue = await pickVenueForMatch(
             supabase,
-            { city: userA?.city ?? null, lat: userA?.lat ?? null, lng: userA?.lng ?? null, radius_km: radiusA },
-            { city: userB?.city ?? null, lat: userB?.lat ?? null, lng: userB?.lng ?? null, radius_km: radiusB },
+            { city: userA?.city ?? null, lat: userA?.lat ?? null, lng: userA?.lng ?? null, radius_km: DEFAULT_RADIUS_KM },
+            { city: userB?.city ?? null, lat: userB?.lat ?? null, lng: userB?.lng ?? null, radius_km: DEFAULT_RADIUS_KM },
             { meetingAtUtc: new Date(meetingMsV2) }
           )
           if (!venue) {
@@ -2227,7 +2114,6 @@ export async function POST(request: Request) {
               conversationThread,
               venueName: proposalFields.venueName,
               neighborhood: proposalFields.neighborhood,
-              broadAvailabilityLabel,
               fikaTalkOverlap: fikaTalkOverlap.slice(0, 3),
             }),
             'v2_mutual_yes_context',
@@ -2243,7 +2129,6 @@ export async function POST(request: Request) {
                 conversationThread,
                 venueName: proposalFields.venueName,
                 neighborhood: proposalFields.neighborhood,
-                broadAvailabilityLabel,
                 fikaTalkOverlap: fikaTalkOverlap.slice(0, 3),
               }),
               'v2_mutual_yes_context_other',
@@ -2325,18 +2210,8 @@ export async function POST(request: Request) {
         }
         const { data: userA } = await supabase.from('profiles').select('city, lat, lng').eq('id', match.user_a).single()
         const { data: userB } = await supabase.from('profiles').select('city, lat, lng').eq('id', match.user_b).single()
-        const [intakeA, intakeB] = await Promise.all([
-          supabase.from('intake_responses_v5').select('responses').eq('user_id', match.user_a).maybeSingle(),
-          supabase.from('intake_responses_v5').select('responses').eq('user_id', match.user_b).maybeSingle(),
-        ])
-        const radiusA = getIntakeRadiusKm(intakeA?.data?.responses ?? null)
-        const radiusB = getIntakeRadiusKm(intakeB?.data?.responses ?? null)
         const matchTzV1 = await fetchMatchMarketTimezone(supabase, match.user_a, match.user_b)
-        const candidates = generateProposalCandidates({
-          responsesA: intakeA?.data?.responses ?? null,
-          responsesB: intakeB?.data?.responses ?? null,
-          timeZone: matchTzV1,
-        })
+        const candidates = generateProposalCandidates({ timeZone: matchTzV1 })
         const pick = candidates[0] ?? null
         if (!pick) {
           await sendConciergeAndLog(fromNumber, "We couldn't find a time that works for both. We'll reach out when we find another good Fika intro for you.", 'no_overlap', {
@@ -2352,8 +2227,8 @@ export async function POST(request: Request) {
         const meetingMsV1 = pick.meetingMsUtc
         const venue = await pickVenueForMatch(
           supabase,
-          { city: userA?.city ?? null, lat: userA?.lat ?? null, lng: userA?.lng ?? null, radius_km: radiusA },
-          { city: userB?.city ?? null, lat: userB?.lat ?? null, lng: userB?.lng ?? null, radius_km: radiusB },
+          { city: userA?.city ?? null, lat: userA?.lat ?? null, lng: userA?.lng ?? null, radius_km: DEFAULT_RADIUS_KM },
+          { city: userB?.city ?? null, lat: userB?.lat ?? null, lng: userB?.lng ?? null, radius_km: DEFAULT_RADIUS_KM },
           { meetingAtUtc: new Date(meetingMsV1) }
         )
         if (!venue) {
@@ -2600,16 +2475,8 @@ export async function POST(request: Request) {
     }
 
     const currentSlotId = (matchPayload.proposed_slot_id as string) ?? ''
-    const [intakeA, intakeB] = await Promise.all([
-      supabase.from('intake_responses_v5').select('responses').eq('user_id', matchRow!.user_a).maybeSingle(),
-      supabase.from('intake_responses_v5').select('responses').eq('user_id', matchRow!.user_b).maybeSingle(),
-    ])
     const matchTzRe = await fetchMatchMarketTimezone(supabase, matchRow!.user_a, matchRow!.user_b)
-    const candidates = generateProposalCandidates({
-      responsesA: intakeA?.data?.responses ?? null,
-      responsesB: intakeB?.data?.responses ?? null,
-      timeZone: matchTzRe,
-    })
+    const candidates = generateProposalCandidates({ timeZone: matchTzRe })
     const nextPick = (candidates.find((c) => c.slotId !== currentSlotId) ?? null)
 
     if (!nextPick) {
@@ -2619,15 +2486,13 @@ export async function POST(request: Request) {
 
     const { data: userA } = await supabase.from('profiles').select('city, lat, lng').eq('id', matchRow!.user_a).single()
     const { data: userB } = await supabase.from('profiles').select('city, lat, lng').eq('id', matchRow!.user_b).single()
-    const radiusA = getIntakeRadiusKm(intakeA?.data?.responses ?? null)
-    const radiusB = getIntakeRadiusKm(intakeB?.data?.responses ?? null)
     const proposalWeekAnchorMonday = nextPick.weekAnchorMonday
     const nextSlotId = nextPick.slotId
     const meetingMsRe = nextPick.meetingMsUtc
     const venue = await pickVenueForMatch(
       supabase,
-      { city: userA?.city ?? null, lat: userA?.lat ?? null, lng: userA?.lng ?? null, radius_km: radiusA },
-      { city: userB?.city ?? null, lat: userB?.lat ?? null, lng: userB?.lng ?? null, radius_km: radiusB },
+      { city: userA?.city ?? null, lat: userA?.lat ?? null, lng: userA?.lng ?? null, radius_km: DEFAULT_RADIUS_KM },
+      { city: userB?.city ?? null, lat: userB?.lat ?? null, lng: userB?.lng ?? null, radius_km: DEFAULT_RADIUS_KM },
       { meetingAtUtc: new Date(meetingMsRe) }
     )
     if (!venue) {
@@ -2931,94 +2796,6 @@ export async function POST(request: Request) {
       state: SMS_STATES.CONFIRMED,
       updated_at: new Date().toISOString(),
     }).eq('user_id', otherUserId).eq('week_anchor_monday', weekAnchorMonday).eq('match_id', matchId)
-    return NextResponse.json({ ok: true })
-  }
-
-  if (matchState === SMS_STATES.ACCEPTED_SCHEDULING_DAY && matchId) {
-    const dayMatch = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'].find((d) => keyword.includes(d))
-    if (dayMatch) {
-      await supabase.from('sms_conversation_states').update({
-        state: SMS_STATES.SCHEDULING_WINDOW,
-        payload: { ...matchPayload, selected_day: dayMatch },
-        last_sendblue_message_handle: messageHandle,
-        updated_at: new Date().toISOString(),
-      }).eq('id', matchStateRow!.id)
-      await sendConciergeAndLog(fromNumber, messageSchedulingWindow(), 'scheduling_window', { userId, weekAnchorMonday, matchId })
-    } else {
-      return smsFail('unrecognized_scheduling_day_reply', {
-        userId,
-        weekAnchorMonday,
-        matchId,
-        contentPreview: content.slice(0, 80),
-      })
-    }
-    return NextResponse.json({ ok: true })
-  }
-
-  if (matchState === SMS_STATES.SCHEDULING_WINDOW && matchId) {
-    const windowMatch = ['MORNING','AFTERNOON','EVENING'].find(w => keyword.includes(w))
-    if (windowMatch) {
-      const { data: match } = await supabase.from('match_candidates').select('user_a, user_b').eq('id', matchId).single()
-      const selectedDay = (matchPayload.selected_day as string) ?? 'THU'
-      const dayLower = selectedDay.toLowerCase()
-      const [intakeAWin, intakeBWin] = await Promise.all([
-        supabase.from('intake_responses_v5').select('responses').eq('user_id', match!.user_a).maybeSingle(),
-        supabase.from('intake_responses_v5').select('responses').eq('user_id', match!.user_b).maybeSingle(),
-      ])
-      const intakeCandidateSlots = candidateSlotIdsForProposalFromIntake(
-        intakeAWin?.data?.responses ?? null,
-        intakeBWin?.data?.responses ?? null
-      )
-      let slotIds = intakeCandidateSlots.filter((id: string) => id.startsWith(dayLower))
-      if (slotIds.length === 0) slotIds = intakeCandidateSlots
-      const window = windowMatch === 'MORNING' ? 'Morning' : windowMatch === 'AFTERNOON' ? 'Afternoon' : 'Evening'
-      let chosenSlot = slotIds[0]
-      for (const id of slotIds) {
-        const dw = slotIdToDayAndWindow(id)
-        if (dw?.window === window) { chosenSlot = id; break }
-        chosenSlot = id
-      }
-      const { data: userA } = await supabase.from('profiles').select('city, lat, lng').eq('id', match!.user_a).single()
-      const { data: userB } = await supabase.from('profiles').select('city, lat, lng').eq('id', match!.user_b).single()
-      const radiusA = getIntakeRadiusKm(intakeAWin?.data?.responses ?? null)
-      const radiusB = getIntakeRadiusKm(intakeBWin?.data?.responses ?? null)
-      const matchTzWin = await fetchMatchMarketTimezone(supabase, match!.user_a, match!.user_b)
-      const meetingMsWin = chosenSlot ? getFikaTimeMs(weekAnchorMonday, chosenSlot, matchTzWin) : null
-      const venue = await pickVenueForMatch(
-        supabase,
-        { city: userA?.city ?? null, lat: userA?.lat ?? null, lng: userA?.lng ?? null, radius_km: radiusA },
-        { city: userB?.city ?? null, lat: userB?.lat ?? null, lng: userB?.lng ?? null, radius_km: radiusB },
-        { meetingAtUtc: meetingMsWin != null ? new Date(meetingMsWin) : undefined }
-      )
-      if (!venue) {
-        return smsFail('pick_venue_for_match_failed_scheduling_window', {
-          userId,
-          weekAnchorMonday,
-          matchId,
-          chosenSlot: chosenSlot ?? null,
-        })
-      }
-      const timeStr = chosenSlot ? (slotIdToDayAndWindow(chosenSlot) ? '7pm' : '2pm') : '7pm'
-      await supabase.from('match_candidates').update({
-        suggested_venue_id: venue.id,
-        default_slot_id: chosenSlot || undefined,
-        overlapping_slot_ids: intakeCandidateSlots,
-      }).eq('id', matchId)
-      await supabase.from('sms_conversation_states').update({
-        state: SMS_STATES.VENUE_PROPOSED,
-        payload: { ...matchPayload, selected_window: window, slot_id: chosenSlot },
-        last_sendblue_message_handle: messageHandle,
-        updated_at: new Date().toISOString(),
-      }).eq('id', matchStateRow!.id)
-      await sendConciergeAndLog(fromNumber, messageVenueProposed(selectedDay, timeStr, venue.name, venue.neighborhood ?? venue.city), 'venue_proposed', { userId, weekAnchorMonday, matchId })
-    } else {
-      return smsFail('unrecognized_scheduling_window_reply', {
-        userId,
-        weekAnchorMonday,
-        matchId,
-        contentPreview: content.slice(0, 80),
-      })
-    }
     return NextResponse.json({ ok: true })
   }
 

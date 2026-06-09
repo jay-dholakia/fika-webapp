@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { getIntakeRadiusKm } from '@/lib/intake-radius'
+import { DEFAULT_RADIUS_KM } from '@/lib/intake-radius'
 import { getIntakeMulti, getIntakeSingle } from '@/lib/intake-response-utils'
 import type { FikaMatchBreakdown, MatcherPerson, ScorePairOptions } from '@/lib/match/fika-matcher'
 import { scoreFikaPair } from '@/lib/match/fika-matcher'
@@ -131,7 +131,7 @@ export function adminSimCandidateFromProfileRow(
     profile,
     intake,
     age: ageFromBirthdate(profile.birthdate),
-    radiusKm: getIntakeRadiusKm(intake.responses),
+    radiusKm: DEFAULT_RADIUS_KM,
   }
 }
 
@@ -182,7 +182,6 @@ function sectionScoresFromBreakdown(bd: FikaMatchBreakdown): Record<string, numb
   return {
     feasibility_total: bd.feasibility.total,
     distance_fit: bd.feasibility.distanceFit,
-    time_fit: bd.feasibility.timeFit,
     data_confidence: bd.feasibility.dataConfidence,
     compatibility_total: bd.compatibility.total,
     q_what_makes_great_fika: bd.compatibility.greatFikaFit,

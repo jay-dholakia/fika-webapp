@@ -19,14 +19,5 @@ function getIntakeNumericValue(responses: unknown, questionId: string): number |
   return null
 }
 
-/** Default when q_radius is missing (~25 miles). */
-export const DEFAULT_RADIUS_KM = 40
-
-/**
- * Travel distance from intake q_radius (miles) → km. Default 40 km.
- * Accepts array-shaped intake `responses` or a flat record.
- */
-export function getIntakeRadiusKm(responses: unknown): number {
-  const miles = getIntakeNumericValue(responses, 'q_radius')
-  return miles != null ? Math.round(miles * 1.60934) : DEFAULT_RADIUS_KM
-}
+/** Fixed travel radius: 10 miles in km. */
+export const DEFAULT_RADIUS_KM = 16

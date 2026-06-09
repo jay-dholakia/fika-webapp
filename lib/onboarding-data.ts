@@ -3,7 +3,6 @@
 
 import { ETHNICITY_OPTIONS } from '@/lib/ethnicity-options'
 import { RELATIONSHIP_STATUS_OPTIONS } from '@/lib/relationship-status-options'
-import { WORK_ROLE_LIFE_SITUATION_CHIPS, WORK_ROLE_OPTIONS } from '@/lib/work-role-options'
 
 export type StepType =
   | 'text'
@@ -34,9 +33,6 @@ export type ProfileStep = {
   /** Short line above featured chips (e.g. work life-situation shortcuts). */
   featuredOptionsCaption?: string
 }
-
-/** Intake `q_radius` labels (miles); `getIntakeRadiusKm` parses the number from these strings. */
-export const Q_RADIUS_MILES_OPTIONS: string[] = ['5 miles', '10 miles', '25 miles', '50 miles']
 
 /** Ordered stops for the “how long in this market” slider (left → right). */
 export const MARKET_TENURE_OPTIONS: string[] = [
@@ -158,14 +154,11 @@ export const INTAKE_STEPS: ProfileStep[] = [
   {
     id: 'q_work',
     question: 'What do you do for work?',
-    body: 'Enter your job title, or search the list for a close match. If you’re unemployed, between roles, or on a career break, use a shortcut below.',
-    type: 'searchable_single',
+    body: "Optional — be as specific or general as you like. If you're between roles or on a break, feel free to say so.",
+    type: 'text',
     required: false,
-    featuredOptions: [...WORK_ROLE_LIFE_SITUATION_CHIPS],
-    featuredOptionsCaption: 'Not in a job title right now?',
-    options: [...WORK_ROLE_OPTIONS],
     customAnswerMaxLength: 100,
-    placeholder: 'Enter your job title',
+    placeholder: 'e.g. Software Engineer at a Startup',
   },
   {
     id: 'q_interests',
@@ -245,28 +238,6 @@ export const INTAKE_STEPS: ProfileStep[] = [
       "Local spots I've been loving lately (food, bars, activities)",
       'Random theories & "what if" ideas',
       'What my routine looks like lately (gym, habits, etc.)',
-    ],
-  },
-  {
-    id: 'q_radius',
-    question: 'How far are you willing to travel for a Fika?',
-    type: 'slider_snap',
-    required: true,
-    options: [...Q_RADIUS_MILES_OPTIONS],
-  },
-  {
-    id: 'q_typical_fika_times',
-    question: 'When are you most likely to be free for a Fika?',
-    body: 'Select all that typically work — we use this to suggest times that fit both people.',
-    type: 'multi_select',
-    required: true,
-    options: [
-      'Weekday mornings',
-      'Weekday afternoons',
-      'Weekday evenings',
-      'Weekend mornings',
-      'Weekend afternoons',
-      'Weekend evenings',
     ],
   },
   {
@@ -405,7 +376,7 @@ export const INTAKE_STEPS_PREVIOUS_REFERENCE = [
   },
   {
     id: 'q_tv_streaming_shows',
-    question: 'Shows you’re into',
+    question: 'Shows you're into',
     body: 'Type to search our list, tap to add, or use your own title anytime. Pick up to eight.',
     type: 'searchable_multi',
     required: false,
@@ -425,7 +396,7 @@ export const INTAKE_STEPS_PREVIOUS_REFERENCE = [
   },
   {
     id: 'q_favorite_artists',
-    question: 'Musical artists or bands you’re into',
+    question: 'Musical artists or bands you're into',
     body: 'Type to search our list, tap to add, or use your own anytime. Pick up to eight.',
     type: 'searchable_multi',
     required: false,
@@ -451,13 +422,13 @@ export const INTAKE_STEPS_PREVIOUS_REFERENCE = [
     required: true,
     options: [
       'Swapping stories from our lives (chapters, how we got here)',
-      'Stuff we’re into lately (books, shows, podcasts, games)',
-      'Recent travel and places you’ve visited',
-      'What we’re working on (work or projects)',
+      'Stuff we're into lately (books, shows, podcasts, games)',
+      'Recent travel and places you've visited',
+      'What we're working on (work or projects)',
       'Giving/getting advice for professional & personal growth',
       'Life in our city (neighborhoods, restaurants, hangout spots)',
       'Big questions and how we see the world',
-      'Hobbies and things we’d like to try next',
+      'Hobbies and things we'd like to try next',
     ],
   },
   {

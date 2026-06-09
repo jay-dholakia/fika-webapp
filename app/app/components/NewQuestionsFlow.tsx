@@ -125,9 +125,7 @@ export function NewQuestionsFlow({ orderedSteps, intake, userId, onComplete }: N
     try {
       const base = raw
       let answer: string | string[] | number =
-        step.id === 'q_radius' && (typeof base === 'string' && base !== '')
-          ? (base.includes('miles') ? base : `${base} miles`)
-          : base
+        base
       if (step.id === 'q_home_state' && answers.q_home_country !== HOME_COUNTRY_UNITED_STATES) {
         answer = INTAKE_ANSWER_SKIPPED
       }
@@ -225,7 +223,7 @@ export function NewQuestionsFlow({ orderedSteps, intake, userId, onComplete }: N
               }
               disabled={saving}
             >
-              {step.id === 'q_radius' && !String(opt).includes('miles') ? `${opt} miles` : opt}
+              {opt}
             </button>
           )})}
         </div>

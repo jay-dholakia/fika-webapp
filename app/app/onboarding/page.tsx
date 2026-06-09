@@ -12,7 +12,6 @@ import {
   PROFILE_STEPS,
   INTAKE_STEPS,
   MARKET_TENURE_OPTIONS,
-  Q_RADIUS_MILES_OPTIONS,
   type ProfileStep,
 } from '@/lib/onboarding-data'
 import { buildOnboardingSessionPayload, payloadToAnswers } from '@/lib/onboarding-session-payload'
@@ -27,7 +26,7 @@ import type { IntakeResponsesV5Row } from '@/lib/db-types'
 
 const BACKGROUND_STEP_IDS = ['q_market_tenure', 'q_ethnicity', 'q_relationship_status'] as const
 const SECTION_2_IDS = [...BACKGROUND_STEP_IDS, 'q_work', 'q_interests'] as const
-const SECTION_3_IDS = ['q_like_talking_about', 'q_radius', 'q_typical_fika_times'] as const
+const SECTION_3_IDS = ['q_like_talking_about'] as const
 const SECTION_2_STEPS = INTAKE_STEPS.filter((s) => SECTION_2_IDS.includes(s.id as (typeof SECTION_2_IDS)[number]))
 const BACKGROUND_STEPS = SECTION_2_STEPS.filter((s) => BACKGROUND_STEP_IDS.includes(s.id as (typeof BACKGROUND_STEP_IDS)[number]))
 const LIFE_CONTEXT_STEPS = SECTION_2_STEPS.filter((s) => !BACKGROUND_STEP_IDS.includes(s.id as (typeof BACKGROUND_STEP_IDS)[number]))
@@ -350,13 +349,6 @@ function AppOnboardingContent() {
     if (typeof raw === 'string' && raw.trim()) return
     setAnswers((a) => ({ ...a, q_market_tenure: MARKET_TENURE_OPTIONS[0] }))
   }, [currentStepId, answers.q_market_tenure])
-
-  useEffect(() => {
-    if (currentStepId !== 'q_radius') return
-    const raw = answers.q_radius
-    if (typeof raw === 'string' && raw.trim() && Q_RADIUS_MILES_OPTIONS.includes(raw)) return
-    setAnswers((a) => ({ ...a, q_radius: Q_RADIUS_MILES_OPTIONS[0] }))
-  }, [currentStepId, answers.q_radius])
 
   const currentStepIndex = Math.max(0, visibleSteps.findIndex((step) => step.id === currentStepId))
   const currentStep = visibleSteps[currentStepIndex] ?? visibleSteps[0]
@@ -1198,7 +1190,7 @@ function AppOnboardingContent() {
             ))}
           </div>
         )}
-        {step.type === 'slider_snap' && step.options && (step.id === 'q_market_tenure' || step.id === 'q_radius') && (
+        {step.type === 'slider_snap' && step.options && step.id === 'q_market_tenure' && (
           <MarketTenureSlider
             id={`onboarding-${step.id}`}
             options={step.options}
@@ -1208,11 +1200,6 @@ function AppOnboardingContent() {
                 : step.options[0]
             }
             disabled={saving}
-            ariaLabel={
-              step.id === 'q_radius'
-                ? 'How far you are willing to travel for a Fika'
-                : undefined
-            }
             onChange={(next) => {
               setAnswers((a) => ({ ...a, [step.id]: next }))
               setError(null)
