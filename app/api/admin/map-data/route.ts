@@ -98,15 +98,10 @@ export async function GET(request: Request) {
       'user_a',
       'user_b',
       'status',
-      'scheduling_status',
       'suggested_venue_id',
-      'confirmed_venue_id',
-      'confirmed_at',
-      'week_anchor_monday',
       'created_at',
     ].join(','))
-    // All-time, but only rows that have a venue we can place on the map.
-    .or('suggested_venue_id.not.is.null,confirmed_venue_id.not.is.null')
+    .not('suggested_venue_id', 'is', null)
     .order('created_at', { ascending: false })
     .limit(2000)
 
@@ -114,9 +109,7 @@ export async function GET(request: Request) {
   const venueIds = new Set<string>()
   const userIds = new Set<string>()
   for (const m of matchList as any[]) {
-    const confirmedVenueId = (m.confirmed_venue_id as string | null) ?? null
     const suggestedVenueId = (m.suggested_venue_id as string | null) ?? null
-    if (confirmedVenueId) venueIds.add(confirmedVenueId)
     if (suggestedVenueId) venueIds.add(suggestedVenueId)
     const a = m.user_a as string | null
     const b = m.user_b as string | null
@@ -150,42 +143,7 @@ export async function GET(request: Request) {
 
   const fikas: any[] = []
   for (const m of matchList as any[]) {
-    const confirmedVenueId = (m.confirmed_venue_id as string | null) ?? null
     const suggestedVenueId = (m.suggested_venue_id as string | null) ?? null
-
-    if (confirmedVenueId) {
-      const venue = venueById.get(confirmedVenueId)
-      if (!venue || venue.lat == null || venue.lng == null) continue
-
-      const userA = profileById.get(m.user_a as string) ?? null
-      const userB = profileById.get(m.user_b as string) ?? null
-      const market = (userA?.market as string | null) ?? (userB?.market as string | null) ?? null
-
-      const lat = Number(venue.lat)
-      const lng = Number(venue.lng)
-      if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue
-
-      fikas.push({
-        matchId: m.id as string,
-        category: 'confirmed' as const,
-        lat,
-        lng,
-        venueName: (venue.name as string | null) ?? null,
-        venueNeighborhood: (venue.neighborhood as string | null) ?? null,
-        venueCity: (venue.city as string | null) ?? null,
-        confirmedAt: (m.confirmed_at as string | null) ?? null,
-        schedulingStatus: (m.scheduling_status as string | null) ?? null,
-        userA: userA
-          ? { id: userA.id as string, firstName: (userA.first_name as string | null) ?? null, phone: (userA.phone as string | null) ?? null }
-          : null,
-        userB: userB
-          ? { id: userB.id as string, firstName: (userB.first_name as string | null) ?? null, phone: (userB.phone as string | null) ?? null }
-          : null,
-        market,
-      })
-      continue
-    }
-
     if (!suggestedVenueId) continue
 
     const venue = venueById.get(suggestedVenueId)
@@ -201,14 +159,12 @@ export async function GET(request: Request) {
 
     fikas.push({
       matchId: m.id as string,
-      category: 'scheduled' as const,
+      category: 'fika' as const,
       lat,
       lng,
       venueName: (venue.name as string | null) ?? null,
       venueNeighborhood: (venue.neighborhood as string | null) ?? null,
       venueCity: (venue.city as string | null) ?? null,
-      confirmedAt: (m.confirmed_at as string | null) ?? null,
-      schedulingStatus: (m.scheduling_status as string | null) ?? null,
       userA: userA
         ? { id: userA.id as string, firstName: (userA.first_name as string | null) ?? null, phone: (userA.phone as string | null) ?? null }
         : null,

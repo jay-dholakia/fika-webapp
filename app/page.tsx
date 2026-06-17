@@ -94,9 +94,9 @@ export default function Home() {
               <li className="step">
                 <span className="step-num">3</span>
                 <div className="step-content">
-                  <h3 className="step-title">Lock time and place</h3>
+                  <h3 className="step-title">We handle the details</h3>
                   <p className="step-text">
-                    We propose a time and place based on when you&apos;re both available and where you live. Confirm by text.
+                    Once you&apos;re both in, we pick a nearby spot and text you everything you need. Just show up.
                   </p>
                 </div>
               </li>

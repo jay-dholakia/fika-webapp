@@ -14,18 +14,13 @@ type SignupRow = {
   city: string | null
   market: string | null
   createdAt: string | null
-  hasUpcomingConfirmedFika?: boolean
-  blockedFromNewIntro?: boolean
 }
 type ProfileDetail = {
   id: string
   firstName: string | null
-  hasUpcomingConfirmedFika?: boolean
-  blockedFromNewIntro?: boolean
   birthdate: string | null
   gender: string | null
   genderPreference: string | null
-  agePreference: string | null
   pronouns: string | null
   relationshipStatus: string | null
   city: string | null
@@ -47,9 +42,6 @@ type SimSummary = {
   usersConsidered: number
   usersSkippedNoIntake?: number
   usersSkippedNoEmbedding?: number
-  /** @deprecated Prefer usersSkippedBlockedIntro */
-  usersSkippedUpcomingConfirmed?: number
-  usersSkippedBlockedIntro?: number
   pairsScored: number
   filteredOut: number
   market: string | null
@@ -162,8 +154,6 @@ export default function AdminSignupsPage() {
   const [simMaxUsers, setSimMaxUsers] = useState(260)
   const [simTopN, setSimTopN] = useState(220)
   const [selectedSimPairs, setSelectedSimPairs] = useState<Record<string, boolean>>({})
-  const [triggeringSms, setTriggeringSms] = useState(false)
-  const [triggerSmsResult, setTriggerSmsResult] = useState<string | null>(null)
 
   const fetchSignups = useCallback(async (market?: string) => {
     const supabase = getSupabase()
@@ -247,7 +237,6 @@ export default function AdminSignupsPage() {
   async function runSimulation() {
     setSimLoading(true)
     setSimError(null)
-    setTriggerSmsResult(null)
     const supabase = getSupabase()
     const { data: { session } } = await supabase?.auth.getSession() ?? { data: { session: null } }
     const headers: HeadersInit = { 'Content-Type': 'application/json' }
@@ -276,69 +265,6 @@ export default function AdminSignupsPage() {
     }
   }
 
-  async function triggerSmsDelivery() {
-    setTriggeringSms(true)
-    setSimError(null)
-    setTriggerSmsResult(null)
-    const supabase = getSupabase()
-    const { data: { session } } = await supabase?.auth.getSession() ?? { data: { session: null } }
-    const headers: HeadersInit = { 'Content-Type': 'application/json' }
-    if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`
-    const selected = simPairs.filter((p) => selectedSimPairs[`${p.userAId}:${p.userBId}`])
-    if (selected.length === 0) {
-      setSimError('Select at least one simulated pair before triggering SMS.')
-      setTriggeringSms(false)
-      return
-    }
-    try {
-      const res = await fetch('/api/admin/match-sim', {
-        method: 'POST',
-        credentials: 'include',
-        headers,
-        body: JSON.stringify({
-          action: 'trigger_sms',
-          selectedPairs: selected.map((p) => ({
-            userAId: p.userAId,
-            userBId: p.userBId,
-            score: p.score,
-            reasons: {
-              matchBreakdown: p.matchBreakdown ?? null,
-              raw: {
-                sectionScores: p.sectionScores,
-                matchBreakdown: p.matchBreakdown ?? null,
-                shared_interests: p.overlapInterests.slice(0, 3),
-                conversation_hooks: p.overlapGreatFika.slice(0, 2),
-                fika_talk_overlap: p.overlapLikeTalkingAbout.slice(0, 5),
-                curiosity_overlap: p.overlapCuriosity.slice(0, 3),
-                life_chapter_overlap: p.overlapLifeChapter.slice(0, 2),
-                everyday_anchor_overlap: p.overlapEverydayAnchor.slice(0, 2),
-                texture_overlap: p.textureOverlap ?? [],
-              },
-              copy: {
-                top_copy_dimensions: p.topCopyDimensions.slice(0, 3),
-                shared_interests: p.overlapInterests.slice(0, 3),
-                shared_topics: [
-                  ...p.overlapLikeTalkingAbout.slice(0, 2),
-                  ...p.overlapCuriosity.slice(0, 3),
-                  ...p.overlapGreatFika.slice(0, 2),
-                ].slice(0, 5),
-                shared_fika_style: p.overlapGreatFika.slice(0, 2),
-                shared_life_context: p.overlapLifeChapter.slice(0, 2),
-                shared_everyday_anchor: p.overlapEverydayAnchor.slice(0, 2),
-              },
-            },
-          })),
-        }),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok || data?.ok === false) throw new Error(data?.error ?? data?.response ?? 'Failed to trigger SMS delivery')
-      setTriggerSmsResult(`Intro SMS sent for ${selected.length} selected pair(s).`)
-    } catch (e) {
-      setSimError(e instanceof Error ? e.message : 'Failed to trigger SMS delivery')
-    } finally {
-      setTriggeringSms(false)
-    }
-  }
 
   const visiblePairs = simPairs.slice(0, 150)
   const selectedVisibleCount = visiblePairs.filter((p) => selectedSimPairs[`${p.userAId}:${p.userBId}`]).length
@@ -413,8 +339,7 @@ export default function AdminSignupsPage() {
           <div className="admin-dashboard" style={{ marginTop: '1rem', marginBottom: '1.25rem' }}>
             <h2 className="admin-dashboard-title">Match preview</h2>
             <p className="admin-description" style={{ marginBottom: '0.75rem' }}>
-              Same intro matcher as production—no embeddings and no calendar availability on this screen. Pairs must pass geography, same pronoun group (legacy gender only fills in empty pronouns), overlapping languages when both people list them, and platonic confirm on intake. Everything else is scored from distance, typical Fika times, how complete each profile is, overlapping intake answers (interests, topics to talk about, etc.), and how close their ages are when both birthdates resolve to an age.{' '}
-              <strong>Send intro SMS</strong> re-runs the matcher for each selection, then creates the match row.
+              Preview match quality across active users. Pairs must pass geography, same pronoun group, overlapping languages, and platonic confirm on intake. Score is based on distance, data completeness, overlapping interests, topics, life context, work, and age proximity.
             </p>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
               <label className="admin-toggle" style={{ marginRight: '0.25rem' }}>
@@ -425,7 +350,7 @@ export default function AdminSignupsPage() {
                   max={300}
                   value={simMaxUsers}
                   onChange={(e) => setSimMaxUsers(Math.max(20, Math.min(300, Number(e.target.value) || 20)))}
-                  disabled={simLoading || triggeringSms}
+                  disabled={simLoading}
                   style={{ width: 80, marginLeft: 6 }}
                 />
               </label>
@@ -437,7 +362,7 @@ export default function AdminSignupsPage() {
                   max={300}
                   value={simTopN}
                   onChange={(e) => setSimTopN(Math.max(10, Math.min(300, Number(e.target.value) || 10)))}
-                  disabled={simLoading || triggeringSms}
+                  disabled={simLoading}
                   style={{ width: 80, marginLeft: 6 }}
                 />
               </label>
@@ -445,24 +370,12 @@ export default function AdminSignupsPage() {
                 type="button"
                 className="admin-btn admin-btn-primary"
                 onClick={runSimulation}
-                disabled={simLoading || triggeringSms}
+                disabled={simLoading}
                 style={{ marginBottom: 0 }}
               >
                 {simLoading ? 'Scoring…' : 'Preview match quality'}
               </button>
-              <button
-                type="button"
-                className="admin-btn"
-                onClick={triggerSmsDelivery}
-                disabled={triggeringSms || simLoading}
-                style={{ border: '1px solid var(--color-border)', background: 'var(--color-surface)', marginBottom: 0 }}
-              >
-                {triggeringSms ? 'Sending…' : 'Send intro SMS for selected pairs'}
-              </button>
             </div>
-            <p className="admin-dashboard-filter" style={{ marginTop: '0.5rem' }}>
-              Select rows in the table, then send intro SMS only for the pairs you want.
-            </p>
             {simSummary && (
               <p className="admin-dashboard-filter" style={{ marginTop: '0.75rem' }}>
                 {simSummary.totalProfiles != null && `${simSummary.totalProfiles} profiles loaded · `}
@@ -472,16 +385,9 @@ export default function AdminSignupsPage() {
                 {simSummary.usersSkippedNoEmbedding != null && simSummary.usersSkippedNoEmbedding > 0
                   ? `${simSummary.usersSkippedNoEmbedding} skipped (legacy) · `
                   : ''}
-                {(simSummary.usersSkippedBlockedIntro ?? simSummary.usersSkippedUpcomingConfirmed) != null &&
-                (simSummary.usersSkippedBlockedIntro ?? simSummary.usersSkippedUpcomingConfirmed ?? 0) > 0
-                  ? `${simSummary.usersSkippedBlockedIntro ?? simSummary.usersSkippedUpcomingConfirmed} blocked from new intro (excluded from sim) · `
-                  : ''}
                 {simSummary.usersConsidered} with intake · Pairs: {simSummary.pairsScored} · Filtered out: {simSummary.filteredOut}
                 {simSummary.scoring ? ` · ${simSummary.scoring.replace(/_/g, ' ')}` : ''}
               </p>
-            )}
-            {triggerSmsResult && (
-              <p style={{ color: 'var(--color-success)', fontSize: '0.9rem', marginTop: '0.5rem' }}>{triggerSmsResult}</p>
             )}
             {simPairs.length > 0 && (
               <div className="admin-table-wrap" style={{ marginTop: '0.75rem' }}>
@@ -599,21 +505,7 @@ export default function AdminSignupsPage() {
                       }}
                     >
                       <td>{formatDate(s.createdAt)}</td>
-                      <td>
-                        <span>{s.firstName ?? '—'}</span>
-                        {s.blockedFromNewIntro ? (
-                          <span
-                            className="admin-badge admin-badge-upcoming-fika"
-                            title={
-                              s.hasUpcomingConfirmedFika
-                                ? 'Has a confirmed Fika that has not happened yet — not eligible for a new intro'
-                                : 'Within 24h of an intro SMS offer — not eligible for another intro yet'
-                            }
-                          >
-                            {s.hasUpcomingConfirmedFika ? 'Upcoming Fika' : 'Intro window'}
-                          </span>
-                        ) : null}
-                      </td>
+                      <td>{s.firstName ?? '—'}</td>
                       <td>{s.city ?? s.market ?? '—'}</td>
                     </tr>
                   ))}
@@ -686,19 +578,6 @@ export default function AdminSignupsPage() {
                           <dt>Name</dt>
                           <dd>
                             {modalProfile.firstName ?? '—'}
-                            {modalProfile.blockedFromNewIntro ? (
-                              <span
-                                className="admin-badge admin-badge-upcoming-fika"
-                                style={{ marginLeft: '0.5rem', verticalAlign: 'middle' }}
-                                title={
-                                  modalProfile.hasUpcomingConfirmedFika
-                                    ? 'Has a confirmed Fika that has not happened yet — not eligible for a new intro'
-                                    : 'Within 24h of an intro SMS offer — not eligible for another intro yet'
-                                }
-                              >
-                                {modalProfile.hasUpcomingConfirmedFika ? 'Upcoming Fika' : 'Intro window'}
-                              </span>
-                            ) : null}
                           </dd>
                           <dt>City</dt>
                           <dd>{modalProfile.city ?? '—'}</dd>

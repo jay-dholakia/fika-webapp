@@ -13,7 +13,6 @@ import {
   type IntroCardSummary,
 } from '@/lib/intro-card-summary'
 import { VerifiedBadge } from '@/app/app/components/VerifiedBadge'
-import { summarizeAvailabilitySlots, getAvailabilitySlotLabel } from '@/lib/availability-slots'
 import type { IntakeResponseItem } from '@/lib/db-types'
 
 export type IntroMatch = {
@@ -32,28 +31,11 @@ export type IntroMatch = {
     shared_interests?: string[]
     /** Shared `q_like_talking_about` chips from `reasons.raw` (set by admin sim / matchers). */
     fika_talk_overlap?: string[]
-    /** Overlapping 30-min slot IDs for intro card; summarize with summarizeAvailabilitySlots() */
-    overlappingAvailabilitySlots?: string[]
   } | null
-  myDecision?: 'yes' | 'no'
   /** Preview for card: topics they enjoy (q5) */
   conversationTypesPreview?: string | null
   /** Preview for card: fika preference (q4) */
   fikaPreferencePreview?: string | null
-  /** Scheduling: proposed_default | counter_proposed | final_proposed | confirmed | expired */
-  schedulingStatus?: string | null
-  /** SMS state for this user + match (e.g. match_offered, awaiting_availability) */
-  matchState?: string | null
-  defaultSlotId?: string | null
-  overlappingSlotIds?: string[] | null
-  counterSlotId?: string | null
-  counterProposedByUserId?: string | null
-  finalSlotId?: string | null
-  confirmedSlotId?: string | null
-  confirmedVenueId?: string | null
-  /** When confirmed: venue name and neighborhood for card/modal display */
-  confirmedVenueName?: string | null
-  confirmedVenueNeighborhood?: string | null
   /** True when the other user completed Persona ID verification */
   otherIdVerified?: boolean
 }
@@ -76,20 +58,16 @@ type IntroDetailModalProps = {
   onClose: () => void
   onOptIn?: (intro: IntroMatch) => void
   onPass?: (intro: IntroMatch) => void
-  onSchedulingAction?: (intro: IntroMatch, action: string, slotId?: string) => Promise<void>
   actionMatchId: string | null
   error: string | null
   currentUserId?: string | null
 }
-
-const CONCIERGE_NUMBER = process.env.NEXT_PUBLIC_SENDBLUE_CONCIERGE_NUMBER?.trim() || null
 
 export function IntroDetailModal({
   intro,
   onClose,
   onOptIn,
   onPass,
-  onSchedulingAction,
   actionMatchId,
   error,
   currentUserId,
@@ -262,26 +240,6 @@ export function IntroDetailModal({
     .map((s) => String(s).trim())
     .filter(Boolean)
 
-  const schedulingStatus = intro.schedulingStatus ?? null
-  const defaultSlotId = intro.defaultSlotId ?? intro.reasons?.overlappingAvailabilitySlots?.[0] ?? null
-  const slots = intro.overlappingSlotIds ?? intro.reasons?.overlappingAvailabilitySlots ?? []
-  const counterSlotId = intro.counterSlotId ?? null
-  const finalSlotId = intro.finalSlotId ?? null
-  const confirmedSlotId = intro.confirmedSlotId ?? null
-  const counterProposedByUserId = intro.counterProposedByUserId ?? null
-  const isRequester = currentUserId && counterProposedByUserId === currentUserId
-  const alternateSlots = defaultSlotId ? slots.filter((s) => s !== defaultSlotId) : [...slots]
-  const remainingAfterCounter =
-    counterSlotId && defaultSlotId
-      ? slots.filter((s) => s !== defaultSlotId && s !== counterSlotId)
-      : []
-  const hasRemainingAfterCounter = remainingAfterCounter.length > 0
-
-  const showScheduling =
-    schedulingStatus &&
-    schedulingStatus !== 'expired' &&
-    slots.length > 0
-
   return (
     <div className="app-modal-overlay" onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="intro-modal-title">
       <div className="app-modal" onClick={(e) => e.stopPropagation()}>
@@ -400,22 +358,6 @@ export function IntroDetailModal({
                 </section>
               ) : null}
 
-              {(() => {
-                const slots = intro.reasons?.overlappingAvailabilitySlots
-                const windows = slots?.length ? summarizeAvailabilitySlots(slots) : []
-                if (windows.length === 0) return null
-                return (
-                  <section className="app-intro-detail-section">
-                    <h3 className="app-intro-detail-section-title">Possible times for your Fika</h3>
-                    <ul className="app-intro-detail-hooks">
-                      {windows.map((w, i) => (
-                        <li key={i}>{w}</li>
-                      ))}
-                    </ul>
-                  </section>
-                )
-              })()}
-
               {displayInterests.length > 0 ? (
                 <section className="app-intro-detail-section">
                   <h3 className="app-intro-detail-section-title">Interests</h3>
@@ -443,81 +385,9 @@ export function IntroDetailModal({
         </div>
 
         <footer className="app-modal-footer">
-          {schedulingStatus === 'confirmed' ? (
-            <>
-              <span className="app-intro-status">
-                Confirmed Fika · {confirmedSlotId ? getAvailabilitySlotLabel(confirmedSlotId) : 'Time TBD'}
-                {intro.confirmedVenueName ? ` · ${intro.confirmedVenueName}${intro.confirmedVenueNeighborhood ? ` (${intro.confirmedVenueNeighborhood})` : ''}` : ''}
-              </span>
-              {CONCIERGE_NUMBER && (
-                <p style={{ marginTop: '0.75rem', fontSize: '0.9rem' }}>
-                  Running late or can&apos;t make it?{' '}
-                  <a href={`sms:${CONCIERGE_NUMBER}`} className="app-intro-btn app-intro-btn-secondary" style={{ display: 'inline-block', marginTop: '0.25rem' }}>
-                    Reply by text
-                  </a>
-                </p>
-              )}
-            </>
-          ) : schedulingStatus === 'expired' ? (
-            <span className="app-intro-status">Expired</span>
-          ) : showScheduling && (schedulingStatus === 'proposed_default' || schedulingStatus === 'counter_proposed' || schedulingStatus === 'final_proposed') ? (
-            <>
-              <p className="app-scheduling-proposal">
-                {schedulingStatus === 'proposed_default' && (
-                  <>Suggested time: <strong>{defaultSlotId ? getAvailabilitySlotLabel(defaultSlotId) : '—'}</strong></>
-                )}
-                {schedulingStatus === 'counter_proposed' && (
-                  <>{intro.otherFirstName} suggested: <strong>{counterSlotId ? getAvailabilitySlotLabel(counterSlotId) : '—'}</strong></>
-                )}
-                {schedulingStatus === 'final_proposed' && (
-                  <>{intro.otherFirstName} suggested: <strong>{finalSlotId ? getAvailabilitySlotLabel(finalSlotId) : '—'}</strong></>
-                )}
-              </p>
-              <p className="app-intro-sms-cta" style={{ marginBottom: '0.75rem', fontSize: '0.95rem', color: 'var(--color-textSecondary)' }}>
-                To confirm this time, suggest a different time, or say you can&apos;t make it, reply by text.
-              </p>
-              {CONCIERGE_NUMBER ? (
-                <a href={`sms:${CONCIERGE_NUMBER}`} className="app-intro-btn app-intro-btn-primary">
-                  Reply by text
-                </a>
-              ) : (
-                <span className="app-intro-status">Reply by text from your account or welcome message.</span>
-              )}
-            </>
-          ) : intro.myDecision === 'yes' ? (
-            <span className="app-intro-status">You opted in · Waiting for them</span>
-          ) : intro.myDecision === 'no' ? (
-            <span className="app-intro-status">Passed</span>
-          ) : (
-            <>
-              <p className="app-intro-sms-cta" style={{ marginBottom: '0.75rem', fontSize: '0.95rem', color: 'var(--color-textSecondary)' }}>
-                To accept or decline this intro, reply by text.
-              </p>
-              <div className="app-scheduling-actions" style={{ flexWrap: 'wrap', gap: '0.5rem' }}>
-                {CONCIERGE_NUMBER ? (
-                  <>
-                    <a
-                      href={`sms:${CONCIERGE_NUMBER}?body=Yes`}
-                      className="app-intro-btn app-intro-btn-primary"
-                    >
-                      Accept (reply Yes)
-                    </a>
-                    <a
-                      href={`sms:${CONCIERGE_NUMBER}?body=No`}
-                      className="app-intro-btn app-intro-btn-secondary"
-                    >
-                      Decline (reply No)
-                    </a>
-                  </>
-                ) : (
-                  <span className="app-intro-status">Text Yes or No to the number we use to text you.</span>
-                )}
-              </div>
-              <p style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: 'var(--color-textSecondary)' }}>
-                After you reply, refresh the page to see your status.
-              </p>
-            </>
-          )}
+          <p className="app-intro-sms-cta" style={{ margin: 0, fontSize: '0.95rem', color: 'var(--color-textSecondary)' }}>
+            You&apos;ll get intro details by text about 30 minutes before your Fika.
+          </p>
           {error && <p className="onboarding-error" style={{ marginTop: '0.5rem' }}>{error}</p>}
         </footer>
       </div>

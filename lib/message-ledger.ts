@@ -14,7 +14,6 @@ export type MessageLedgerEntry = {
   content_snippet: string
   context?: string | null
   message_handle?: string | null
-  week_anchor_monday?: string | null
   match_id?: string | null
 }
 
@@ -36,7 +35,6 @@ export async function insertMessageLedger(
     content_snippet: snippet,
     context: entry.context ?? null,
     message_handle: entry.message_handle ?? null,
-    week_anchor_monday: entry.week_anchor_monday ?? null,
     match_id: entry.match_id ?? null,
   })
   if (error) {

@@ -4,8 +4,8 @@ import { useState } from 'react'
 
 const portalFaqItems = [
   {
-    q: 'How do intros and scheduling work?',
-    a: 'We use your profile, preferences, and when you’re usually free to line up intros. We text you on this number when we have a strong one for you. We focus on one at a time. You’ll get an SMS with a short intro, a proposed time, and a public spot (usually a café). Reply to confirm or ask for one alternate; both people need to confirm before you’re set.',
+    q: "How do intros work?",
+    a: "We use your profile and preferences to find good intros nearby. When we have a strong one, we’ll text you a short intro on this number. If you’re both in, we take care of the rest—we pick a public spot nearby and send you the details.",
   },
   {
     q: 'How long do I have to respond?',
@@ -44,7 +44,7 @@ export default function SettingsHowItWorksPage() {
     <div className="app-card">
       <h2>How it Works</h2>
       <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem', marginBottom: '1.5rem' }}>
-        Quick answers to how intros and scheduling work.
+        Quick answers to how intros work.
       </p>
       <div className="faq-list">
         {portalFaqItems.map((item, index) => (

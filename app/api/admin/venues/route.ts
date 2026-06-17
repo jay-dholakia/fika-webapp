@@ -2,6 +2,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase-server'
 import { isAdminByUserId } from '@/lib/admin-markets'
+import { MARKETS } from '@/lib/markets'
 
 export const dynamic = 'force-dynamic'
 
@@ -48,6 +49,7 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url)
     const q = searchParams.get('q')?.trim() ?? ''
+    const marketSlug = searchParams.get('market_slug')?.trim() ?? ''
     const limit = Math.min(200, Math.max(10, Number(searchParams.get('limit') ?? '80') || 80))
 
     let query = supabase
@@ -55,6 +57,14 @@ export async function GET(request: Request) {
       .select('id, name, neighborhood, city, address, lat, lng, google_place_id, google_permanently_closed, created_at')
       .order('created_at', { ascending: false })
       .limit(limit)
+
+    if (marketSlug) {
+      const market = MARKETS.find(m => m.slug === marketSlug)
+      if (market && market.cityPatterns.length > 0) {
+        const cityFilter = market.cityPatterns.map(p => `city.ilike.%${p}%`).join(',')
+        query = query.or(cityFilter)
+      }
+    }
 
     if (q.length >= 2) {
       const esc = q.replace(/,/g, ' ').replace(/%/g, '\\%').replace(/_/g, '\\_')

@@ -6,7 +6,6 @@ import Link from 'next/link'
 import { getSupabase } from '@/lib/supabase'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { authLog } from '@/lib/auth-log'
-import { getAvailabilitySlotLabel } from '@/lib/availability-slots'
 import { getMarketBySlug, getMarketFromCity } from '@/lib/markets'
 import { useOnboardingStatus } from '@/lib/use-onboarding'
 import { formatIntakeAnswer, ageFromBirthdate } from '@/lib/intro-detail'
@@ -145,7 +144,7 @@ function AppHomeContent() {
     setIntrosLoading(true)
     supabase
       .from('match_candidates')
-      .select('id, user_a, user_b, score, reasons, scheduling_status, default_slot_id, overlapping_slot_ids, counter_slot_id, counter_proposed_by_user_id, final_slot_id, confirmed_slot_id, confirmed_venue_id')
+      .select('id, user_a, user_b, score, reasons')
       .or(`user_a.eq.${userId},user_b.eq.${userId}`)
       .eq('status', 'active')
       .then(({ data: matches, error: matchError }) => {
@@ -154,24 +153,15 @@ function AppHomeContent() {
           setIntrosLoading(false)
           return
         }
-        const matchIds = matches.map((m: { id: string }) => m.id)
         const otherIds = Array.from(new Set(
           matches.map((m: { user_a: string; user_b: string }) => m.user_a === userId ? m.user_b : m.user_a)
         ))
         Promise.allSettled([
           supabase.from('profiles').select('id, first_name, city, birthdate, id_verified_at').in('id', otherIds),
-          supabase.from('opt_ins').select('match_id, decision').eq('user_id', userId).in('match_id', matchIds),
           supabase.from('intake_responses_v5').select('user_id, responses').in('user_id', otherIds),
-          supabase
-            .from('sms_conversation_states')
-            .select('match_id, state')
-            .eq('user_id', userId)
-            .in('match_id', matchIds),
-        ]).then(([profilesSettled, optInsSettled, intakeSettled, statesSettled]) => {
+        ]).then(([profilesSettled, intakeSettled]) => {
           const profilesRes = profilesSettled.status === 'fulfilled' ? profilesSettled.value : { data: null, error: { message: 'Profiles request failed' } }
-          const optInsRes = optInsSettled.status === 'fulfilled' ? optInsSettled.value : { data: null, error: null }
           const intakeRes = intakeSettled.status === 'fulfilled' ? intakeSettled.value : { data: null, error: null }
-          const statesRes = statesSettled.status === 'fulfilled' ? statesSettled.value : { data: null, error: null }
           // Build list even when profiles fail (e.g. RLS) so we don't hide intros – use empty profile data
           const profiles = (profilesRes?.data ?? []) as {
             id: string
@@ -199,14 +189,6 @@ function AppHomeContent() {
             }
             return acc
           }, {})
-          const myOptIns = ((optInsRes?.data ?? []) as { match_id: string; decision: string }[]).reduce<Record<string, 'yes' | 'no'>>((acc, o) => {
-            acc[o.match_id] = (o.decision === 'opt_in' || o.decision === 'yes') ? 'yes' : 'no'
-            return acc
-          }, {})
-          const myStates = ((statesRes?.data ?? []) as { match_id: string; state: string }[]).reduce<Record<string, string>>((acc, s) => {
-            if (s.match_id) acc[s.match_id] = s.state
-            return acc
-          }, {})
           const intakeByUserId: Record<string, { topicsPreview: string | null; fikaPreference: string | null }> = {}
           ;((intakeRes?.data ?? []) as { user_id: string; responses: unknown }[]).forEach((row) => {
             const responses = Array.isArray(row.responses) ? (row.responses as IntakeResponseItem[]) : []
@@ -223,14 +205,6 @@ function AppHomeContent() {
             user_b: string
             score: number | null
             reasons: unknown
-            scheduling_status?: string | null
-            default_slot_id?: string | null
-            overlapping_slot_ids?: string[] | null
-            counter_slot_id?: string | null
-            counter_proposed_by_user_id?: string | null
-            final_slot_id?: string | null
-            confirmed_slot_id?: string | null
-            confirmed_venue_id?: string | null
           }) => {
             const otherId = m.user_a === userId ? m.user_b : m.user_a
             const profile = byId[otherId]
@@ -244,42 +218,12 @@ function AppHomeContent() {
               otherAge: profile?.birthdate != null ? ageFromBirthdate(profile.birthdate) : null,
               score: m.score ?? null,
               reasons: (m.reasons as IntroMatch['reasons']) ?? null,
-              myDecision: myOptIns[m.id],
-              matchState: myStates[m.id] ?? null,
               conversationTypesPreview: intake?.topicsPreview ?? null,
               fikaPreferencePreview: intake?.fikaPreference ?? null,
-              schedulingStatus: m.scheduling_status ?? null,
-              defaultSlotId: m.default_slot_id ?? null,
-              overlappingSlotIds: m.overlapping_slot_ids ?? null,
-              counterSlotId: m.counter_slot_id ?? null,
-              counterProposedByUserId: m.counter_proposed_by_user_id ?? null,
-              finalSlotId: m.final_slot_id ?? null,
-              confirmedSlotId: m.confirmed_slot_id ?? null,
-              confirmedVenueId: m.confirmed_venue_id ?? null,
             }
           })
-          const filtered = list.filter(
-            (i) =>
-              i.myDecision !== 'no' &&
-              i.schedulingStatus !== 'expired' &&
-              i.schedulingStatus !== 'cancelled_pending_retry'
-          )
-          setIntros(filtered)
+          setIntros(list)
           setIntrosLoading(false)
-          const venueIds = Array.from(new Set(filtered.map((i) => i.confirmedVenueId).filter(Boolean) as string[]))
-          if (venueIds.length > 0) {
-            supabase.from('venues').select('id, name, neighborhood, city').in('id', venueIds).then(({ data: venues }) => {
-              const byId = (venues ?? []).reduce<Record<string, { name: string; neighborhood: string }>>((acc, v: { id: string; name?: string | null; neighborhood?: string | null; city?: string | null }) => {
-                acc[v.id] = { name: v.name ?? 'Meetup spot', neighborhood: v.neighborhood ?? v.city ?? '' }
-                return acc
-              }, {} as Record<string, { name: string; neighborhood: string }>)
-              setIntros((prev) => prev.map((i) => ({
-                ...i,
-                confirmedVenueName: i.confirmedVenueId ? byId[i.confirmedVenueId]?.name ?? null : null,
-                confirmedVenueNeighborhood: i.confirmedVenueId ? byId[i.confirmedVenueId]?.neighborhood ?? null : null,
-              })))
-            })
-          }
         }).catch(() => {
           setIntros([])
           setIntrosLoading(false)
@@ -409,22 +353,8 @@ function AppHomeContent() {
                           ) : null}
                         </p>
                       ) : null}
-                      {intro.myDecision === 'yes' && intro.schedulingStatus === 'confirmed' && (intro.confirmedSlotId || intro.confirmedVenueName) ? (
-                        <p className="app-intro-card-confirmed" style={{ marginTop: '0.5rem', fontSize: '0.9rem', fontWeight: 500, color: 'var(--color-textSecondary)' }}>
-                          Confirmed Fika · {intro.confirmedSlotId ? getAvailabilitySlotLabel(intro.confirmedSlotId) : 'Time TBD'}
-                          {intro.confirmedVenueName ? ` · ${intro.confirmedVenueName}${intro.confirmedVenueNeighborhood ? ` (${intro.confirmedVenueNeighborhood})` : ''}` : ''}
-                        </p>
-                      ) : null}
                     </div>
-                    {intro.matchState === 'awaiting_availability' ? (
-                      <span className="app-intro-card-status">Scheduling</span>
-                    ) : intro.myDecision === 'yes' ? (
-                      <span className="app-intro-card-status">In progress</span>
-                    ) : intro.myDecision === 'no' ? (
-                      <span className="app-intro-card-status">Passed</span>
-                    ) : (
-                      <span className="app-intro-card-cta">View details →</span>
-                    )}
+                    <span className="app-intro-card-cta">View details →</span>
                   </button>
                 </div>
               ))}

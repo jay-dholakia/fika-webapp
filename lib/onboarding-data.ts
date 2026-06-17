@@ -66,11 +66,11 @@ export const PROFILE_STEPS: ProfileStep[] = [
     placeholder: 'Month, day, and year',
   },
   {
-    id: 'pronouns',
-    question: 'What are your pronouns?',
+    id: 'gender',
+    question: 'What gender do you identify as?',
     type: 'chips_single',
     required: true,
-    options: ['She/her', 'He/him', 'They/them', 'She/they', 'He/they'],
+    options: ['Woman', 'Man', 'Non-binary'],
   },
   {
     id: 'languages',
@@ -243,7 +243,7 @@ export const INTAKE_STEPS: ProfileStep[] = [
   {
     id: 'confirm_intent',
     question: 'Before you continue',
-    body: "Fika is for meeting people in real life. Use good judgment: meet in public, and stop if anything feels off. We're here for respectful conversation; harassment can lead to removal. By continuing, you agree to show up with care for yourself and others.",
+    body: "Fika is for meeting people in real life. We'll invite you to upcoming events — just reply Yes when you get an invite and we'll match you with someone. You'll find out who you're meeting 30 minutes before.\n\nMeet in public and use good judgment. We're here for respectful conversation. By continuing, you agree to show up with care for yourself and others.",
     type: 'chips_single',
     required: true,
     options: ["I'm in"],
@@ -465,13 +465,6 @@ export const INTAKE_STEPS_PREVIOUS_REFERENCE = [
     type: 'chips_single',
     required: true,
     options: ['No preference', 'Same gender', 'Different gender'],
-  },
-  {
-    id: 'age_preference',
-    question: "Do you have an age preference for who you'd like to meet?",
-    type: 'chips_single',
-    required: true,
-    options: ['Open to any age/life stage', 'Prefer around my age'],
   },
   {
     id: 'q_hoping_for',

@@ -14,7 +14,7 @@ import {
   MARKET_TENURE_OPTIONS,
   type ProfileStep,
 } from '@/lib/onboarding-data'
-import { buildOnboardingSessionPayload, payloadToAnswers } from '@/lib/onboarding-session-payload'
+import { buildOnboardingSessionPayload, payloadToAnswers, genderDisplayToStored } from '@/lib/onboarding-session-payload'
 import { getMarketFromCityOrLatLngWithDb } from '@/lib/markets'
 import { checkProfilePhotoSingleFace } from '@/lib/avatar-face-check'
 import { SearchableMultiPicker } from '@/app/app/components/SearchableMultiPicker'
@@ -141,22 +141,21 @@ function getInitialAnswers(
   for (const s of PROFILE_STEPS) {
     if (s.id === 'first_name') answers.first_name = profile?.first_name?.trim() ?? ''
     else if (s.id === 'birthdate') answers.birthdate = profile?.birthdate ?? ''
-    else if (s.id === 'pronouns') {
-      let pr = profile?.pronouns?.trim() ?? ''
-      if (!pr && profile?.gender?.trim()) {
-        const g = profile.gender.trim().toLowerCase()
-        if (g === 'female' || g === 'woman' || g === 'women') pr = 'She/her'
-        else if (g === 'male' || g === 'man' || g === 'men') pr = 'He/him'
-        else if (g === 'non-binary' || g === 'nonbinary') pr = 'They/them'
-        else pr = 'They/them'
-      }
-      answers.pronouns = pr
+    else if (s.id === 'gender') {
+      const g = profile?.gender?.trim().toLowerCase() ?? ''
+      const pr = profile?.pronouns?.trim().toLowerCase() ?? ''
+      if (g === 'female' || g === 'woman' || g === 'women') answers.gender = 'Woman'
+      else if (g === 'male' || g === 'man' || g === 'men') answers.gender = 'Man'
+      else if (g === 'non-binary' || g === 'nonbinary') answers.gender = 'Non-binary'
+      else if (pr.startsWith('she')) answers.gender = 'Woman'
+      else if (pr.startsWith('he')) answers.gender = 'Man'
+      else if (pr) answers.gender = 'Non-binary'
+      else answers.gender = ''
     }
     else if (s.id === 'languages') answers.languages = Array.isArray(profile?.languages) ? profile.languages : []
     else if (s.id === 'location' && profile?.city) answers.location = { city: profile.city, lat: profile.lat ?? 0, lng: profile.lng ?? 0 }
   }
   answers.gender_preference = profile?.gender_preference ?? ''
-  answers.age_preference = profile?.age_preference ?? ''
   const responses = intake?.responses ?? []
   for (const s of INTAKE_STEPS) {
     const r = responses.find((x: IntakeResponseItem) => x.question_id === s.id)
@@ -166,7 +165,6 @@ function getInitialAnswers(
     answers[s.id] = val
   }
   answers.gender_preference = profile?.gender_preference ?? ''
-  answers.age_preference = profile?.age_preference ?? ''
   const relQ = answers.q_relationship_status
   const relEmpty =
     relQ === undefined || relQ === '' || (typeof relQ === 'string' && (relQ === 'N/A' || !relQ.trim()))
@@ -655,10 +653,9 @@ function AppOnboardingContent() {
       id: sessionUserId,
       first_name: (typeof answers.first_name === 'string' ? answers.first_name.trim() : '') || ' ',
       birthdate: birthdateIso ?? null,
-      gender: null,
-      pronouns: (typeof answers.pronouns === 'string' ? answers.pronouns.trim() : null) || null,
+      gender: genderDisplayToStored(typeof answers.gender === 'string' ? answers.gender : ''),
+      pronouns: null,
       gender_preference: (typeof answers.gender_preference === 'string' ? answers.gender_preference : null) ?? null,
-      age_preference: (typeof answers.age_preference === 'string' ? answers.age_preference : null) ?? null,
       languages: Array.isArray(answers.languages) ? answers.languages : null,
       city: loc?.city ?? null,
       lat: typeof loc?.lat === 'number' ? loc.lat : null,
@@ -679,7 +676,7 @@ function AppOnboardingContent() {
     if (!sessionUserId) return
     const supabase = getSupabase()
     if (!supabase) return
-    const responses: IntakeResponseItem[] = INTAKE_STEPS.filter((s) => s.id !== 'gender_preference' && s.id !== 'age_preference').map((s) => {
+    const responses: IntakeResponseItem[] = INTAKE_STEPS.filter((s) => s.id !== 'gender_preference').map((s) => {
       let raw = answers[s.id]
       if (s.id === 'q_home_state' && answers.q_home_country !== HOME_COUNTRY_UNITED_STATES) {
         raw = ''

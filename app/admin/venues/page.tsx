@@ -442,8 +442,6 @@ export default function AdminVenuesPage() {
       </section>
 
       <p className="admin-back" style={{ marginTop: '1.25rem' }}>
-        <Link href="/admin/fika-socials">Fika socials</Link>
-        {' · '}
         <Link href="/admin">Admin home</Link>
       </p>
     </main>

@@ -6,6 +6,21 @@
 import { HOME_COUNTRY_UNITED_STATES } from './countries-list'
 import { INTAKE_STEPS } from './onboarding-data'
 
+export function genderDisplayToStored(display: string): string | null {
+  const d = display.trim().toLowerCase()
+  if (d === 'woman') return 'female'
+  if (d === 'man') return 'male'
+  if (d === 'non-binary') return 'non-binary'
+  return display.trim() || null
+}
+
+function genderStoredToDisplay(stored: string): string {
+  const s = stored.trim().toLowerCase()
+  if (s === 'female' || s === 'woman' || s === 'women') return 'Woman'
+  if (s === 'male' || s === 'man' || s === 'men') return 'Man'
+  return 'Non-binary'
+}
+
 export type AnswersState = Record<
   string,
   string | string[] | number | { city: string; lat: number; lng: number }
@@ -40,9 +55,8 @@ export function buildOnboardingSessionPayload(answers: AnswersState): Record<str
   return {
     first_name: typeof answers.first_name === 'string' ? answers.first_name.trim() || ' ' : ' ',
     birthdate: answers.birthdate ?? null,
-    pronouns: typeof answers.pronouns === 'string' ? answers.pronouns.trim() || null : null,
+    gender: typeof answers.gender === 'string' ? genderDisplayToStored(answers.gender) : null,
     gender_preference: answers.gender_preference ?? null,
-    age_preference: answers.age_preference ?? null,
     languages: Array.isArray(answers.languages) ? answers.languages : null,
     city: loc?.city ?? null,
     lat: typeof loc?.lat === 'number' ? loc.lat : null,
@@ -58,15 +72,16 @@ export function payloadToAnswers(payload: Record<string, unknown>): AnswersState
   const answers: AnswersState = {}
   if (typeof payload.first_name === 'string') answers.first_name = payload.first_name
   if (typeof payload.birthdate === 'string') answers.birthdate = payload.birthdate
-  if (typeof payload.pronouns === 'string') answers.pronouns = payload.pronouns
-  else if (typeof (payload as { gender?: string }).gender === 'string' && (payload as { gender: string }).gender.trim()) {
-    const g = (payload as { gender: string }).gender.trim().toLowerCase()
-    if (g === 'female' || g === 'woman' || g === 'women') answers.pronouns = 'She/her'
-    else if (g === 'male' || g === 'man' || g === 'men') answers.pronouns = 'He/him'
-    else answers.pronouns = 'They/them'
+  if (typeof (payload as { gender?: string }).gender === 'string' && (payload as { gender: string }).gender.trim()) {
+    answers.gender = genderStoredToDisplay((payload as { gender: string }).gender)
+  } else if (typeof payload.pronouns === 'string' && payload.pronouns.trim()) {
+    // legacy: pronouns field from old onboarding sessions
+    const p = (payload.pronouns as string).trim().toLowerCase()
+    if (p.startsWith('she')) answers.gender = 'Woman'
+    else if (p.startsWith('he')) answers.gender = 'Man'
+    else answers.gender = 'Non-binary'
   }
   if (typeof payload.gender_preference === 'string') answers.gender_preference = payload.gender_preference
-  if (typeof payload.age_preference === 'string') answers.age_preference = payload.age_preference
   if (Array.isArray(payload.languages)) answers.languages = payload.languages
   if (
     typeof payload.city === 'string' &&

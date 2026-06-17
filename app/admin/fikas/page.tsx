@@ -3,32 +3,25 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getSupabase } from '@/lib/supabase'
 
-type OptInLite = {
-  decision: 'opt_in' | 'pass' | null
-  answered_at: string | null
-  payment_status: string | null
-}
-
-type SmsLite = { state: string; updated_at: string | null } | null
-
-type VenueLite = { id: string; name: string; neighborhood: string | null; city: string; address: string | null } | null
+type EventInfo = {
+  id: string
+  marketSlug: string
+  startsAt: string
+  venueName: string | null
+  venueNeighborhood: string | null
+} | null
 
 type FikaRow = {
   id: string
-  weekAnchorMonday: string | null
   createdAt: string | null
   expiresAt: string | null
   status: string | null
-  schedulingStatus: string | null
-  stage: string
+  stage: 'pending' | 'revealed' | 'expired' | 'cancelled' | 'unknown'
   needsAttentionReason: string | null
   score: number | null
-  slots: { default: string | null; counter: string | null; final: string | null; confirmed: string | null }
-  confirmedAt: string | null
-  reminders: { threeHourSentAt: string | null; postFikaSentAt: string | null }
-  venue: { suggested: VenueLite; confirmed: VenueLite }
-  userA: { id: string; firstName: string | null; phone: string | null; city: string | null; market: string | null; optIn: OptInLite; sms: SmsLite }
-  userB: { id: string; firstName: string | null; phone: string | null; city: string | null; market: string | null; optIn: OptInLite; sms: SmsLite }
+  event: EventInfo
+  userA: { id: string; firstName: string | null; phone: string | null; city: string | null; market: string | null }
+  userB: { id: string; firstName: string | null; phone: string | null; city: string | null; market: string | null }
 }
 
 type ApiResponse = {
@@ -44,22 +37,28 @@ type ApiResponse = {
   fikas: FikaRow[]
 }
 
-function fmt(ts: string | null): string {
-  if (!ts) return '—'
-  const d = new Date(ts)
-  if (Number.isNaN(d.getTime())) return ts
-  return d.toLocaleString()
-}
-
-function fmtShort(ts: string | null): string {
+function fmtDate(ts: string | null): string {
   if (!ts) return '—'
   const d = new Date(ts)
   if (Number.isNaN(d.getTime())) return ts
   return d.toLocaleDateString(undefined, { dateStyle: 'medium' })
 }
 
-function stageLabel(stage: string): string {
-  return stage.replace(/_/g, ' ')
+function fmtDateTime(ts: string | null): string {
+  if (!ts) return '—'
+  const d = new Date(ts)
+  if (Number.isNaN(d.getTime())) return ts
+  return d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+}
+
+function stageChip(stage: FikaRow['stage']): string {
+  switch (stage) {
+    case 'pending': return '🕐 Pending'
+    case 'revealed': return '✅ Revealed'
+    case 'expired': return '⏰ Expired'
+    case 'cancelled': return '❌ Cancelled'
+    default: return stage
+  }
 }
 
 export default function AdminFikasPage() {
@@ -69,13 +68,14 @@ export default function AdminFikasPage() {
   const [q, setQ] = useState('')
   const [market, setMarket] = useState('')
   const [stage, setStage] = useState('')
-  const [needsAttentionOnly, setNeedsAttentionOnly] = useState(true)
+  const [needsAttentionOnly, setNeedsAttentionOnly] = useState(false)
 
   const marketOptions = useMemo(() => {
     const set = new Set<string>()
     for (const r of data?.fikas ?? []) {
       if (r.userA.market) set.add(r.userA.market)
       if (r.userB.market) set.add(r.userB.market)
+      if (r.event?.marketSlug) set.add(r.event.marketSlug)
     }
     return Array.from(set).sort()
   }, [data?.fikas])
@@ -121,7 +121,8 @@ export default function AdminFikasPage() {
       <div className="admin-card">
         <h1 className="admin-title">Fikas</h1>
         <p className="admin-description">
-          All-time match lifecycle view (source of truth: <code>match_candidates</code>), enriched with opt-ins, SMS states, and venue.
+          All-time match lifecycle view — source of truth: <code>match_candidates</code>.
+          Stage reflects the event-based flow: pending → revealed (reveal SMS sent 30 min before event).
         </p>
 
         <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
@@ -129,7 +130,7 @@ export default function AdminFikasPage() {
             className="auth-input"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search name, phone, city, venue, match id"
+            placeholder="Search name, phone, city, market, match id"
             aria-label="Search"
             style={{ minWidth: 280 }}
           />
@@ -139,14 +140,11 @@ export default function AdminFikasPage() {
           </select>
           <select className="auth-input" value={stage} onChange={(e) => setStage(e.target.value)} aria-label="Stage">
             <option value="">All stages</option>
-            <option value="awaiting_opt_in">awaiting opt in</option>
-            <option value="awaiting_other_opt_in">awaiting other opt in</option>
-            <option value="scheduling">scheduling</option>
-            <option value="confirmed">confirmed</option>
-            <option value="passed">passed</option>
-            <option value="expired">expired</option>
-            <option value="offered">offered</option>
-            <option value="unknown">unknown</option>
+            <option value="pending">Pending</option>
+            <option value="revealed">Revealed</option>
+            <option value="expired">Expired</option>
+            <option value="cancelled">Cancelled</option>
+            <option value="unknown">Unknown</option>
           </select>
           <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
             <input
@@ -177,13 +175,11 @@ export default function AdminFikasPage() {
               <thead>
                 <tr>
                   <th>Created</th>
-                  <th>Week</th>
                   <th>Pair</th>
                   <th>Stage</th>
-                  <th>Opt-ins</th>
-                  <th>Scheduling</th>
-                  <th>Confirmed</th>
+                  <th>Event</th>
                   <th>Venue</th>
+                  <th>Score</th>
                   <th>Attention</th>
                 </tr>
               </thead>
@@ -191,21 +187,20 @@ export default function AdminFikasPage() {
                 {(data?.fikas ?? []).map((r) => {
                   const nameA = r.userA.firstName?.trim() || 'Unknown'
                   const nameB = r.userB.firstName?.trim() || 'Unknown'
-                  const optA = r.userA.optIn.decision ?? '—'
-                  const optB = r.userB.optIn.decision ?? '—'
-                  const venue = r.venue.confirmed?.name ?? r.venue.suggested?.name ?? '—'
-                  const confirmedSlot = r.slots.confirmed
-                  const confirmedAt = r.confirmedAt
+                  const venueLine = r.event
+                    ? [r.event.venueName, r.event.venueNeighborhood].filter(Boolean).join(', ') || '—'
+                    : '—'
                   return (
                     <tr key={r.id}>
-                      <td>{fmtShort(r.createdAt)}</td>
-                      <td>{r.weekAnchorMonday ?? '—'}</td>
-                      <td>{nameA} ↔ {nameB}</td>
-                      <td>{stageLabel(r.stage)}</td>
-                      <td>{optA} / {optB}</td>
-                      <td>{r.schedulingStatus ?? '—'}</td>
-                      <td>{confirmedSlot ? confirmedSlot : confirmedAt ? fmt(confirmedAt) : '—'}</td>
-                      <td>{venue}</td>
+                      <td>{fmtDate(r.createdAt)}</td>
+                      <td>
+                        {nameA} ↔ {nameB}
+                        {r.userA.market && <div style={{ fontSize: '0.75em', opacity: 0.6 }}>{r.userA.market}</div>}
+                      </td>
+                      <td>{stageChip(r.stage)}</td>
+                      <td>{r.event ? fmtDateTime(r.event.startsAt) : '—'}</td>
+                      <td>{venueLine}</td>
+                      <td>{r.score != null ? r.score.toFixed(1) : '—'}</td>
                       <td>{r.needsAttentionReason ?? '—'}</td>
                     </tr>
                   )
@@ -218,4 +213,3 @@ export default function AdminFikasPage() {
     </main>
   )
 }
-

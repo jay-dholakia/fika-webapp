@@ -3,8 +3,6 @@ import { NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase-server'
 import { isAdminByUserId } from '@/lib/admin-markets'
 import { getMarketBySlug } from '@/lib/markets'
-import { userBlockedFromNewIntro } from '@/lib/intro-eligibility'
-import { userHasUpcomingConfirmedFika } from '@/lib/upcoming-confirmed-fika'
 
 export const dynamic = 'force-dynamic'
 
@@ -75,9 +73,6 @@ export async function GET(
   const marketSlug = (profile as { market?: string | null }).market ?? null
   const marketLabel = marketSlug ? (getMarketBySlug(marketSlug)?.label ?? marketSlug) : null
 
-  const hasUpcomingConfirmedFika = await userHasUpcomingConfirmedFika(supabase, targetUserId.trim())
-  const blockedFromNewIntro = await userBlockedFromNewIntro(supabase, targetUserId.trim())
-
   return NextResponse.json({
     profile: {
       id: profile.id,
@@ -85,7 +80,6 @@ export async function GET(
       birthdate: (profile as { birthdate?: string | null }).birthdate,
       gender: (profile as { gender?: string | null }).gender,
       genderPreference: (profile as { gender_preference?: string | null }).gender_preference,
-      agePreference: (profile as { age_preference?: string | null }).age_preference,
       pronouns: (profile as { pronouns?: string | null }).pronouns,
       relationshipStatus: (profile as { relationship_status?: string | null }).relationship_status,
       city: (profile as { city?: string | null }).city,
@@ -96,8 +90,6 @@ export async function GET(
       intentConfirmedAt: (profile as { intent_confirmed_at?: string | null }).intent_confirmed_at,
       createdAt: (profile as { created_at?: string }).created_at,
       updatedAt: (profile as { updated_at?: string }).updated_at,
-      hasUpcomingConfirmedFika,
-      blockedFromNewIntro,
     },
     intake: intake
       ? {

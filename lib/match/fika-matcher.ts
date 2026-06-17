@@ -202,7 +202,8 @@ function samePronounMatchingGroup(a: string, b: string): boolean {
 
 export function checkPairEligibility(
   a: MatcherPerson,
-  b: MatcherPerson
+  b: MatcherPerson,
+  opts?: { skipDistanceGate?: boolean }
 ): { eligible: boolean; rejectReasons: string[]; distanceKm: number | null; combinedRadiusKm: number } {
   const reasons: string[] = []
   const combinedRadiusKm = a.radiusKm + b.radiusKm
@@ -215,7 +216,7 @@ export function checkPairEligibility(
     b.profile.lng != null
   ) {
     distanceKm = calculateDistanceKm(a.profile.lat, a.profile.lng, b.profile.lat, b.profile.lng)
-    if (distanceKm > combinedRadiusKm * DISTANCE_HARD_REJECT_RATIO) {
+    if (!opts?.skipDistanceGate && distanceKm > combinedRadiusKm * DISTANCE_HARD_REJECT_RATIO) {
       reasons.push('geography')
     }
   }
@@ -252,12 +253,16 @@ export function checkPairEligibility(
 
 export type ScorePairOptions = {
   logMatrixUnknown?: (msg: string) => void
+  /** When set, skips the distance hard-reject gate and uses this value (0–1) for distanceFit.
+   *  Pass 1.0 for event matching where both users have already committed to a venue. */
+  distanceOverride?: number
 }
 
 export function scoreFikaPair(a: MatcherPerson, b: MatcherPerson, opts?: ScorePairOptions): FikaMatchBreakdown {
-  const { eligible, rejectReasons, distanceKm, combinedRadiusKm } = checkPairEligibility(a, b)
+  const skipDistanceGate = opts?.distanceOverride != null
+  const { eligible, rejectReasons, distanceKm, combinedRadiusKm } = checkPairEligibility(a, b, { skipDistanceGate })
 
-  const distanceFit = distanceFitScore(distanceKm, combinedRadiusKm)
+  const distanceFit = opts?.distanceOverride != null ? opts.distanceOverride : distanceFitScore(distanceKm, combinedRadiusKm)
   const dataConfidence = pairDataConfidence(a, b)
   const feasibilityTotal =
     FEASIBILITY_WEIGHTS.distanceFit * distanceFit +

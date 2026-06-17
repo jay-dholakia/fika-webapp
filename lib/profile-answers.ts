@@ -42,7 +42,6 @@ export function getAnswersFromProfileAndIntake(
       answers.location = { city: profile.city, lat: profile.lat ?? 0, lng: profile.lng ?? 0 }
   }
   answers.gender_preference = profile?.gender_preference ?? ''
-  answers.age_preference = profile?.age_preference ?? ''
   const responses = intake?.responses ?? []
   for (const s of INTAKE_STEPS) {
     const r = responses.find((x: IntakeResponseItem) => x.question_id === s.id)
@@ -57,7 +56,6 @@ export function getAnswersFromProfileAndIntake(
     answers.q_relationship_status = profile.relationship_status
   }
   answers.gender_preference = profile?.gender_preference ?? ''
-  answers.age_preference = profile?.age_preference ?? ''
   answers.phone = profile?.phone ?? ''
   return answers
 }

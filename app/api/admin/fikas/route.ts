@@ -19,56 +19,27 @@ async function getAdminUserId(request: Request): Promise<string | null> {
   return null
 }
 
-type FikaStage =
-  | 'passed'
-  | 'confirmed'
-  | 'expired'
-  | 'scheduling'
-  | 'awaiting_opt_in'
-  | 'awaiting_other_opt_in'
-  | 'offered'
-  | 'unknown'
+type FikaStage = 'pending' | 'revealed' | 'expired' | 'cancelled' | 'unknown'
 
 function deriveStage(row: {
   status: string | null
-  scheduling_status: string | null
-  confirmed_slot_id: string | null
-  confirmed_at: string | null
-  optA: 'opt_in' | 'pass' | null
-  optB: 'opt_in' | 'pass' | null
+  cancel_retry_flow: boolean | null
+  eventRevealed: boolean
 }): FikaStage {
-  if (row.optA === 'pass' || row.optB === 'pass') return 'passed'
-  if (row.scheduling_status === 'cancelled_pending_retry') return 'expired'
-  if (row.scheduling_status === 'expired') return 'expired'
-  if (row.scheduling_status === 'confirmed' || row.confirmed_slot_id || row.confirmed_at) return 'confirmed'
-  if (row.scheduling_status && row.scheduling_status !== 'confirmed') return 'scheduling'
-  if (row.status === 'active' || row.status == null) {
-    if (row.optA === 'opt_in' && row.optB === 'opt_in') return 'scheduling'
-    if (row.optA === 'opt_in' || row.optB === 'opt_in') return 'awaiting_other_opt_in'
-    if (row.optA == null && row.optB == null) return 'awaiting_opt_in'
-    return 'offered'
-  }
+  if (row.cancel_retry_flow) return 'cancelled'
+  if (row.eventRevealed) return 'revealed'
+  if (row.status === 'expired') return 'expired'
+  if (row.status === 'active') return 'pending'
   return 'unknown'
 }
 
-function pickNeedsAttentionReason(row: {
-  stage: FikaStage
-  created_at: string | null
-  confirmed_at: string | null
-  scheduling_status: string | null
-  three_hour_reminder_sent_at: string | null
-  post_fika_sent_at: string | null
-}): string | null {
-  if (row.stage === 'awaiting_opt_in' || row.stage === 'awaiting_other_opt_in') return 'Waiting on opt-in'
-  if (row.stage === 'scheduling') return 'Scheduling in progress'
-  if (row.stage === 'confirmed') {
-    if (!row.three_hour_reminder_sent_at) return 'Pre-Fika (~90m) reminder not sent'
-    if (!row.post_fika_sent_at) return 'Post-Fika not sent'
-  }
+function pickNeedsAttentionReason(stage: FikaStage, hasEventId: boolean): string | null {
+  if (stage === 'expired') return 'Expired before reveal'
+  if (stage === 'pending' && !hasEventId) return 'No event linked'
   return null
 }
 
-/** GET /api/admin/fikas — all-time match lifecycle list (match_candidates as source of truth). Admin only. */
+/** GET /api/admin/fikas — event-based match lifecycle list. Admin only. */
 export async function GET(request: Request) {
   const userId = await getAdminUserId(request)
   if (!userId) return NextResponse.json({ error: 'Not signed in', code: 'NO_SESSION' }, { status: 401 })
@@ -90,190 +61,97 @@ export async function GET(request: Request) {
 
   const { data: matches, error: matchErr } = await supabase
     .from('match_candidates')
-    .select([
-      'id',
-      'user_a',
-      'user_b',
-      'score',
-      'status',
-      'scheduling_status',
-      'week_anchor_monday',
-      'created_at',
-      'expires_at',
-      'default_slot_id',
-      'counter_slot_id',
-      'final_slot_id',
-      'confirmed_slot_id',
-      'confirmed_at',
-      'suggested_venue_id',
-      'confirmed_venue_id',
-      'three_hour_reminder_sent_at',
-      'post_fika_sent_at',
-    ].join(','))
+    .select('id, user_a, user_b, score, status, cancel_retry_flow, reasons, created_at, expires_at')
     .order('created_at', { ascending: false })
     .limit(limit)
 
   if (matchErr) return NextResponse.json({ error: matchErr.message }, { status: 500 })
 
   const rows = (matches ?? []) as Array<Record<string, any>>
-  const userIds = Array.from(
-    new Set(rows.flatMap((r) => [r.user_a as string | null, r.user_b as string | null]).filter(Boolean) as string[])
-  )
-  const matchIds = rows.map((r) => r.id as string)
-  const venueIds = Array.from(
+
+  // Extract event_ids from reasons JSONB
+  const eventIds = Array.from(
     new Set(
       rows
-        .flatMap((r) => [r.suggested_venue_id as string | null, r.confirmed_venue_id as string | null])
+        .map((r) => (r.reasons as Record<string, any> | null)?.event_id as string | undefined)
         .filter(Boolean) as string[]
     )
   )
 
-  const [{ data: profiles }, { data: optIns }, { data: smsStates }, { data: venues }] = await Promise.all([
+  const userIds = Array.from(
+    new Set(rows.flatMap((r) => [r.user_a as string, r.user_b as string]).filter(Boolean))
+  )
+
+  const [{ data: profiles }, { data: events }] = await Promise.all([
     supabase.from('profiles').select('id, first_name, phone, city, market').in('id', userIds),
-    supabase.from('opt_ins').select('match_id, user_id, decision, answered_at, payment_status').in('match_id', matchIds),
-    supabase
-      .from('sms_conversation_states')
-      .select('match_id, user_id, state, updated_at')
-      .in('match_id', matchIds)
-      .order('updated_at', { ascending: false }),
-    venueIds.length > 0
-      ? supabase.from('venues').select('id, name, neighborhood, city, address').in('id', venueIds)
+    eventIds.length > 0
+      ? supabase
+          .from('weekly_fika_events')
+          .select('id, market_slug, event_starts_at, venue_id, reveals_sent_at')
+          .in('id', eventIds)
       : Promise.resolve({ data: [] as any[] }),
   ])
 
-  const profileById = new Map<string, { id: string; first_name: string | null; phone: string | null; city: string | null; market: string | null }>()
-  for (const p of (profiles ?? []) as any[]) {
-    profileById.set(p.id as string, {
-      id: p.id as string,
-      first_name: (p.first_name as string | null) ?? null,
-      phone: (p.phone as string | null) ?? null,
-      city: (p.city as string | null) ?? null,
-      market: (p.market as string | null) ?? null,
-    })
-  }
+  // Fetch venues for events
+  const venueIds = Array.from(
+    new Set((events ?? []).map((e: any) => e.venue_id as string | null).filter(Boolean) as string[])
+  )
+  const { data: venues } = venueIds.length > 0
+    ? await supabase.from('venues').select('id, name, neighborhood, city').in('id', venueIds)
+    : { data: [] as any[] }
 
-  const optKey = (match_id: string, user_id: string) => `${match_id}:${user_id}`
-  const optBy = new Map<string, { decision: 'opt_in' | 'pass' | null; answered_at: string | null; payment_status: string | null }>()
-  for (const o of (optIns ?? []) as any[]) {
-    const rawDecision = (o.decision as string | null)
-    const decision =
-      rawDecision === 'opt_in' || rawDecision === 'yes'
-        ? 'opt_in'
-        : rawDecision === 'pass' || rawDecision === 'no'
-          ? 'pass'
-          : null
-    optBy.set(optKey(o.match_id as string, o.user_id as string), {
-      decision,
-      answered_at: (o.answered_at as string | null) ?? null,
-      payment_status: (o.payment_status as string | null) ?? null,
-    })
-  }
+  const profileById = new Map<string, any>()
+  for (const p of (profiles ?? []) as any[]) profileById.set(p.id, p)
 
-  const smsBy = new Map<string, { state: string; updated_at: string | null }>()
-  for (const s of (smsStates ?? []) as any[]) {
-    const k = optKey(s.match_id as string, s.user_id as string)
-    if (!smsBy.has(k)) {
-      smsBy.set(k, { state: String(s.state ?? ''), updated_at: (s.updated_at as string | null) ?? null })
-    }
-  }
+  const eventById = new Map<string, any>()
+  for (const e of (events ?? []) as any[]) eventById.set(e.id, e)
 
-  const venueById = new Map<string, { id: string; name: string; neighborhood: string | null; city: string; address: string | null }>()
-  for (const v of (venues ?? []) as any[]) {
-    venueById.set(v.id as string, {
-      id: v.id as string,
-      name: String(v.name ?? ''),
-      neighborhood: (v.neighborhood as string | null) ?? null,
-      city: String(v.city ?? ''),
-      address: (v.address as string | null) ?? null,
-    })
-  }
+  const venueById = new Map<string, any>()
+  for (const v of (venues ?? []) as any[]) venueById.set(v.id, v)
 
   const out = rows.map((r) => {
-    const userA = profileById.get(r.user_a as string) ?? { id: r.user_a as string, first_name: null, phone: null, city: null, market: null }
-    const userB = profileById.get(r.user_b as string) ?? { id: r.user_b as string, first_name: null, phone: null, city: null, market: null }
-    const optA = optBy.get(optKey(r.id as string, r.user_a as string)) ?? { decision: null, answered_at: null, payment_status: null }
-    const optB = optBy.get(optKey(r.id as string, r.user_b as string)) ?? { decision: null, answered_at: null, payment_status: null }
-    const smsA = smsBy.get(optKey(r.id as string, r.user_a as string)) ?? null
-    const smsB = smsBy.get(optKey(r.id as string, r.user_b as string)) ?? null
-    const suggestedVenue = r.suggested_venue_id ? venueById.get(r.suggested_venue_id as string) ?? null : null
-    const confirmedVenue = r.confirmed_venue_id ? venueById.get(r.confirmed_venue_id as string) ?? null : null
+    const reasons = (r.reasons as Record<string, any> | null) ?? {}
+    const eventId = (reasons.event_id as string | null) ?? null
+    const event = eventId ? eventById.get(eventId) ?? null : null
+    const venue = event?.venue_id ? venueById.get(event.venue_id) ?? null : null
 
     const stageDerived = deriveStage({
-      status: (r.status as string | null) ?? null,
-      scheduling_status: (r.scheduling_status as string | null) ?? null,
-      confirmed_slot_id: (r.confirmed_slot_id as string | null) ?? null,
-      confirmed_at: (r.confirmed_at as string | null) ?? null,
-      optA: optA.decision,
-      optB: optB.decision,
+      status: r.status,
+      cancel_retry_flow: r.cancel_retry_flow,
+      eventRevealed: !!event?.reveals_sent_at,
     })
 
-    const needsAttentionReason = pickNeedsAttentionReason({
-      stage: stageDerived,
-      created_at: (r.created_at as string | null) ?? null,
-      confirmed_at: (r.confirmed_at as string | null) ?? null,
-      scheduling_status: (r.scheduling_status as string | null) ?? null,
-      three_hour_reminder_sent_at: (r.three_hour_reminder_sent_at as string | null) ?? null,
-      post_fika_sent_at: (r.post_fika_sent_at as string | null) ?? null,
-    })
+    const profA = profileById.get(r.user_a) ?? { id: r.user_a, first_name: null, phone: null, city: null, market: null }
+    const profB = profileById.get(r.user_b) ?? { id: r.user_b, first_name: null, phone: null, city: null, market: null }
 
     return {
       id: r.id as string,
-      weekAnchorMonday: (r.week_anchor_monday as string | null) ?? null,
-      createdAt: (r.created_at as string | null) ?? null,
-      expiresAt: (r.expires_at as string | null) ?? null,
-      status: (r.status as string | null) ?? null,
-      schedulingStatus: (r.scheduling_status as string | null) ?? null,
+      createdAt: r.created_at as string | null,
+      expiresAt: r.expires_at as string | null,
+      status: r.status as string | null,
       stage: stageDerived,
-      needsAttentionReason,
+      needsAttentionReason: pickNeedsAttentionReason(stageDerived, !!eventId),
       score: r.score != null ? Number(r.score) : null,
-      slots: {
-        default: (r.default_slot_id as string | null) ?? null,
-        counter: (r.counter_slot_id as string | null) ?? null,
-        final: (r.final_slot_id as string | null) ?? null,
-        confirmed: (r.confirmed_slot_id as string | null) ?? null,
-      },
-      confirmedAt: (r.confirmed_at as string | null) ?? null,
-      reminders: {
-        threeHourSentAt: (r.three_hour_reminder_sent_at as string | null) ?? null,
-        postFikaSentAt: (r.post_fika_sent_at as string | null) ?? null,
-      },
-      venue: {
-        suggested: suggestedVenue,
-        confirmed: confirmedVenue,
-      },
-      userA: {
-        id: userA.id,
-        firstName: userA.first_name,
-        phone: userA.phone,
-        city: userA.city,
-        market: userA.market,
-        optIn: optA,
-        sms: smsA,
-      },
-      userB: {
-        id: userB.id,
-        firstName: userB.first_name,
-        phone: userB.phone,
-        city: userB.city,
-        market: userB.market,
-        optIn: optB,
-        sms: smsB,
-      },
+      event: event
+        ? {
+            id: event.id as string,
+            marketSlug: event.market_slug as string,
+            startsAt: event.event_starts_at as string,
+            venueName: (venue?.name as string | null) ?? null,
+            venueNeighborhood: (venue?.neighborhood as string | null) ?? null,
+          }
+        : null,
+      userA: { id: profA.id, firstName: profA.first_name, phone: profA.phone, city: profA.city, market: profA.market },
+      userB: { id: profB.id, firstName: profB.first_name, phone: profB.phone, city: profB.city, market: profB.market },
     }
   })
 
   const filtered = out.filter((r) => {
     if (market) {
-      const mA = r.userA.market ?? ''
-      const mB = r.userB.market ?? ''
-      if (mA !== market && mB !== market) return false
+      if (r.userA.market !== market && r.userB.market !== market && r.event?.marketSlug !== market) return false
     }
-    if (stage) {
-      if (r.stage !== stage) return false
-    }
-    if (needsAttentionOnly) {
-      if (!r.needsAttentionReason) return false
-    }
+    if (stage && r.stage !== stage) return false
+    if (needsAttentionOnly && !r.needsAttentionReason) return false
     if (q) {
       const hay = [
         r.id,
@@ -284,9 +162,8 @@ export async function GET(request: Request) {
         r.userA.city,
         r.userB.city,
         r.userA.market,
-        r.userB.market,
-        r.venue.confirmed?.name,
-        r.venue.suggested?.name,
+        r.event?.marketSlug,
+        r.event?.venueName,
       ]
         .filter(Boolean)
         .join(' ')
@@ -297,16 +174,7 @@ export async function GET(request: Request) {
   })
 
   return NextResponse.json({
-    summary: {
-      total: out.length,
-      returned: filtered.length,
-      limit,
-      market,
-      stage,
-      needs_attention: needsAttentionOnly,
-      q,
-    },
+    summary: { total: out.length, returned: filtered.length, limit, market, stage, needs_attention: needsAttentionOnly, q },
     fikas: filtered,
   })
 }
-

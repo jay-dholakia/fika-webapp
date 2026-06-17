@@ -17,7 +17,6 @@ export type AdminMatchProfileRow = {
   gender_preference: string | null
   age_preference: string | null
   languages: string[] | null
-  in_match_bowl: boolean | null
   is_active: boolean | null
 }
 
@@ -61,7 +60,7 @@ export type AdminScoredPairPayload = {
 }
 
 export const ADMIN_MATCH_PROFILE_SELECT =
-  'id, first_name, market, city, lat, lng, birthdate, gender, pronouns, gender_preference, age_preference, languages, in_match_bowl, is_active'
+  'id, first_name, market, city, lat, lng, birthdate, gender, pronouns, gender_preference, age_preference, languages, is_active'
 
 export function ageFromBirthdate(birthdate: string | null | undefined): number | null {
   if (!birthdate || typeof birthdate !== 'string') return null

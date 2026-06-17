@@ -1,5 +1,4 @@
 import { createClient } from '@supabase/supabase-js'
-import type { SupabaseClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase-server'
 import { isAdminByUserId } from '@/lib/admin-markets'
@@ -13,14 +12,8 @@ import {
   type AdminSimCandidate,
   adminSimCandidateFromProfileRow,
   computeAdminPairPayload,
-  loadAdminSimCandidatesForCanonicalPair,
 } from '@/lib/match/admin-match-pair'
-import {
-  MATCH_OPT_IN_DEADLINE_MS,
-  fetchUserIdsBlockedFromNewIntro,
-} from '@/lib/intro-eligibility'
 import { MATCH_SCORING_VERSION } from '@/lib/match/weights'
-import { fetchUserIdsWithUpcomingConfirmedFika } from '@/lib/upcoming-confirmed-fika'
 
 /** Admin simulation: config-driven structured matcher (eligibility + feasibility + compatibility). */
 export const dynamic = 'force-dynamic'
@@ -33,13 +26,6 @@ type CompareRow = {
   label: string
   a: string
   b: string
-}
-
-type SelectedPairInput = {
-  userAId: string
-  userBId: string
-  score?: number
-  reasons?: Record<string, unknown>
 }
 
 type CopyDimensionKey = AdminCopyDimensionKey
@@ -89,119 +75,6 @@ async function getAdminUserId(request: Request): Promise<string | null> {
   return null
 }
 
-/**
- * Insert or update a match_candidate for admin trigger_sms.
- * Handles 23505 when a row already exists: unique may be (user_a, user_b, week_anchor_monday)
- * or only (user_a, user_b). Updating by week alone can match 0 rows → PostgREST PGRST116 on .single().
- */
-async function insertOrUpdateMatchCandidateForTrigger(
-  supabase: SupabaseClient,
-  params: {
-    userA: string
-    userB: string
-    weekAnchorMonday: string
-    expiresAt: string
-    score: number
-    reasons: Record<string, unknown>
-  }
-): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
-  const { userA, userB, weekAnchorMonday, expiresAt, score, reasons } = params
-  const matchOptInDeadlineAt = new Date(Date.now() + MATCH_OPT_IN_DEADLINE_MS).toISOString()
-
-  const { data: inserted, error: insertErr } = await supabase
-    .from('match_candidates')
-    .insert({
-      user_a: userA,
-      user_b: userB,
-      score,
-      reasons,
-      status: 'active',
-      week_anchor_monday: weekAnchorMonday,
-      expires_at: expiresAt,
-      match_opt_in_deadline_at: matchOptInDeadlineAt,
-    })
-    .select('id')
-    .maybeSingle()
-
-  if (!insertErr && inserted?.id) return { ok: true, id: inserted.id as string }
-
-  if (insertErr?.code !== '23505') {
-    return { ok: false, error: insertErr?.message ?? 'insert failed' }
-  }
-
-  const { data: sameWeekRows } = await supabase
-    .from('match_candidates')
-    .select('id')
-    .eq('user_a', userA)
-    .eq('user_b', userB)
-    .eq('week_anchor_monday', weekAnchorMonday)
-    .limit(2)
-
-  const sameWeekId = sameWeekRows?.[0]?.id as string | undefined
-  if (sameWeekId) {
-    const { data: updated, error: updateErr } = await supabase
-      .from('match_candidates')
-      .update({
-        score,
-        reasons,
-        expires_at: expiresAt,
-        match_opt_in_deadline_at: matchOptInDeadlineAt,
-      })
-      .eq('id', sameWeekId)
-      .select('id')
-      .maybeSingle()
-    if (updateErr) return { ok: false, error: updateErr.message }
-    if (updated?.id) return { ok: true, id: updated.id as string }
-    return { ok: false, error: 'update by id returned no row' }
-  }
-
-  const { data: pairRows } = await supabase
-    .from('match_candidates')
-    .select('id')
-    .eq('user_a', userA)
-    .eq('user_b', userB)
-    .order('week_anchor_monday', { ascending: false })
-    .limit(1)
-
-  const pairId = pairRows?.[0]?.id as string | undefined
-  if (!pairId) {
-    return { ok: false, error: 'duplicate insert but no existing row for this pair' }
-  }
-
-  const { data: updatedPair, error: updatePairErr } = await supabase
-    .from('match_candidates')
-    .update({
-      score,
-      reasons,
-      expires_at: expiresAt,
-      week_anchor_monday: weekAnchorMonday,
-      status: 'active',
-      match_opt_in_deadline_at: matchOptInDeadlineAt,
-    })
-    .eq('id', pairId)
-    .select('id')
-    .maybeSingle()
-
-  if (updatePairErr) return { ok: false, error: updatePairErr.message }
-  if (updatedPair?.id) return { ok: true, id: updatedPair.id as string }
-  return { ok: false, error: 'update pair row returned no row' }
-}
-
-function getWeekAnchorMonday(now: Date): string {
-  const monday = new Date(now)
-  const day = monday.getUTCDay()
-  const diffToMonday = (day + 6) % 7
-  monday.setUTCDate(monday.getUTCDate() - diffToMonday)
-  monday.setUTCHours(0, 0, 0, 0)
-  return monday.toISOString().split('T')[0]
-}
-
-function getExpiresAtWednesdayMidnightUtc(weekAnchorMonday: string): string {
-  const d = new Date(`${weekAnchorMonday}T00:00:00.000Z`)
-  d.setUTCDate(d.getUTCDate() + 2)
-  return d.toISOString()
-}
-
 export async function POST(request: Request) {
   const userId = await getAdminUserId(request)
   if (!userId) return NextResponse.json({ error: 'Not signed in', code: 'NO_SESSION' }, { status: 401 })
@@ -215,112 +88,6 @@ export async function POST(request: Request) {
   if (!isAdmin) return NextResponse.json({ error: 'Admin role required', code: 'NOT_ADMIN' }, { status: 403 })
 
   const body = await request.json().catch(() => ({} as Record<string, unknown>))
-  const action = typeof body.action === 'string' ? body.action : 'simulate'
-
-  if (action === 'trigger_sms') {
-    const selectedPairsRaw = Array.isArray(body.selectedPairs) ? body.selectedPairs as unknown[] : []
-    const selectedPairs: SelectedPairInput[] = selectedPairsRaw
-      .filter((p): p is SelectedPairInput => {
-        const v = p as SelectedPairInput
-        return (
-          typeof v?.userAId === 'string' &&
-          v.userAId.trim().length > 0 &&
-          typeof v?.userBId === 'string' &&
-          v.userBId.trim().length > 0
-        )
-      })
-
-    const upcomingConfirmed = await fetchUserIdsWithUpcomingConfirmedFika(supabase)
-    const blockedFromNewIntro = await fetchUserIdsBlockedFromNewIntro(supabase, {
-      upcomingConfirmed,
-    })
-    if (selectedPairs.length > 0) {
-      for (const pair of selectedPairs) {
-        const userA = pair.userAId < pair.userBId ? pair.userAId : pair.userBId
-        const userB = pair.userAId < pair.userBId ? pair.userBId : pair.userAId
-        if (blockedFromNewIntro.has(userA) || blockedFromNewIntro.has(userB)) {
-          const blockedIds = [userA, userB].filter((id) => blockedFromNewIntro.has(id))
-          return NextResponse.json(
-            {
-              error:
-                'One or both users are blocked from a new intro: upcoming confirmed Fika not yet happened, or an intro offer is still within its 24-hour window.',
-              code: 'BLOCKED_FROM_NEW_INTRO',
-              blockedUserIds: blockedIds,
-            },
-            { status: 400 }
-          )
-        }
-      }
-    }
-
-    const weekAnchorMonday = getWeekAnchorMonday(new Date())
-    let targetMatchIds: string[] | null = null
-
-    if (selectedPairs.length > 0) {
-      const expiresAt = getExpiresAtWednesdayMidnightUtc(weekAnchorMonday)
-      const createdIds: string[] = []
-      for (const pair of selectedPairs) {
-        const userA = pair.userAId < pair.userBId ? pair.userAId : pair.userBId
-        const userB = pair.userAId < pair.userBId ? pair.userBId : pair.userAId
-
-        const loaded = await loadAdminSimCandidatesForCanonicalPair(supabase, userA, userB)
-        if ('error' in loaded) {
-          return NextResponse.json(
-            { error: loaded.error, code: 'INTRO_PAIR_LOAD' },
-            { status: 400 }
-          )
-        }
-        const payload = computeAdminPairPayload(loaded.ca, loaded.cb)
-        if (!payload.breakdown.eligible) {
-          return NextResponse.json(
-            {
-              error:
-                'This pair does not pass intro matcher eligibility (geography, languages when both set, same pronoun group, platonic confirm). Pick another pair or fix profile/intake gaps.',
-              code: 'PAIR_NOT_INTRO_ELIGIBLE',
-              rejectReasons: payload.breakdown.rejectReasons,
-            },
-            { status: 400 }
-          )
-        }
-
-        const result = await insertOrUpdateMatchCandidateForTrigger(supabase, {
-          userA,
-          userB,
-          weekAnchorMonday,
-          expiresAt,
-          score: payload.score,
-          reasons: payload.reasons,
-        })
-        if (!result.ok) {
-          return NextResponse.json({ error: result.error, code: 'MATCH_CANDIDATE_UPSERT' }, { status: 500 })
-        }
-        createdIds.push(result.id)
-      }
-      targetMatchIds = createdIds
-    }
-
-    const fnUrl = `${url}/functions/v1/sms-match-delivery`
-    const res = await fetch(fnUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${key}`,
-      },
-      body: JSON.stringify(
-        targetMatchIds && targetMatchIds.length > 0
-          ? { match_ids: targetMatchIds }
-          : {}
-      ),
-    })
-    const raw = await res.text()
-    return NextResponse.json({
-      ok: res.ok,
-      status: res.status,
-      response: raw,
-      targeted_matches: targetMatchIds?.length ?? 0,
-    }, { status: res.ok ? 200 : 500 })
-  }
-
   const market = typeof body.market === 'string' ? body.market.trim() : null
   const maxUsers = Math.min(300, Math.max(20, typeof body.maxUsers === 'number' ? Math.floor(body.maxUsers) : 120))
   const topN = Math.min(300, Math.max(10, typeof body.topN === 'number' ? Math.floor(body.topN) : 100))
@@ -336,7 +103,6 @@ export async function POST(request: Request) {
   const activeSlugs = (activeMarkets ?? []).map((m: { slug: string }) => m.slug)
 
   let profilesQuery = supabase.from('profiles').select(ADMIN_MATCH_PROFILE_SELECT)
-    .eq('in_match_bowl', true)
     .eq('is_active', true)
     .limit(maxUsers)
 
@@ -347,23 +113,13 @@ export async function POST(request: Request) {
   if (profilesErr) return NextResponse.json({ error: profilesErr.message }, { status: 500 })
 
   const userProfiles = (profiles ?? []) as ProfileRow[]
-  const upcomingConfirmed = await fetchUserIdsWithUpcomingConfirmedFika(supabase)
-  const blockedFromNewIntro = await fetchUserIdsBlockedFromNewIntro(supabase, {
-    upcomingConfirmed,
-  })
-  const usersSkippedBlockedIntro = userProfiles.filter((p) => blockedFromNewIntro.has(p.id)).length
-  const usersSkippedUpcomingConfirmed = userProfiles.filter((p) => upcomingConfirmed.has(p.id)).length
-  const filteredProfiles = userProfiles.filter((p) => !blockedFromNewIntro.has(p.id))
-  const ids = filteredProfiles.map((p) => p.id)
+  const ids = userProfiles.map((p) => p.id)
   if (ids.length < 2) {
     return NextResponse.json({
       summary: {
         totalProfiles: userProfiles.length,
         usersConsidered: 0,
         usersSkippedNoIntake: 0,
-        usersSkippedNoEmbedding: 0,
-        usersSkippedBlockedIntro,
-        usersSkippedUpcomingConfirmed,
         pairsScored: 0,
         filteredOut: 0,
         market,
@@ -383,7 +139,7 @@ export async function POST(request: Request) {
 
   let usersSkippedNoIntake = 0
   const candidates: SimCandidate[] = []
-  for (const p of filteredProfiles) {
+  for (const p of userProfiles) {
     const intake = intakeById.get(p.id)
     if (!intake) {
       usersSkippedNoIntake++
@@ -398,9 +154,6 @@ export async function POST(request: Request) {
         totalProfiles: userProfiles.length,
         usersConsidered: candidates.length,
         usersSkippedNoIntake,
-        usersSkippedNoEmbedding: 0,
-        usersSkippedBlockedIntro,
-        usersSkippedUpcomingConfirmed,
         pairsScored: 0,
         filteredOut: 0,
         market,
@@ -500,9 +253,6 @@ export async function POST(request: Request) {
       totalProfiles: userProfiles.length,
       usersConsidered: candidates.length,
       usersSkippedNoIntake,
-      usersSkippedNoEmbedding: 0,
-      usersSkippedBlockedIntro,
-      usersSkippedUpcomingConfirmed,
       pairsScored: pairs.length,
       filteredOut,
       market,

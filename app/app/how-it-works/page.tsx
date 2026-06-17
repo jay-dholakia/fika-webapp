@@ -182,7 +182,7 @@ export default function HowItWorksPage() {
             <div className="app-how-it-works-step-content">
               <span className="app-how-it-works-when">We line it up</span>
               <span className="app-how-it-works-what">
-                We propose a time and a nearby spot from both your locations and availability—you confirm by text.
+                Once you&apos;re both in, we pick a nearby spot and send you the details. No back-and-forth needed.
               </span>
             </div>
           </li>
