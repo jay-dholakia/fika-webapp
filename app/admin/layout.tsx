@@ -14,6 +14,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const isSmsControl = pathname?.startsWith('/admin/sms-control')
   const isVenues = pathname?.startsWith('/admin/venues')
   const isWeeklyEvents = pathname?.startsWith('/admin/weekly-events')
+  const isIntakeQuestions = pathname?.startsWith('/admin/intake-questions')
 
   useEffect(() => {
     setMobileMenuOpen(false)
@@ -27,8 +28,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { href: '/admin/sms-control', label: 'SMS control', active: isSmsControl },
     { href: '/admin/venues', label: 'Venues', active: isVenues },
     { href: '/admin/weekly-events', label: 'Weekly events', active: isWeeklyEvents },
+    { href: '/admin/intake-questions', label: "Intake Q's", active: isIntakeQuestions },
     { href: '/app/yourfika', label: 'Back to app', active: false },
-  ]), [isMarkets, isMap, isFikas, isSignups, isSmsControl, isVenues, isWeeklyEvents])
+  ]), [isMarkets, isMap, isFikas, isSignups, isSmsControl, isVenues, isWeeklyEvents, isIntakeQuestions])
 
   return (
     <div className="admin-layout">

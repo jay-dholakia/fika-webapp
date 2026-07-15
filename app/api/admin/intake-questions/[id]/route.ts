@@ -29,33 +29,52 @@ async function getAdminSupabase(request: Request): Promise<SupabaseClient | null
   return supabase
 }
 
-/** GET /api/admin/weekly-events/[id]/rsvps
- *  Returns all RSVPs for this event with user details and counts by decision. */
-export async function GET(
+/** PATCH /api/admin/intake-questions/[id] — update a question */
+export async function PATCH(
   request: Request,
   { params }: { params: { id: string } }
 ) {
   try {
     const supabase = await getAdminSupabase(request)
-    if (!supabase) return NextResponse.json({ error: 'Admin role required', code: 'NOT_ADMIN' }, { status: 403 })
+    if (!supabase) return NextResponse.json({ error: 'Admin role required' }, { status: 403 })
 
-    const eventId = params.id
-
-    const { data: rsvps, error } = await supabase
-      .from('weekly_rsvps')
-      .select('user_id, decision, decided_at, profiles(id, first_name, phone, avatar_url)')
-      .eq('event_id', eventId)
-      .order('decided_at', { ascending: false })
-
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
-    const counts = { yes: 0, no: 0, cancelled: 0, no_response: 0 }
-    for (const r of rsvps ?? []) {
-      const d = (r.decision as string) ?? 'no_response'
-      if (d in counts) counts[d as keyof typeof counts]++
+    const body = await request.json()
+    const allowed = ['label', 'body', 'type', 'options', 'required', 'enabled', 'display_order', 'max_selections', 'placeholder']
+    const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
+    for (const key of allowed) {
+      if (key in body) updates[key] = body[key]
     }
 
-    return NextResponse.json({ rsvps: rsvps ?? [], counts })
+    const { data, error } = await supabase
+      .from('intake_question_config')
+      .update(updates)
+      .eq('id', params.id)
+      .select()
+      .single()
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ question: data })
+  } catch (e) {
+    return NextResponse.json({ error: String(e) }, { status: 500 })
+  }
+}
+
+/** DELETE /api/admin/intake-questions/[id] — hard delete a question */
+export async function DELETE(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const supabase = await getAdminSupabase(request)
+    if (!supabase) return NextResponse.json({ error: 'Admin role required' }, { status: 403 })
+
+    const { error } = await supabase
+      .from('intake_question_config')
+      .delete()
+      .eq('id', params.id)
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ ok: true })
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })
   }

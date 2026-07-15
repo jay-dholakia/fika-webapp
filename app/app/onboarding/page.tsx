@@ -336,6 +336,7 @@ function AppOnboardingContent() {
   const [avatarPhotoError, setAvatarPhotoError] = useState<string | null>(null)
   const [languageQuery, setLanguageQuery] = useState('')
   const [currentStepId, setCurrentStepId] = useState<string | null>(null)
+  const [stepOverrides, setStepOverrides] = useState<Map<string, { question?: string; body?: string | null; options?: string[] | null; maxSelections?: number | null }>>(new Map())
   const submitRef = useRef<HTMLDivElement>(null)
   const lastMultiSelectRef = useRef<{ stepId: string; opt: string; t: number }>({ stepId: '', opt: '', t: 0 })
 
@@ -348,8 +349,35 @@ function AppOnboardingContent() {
     setAnswers((a) => ({ ...a, q_market_tenure: MARKET_TENURE_OPTIONS[0] }))
   }, [currentStepId, answers.q_market_tenure])
 
+  useEffect(() => {
+    fetch('/api/intake-questions')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (!data?.questions?.length) return
+        const map = new Map<string, { question?: string; body?: string | null; options?: string[] | null; maxSelections?: number | null }>()
+        for (const q of data.questions) {
+          if (!q.question_id) continue
+          map.set(q.question_id, { question: q.label, body: q.body, options: q.options, maxSelections: q.max_selections })
+        }
+        setStepOverrides(map)
+      })
+      .catch(() => {})
+  }, [])
+
   const currentStepIndex = Math.max(0, visibleSteps.findIndex((step) => step.id === currentStepId))
   const currentStep = visibleSteps[currentStepIndex] ?? visibleSteps[0]
+  const effectiveCurrentStep = useMemo(() => {
+    if (!currentStep || stepOverrides.size === 0) return currentStep
+    const o = stepOverrides.get(currentStep.id)
+    if (!o) return currentStep
+    return {
+      ...currentStep,
+      ...(o.question !== undefined ? { question: o.question } : {}),
+      ...(o.body !== undefined ? { body: o.body ?? undefined } : {}),
+      ...(o.options != null ? { options: o.options } : {}),
+      ...(o.maxSelections != null ? { maxSelections: o.maxSelections } : {}),
+    } as typeof currentStep
+  }, [currentStep, stepOverrides])
   const totalSteps = visibleSteps.length
   /** SMS token flow: Google sign-in is the final onboarding step and counts toward 0–100%. */
   const includesFinalGoogleAuthStep = tokenMode && Boolean(token)
@@ -593,7 +621,7 @@ function AppOnboardingContent() {
     setError(null)
     setAvatarPhotoError(null)
 
-    const stepError = getStepError(currentStep)
+    const stepError = getStepError(effectiveCurrentStep ?? currentStep)
     if (stepError) {
       setError(stepError)
       submitRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
@@ -1415,7 +1443,7 @@ function AppOnboardingContent() {
               </button>
             </div>
           ) : (
-            currentStep ? renderField(currentStep) : null
+            effectiveCurrentStep ? renderField(effectiveCurrentStep) : null
           )}
 
           {error ? (
