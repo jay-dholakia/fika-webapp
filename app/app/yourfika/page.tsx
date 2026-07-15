@@ -8,20 +8,63 @@ import type { RealtimeChannel } from '@supabase/supabase-js'
 import { authLog } from '@/lib/auth-log'
 import { getMarketBySlug, getMarketFromCity } from '@/lib/markets'
 import { useOnboardingStatus } from '@/lib/use-onboarding'
-import { formatIntakeAnswer, ageFromBirthdate } from '@/lib/intro-detail'
-import { IntroDetailModal, type IntroMatch } from '@/app/app/components/IntroDetailModal'
-import { VerifiedBadge } from '@/app/app/components/VerifiedBadge'
-import type { IntakeResponseItem } from '@/lib/db-types'
+
+type UpcomingRsvp = {
+  eventId: string
+  eventStartsAt: string | null
+  revealsAt: string | null
+  venueName: string | null
+  venueNeighborhood: string | null
+  matchFirstName: string | null
+}
+
+function formatEventDate(iso: string): string {
+  const d = new Date(iso)
+  return new Intl.DateTimeFormat('en-US', {
+    weekday: 'long',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  }).format(d).replace(/:00\s/, ' ')
+}
+
+function UpcomingFikaCard({ rsvp }: { rsvp: UpcomingRsvp }) {
+  const venue = rsvp.venueName
+  const location = rsvp.venueNeighborhood ? `${venue} · ${rsvp.venueNeighborhood}` : (venue ?? null)
+  const dateStr = rsvp.eventStartsAt ? formatEventDate(rsvp.eventStartsAt) : null
+
+  if (rsvp.matchFirstName) {
+    return (
+      <div style={{ fontSize: '0.95rem' }}>
+        <p style={{ margin: '0 0 0.35rem', fontWeight: 600, fontSize: '1rem' }}>
+          You&apos;re meeting {rsvp.matchFirstName} ☕
+        </p>
+        {dateStr && <p style={{ margin: '0 0 0.2rem', color: 'var(--color-textSecondary)' }}>{dateStr}</p>}
+        {location && <p style={{ margin: 0, color: 'var(--color-textSecondary)' }}>{location}</p>}
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ fontSize: '0.95rem' }}>
+      <p style={{ margin: '0 0 0.35rem', fontWeight: 600, fontSize: '1rem' }}>You&apos;re in ✓</p>
+      {dateStr && <p style={{ margin: '0 0 0.2rem', color: 'var(--color-textSecondary)' }}>{dateStr}</p>}
+      {location && <p style={{ margin: '0 0 0.5rem', color: 'var(--color-textSecondary)' }}>{location}</p>}
+      <p style={{ margin: 0, color: 'var(--color-textSecondary)', fontSize: '0.88rem' }}>
+        Your match will be revealed 30 minutes before.
+      </p>
+    </div>
+  )
+}
 
 function AppHomeContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [userId, setUserId] = useState<string | null>(null)
-  const [intros, setIntros] = useState<IntroMatch[]>([])
-  const [introsLoading, setIntrosLoading] = useState(false)
+  const [upcomingRsvp, setUpcomingRsvp] = useState<UpcomingRsvp | null | 'loading'>('loading')
   const [loading, setLoading] = useState(true)
-  const [modalIntro, setModalIntro] = useState<IntroMatch | null>(null)
-  const [error, setError] = useState<string | null>(null)
   const [profileCount, setProfileCount] = useState<number | null>(null)
   const [marketLabel, setMarketLabel] = useState<string | null>(null)
   const [marketActive, setMarketActive] = useState<boolean | null>(null)
@@ -130,105 +173,88 @@ function AppHomeContent() {
     setLoading(false)
   }, [userId])
 
-  // Load this week’s active intro row(s) from match_candidates
+  // Load upcoming yes-RSVP with event + venue, and match reveal if available
   useEffect(() => {
     if (!userId) {
-      setIntros([])
+      setUpcomingRsvp(null)
       return
     }
     const supabase = getSupabase()
     if (!supabase) {
-      setIntros([])
+      setUpcomingRsvp(null)
       return
     }
-    setIntrosLoading(true)
+    setUpcomingRsvp('loading')
+
+    const now = new Date().toISOString()
+    void Promise.resolve(
     supabase
-      .from('match_candidates')
-      .select('id, user_a, user_b, score, reasons')
-      .or(`user_a.eq.${userId},user_b.eq.${userId}`)
-      .eq('status', 'active')
-      .then(({ data: matches, error: matchError }) => {
-        if (matchError || !matches?.length) {
-          setIntros([])
-          setIntrosLoading(false)
+      .from('weekly_rsvps')
+      .select('event_id, weekly_fika_events(id, event_starts_at, reveals_sent_at, venue_id, venues(name, neighborhood))')
+      .eq('user_id', userId)
+      .eq('decision', 'yes')
+      .order('decided_at', { ascending: false })
+      .limit(5)
+    ).then(({ data: rsvps }) => {
+        if (!rsvps?.length) { setUpcomingRsvp(null); return }
+
+        type EventRow = { id: string; event_starts_at: string | null; reveals_sent_at: string | null; venue_id: string | null; venues: { name: string | null; neighborhood: string | null } | null }
+        const withEvent = (rsvps as unknown as { event_id: string; weekly_fika_events: EventRow | null }[])
+          .filter(r => r.weekly_fika_events)
+          .map(r => ({ rsvp: r, event: r.weekly_fika_events! }))
+
+        const upcoming = withEvent.filter(x => !x.event.event_starts_at || x.event.event_starts_at >= now)
+        const chosen = upcoming[0] ?? withEvent[0]
+        if (!chosen) { setUpcomingRsvp(null); return }
+
+        const event = chosen.event
+        const venue = event.venues
+
+        const baseRsvp = {
+          eventId: event.id,
+          eventStartsAt: event.event_starts_at,
+          revealsAt: event.reveals_sent_at,
+          venueName: venue?.name ?? null,
+          venueNeighborhood: venue?.neighborhood ?? null,
+          matchFirstName: null as string | null,
+        }
+
+        if (!event.reveals_sent_at) {
+          setUpcomingRsvp(baseRsvp)
           return
         }
-        const otherIds = Array.from(new Set(
-          matches.map((m: { user_a: string; user_b: string }) => m.user_a === userId ? m.user_b : m.user_a)
-        ))
-        Promise.allSettled([
-          supabase.from('profiles').select('id, first_name, city, birthdate, id_verified_at').in('id', otherIds),
-          supabase.from('intake_responses_v5').select('user_id, responses').in('user_id', otherIds),
-        ]).then(([profilesSettled, intakeSettled]) => {
-          const profilesRes = profilesSettled.status === 'fulfilled' ? profilesSettled.value : { data: null, error: { message: 'Profiles request failed' } }
-          const intakeRes = intakeSettled.status === 'fulfilled' ? intakeSettled.value : { data: null, error: null }
-          // Build list even when profiles fail (e.g. RLS) so we don't hide intros – use empty profile data
-          const profiles = (profilesRes?.data ?? []) as {
-            id: string
-            first_name: string | null
-            city: string | null
-            birthdate: string | null
-            id_verified_at: string | null
-          }[]
-          const byId = profiles.reduce<
-            Record<
-              string,
-              {
-                first_name: string
-                city: string | null
-                birthdate: string | null
-                id_verified_at: string | null
-              }
-            >
-          >((acc, p) => {
-            acc[p.id] = {
-              first_name: p.first_name?.trim() || 'Someone',
-              city: p.city ?? null,
-              birthdate: p.birthdate ?? null,
-              id_verified_at: p.id_verified_at ?? null,
-            }
-            return acc
-          }, {})
-          const intakeByUserId: Record<string, { topicsPreview: string | null; fikaPreference: string | null }> = {}
-          ;((intakeRes?.data ?? []) as { user_id: string; responses: unknown }[]).forEach((row) => {
-            const responses = Array.isArray(row.responses) ? (row.responses as IntakeResponseItem[]) : []
-            const q5 = responses.find((r: IntakeResponseItem) => r.question_id === 'q5_talk_about')
-            const q4 = responses.find((r: IntakeResponseItem) => r.question_id === 'q4_where_most_yourself')
-            intakeByUserId[row.user_id] = {
-              topicsPreview: q5 ? formatIntakeAnswer(q5.answer) || null : null,
-              fikaPreference: q4 ? formatIntakeAnswer(q4.answer) || null : null,
-            }
-          })
-          const list: IntroMatch[] = matches.map((m: {
-            id: string
-            user_a: string
-            user_b: string
-            score: number | null
-            reasons: unknown
-          }) => {
-            const otherId = m.user_a === userId ? m.user_b : m.user_a
-            const profile = byId[otherId]
-            const intake = intakeByUserId[otherId]
-            return {
-              id: m.id,
-              otherUserId: otherId,
-              otherFirstName: profile?.first_name ?? 'Someone',
-              otherCity: profile?.city ?? null,
-              otherIdVerified: Boolean(profile?.id_verified_at),
-              otherAge: profile?.birthdate != null ? ageFromBirthdate(profile.birthdate) : null,
-              score: m.score ?? null,
-              reasons: (m.reasons as IntroMatch['reasons']) ?? null,
-              conversationTypesPreview: intake?.topicsPreview ?? null,
-              fikaPreferencePreview: intake?.fikaPreference ?? null,
-            }
-          })
-          setIntros(list)
-          setIntrosLoading(false)
-        }).catch(() => {
-          setIntros([])
-          setIntrosLoading(false)
-        })
+
+        // Reveals sent — look up their approved match
+        void (async () => {
+          try {
+            const { data: matches } = await supabase
+              .from('match_candidates')
+              .select('user_a, user_b')
+              .or(`user_a.eq.${userId},user_b.eq.${userId}`)
+              .eq('status', 'active')
+              .eq('admin_approval_status', 'approved')
+              .limit(1)
+
+            const match = (matches as { user_a: string; user_b: string }[] | null)?.[0]
+            if (!match) { setUpcomingRsvp(baseRsvp); return }
+
+            const otherId = match.user_a === userId ? match.user_b : match.user_a
+            const { data: prof } = await supabase
+              .from('profiles')
+              .select('first_name')
+              .eq('id', otherId)
+              .single()
+
+            setUpcomingRsvp({
+              ...baseRsvp,
+              matchFirstName: (prof as { first_name: string | null } | null)?.first_name?.trim() || null,
+            })
+          } catch {
+            setUpcomingRsvp(baseRsvp)
+          }
+        })()
       })
+      .catch(() => setUpcomingRsvp(null))
   }, [userId])
 
   if (loading) {
@@ -288,77 +314,32 @@ function AppHomeContent() {
             </div>
           </>
         ) : (
-          <>
-            <div style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem' }}>
-              <p style={{ margin: '0 0 0.5rem 0' }}>You&apos;re in.</p>
-              <p style={{ margin: '0 0 0.75rem 0' }}>
-                We&apos;ll reach out when there&apos;s a strong Fika intro for you.
-              </p>
-              <p style={{ margin: 0 }}>
-                We&apos;re actively looking—nothing you need to do in the meantime.
-              </p>
-            </div>
-            {error && <p className="onboarding-error" style={{ marginTop: '0.75rem' }}>{error}</p>}
-          </>
+          <div style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem' }}>
+            <p style={{ margin: '0 0 0.5rem 0' }}>You&apos;re in.</p>
+            <p style={{ margin: 0 }}>
+              Every week we host a coffee meetup in your area. You&apos;ll get a text invite — reply Yes to grab a spot. We&apos;ll match you with someone and reveal who 30 minutes before.
+            </p>
+          </div>
         )}
 
         <div style={{ marginTop: '1.75rem', paddingTop: '1.25rem', borderTop: '1px solid var(--color-border, rgba(0,0,0,0.08))' }}>
           <h3 className="app-subsection-title" style={{ fontSize: '1.1rem', margin: '0 0 0.75rem', fontWeight: 600 }}>
-            {isInactiveMarket ? 'Your Fika Intro' : 'Your Fika intro'}
+            Your next Fika
           </h3>
-          {introsLoading ? (
+          {upcomingRsvp === 'loading' ? (
             <p className="app-empty" style={{ padding: '0.5rem 0' }}>Loading…</p>
-          ) : intros.length === 0 ? (
+          ) : upcomingRsvp === null ? (
             isInactiveMarket ? (
-              <p className="app-empty" style={{ padding: '0.5rem 0', margin: 0, color: 'var(--color-textSecondary)', fontSize: '0.95rem' }}>
-                Your intro will show up here once your area is live.
+              <p style={{ padding: '0.5rem 0', margin: 0, color: 'var(--color-textSecondary)', fontSize: '0.95rem' }}>
+                Your first invite will arrive once Fika launches in your area.
               </p>
             ) : (
-              <div className="app-empty" style={{ padding: '0.5rem 0', margin: 0, color: 'var(--color-textSecondary)', fontSize: '0.95rem' }}>
-                <p style={{ margin: '0 0 0.5rem 0' }}>No intro yet.</p>
-                <p style={{ margin: 0 }}>When we find the right person, their details will show up here.</p>
-              </div>
+              <p style={{ padding: '0.5rem 0', margin: 0, color: 'var(--color-textSecondary)', fontSize: '0.95rem' }}>
+                No upcoming Fika yet. When you get a text invite and reply Yes, it&apos;ll show up here.
+              </p>
             )
           ) : (
-            <div className="app-intro-list" aria-label={isInactiveMarket ? 'Your Fika Intro' : 'Your Fika intro'}>
-              {intros.map((intro) => (
-                <div key={intro.id} className="app-intro-card">
-                  <button
-                    type="button"
-                    className="app-intro-card-trigger"
-                    onClick={() => setModalIntro(intro)}
-                  >
-                    <div className="app-intro-card-body">
-                      <span className="app-intro-name app-intro-name-with-badge">
-                        <strong className="app-intro-name-text">{intro.otherFirstName}</strong>
-                        {intro.otherIdVerified ? <VerifiedBadge /> : null}
-                      </span>
-                      {intro.otherAge != null && <span className="app-intro-meta"> · {intro.otherAge} years old</span>}
-                      {(intro.reasons?.conversationHooks?.length || intro.reasons?.conversation_hooks?.length || intro.fikaPreferencePreview) ? (
-                        <p className="app-intro-preview">
-                          {(() => {
-                            const hooks = intro.reasons?.conversationHooks?.length ? intro.reasons.conversationHooks : intro.reasons?.conversation_hooks ?? []
-                            const firstHook = hooks[0]
-                            return firstHook ? (
-                              <span className="app-intro-preview-line">{firstHook}</span>
-                            ) : null
-                          })()}
-                          {((intro.reasons?.conversationHooks?.length || intro.reasons?.conversation_hooks?.length) && intro.fikaPreferencePreview) ? (
-                            <span className="app-intro-preview-sep"> · </span>
-                          ) : null}
-                          {intro.fikaPreferencePreview ? (
-                            <span className="app-intro-preview-line">
-                              <strong className="app-intro-preview-label">Fika:</strong> {intro.fikaPreferencePreview}
-                            </span>
-                          ) : null}
-                        </p>
-                      ) : null}
-                    </div>
-                    <span className="app-intro-card-cta">View details →</span>
-                  </button>
-                </div>
-              ))}
-            </div>
+            <UpcomingFikaCard rsvp={upcomingRsvp} />
           )}
         </div>
       </div>
@@ -366,31 +347,21 @@ function AppHomeContent() {
       {showJustCompletedThankYou && (
         <div className="app-card">
           <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem', margin: 0 }}>
-            Thank you for completing the intro questions! We&apos;ll reach out when we find a good Fika intro for you.
+            Profile complete! You&apos;ll get a text invite when there&apos;s a Fika in your area.
           </p>
         </div>
       )}
 
       {showQuestionnaireCard && (
         <div className="app-card app-questionnaire-card">
-          <h2>Complete intro questionnaire</h2>
+          <h2>Complete your profile</h2>
           <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem', marginBottom: '1rem' }}>
-            Answer a few questions so we can send you a strong intro for your Fika. Takes about 5 minutes.
+            Answer a few questions so we can match you well at your first Fika. Takes about 5 minutes.
           </p>
           <Link href="/app/onboarding" className="btn btn-primary btn-block auth-submit" style={{ display: 'inline-block', textAlign: 'center' }}>
-            Start questionnaire
+            Set up profile
           </Link>
         </div>
-      )}
-
-      {modalIntro != null && (
-        <IntroDetailModal
-          intro={modalIntro}
-          onClose={() => setModalIntro(null)}
-          actionMatchId={null}
-          error={error}
-          currentUserId={userId}
-        />
       )}
     </>
   )
