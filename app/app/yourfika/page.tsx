@@ -12,10 +12,8 @@ import { useOnboardingStatus } from '@/lib/use-onboarding'
 type UpcomingRsvp = {
   eventId: string
   eventStartsAt: string | null
-  revealsAt: string | null
   venueName: string | null
   venueNeighborhood: string | null
-  matchFirstName: string | null
 }
 
 function formatEventDate(iso: string): string {
@@ -35,26 +33,11 @@ function UpcomingFikaCard({ rsvp }: { rsvp: UpcomingRsvp }) {
   const location = rsvp.venueNeighborhood ? `${venue} · ${rsvp.venueNeighborhood}` : (venue ?? null)
   const dateStr = rsvp.eventStartsAt ? formatEventDate(rsvp.eventStartsAt) : null
 
-  if (rsvp.matchFirstName) {
-    return (
-      <div style={{ fontSize: '0.95rem' }}>
-        <p style={{ margin: '0 0 0.35rem', fontWeight: 600, fontSize: '1rem' }}>
-          You&apos;re meeting {rsvp.matchFirstName} ☕
-        </p>
-        {dateStr && <p style={{ margin: '0 0 0.2rem', color: 'var(--color-textSecondary)' }}>{dateStr}</p>}
-        {location && <p style={{ margin: 0, color: 'var(--color-textSecondary)' }}>{location}</p>}
-      </div>
-    )
-  }
-
   return (
     <div style={{ fontSize: '0.95rem' }}>
-      <p style={{ margin: '0 0 0.35rem', fontWeight: 600, fontSize: '1rem' }}>You&apos;re in ✓</p>
+      <p style={{ margin: '0 0 0.35rem', fontWeight: 600, fontSize: '1rem' }}>You&apos;re confirmed ✓</p>
       {dateStr && <p style={{ margin: '0 0 0.2rem', color: 'var(--color-textSecondary)' }}>{dateStr}</p>}
-      {location && <p style={{ margin: '0 0 0.5rem', color: 'var(--color-textSecondary)' }}>{location}</p>}
-      <p style={{ margin: 0, color: 'var(--color-textSecondary)', fontSize: '0.88rem' }}>
-        Your match will be revealed 30 minutes before.
-      </p>
+      {location && <p style={{ margin: 0, color: 'var(--color-textSecondary)' }}>{location}</p>}
     </div>
   )
 }
@@ -190,7 +173,7 @@ function AppHomeContent() {
     void Promise.resolve(
     supabase
       .from('weekly_rsvps')
-      .select('event_id, weekly_fika_events(id, event_starts_at, reveals_sent_at, venue_id, venues(name, neighborhood))')
+      .select('event_id, weekly_fika_events(id, event_starts_at, venue_id, venues(name, neighborhood))')
       .eq('user_id', userId)
       .eq('decision', 'yes')
       .order('decided_at', { ascending: false })
@@ -198,7 +181,7 @@ function AppHomeContent() {
     ).then(({ data: rsvps }) => {
         if (!rsvps?.length) { setUpcomingRsvp(null); return }
 
-        type EventRow = { id: string; event_starts_at: string | null; reveals_sent_at: string | null; venue_id: string | null; venues: { name: string | null; neighborhood: string | null } | null }
+        type EventRow = { id: string; event_starts_at: string | null; venue_id: string | null; venues: { name: string | null; neighborhood: string | null } | null }
         const withEvent = (rsvps as unknown as { event_id: string; weekly_fika_events: EventRow | null }[])
           .filter(r => r.weekly_fika_events)
           .map(r => ({ rsvp: r, event: r.weekly_fika_events! }))
@@ -210,49 +193,12 @@ function AppHomeContent() {
         const event = chosen.event
         const venue = event.venues
 
-        const baseRsvp = {
+        setUpcomingRsvp({
           eventId: event.id,
           eventStartsAt: event.event_starts_at,
-          revealsAt: event.reveals_sent_at,
           venueName: venue?.name ?? null,
           venueNeighborhood: venue?.neighborhood ?? null,
-          matchFirstName: null as string | null,
-        }
-
-        if (!event.reveals_sent_at) {
-          setUpcomingRsvp(baseRsvp)
-          return
-        }
-
-        // Reveals sent — look up their approved match
-        void (async () => {
-          try {
-            const { data: matches } = await supabase
-              .from('match_candidates')
-              .select('user_a, user_b')
-              .or(`user_a.eq.${userId},user_b.eq.${userId}`)
-              .eq('status', 'active')
-              .eq('admin_approval_status', 'approved')
-              .limit(1)
-
-            const match = (matches as { user_a: string; user_b: string }[] | null)?.[0]
-            if (!match) { setUpcomingRsvp(baseRsvp); return }
-
-            const otherId = match.user_a === userId ? match.user_b : match.user_a
-            const { data: prof } = await supabase
-              .from('profiles')
-              .select('first_name')
-              .eq('id', otherId)
-              .single()
-
-            setUpcomingRsvp({
-              ...baseRsvp,
-              matchFirstName: (prof as { first_name: string | null } | null)?.first_name?.trim() || null,
-            })
-          } catch {
-            setUpcomingRsvp(baseRsvp)
-          }
-        })()
+        })
       })
       .catch(() => setUpcomingRsvp(null))
   }, [userId])
@@ -317,7 +263,7 @@ function AppHomeContent() {
           <div style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem' }}>
             <p style={{ margin: '0 0 0.5rem 0' }}>You&apos;re in.</p>
             <p style={{ margin: 0 }}>
-              Every week we host a coffee meetup in your area. You&apos;ll get a text invite — reply Yes to grab a spot. We&apos;ll match you with someone and reveal who 30 minutes before.
+              When there&apos;s a Fika in your area, you&apos;ll get a text invite. Reply Yes to grab a spot — we&apos;ll match you with someone interesting. You&apos;ll find out who 30 minutes before.
             </p>
           </div>
         )}
