@@ -768,6 +768,24 @@ export async function POST(request: Request) {
       await sendConciergeAndLog(fromNumber, messageRsvpCancelled(), 'rsvp_accepted_cancelled', { userId })
       return NextResponse.json({ ok: true })
     }
+    // If day-before confirm SMS was sent and user replies Yes, stamp their confirmation
+    if (isMatchYesSignal && rsvpEventId) {
+      const { data: eventForConfirm } = await supabase
+        .from('weekly_fika_events')
+        .select('day_before_sms_sent_at')
+        .eq('id', rsvpEventId)
+        .maybeSingle()
+      if (eventForConfirm?.day_before_sms_sent_at) {
+        await supabase
+          .from('weekly_rsvps')
+          .update({ day_before_confirmed_at: new Date().toISOString() })
+          .eq('user_id', userId)
+          .eq('event_id', rsvpEventId)
+          .eq('decision', 'yes')
+        await sendConciergeAndLog(fromNumber, "Confirmed ✓ See you there ☕", 'rsvp_day_before_confirmed', { userId })
+        return NextResponse.json({ ok: true })
+      }
+    }
     await sendConciergeAndLog(fromNumber, "You're in! Text 'cancel' if your plans change.", 'rsvp_accepted_nudge', { userId })
     return NextResponse.json({ ok: true })
   }
