@@ -6,6 +6,8 @@ declare const Deno: { env: { get(key: string): string | undefined } }
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 // @ts-ignore Deno
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+// @ts-ignore Deno
+import { getIanaTimezoneForMarketSlug } from '../_shared/market-timezones.ts'
 
 const SENDBLUE_URL = 'https://api.sendblue.co/api/send-message'
 
@@ -130,7 +132,8 @@ serve(async (req: Request) => {
       }
     }
 
-    const { dayDate, time } = formatEventDateTime(eventStartsAt)
+    const eventTz = getIanaTimezoneForMarketSlug(marketSlug)
+    const { dayDate, time } = formatEventDateTime(eventStartsAt, eventTz)
     const message = buildOptInMessage({ dayDate, time, venueName, neighborhood })
 
     // Dedup: already invited to this specific event

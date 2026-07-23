@@ -330,7 +330,7 @@ export function messageWeeklyOptInYes(): string {
 
 /** Sent when user says No to the weekly opt-in. */
 export function messageWeeklyOptInNo(): string {
-  return `No worries — we'll reach out next week.`
+  return `No worries — we'll reach out when there's a next one.`
 }
 
 /** Weekly opt-in SMS inviting user to a specific event. */

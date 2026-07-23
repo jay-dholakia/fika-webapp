@@ -578,6 +578,7 @@ export async function POST(request: Request) {
   }
   if (profileForSms?.sms_opted_out_at) {
     await supabase.from('profiles').update({ sms_opted_out_at: null }).eq('id', userId)
+    await setGlobalSmsState({ userId, state: SMS_STATES.GLOBAL_READY, payload: {} })
     await sendConciergeAndLog(fromNumber, messageSmsOptBackIn(), 'opt_back_in', { userId })
     return NextResponse.json({ ok: true })
   }
@@ -887,6 +888,60 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true })
   }
 
+
+  // Confirmed state: user has been revealed a match. If the event has passed, treat like global_ready.
+  // If texting before the event, give a short holding reply.
+  if (!matchId && state === SMS_STATES.CONFIRMED) {
+    const confirmedEventId = (payload.event_id as string | undefined) ?? null
+    let eventPassed = true
+    if (confirmedEventId) {
+      const { data: confirmedEvent } = await supabase
+        .from('weekly_fika_events')
+        .select('event_starts_at')
+        .eq('id', confirmedEventId)
+        .maybeSingle()
+      if (confirmedEvent?.event_starts_at && new Date(confirmedEvent.event_starts_at as string).getTime() > Date.now()) {
+        eventPassed = false
+      }
+    }
+
+    if (!eventPassed) {
+      await sendConciergeAndLog(fromNumber, "You're all set — see you there ☕", 'confirmed_pre_event_nudge', { userId })
+      return NextResponse.json({ ok: true })
+    }
+
+    // Event has passed — reset to global_ready and handle like a normal global_ready message
+    await setGlobalSmsState({ userId, state: SMS_STATES.GLOBAL_READY, payload: {} })
+    const { data: profileForConfirmed } = await supabase
+      .from('profiles')
+      .select('first_name, market')
+      .eq('id', userId)
+      .maybeSingle()
+    const apiKeyConfirmed = getOpenAiKeyForSms()
+    if (apiKeyConfirmed) {
+      const aiCount = await countGlobalReadyAiRepliesLast24h(supabase, userId)
+      if (aiCount < getSmsAiMaxGlobalReadyPer24h()) {
+        await prepareOutboundAiPresence(fromNumber)
+        const firstNameC = (profileForConfirmed as { first_name?: string | null } | null)?.first_name?.trim() ?? ''
+        const marketSlugC = (profileForConfirmed as { market?: string | null } | null)?.market ?? null
+        const marketLabelC = marketSlugC ? getMarketBySlug(marketSlugC)?.label ?? marketSlugC : undefined
+        const aiReply = await fetchGlobalReadyConciergeReply({
+          apiKey: apiKeyConfirmed,
+          userMessage: content,
+          firstName: firstNameC || undefined,
+          marketLabel: marketLabelC,
+          appBaseUrl: getAppBase(),
+        })
+        if (aiReply.ok) {
+          const sr = await sendConciergeAndLog(fromNumber, aiReply.text, GLOBAL_READY_CONCIERGE_AI_CONTEXT, { userId })
+          await setGlobalSmsState({ userId, state: SMS_STATES.GLOBAL_READY, payload: {}, lastSendblueMessageHandle: sr.message_handle ?? messageHandle ?? null })
+          return NextResponse.json({ ok: true })
+        }
+      }
+    }
+    await sendConciergeAndLog(fromNumber, messageEntryReminder(), 'confirmed_post_event_fallback', { userId })
+    return NextResponse.json({ ok: true })
+  }
 
   return smsFail('unhandled_inbound_sms', {
     userId,

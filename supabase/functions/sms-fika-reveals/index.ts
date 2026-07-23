@@ -6,6 +6,8 @@ declare const Deno: { env: { get(key: string): string | undefined } }
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 // @ts-ignore Deno
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+// @ts-ignore Deno
+import { getIanaTimezoneForMarketSlug } from '../_shared/market-timezones.ts'
 
 const SENDBLUE_URL = 'https://api.sendblue.co/api/send-message'
 
@@ -109,7 +111,8 @@ serve(async (_req: Request) => {
       const eventId = event.id as string
       const eventStartsAt = event.event_starts_at as string
       const venueId = event.venue_id as string | null
-      const eventTimeFormatted = formatEventTime(eventStartsAt)
+      const eventTz = getIanaTimezoneForMarketSlug(event.market_slug as string | null)
+      const eventTimeFormatted = formatEventTime(eventStartsAt, eventTz)
 
       // Get venue info
       let venueName = 'your Fika venue'
@@ -222,6 +225,36 @@ serve(async (_req: Request) => {
           }
 
           totalRevealsSent++
+        }
+      }
+
+      // Send fallback to any yes-RSVP users who weren't in a matched pair
+      const matchedUserIds = new Set<string>()
+      for (const m of matchesToReveal) {
+        matchedUserIds.add(m.user_a as string)
+        matchedUserIds.add(m.user_b as string)
+      }
+      const unmatchedIds = [...yesUserIds].filter(id => !matchedUserIds.has(id))
+      if (unmatchedIds.length > 0) {
+        const { data: unmatchedProfiles } = await supabase
+          .from('profiles')
+          .select('id, phone')
+          .in('id', unmatchedIds)
+        for (const prof of (unmatchedProfiles ?? []) as Array<{ id: string; phone: string | null }>) {
+          const phone = prof.phone?.trim()
+          if (!phone) continue
+          await sendMessage({
+            apiKeyId,
+            apiSecret,
+            phone,
+            content: "We weren't able to pair you for this one — sorry about that. We'll get you next time.",
+          })
+          await supabase.rpc('upsert_global_sms_conversation_state', {
+            p_user_id: prof.id,
+            p_state: 'global_ready',
+            p_payload: {},
+            p_last_sendblue_message_handle: null,
+          })
         }
       }
 

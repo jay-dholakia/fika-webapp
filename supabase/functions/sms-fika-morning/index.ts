@@ -6,6 +6,8 @@ declare const Deno: { env: { get(key: string): string | undefined } }
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 // @ts-ignore Deno
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+// @ts-ignore Deno
+import { getIanaTimezoneForMarketSlug } from '../_shared/market-timezones.ts'
 
 const SENDBLUE_URL = 'https://api.sendblue.co/api/send-message'
 
@@ -126,7 +128,8 @@ serve(async (_req: Request) => {
       const eventId = event.id as string
       const eventStartsAt = event.event_starts_at as string
       const venueId = event.venue_id as string | null
-      const eventTimeFormatted = formatEventTimeOnly(eventStartsAt)
+      const eventTz = getIanaTimezoneForMarketSlug(event.market_slug as string | null)
+      const eventTimeFormatted = formatEventTimeOnly(eventStartsAt, eventTz)
 
       // Get venue info
       let venueName = 'your Fika venue'
