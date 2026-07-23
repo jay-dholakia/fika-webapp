@@ -24,10 +24,23 @@ function formatEventDateTime(isoStr: string, tz = 'America/Los_Angeles'): string
   return `${weekday} at ${time}`
 }
 
-function buildDayBeforeMessage(params: { eventLabel: string; venueName: string; neighborhood: string }): string {
-  const { eventLabel, venueName, neighborhood } = params
+function formatTime(isoStr: string, tz = 'America/Los_Angeles'): string {
+  const d = new Date(isoStr)
+  let time = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz,
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  }).format(d).toLowerCase()
+  time = time.replace(':00', '')
+  if (time === '12pm') time = 'noon'
+  return time
+}
+
+function buildDayBeforeMessage(params: { eventLabel: string; deadlineTime: string; venueName: string; neighborhood: string }): string {
+  const { eventLabel, deadlineTime, venueName, neighborhood } = params
   const locationLine = neighborhood ? `${venueName} (${neighborhood})` : venueName
-  return `Your Fika is ${eventLabel} at ${locationLine}. Still on? Reply Yes to confirm your spot — if we don't hear from you, we'll give it to someone else.`
+  return `Your Fika is ${eventLabel} at ${locationLine}. Still on? Reply Yes to confirm — we need to hear from you by ${deadlineTime} or we'll give your spot to someone else.`
 }
 
 async function sendMessage(params: {
@@ -106,7 +119,9 @@ serve(async (_req: Request) => {
       }
 
       const eventLabel = formatEventDateTime(eventStartsAt, eventTz)
-      const message = buildDayBeforeMessage({ eventLabel, venueName, neighborhood })
+      const deadlineIso = new Date(new Date(eventStartsAt).getTime() - 6 * 60 * 60 * 1000).toISOString()
+      const deadlineTime = formatTime(deadlineIso, eventTz)
+      const message = buildDayBeforeMessage({ eventLabel, deadlineTime, venueName, neighborhood })
 
       const { data: rsvps } = await supabase
         .from('weekly_rsvps')

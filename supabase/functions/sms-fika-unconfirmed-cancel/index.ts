@@ -1,4 +1,4 @@
-// Fires every 30 min (pg_cron). Finds events starting in 10-14 hours where a day-before confirm
+// Fires every 30 min (pg_cron). Finds events starting in 5.5-6.5 hours where a day-before confirm
 // SMS was sent. Cancels RSVPs from users who never replied Yes and notifies them.
 
 declare const Deno: { env: { get(key: string): string | undefined } }
@@ -45,8 +45,8 @@ serve(async (_req: Request) => {
     )
 
     const nowMs = Date.now()
-    const windowStart = new Date(nowMs + 10 * 60 * 60 * 1000).toISOString()
-    const windowEnd = new Date(nowMs + 14 * 60 * 60 * 1000).toISOString()
+    const windowStart = new Date(nowMs + 5.5 * 60 * 60 * 1000).toISOString()
+    const windowEnd = new Date(nowMs + 6.5 * 60 * 60 * 1000).toISOString()
 
     // Find events in the window where a day-before SMS was sent
     const { data: events } = await supabase

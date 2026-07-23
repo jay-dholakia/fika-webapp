@@ -1,4 +1,4 @@
-// Fires every 30 min (pg_cron). Finds events starting in 7–9 hours with morning_sms_sent_at IS NULL,
+// Fires every 30 min (pg_cron). Finds events starting in 5–5.5 hours with morning_sms_sent_at IS NULL,
 // then sends two conversation questions to all yes-RSVP attendees.
 
 declare const Deno: { env: { get(key: string): string | undefined } }
@@ -48,7 +48,7 @@ function formatEventTimeOnly(isoStr: string, tz = 'America/Los_Angeles'): string
   return time.replace(':00', '')
 }
 
-function buildMorningMessage(params: {
+function buildPreEventMessage(params: {
   venueName: string
   neighborhood: string
   eventTimeFormatted: string
@@ -61,7 +61,7 @@ function buildMorningMessage(params: {
   const lines: string[] = [
     `Your Fika is today at ${eventTimeFormatted} at ${locationLine} ☕`,
     '',
-    `While you're getting ready, here are two things to kick off the conversation:`,
+    `A couple of things to think about before you go:`,
     `• ${q1}`,
     `• ${q2}`,
     '',
@@ -106,8 +106,8 @@ serve(async (_req: Request) => {
     )
 
     const nowMs = Date.now()
-    const windowStart = new Date(nowMs + 7 * 60 * 60 * 1000).toISOString()
-    const windowEnd = new Date(nowMs + 9 * 60 * 60 * 1000).toISOString()
+    const windowStart = new Date(nowMs + 5 * 60 * 60 * 1000).toISOString()
+    const windowEnd = new Date(nowMs + 5.5 * 60 * 60 * 1000).toISOString()
 
     const { data: events } = await supabase
       .from('weekly_fika_events')
@@ -147,7 +147,7 @@ serve(async (_req: Request) => {
       }
 
       const [q1, q2] = pickFikaPromptQuestions(eventId)
-      const message = buildMorningMessage({ venueName, neighborhood, eventTimeFormatted, q1, q2 })
+      const message = buildPreEventMessage({ venueName, neighborhood, eventTimeFormatted, q1, q2 })
 
       // Get all yes-RSVP users and their phone numbers
       const { data: rsvps } = await supabase
