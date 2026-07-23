@@ -5,19 +5,19 @@ import { useState } from 'react'
 const faqItems = [
   {
     q: 'How do you choose who I meet?',
-    a: 'We use your profile, preferences, and when you’re usually free. We text you from our number when we have a good intro. You’ll get a proposed time and a public place (often a café) to confirm by text.',
+    a: "We use your profile and interests to match you with someone we think you'll have a good conversation with — similar enough to connect, different enough to stay interesting. You find out who right before the event.",
   },
   {
     q: 'Do I have to meet in person?',
-    a: 'Yes. Fika is for in‑person conversation in a public spot—usually a café or similar.',
+    a: 'Yes. Fika is for in-person conversation in a public spot — usually a café or similar.',
   },
   {
-    q: 'What if we don’t click?',
-    a: 'No pressure—it’s one conversation. Stay in touch or leave it at that; your call.',
+    q: 'What if we don\'t click?',
+    a: "No pressure — it's one conversation. Stay in touch or leave it at that; your call.",
   },
   {
-    q: 'What do you do with my email and number?',
-    a: 'We don’t sell or share them. We only use them to run Fika, and your intros never get your contact info.',
+    q: 'What do you do with my phone number?',
+    a: "We don't sell or share it. We only use it to run Fika, and your match never gets your contact info.",
   },
   {
     q: 'What does it cost?',

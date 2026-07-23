@@ -25,7 +25,7 @@ export default function Home() {
                     <span className="hero-title-accent">Have a real conversation.</span>
                   </h1>
                   <p className="hero-sub">
-                    Thoughtful intros, sent by text. You meet. You talk. You connect.
+                    A coffee meetup, set up by text. Show up and have a real conversation.
                   </p>
                 </div>
               </section>
@@ -78,34 +78,34 @@ export default function Home() {
                 <div className="step-content">
                   <h3 className="step-title">Get set up</h3>
                   <p className="step-text">
-                    Text our number and answer a few quick questions. We use that to introduce you to people nearby who are similar enough to connect and different enough to stay interesting.
+                    Text our number and answer a few quick questions. We use that to match you well when there&apos;s a Fika in your area.
                   </p>
                 </div>
               </li>
               <li className="step">
                 <span className="step-num">2</span>
                 <div className="step-content">
-                  <h3 className="step-title">Get your Fika intro</h3>
+                  <h3 className="step-title">Get a text invite</h3>
                   <p className="step-text">
-                    When we have an intro for you, we&apos;ll text you a bit about them and text them a bit about you. If you both are down to meet for a Fika, we&apos;ll set it up for you.
+                    When there&apos;s an upcoming Fika near you, we&apos;ll text you. Reply Yes to grab a spot.
                   </p>
                 </div>
               </li>
               <li className="step">
                 <span className="step-num">3</span>
                 <div className="step-content">
-                  <h3 className="step-title">We handle the details</h3>
+                  <h3 className="step-title">Find out who</h3>
                   <p className="step-text">
-                    Once you&apos;re both in, we pick a nearby spot and text you everything you need. Just show up.
+                    We match you with someone we think you&apos;ll have a good conversation with. You find out who 30 minutes before.
                   </p>
                 </div>
               </li>
               <li className="step">
                 <span className="step-num">4</span>
                 <div className="step-content">
-                  <h3 className="step-title">Meet up</h3>
+                  <h3 className="step-title">Show up</h3>
                   <p className="step-text">
-                    Show up for your Fika. Simple as that.
+                    We pick a nearby spot and text you everything you need. Just show up.
                   </p>
                 </div>
               </li>
