@@ -12,6 +12,7 @@ import {
   PROFILE_STEPS,
   INTAKE_STEPS,
   MARKET_TENURE_OPTIONS,
+  NEIGHBORHOOD_OPTIONS,
   type ProfileStep,
 } from '@/lib/onboarding-data'
 import { buildOnboardingSessionPayload, payloadToAnswers, genderDisplayToStored } from '@/lib/onboarding-session-payload'
@@ -24,8 +25,8 @@ import type { IntakeResponseItem } from '@/lib/db-types'
 import type { ProfileRow } from '@/lib/db-types'
 import type { IntakeResponsesV5Row } from '@/lib/db-types'
 
-const BACKGROUND_STEP_IDS = ['q_market_tenure', 'q_ethnicity', 'q_relationship_status'] as const
-const SECTION_2_IDS = [...BACKGROUND_STEP_IDS, 'q_work', 'q_interests'] as const
+const BACKGROUND_STEP_IDS = ['q_market_tenure', 'q_ethnicity'] as const
+const SECTION_2_IDS = [...BACKGROUND_STEP_IDS, 'q_work', 'q_current_interest', 'q_friend_description', 'q_interests'] as const
 const SECTION_3_IDS = ['q_like_talking_about'] as const
 const SECTION_2_STEPS = INTAKE_STEPS.filter((s) => SECTION_2_IDS.includes(s.id as (typeof SECTION_2_IDS)[number]))
 const BACKGROUND_STEPS = SECTION_2_STEPS.filter((s) => BACKGROUND_STEP_IDS.includes(s.id as (typeof BACKGROUND_STEP_IDS)[number]))
@@ -85,13 +86,15 @@ function hasStepAnswer(step: OnboardingRenderableStep, answers: AnswersState): b
   }
   const raw = answers[step.id]
   if (step.id === 'location') {
-    return (
+    const citySet =
       typeof raw === 'object' &&
       raw !== null &&
       'city' in raw &&
       typeof (raw as { city?: string }).city === 'string' &&
       ((raw as { city?: string }).city?.trim() ?? '') !== ''
-    )
+    const neighborhoodSet =
+      typeof answers.q_neighborhood === 'string' && answers.q_neighborhood.trim() !== ''
+    return citySet && neighborhoodSet
   }
   if (step.type === 'multi_select' || step.type === 'searchable_multi') {
     return Array.isArray(raw) && raw.length > 0
@@ -335,6 +338,7 @@ function AppOnboardingContent() {
   const [avatarFaceChecking, setAvatarFaceChecking] = useState(false)
   const [avatarPhotoError, setAvatarPhotoError] = useState<string | null>(null)
   const [languageQuery, setLanguageQuery] = useState('')
+  const [neighborhoodQuery, setNeighborhoodQuery] = useState('')
   const [currentStepId, setCurrentStepId] = useState<string | null>(null)
   const [stepOverrides, setStepOverrides] = useState<Map<string, { question?: string; body?: string | null; options?: string[] | null; maxSelections?: number | null }>>(new Map())
   const submitRef = useRef<HTMLDivElement>(null)
@@ -689,12 +693,9 @@ function AppOnboardingContent() {
       lat: typeof loc?.lat === 'number' ? loc.lat : null,
       lng: typeof loc?.lng === 'number' ? loc.lng : null,
       market: (await getMarketFromCityOrLatLngWithDb(supabase, loc?.city, loc?.lat, loc?.lng))?.slug ?? null,
+      neighborhood: typeof answers.q_neighborhood === 'string' && answers.q_neighborhood.trim() ? answers.q_neighborhood.trim() : null,
       intent_confirmed_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-      relationship_status:
-        typeof answers.q_relationship_status === 'string' && answers.q_relationship_status.trim() && answers.q_relationship_status !== 'N/A'
-          ? answers.q_relationship_status.trim()
-          : null,
     }
     const { error: e } = await supabase.from('profiles').upsert(updates, { onConflict: 'id' })
     if (e) throw new Error(e.message)
@@ -1278,6 +1279,59 @@ function AppOnboardingContent() {
                   )}
                 </button>
               </div>
+            </div>
+            <div style={{ marginTop: '1.25rem' }}>
+              <label className="onboarding-location-zip-label">Which neighborhood are you in?</label>
+              {(() => {
+                const selectedNeighborhood = typeof answers.q_neighborhood === 'string' ? answers.q_neighborhood : ''
+                const query = neighborhoodQuery.trim().toLowerCase()
+                const visibleNeighborhoods = query
+                  ? NEIGHBORHOOD_OPTIONS.filter((n) => n.toLowerCase().includes(query))
+                  : []
+                return (
+                  <>
+                    <input
+                      type="text"
+                      className="auth-input"
+                      placeholder="Type to search (e.g. Silver Lake, Irvine)"
+                      value={neighborhoodQuery}
+                      onChange={(e) => setNeighborhoodQuery(e.target.value)}
+                      disabled={saving}
+                      autoComplete="off"
+                      style={{ marginBottom: '0.5rem' }}
+                    />
+                    {selectedNeighborhood && (
+                      <div style={{ marginBottom: '0.5rem' }}>
+                        <button
+                          type="button"
+                          className="onboarding-chip multi-selected"
+                          onClick={() => {
+                            setAnswers((a) => ({ ...a, q_neighborhood: '' }))
+                            setNeighborhoodQuery('')
+                          }}
+                          disabled={saving}
+                        >
+                          {selectedNeighborhood} ×
+                        </button>
+                      </div>
+                    )}
+                    {visibleNeighborhoods.map((n) => (
+                      <button
+                        key={n}
+                        type="button"
+                        className={`onboarding-chip ${n === selectedNeighborhood ? 'multi-selected' : ''}`}
+                        onClick={() => {
+                          setAnswers((a) => ({ ...a, q_neighborhood: n }))
+                          setNeighborhoodQuery('')
+                        }}
+                        disabled={saving}
+                      >
+                        {n}
+                      </button>
+                    ))}
+                  </>
+                )
+              })()}
             </div>
           </div>
         )}

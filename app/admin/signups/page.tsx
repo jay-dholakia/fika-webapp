@@ -29,6 +29,7 @@ type ProfileDetail = {
   phone: string | null
   avatarUrl: string | null
   intentConfirmedAt: string | null
+  lastFikaAt: string | null
   createdAt: string | null
   updatedAt: string | null
 }
@@ -154,6 +155,12 @@ export default function AdminSignupsPage() {
   const [simMaxUsers, setSimMaxUsers] = useState(260)
   const [simTopN, setSimTopN] = useState(220)
   const [selectedSimPairs, setSelectedSimPairs] = useState<Record<string, boolean>>({})
+  const [matchVenues, setMatchVenues] = useState<Array<{ id: string; name: string; neighborhood: string | null; city: string }>>([])
+  const [matchVenueSearch, setMatchVenueSearch] = useState('')
+  const [matchVenueId, setMatchVenueId] = useState('')
+  const [matchEventStartsAt, setMatchEventStartsAt] = useState('')
+  const [matchSending, setMatchSending] = useState(false)
+  const [matchSendResult, setMatchSendResult] = useState<string | null>(null)
 
   const fetchSignups = useCallback(async (market?: string) => {
     const supabase = getSupabase()
@@ -200,6 +207,28 @@ export default function AdminSignupsPage() {
     }
     load()
   }, [fetchSignups, filterMarket])
+
+  useEffect(() => {
+    if (!filterMarket) { setMatchVenues([]); setMatchVenueId(''); setMatchVenueSearch(''); return }
+    let cancelled = false
+    async function loadVenues() {
+      const supabase = getSupabase()
+      const { data: { session } } = await supabase?.auth.getSession() ?? { data: { session: null } }
+      const headers: HeadersInit = {}
+      if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`
+      const res = await fetch(`/api/admin/venues?limit=200&market_slug=${encodeURIComponent(filterMarket)}`, {
+        credentials: 'include', headers,
+      })
+      if (res.ok && !cancelled) {
+        const data = await res.json()
+        setMatchVenues(data.venues ?? [])
+      }
+    }
+    loadVenues()
+    setMatchVenueId('')
+    setMatchVenueSearch('')
+    return () => { cancelled = true }
+  }, [filterMarket])
 
   async function openModal(userId: string) {
     setModalUserId(userId)
@@ -270,9 +299,63 @@ export default function AdminSignupsPage() {
   const selectedVisibleCount = visiblePairs.filter((p) => selectedSimPairs[`${p.userAId}:${p.userBId}`]).length
   const allVisibleSelected = visiblePairs.length > 0 && selectedVisibleCount === visiblePairs.length
 
+  const filteredMatchVenues = matchVenueSearch.trim().length >= 2
+    ? matchVenues.filter(v =>
+        v.name.toLowerCase().includes(matchVenueSearch.toLowerCase()) ||
+        (v.neighborhood ?? '').toLowerCase().includes(matchVenueSearch.toLowerCase()) ||
+        v.city.toLowerCase().includes(matchVenueSearch.toLowerCase())
+      )
+    : matchVenues
+
   function toggleSimPair(pair: SimPair, checked: boolean) {
     const key = `${pair.userAId}:${pair.userBId}`
     setSelectedSimPairs((prev) => ({ ...prev, [key]: checked }))
+  }
+
+  async function sendIntros() {
+    const selectedPairs = visiblePairs.filter(p => selectedSimPairs[`${p.userAId}:${p.userBId}`])
+    if (selectedPairs.length === 0 || !matchVenueId || !matchEventStartsAt) return
+    setMatchSending(true)
+    setMatchSendResult(null)
+    try {
+      const supabase = getSupabase()
+      const { data: { session } } = await supabase?.auth.getSession() ?? { data: { session: null } }
+      const headers: HeadersInit = { 'Content-Type': 'application/json' }
+      if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`
+      const venue = matchVenues.find(v => v.id === matchVenueId)
+      const pairs = selectedPairs.map(p => ({
+        user_a: p.userAId,
+        user_b: p.userBId,
+        signals: [...p.overlapInterests.slice(0, 2), ...p.overlapGreatFika.slice(0, 1)].filter(Boolean),
+        user_a_work: p.userAWorkLabel,
+        user_b_work: p.userBWorkLabel,
+      }))
+      const res = await fetch('/api/admin/matches', {
+        method: 'POST',
+        credentials: 'include',
+        headers,
+        body: JSON.stringify({
+          pairs,
+          venue_id: matchVenueId,
+          event_starts_at: new Date(matchEventStartsAt).toISOString(),
+          area_label: venue?.neighborhood || venue?.city || '',
+        }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        const skippedCount = Array.isArray(data.skipped) ? data.skipped.length : 0
+        let msg = `Sent ${data.sent} intro${data.sent === 1 ? '' : 's'}`
+        if (skippedCount > 0) msg += ` · ${skippedCount} skipped (already in another flow)`
+        setMatchSendResult(msg)
+        setSelectedSimPairs({})
+      } else {
+        setMatchSendResult(`Error: ${data.error ?? 'Send failed'}`)
+      }
+    } catch (e) {
+      setMatchSendResult(`Error: ${e instanceof Error ? e.message : 'Failed'}`)
+    } finally {
+      setMatchSending(false)
+    }
   }
 
   if (loading) {
@@ -477,6 +560,70 @@ export default function AdminSignupsPage() {
             )}
           </div>
 
+          {selectedVisibleCount > 0 && (
+            <div className="admin-dashboard" style={{ marginTop: 0, marginBottom: '1.25rem' }}>
+              <h2 className="admin-dashboard-title">Send 1v1 intro</h2>
+              <p className="admin-description" style={{ marginBottom: '0.75rem' }}>
+                {selectedVisibleCount} pair{selectedVisibleCount === 1 ? '' : 's'} selected.
+                Pick a venue and time, then send.
+                {!filterMarket && ' Select a market above to search venues.'}
+              </p>
+
+              {filterMarket && (
+                <>
+                  <div style={{ marginBottom: '0.5rem' }}>
+                    <input
+                      type="text"
+                      placeholder="Search venue..."
+                      value={matchVenueSearch}
+                      onChange={e => { setMatchVenueSearch(e.target.value); setMatchVenueId('') }}
+                      style={{ width: '100%', padding: '0.4rem 0.6rem', borderRadius: 4, border: '1px solid #ccc', fontSize: '0.875rem', marginBottom: 4, boxSizing: 'border-box' }}
+                    />
+                    <select
+                      value={matchVenueId}
+                      onChange={e => setMatchVenueId(e.target.value)}
+                      size={Math.min(filteredMatchVenues.length + 1, 6)}
+                      style={{ width: '100%', padding: '0.2rem', borderRadius: 4, border: '1px solid #ccc', fontSize: '0.875rem' }}
+                    >
+                      <option value="">— Select venue —</option>
+                      {filteredMatchVenues.map(v => (
+                        <option key={v.id} value={v.id}>
+                          {v.name}{v.neighborhood ? ` (${v.neighborhood})` : ''} — {v.city}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div style={{ marginBottom: '0.75rem' }}>
+                    <input
+                      type="datetime-local"
+                      value={matchEventStartsAt}
+                      onChange={e => setMatchEventStartsAt(e.target.value)}
+                      style={{ padding: '0.4rem 0.6rem', borderRadius: 4, border: '1px solid #ccc', fontSize: '0.875rem' }}
+                    />
+                  </div>
+                </>
+              )}
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  className="admin-btn admin-btn-primary"
+                  onClick={sendIntros}
+                  disabled={matchSending || !matchVenueId || !matchEventStartsAt || selectedVisibleCount === 0}
+                  style={{ marginBottom: 0 }}
+                >
+                  {matchSending ? 'Sending…' : `Send intro${selectedVisibleCount === 1 ? '' : 's'}`}
+                </button>
+                {matchSendResult && (
+                  <span style={{ fontSize: '0.875rem', color: matchSendResult.startsWith('Error') ? '#c00' : '#166534' }}>
+                    {matchSendResult}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
           {signups.length === 0 ? (
             <p className="admin-empty">No sign-ups yet.</p>
           ) : (
@@ -591,6 +738,8 @@ export default function AdminSignupsPage() {
                           <dd>{modalProfile.relationshipStatus ?? '—'}</dd>
                           <dt>Intent confirmed</dt>
                           <dd>{modalProfile.intentConfirmedAt ? formatDate(modalProfile.intentConfirmedAt) : '—'}</dd>
+                          <dt>Last fika</dt>
+                          <dd>{modalProfile.lastFikaAt ? formatDate(modalProfile.lastFikaAt) : '—'}</dd>
                           <dt>Created</dt>
                           <dd>{formatDate(modalProfile.createdAt)}</dd>
                         </dl>

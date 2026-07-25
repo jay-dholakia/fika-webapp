@@ -44,7 +44,7 @@ const PERSONA_EMBED_CONFIGURED = Boolean(
     process.env.NEXT_PUBLIC_PERSONA_ENVIRONMENT_ID?.trim()
 )
 
-const BACKGROUND_INTAKE_IDS = new Set(['q_market_tenure', 'q_ethnicity', 'q_relationship_status'])
+const BACKGROUND_INTAKE_IDS = new Set(['q_market_tenure', 'q_ethnicity'])
 
 function intakeQuestionLabel(step: ProfileStep, answers: AnswersState): string {
   if (step.id !== 'q_market_tenure') return step.question
@@ -90,10 +90,6 @@ export default function SettingsProfilePage() {
       gender: profile?.gender ?? null,
       gender_preference: typeof answers.gender_preference === 'string' ? answers.gender_preference || null : null,
       pronouns: typeof answers.pronouns === 'string' ? answers.pronouns || null : null,
-      relationship_status:
-        typeof answers.q_relationship_status === 'string' && answers.q_relationship_status.trim() && answers.q_relationship_status !== 'N/A'
-          ? answers.q_relationship_status.trim()
-          : null,
       languages: Array.isArray(answers.languages) ? answers.languages : null,
     }
     const loc = answers.location

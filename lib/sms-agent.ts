@@ -14,13 +14,13 @@ export const SMS_STATES = {
   GLOBAL_READY: 'global_ready',
   EVENT_INVITE_SENT: 'event_invite_sent',
   RSVP_ACCEPTED: 'rsvp_accepted',
-  CONFIRMED: 'confirmed',
+  REVEAL_SENT: 'reveal_sent',
 } as const
 
 const READY_FOR_INTRO_VARIANTS = [
-  "You're in. We'll invite you to upcoming Fika events — reply Yes when you get an invite.",
-  "You're in. When there's a Fika near you, we'll text you an invite.",
-  "You're in. Keep an eye out — we'll text when there's a Fika event near you.",
+  "You're in. We host Fika socials and set up curated 1-on-1 intros — we'll reach out when we have something for you.",
+  "You're in. We set up two kinds of meetups: Fika socials and curated 1-on-1 intros. We'll text you when we have something.",
+  "You're in. Expect two types of meetups — Fika socials and curated 1-on-1 intros. We'll reach out when the time's right.",
 ]
 
 function pickReadyForIntroMessage(): string {
@@ -247,7 +247,7 @@ export function messageEntryFirstTimeMessagesInactiveMarket(
 ): TimedSmsMessage[] {
   const base = appBase.trim().replace(/\/$/, '') || 'https://letsfika.vercel.app'
   const lead =
-    "We're growing Fika in your area — you'll get an invite when we host an event near you.\n" +
+    "We're growing Fika in your area — we'll reach out when we have a great intro for you.\n" +
     firstTimeEntryInviteBlock()
   return [
     { content: lead, delayAfterMs: SMS_PACING_MS.quickAck },
@@ -281,7 +281,7 @@ export function messageEntryAfterDeadline(
 
 /** Short reminder when they text HI/FIKA again — avoid re-sending the full intro. */
 export function messageEntryReminder(): string {
-  return `You're in. We'll text you when there's a Fika event near you.`
+  return `You're in. We'll text you when we have a Fika social or a 1-on-1 intro lined up for you.`
 }
 
 /** Short commitment line (e.g. user-initiated SMS). */
@@ -316,7 +316,7 @@ export function messageAvailabilityLockNotSubmitted(): string {
 
 /** When user is known but hasn't completed onboarding/intake. Text only; send onboardingUrl as a separate message after this. */
 export function messageOnboardingRequired(_onboardingUrl: string): string {
-  return `You're almost set.\n\nWe just need a few more details before we can match you.`
+  return `You're almost set.\n\nWe just need a few more details to get you set up.`
 }
 
 export function messageWeeklyOptIn(): string {
@@ -415,8 +415,12 @@ export function formatMatchRevealSentence(params: {
   dateLine?: string | null
   /** e.g. "Verve Coffee (Silver Lake)" — included in reveal if pre-set */
   venueLine?: string | null
+  /** Intake `q_current_interest` — what they're into right now */
+  currentInterest?: string | null
+  /** Intake `q_friend_description` — how a close friend would describe them */
+  friendDescription?: string | null
 }): string {
-  const { otherFirstName, otherPronouns, otherWorkLabel, sharedInterests, conversationHooks, fikaTalkOverlap = [], dateLine, venueLine } =
+  const { otherFirstName, otherPronouns, otherWorkLabel, sharedInterests, conversationHooks, fikaTalkOverlap = [], dateLine, venueLine, currentInterest, friendDescription } =
     params
 
   const pronounPack = revealPronounPackFromProfilePronouns(otherPronouns)
@@ -564,14 +568,24 @@ export function formatMatchRevealSentence(params: {
   const talkSentence =
     talkTeaser.length > 0 ? `You both like talking about ${formatTopicList(talkTeaser)}.` : ''
 
+  const currentInterestClean = currentInterest?.trim() || ''
+  const friendDescriptionClean = friendDescription?.trim() || ''
+  const subjectHave = pronounPack.contractLead.replace("'re", "'ve")
+  const currentInterestSentence = currentInterestClean
+    ? `${subjectHave} been ${currentInterestClean.charAt(0).toLowerCase() + currentInterestClean.slice(1).replace(/\.$/, '')}.`
+    : ''
+  const friendDescriptionSentence = friendDescriptionClean
+    ? `A close friend would say ${friendDescriptionClean.charAt(0).toLowerCase() + friendDescriptionClean.slice(1).replace(/\.$/, '')}.`
+    : ''
+
   if (dateLine?.trim() || venueLine?.trim()) {
-    const contextParts = [profileSentence, talkSentence].filter(Boolean).join(' ')
+    const contextParts = [profileSentence, currentInterestSentence, friendDescriptionSentence, talkSentence].filter(Boolean).join(' ')
     const timeParts = [dateLine?.trim(), venueLine?.trim()].filter(Boolean).join('\n')
     return [`Meet ${name}.`, contextParts, timeParts, 'Reply Yes to meet them, or No to pass.']
       .filter(Boolean)
       .join('\n\n')
   }
-  const bits = [`Meet ${name}.`, profileSentence, talkSentence, 'Want to meet for Fika? Reply with a Yes or No.'].filter(Boolean)
+  const bits = [`Meet ${name}.`, profileSentence, currentInterestSentence, friendDescriptionSentence, talkSentence, 'Want to meet for Fika? Reply with a Yes or No.'].filter(Boolean)
   return bits.join(' ')
 }
 
@@ -610,7 +624,7 @@ export function messageIntroWithPlan(params: {
   neighborhood: string
 }): string {
   const { otherFirstName, areaLabel, day, time, venueName, neighborhood } = params
-  return `You've been matched with ${otherFirstName}.\n\nYou both live near ${areaLabel} and are free ${day} evening.\n\nFika plan\n\n${day} — ${time}\n${venueName} (${neighborhood})\n\nReply Yes to confirm by 9 PM tonight.`
+  return `You've been paired with ${otherFirstName}.\n\nYou both live near ${areaLabel} and are free ${day} evening.\n\nFika plan\n\n${day} — ${time}\n${venueName} (${neighborhood})\n\nReply Yes to confirm by 9 PM tonight.`
 }
 
 export function messageConversationContext(params: {
@@ -699,7 +713,7 @@ export function isCancellationSignal(text: string): boolean {
 
 /** Notify the user who said YES when the other didn't respond before the intro expired. */
 export function messageMatchExpiredOtherNoResponse(): string {
-  return `This one didn't come together.\n\nWe'll reach out when we find another good intro.`
+  return `This intro didn't come together, but thanks for being open to it. We'll reach out when we find another good match.`
 }
 
 /** Notify the user who didn't respond before the intro expired. */

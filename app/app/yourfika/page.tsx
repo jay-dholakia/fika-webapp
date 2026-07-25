@@ -263,7 +263,7 @@ function AppHomeContent() {
           <div style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem' }}>
             <p style={{ margin: '0 0 0.5rem 0' }}>You&apos;re in.</p>
             <p style={{ margin: 0 }}>
-              When there&apos;s a Fika in your area, you&apos;ll get a text invite. Reply Yes to grab a spot — we&apos;ll match you with someone interesting. You&apos;ll find out who 30 minutes before.
+              When we have a great intro for you, we&apos;ll reach out by text. Reply Yes and we&apos;ll handle the rest.
             </p>
           </div>
         )}
@@ -281,7 +281,7 @@ function AppHomeContent() {
               </p>
             ) : (
               <p style={{ padding: '0.5rem 0', margin: 0, color: 'var(--color-textSecondary)', fontSize: '0.95rem' }}>
-                No upcoming Fika yet. When you get a text invite and reply Yes, it&apos;ll show up here.
+                Nothing coming up yet. When you reply Yes to an invite, it&apos;ll show up here.
               </p>
             )
           ) : (
@@ -302,7 +302,7 @@ function AppHomeContent() {
         <div className="app-card app-questionnaire-card">
           <h2>Complete your profile</h2>
           <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem', marginBottom: '1rem' }}>
-            Answer a few questions so we can match you well at your first Fika. Takes about 5 minutes.
+            Answer a few questions so we can find a great intro for you. Takes about 5 minutes.
           </p>
           <Link href="/app/onboarding" className="btn btn-primary btn-block auth-submit" style={{ display: 'inline-block', textAlign: 'center' }}>
             Set up profile

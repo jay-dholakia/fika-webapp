@@ -669,6 +669,228 @@ export async function POST(request: Request) {
   const isMatchYesSignal = isMatchYesKeyword(content) || keyword === 'YES' || reactionDecision === 'yes'
   const isMatchPassSignal = isMatchPassKeyword(content) || keyword === 'PASS' || reactionDecision === 'pass'
 
+  // --- 1v1 per-match state handlers ---
+  // These run before global state handlers so a user with an active 1v1 intro always goes here first.
+  if (matchId && (matchState === 'match_offered' || matchState === 'match_accepted')) {
+    const activeMatchId = matchId as string
+
+    const { data: matchRow } = await supabase
+      .from('match_candidates')
+      .select('id, user_a, user_b, reasons')
+      .eq('id', activeMatchId)
+      .maybeSingle()
+
+    const matchReasons = (matchRow?.reasons as Record<string, unknown>) ?? {}
+    const matchUserA = (matchRow?.user_a as string | null) ?? null
+    const matchUserB = (matchRow?.user_b as string | null) ?? null
+    const otherUserId = matchUserA === userId ? matchUserB : matchUserA
+
+    const cancelMatch = async () => {
+      // Check other user's state before deleting rows
+      let otherAccepted = false
+      let otherPhone: string | null = null
+      if (otherUserId) {
+        const { data: otherStateRow } = await supabase
+          .from('sms_conversation_states')
+          .select('state')
+          .eq('user_id', otherUserId)
+          .eq('match_id', activeMatchId)
+          .maybeSingle()
+        otherAccepted = (otherStateRow?.state as string | null) === 'match_accepted'
+        if (otherAccepted) {
+          const { data: otherProf } = await supabase
+            .from('profiles').select('phone').eq('id', otherUserId).maybeSingle()
+          otherPhone = (otherProf?.phone as string | null)?.trim() ?? null
+        }
+      }
+
+      await supabase.from('match_candidates').update({ status: 'cancelled' }).eq('id', activeMatchId)
+      for (const uid of [userId, ...(otherUserId ? [otherUserId] : [])]) {
+        await supabase.from('sms_conversation_states').delete().eq('user_id', uid).eq('match_id', activeMatchId)
+        await setGlobalSmsState({ userId: uid, state: SMS_STATES.GLOBAL_READY, payload: {} })
+      }
+
+      await sendConciergeAndLog(
+        fromNumber,
+        "No worries — we'll reach out when we have another thoughtful match.",
+        'match_cancelled_self',
+        { userId, matchId: activeMatchId }
+      )
+
+      if (otherAccepted && otherPhone && otherUserId) {
+        await sendConciergeAndLog(
+          otherPhone,
+          "Plans changed — we're sorry about that. We'll find another intro for you.",
+          'match_cancelled_other',
+          { userId: otherUserId, matchId: activeMatchId }
+        )
+      }
+    }
+
+    if (matchState === 'match_offered') {
+      if (isMatchYesSignal) {
+        await setPerMatchSmsState({
+          userId,
+          matchId: activeMatchId,
+          state: 'match_accepted',
+          payload: { accepted_at: new Date().toISOString() },
+        })
+
+        // Fetch other user's acceptance state + profile, and our own name, in parallel
+        const [{ data: otherStateRow }, { data: otherProf }, { data: myProf }] = await Promise.all([
+          otherUserId
+            ? supabase.from('sms_conversation_states')
+                .select('state')
+                .eq('user_id', otherUserId)
+                .eq('match_id', activeMatchId)
+                .maybeSingle()
+            : Promise.resolve({ data: null }),
+          otherUserId
+            ? supabase.from('profiles').select('first_name, phone').eq('id', otherUserId).maybeSingle()
+            : Promise.resolve({ data: null }),
+          supabase.from('profiles').select('first_name').eq('id', userId).maybeSingle(),
+        ])
+
+        const otherAlreadyAccepted = (otherStateRow?.state as string | null) === 'match_accepted'
+        const otherFirstName = (otherProf?.first_name as string | null)?.trim() || 'them'
+        const otherPhone = (otherProf?.phone as string | null)?.trim() ?? null
+        const myFirstName = (myProf?.first_name as string | null)?.trim() || 'them'
+
+        if (otherAlreadyAccepted) {
+          // Both accepted — send mutual confirmation with date + venue to both
+          const eventStartsAt = typeof matchReasons.event_starts_at === 'string' ? matchReasons.event_starts_at : null
+          const venueId = typeof matchReasons.venue_id === 'string' ? matchReasons.venue_id : null
+          let venueName = 'the venue'
+          let areaLabel = typeof matchReasons.area_label === 'string' ? matchReasons.area_label : ''
+          if (venueId) {
+            const { data: venue } = await supabase
+              .from('venues').select('name, neighborhood').eq('id', venueId).maybeSingle()
+            if (venue?.name) venueName = venue.name as string
+            if (!areaLabel && venue?.neighborhood) areaLabel = venue.neighborhood as string
+          }
+          let dateTimeLine = 'soon'
+          if (eventStartsAt) {
+            const d = new Date(eventStartsAt)
+            const day = new Intl.DateTimeFormat('en-US', {
+              timeZone: 'America/Los_Angeles', weekday: 'long',
+            }).format(d)
+            let t = new Intl.DateTimeFormat('en-US', {
+              timeZone: 'America/Los_Angeles', hour: 'numeric', minute: '2-digit', hour12: true,
+            }).format(d).toLowerCase()
+            t = t.replace(':00', '')
+            dateTimeLine = `${day} at ${t}`
+          }
+          const locationLine = areaLabel ? `${venueName} (${areaLabel})` : venueName
+          const buildMutualMsg = (partnerName: string) =>
+            `It's on ✓\n\nYou're meeting ${partnerName} on ${dateTimeLine} at ${locationLine}. We'll send you a photo the day of so you can find each other.`
+
+          await Promise.all([
+            sendConciergeAndLog(
+              fromNumber,
+              buildMutualMsg(otherFirstName),
+              'match_mutually_confirmed',
+              { userId, matchId: activeMatchId }
+            ),
+            otherPhone && otherUserId
+              ? sendConciergeAndLog(
+                  otherPhone,
+                  buildMutualMsg(myFirstName),
+                  'match_mutually_confirmed',
+                  { userId: otherUserId, matchId: activeMatchId }
+                )
+              : Promise.resolve(),
+          ])
+        } else {
+          // Other person hasn't accepted yet — tell this user we're checking
+          await sendConciergeAndLog(
+            fromNumber,
+            `Great — we're checking with ${otherFirstName}. We'll confirm as soon as you're both in.`,
+            'match_accepted_waiting',
+            { userId, matchId: activeMatchId }
+          )
+        }
+
+        return NextResponse.json({ ok: true })
+      }
+
+      if (isCancellationSignal(content) || isMatchPassSignal) {
+        await cancelMatch()
+        return NextResponse.json({ ok: true })
+      }
+
+      await sendConciergeAndLog(
+        fromNumber,
+        "Reply Yes to accept the intro, or No to pass.",
+        'match_offered_nudge',
+        { userId, matchId: activeMatchId }
+      )
+      return NextResponse.json({ ok: true })
+    }
+
+    if (matchState === 'match_accepted') {
+      if (isCancellationSignal(content) || isMatchPassSignal) {
+        await cancelMatch()
+        return NextResponse.json({ ok: true })
+      }
+
+      // Check if other person has also accepted (mutually confirmed) or we're still waiting
+      let otherAlsoAccepted = false
+      let otherFirstNameForNudge = 'the other person'
+      if (otherUserId) {
+        const [{ data: otherStateRow }, { data: otherProfNudge }] = await Promise.all([
+          supabase.from('sms_conversation_states')
+            .select('state')
+            .eq('user_id', otherUserId)
+            .eq('match_id', activeMatchId)
+            .maybeSingle(),
+          supabase.from('profiles').select('first_name').eq('id', otherUserId).maybeSingle(),
+        ])
+        otherAlsoAccepted = (otherStateRow?.state as string | null) === 'match_accepted'
+        otherFirstNameForNudge = (otherProfNudge?.first_name as string | null)?.trim() || 'the other person'
+      }
+
+      if (!otherAlsoAccepted) {
+        await sendConciergeAndLog(
+          fromNumber,
+          `Still waiting to hear from ${otherFirstNameForNudge} — we'll confirm as soon as you're both in.`,
+          'match_accepted_pending_nudge',
+          { userId, matchId: activeMatchId }
+        )
+        return NextResponse.json({ ok: true })
+      }
+
+      // Mutually confirmed — remind them of the details
+      const eventStartsAt = typeof matchReasons.event_starts_at === 'string' ? matchReasons.event_starts_at : null
+      const venueId = typeof matchReasons.venue_id === 'string' ? matchReasons.venue_id : null
+      let venueName = 'your venue'
+      let areaLabel = typeof matchReasons.area_label === 'string' ? matchReasons.area_label : ''
+      if (venueId) {
+        const { data: venue } = await supabase
+          .from('venues').select('name, neighborhood').eq('id', venueId).maybeSingle()
+        if (venue?.name) venueName = (venue.name as string)
+        if (!areaLabel && venue?.neighborhood) areaLabel = (venue.neighborhood as string)
+      }
+      let dateTimeLine = 'soon'
+      if (eventStartsAt) {
+        const d = new Date(eventStartsAt)
+        const day = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', weekday: 'long' }).format(d)
+        let t = new Intl.DateTimeFormat('en-US', {
+          timeZone: 'America/Los_Angeles', hour: 'numeric', minute: '2-digit', hour12: true,
+        }).format(d).toLowerCase()
+        t = t.replace(':00', '')
+        dateTimeLine = `${day} at ${t}`
+      }
+      const locationPart = areaLabel ? `${venueName} (${areaLabel})` : venueName
+      await sendConciergeAndLog(
+        fromNumber,
+        `You're all set — see you ${dateTimeLine} at ${locationPart} ☕`,
+        'match_accepted_nudge',
+        { userId, matchId: activeMatchId }
+      )
+      return NextResponse.json({ ok: true })
+    }
+  }
+
   // Event invite: user replied to event invite (also handles legacy weekly_opt_in_sent rows)
   if (state === SMS_STATES.EVENT_INVITE_SENT || state === 'weekly_opt_in_sent') {
     const marketSlug = (payload.market_slug as string | undefined) ?? null
@@ -907,24 +1129,24 @@ export async function POST(request: Request) {
   }
 
 
-  // Confirmed state: user has been revealed a match. If the event has passed, treat like global_ready.
-  // If texting before the event, give a short holding reply.
-  if (!matchId && state === SMS_STATES.CONFIRMED) {
-    const confirmedEventId = (payload.event_id as string | undefined) ?? null
+  // reveal_sent state: reveal SMS was sent ~30 min before the meeting. If the event hasn't passed,
+  // give a short holding reply. If it has passed, reset to global_ready.
+  if (!matchId && state === SMS_STATES.REVEAL_SENT) {
+    const revealEventId = (payload.event_id as string | undefined) ?? null
     let eventPassed = true
-    if (confirmedEventId) {
-      const { data: confirmedEvent } = await supabase
+    if (revealEventId) {
+      const { data: revealEvent } = await supabase
         .from('weekly_fika_events')
         .select('event_starts_at')
-        .eq('id', confirmedEventId)
+        .eq('id', revealEventId)
         .maybeSingle()
-      if (confirmedEvent?.event_starts_at && new Date(confirmedEvent.event_starts_at as string).getTime() > Date.now()) {
+      if (revealEvent?.event_starts_at && new Date(revealEvent.event_starts_at as string).getTime() > Date.now()) {
         eventPassed = false
       }
     }
 
     if (!eventPassed) {
-      await sendConciergeAndLog(fromNumber, "You're all set — see you there ☕", 'confirmed_pre_event_nudge', { userId })
+      await sendConciergeAndLog(fromNumber, "You're all set — see you there ☕", 'reveal_sent_pre_event_nudge', { userId })
       return NextResponse.json({ ok: true })
     }
 
@@ -957,7 +1179,7 @@ export async function POST(request: Request) {
         }
       }
     }
-    await sendConciergeAndLog(fromNumber, messageEntryReminder(), 'confirmed_post_event_fallback', { userId })
+    await sendConciergeAndLog(fromNumber, messageEntryReminder(), 'reveal_sent_post_event_fallback', { userId })
     return NextResponse.json({ ok: true })
   }
 

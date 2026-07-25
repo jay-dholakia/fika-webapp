@@ -83,11 +83,11 @@ export async function DELETE(
         .in('id', rsvpIds)
     }
 
-    // Reset sms_conversation_states for users still in event_invite_sent for this event
+    // Reset sms_conversation_states for all users still in this event's flow (including reveal_sent)
     const { data: pendingStates } = await supabase
       .from('sms_conversation_states')
       .select('user_id')
-      .in('state', ['event_invite_sent', 'weekly_opt_in_sent', 'rsvp_accepted'])
+      .in('state', ['event_invite_sent', 'weekly_opt_in_sent', 'rsvp_accepted', 'reveal_sent'])
       .filter('payload->>event_id', 'eq', eventId)
       .is('match_id', null)
 

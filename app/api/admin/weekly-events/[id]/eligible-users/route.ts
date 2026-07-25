@@ -98,12 +98,34 @@ export async function GET(
 
     const { data: profiles } = await supabase
       .from('profiles')
-      .select('id, first_name, phone, lat, lng, gender, birthdate, avatar_url')
+      .select('id, first_name, phone, lat, lng, gender, birthdate, avatar_url, last_fika_at')
       .eq('market', marketSlug)
       .eq('is_active', true)
       .is('sms_opted_out_at', null)
       .not('phone', 'is', null)
       .order('first_name')
+
+    // Users in any active flow (would be skipped by sms-event-invite)
+    const cutoff72h = new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString()
+    const cutoff24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+    const allProfileIds = (profiles ?? []).map((p: { id: string }) => p.id)
+
+    const [{ data: globalBusyRows }, { data: perMatchBusyRows }] = await Promise.all([
+      allProfileIds.length > 0
+        ? supabase.from('sms_conversation_states').select('user_id')
+            .in('user_id', allProfileIds).is('match_id', null).not('state', 'eq', 'global_ready')
+        : Promise.resolve({ data: [] }),
+      allProfileIds.length > 0
+        ? supabase.from('sms_conversation_states').select('user_id')
+            .in('user_id', allProfileIds).not('match_id', 'is', null)
+            .in('state', ['match_offered', 'match_accepted', 'pre_event_sent'])
+            .gte('updated_at', cutoff72h)
+        : Promise.resolve({ data: [] }),
+    ])
+    const activeFlowIds = new Set<string>([
+      ...(globalBusyRows ?? []).map((r: { user_id: string }) => r.user_id),
+      ...(perMatchBusyRows ?? []).map((r: { user_id: string }) => r.user_id),
+    ])
 
     const eligible: Array<{
       id: string
@@ -115,6 +137,8 @@ export async function GET(
       distance_miles: number | null
       already_invited: boolean
       already_rsvpd: boolean
+      in_active_flow: boolean
+      in_cooldown: boolean
     }> = []
 
     for (const p of profiles ?? []) {
@@ -148,6 +172,7 @@ export async function GET(
 
       if (!passRadius || !passGender || !passAge) continue
 
+      const lastFikaAt = (p.last_fika_at as string | null) ?? null
       eligible.push({
         id: userId,
         first_name: (p.first_name as string | null) ?? null,
@@ -158,6 +183,8 @@ export async function GET(
         distance_miles: distMiles !== null ? Math.round(distMiles * 10) / 10 : null,
         already_invited: alreadySentIds.has(userId),
         already_rsvpd: alreadyRsvpdIds.has(userId),
+        in_active_flow: activeFlowIds.has(userId),
+        in_cooldown: !!(lastFikaAt && lastFikaAt > cutoff24h),
       })
     }
 

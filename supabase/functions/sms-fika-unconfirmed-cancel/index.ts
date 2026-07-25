@@ -100,7 +100,7 @@ serve(async (_req: Request) => {
           apiKeyId,
           apiSecret,
           phone,
-          content: "We didn't hear back from you so we gave your spot to someone else — no worries, we'll get you at the next one.",
+          content: "We didn't hear back from you so we gave your spot to someone else — no worries, we'll reach out about the next one.",
         })
 
         await supabase.rpc('upsert_global_sms_conversation_state', {

@@ -54,7 +54,7 @@ function formatEventDateTime(isoStr: string, tz = 'America/Los_Angeles'): { dayD
 
 function buildOptInMessage(params: { dayDate: string; time: string; venueName: string; neighborhood: string }): string {
   const { dayDate, time, venueName, neighborhood } = params
-  return `We're hosting a Fika on ${dayDate} at ${time} at ${venueName} in ${neighborhood}.\n\nSpots are limited — reply Yes or No within 24 hours.`
+  return `We're hosting a Fika social on ${dayDate} at ${time} at ${venueName} in ${neighborhood}. It's a group gathering — 30 minutes before we'll send you a photo of someone we think you'll enjoy talking with.\n\nSpots are limited — reply Yes or No within 24 hours.`
 }
 
 serve(async (req: Request) => {
@@ -152,13 +152,14 @@ serve(async (req: Request) => {
       .eq('event_id', eventId)
     const alreadyRsvpdIds = new Set((alreadyRsvpd ?? []).map((r: { user_id: string }) => r.user_id))
 
+
     // Count current invites for capacity check
     const alreadySentCount = alreadySentIds.size
 
     // Build eligible profiles query
     let profilesQuery = supabase
       .from('profiles')
-      .select('id, phone, lat, lng, gender, birthdate')
+      .select('id, phone, lat, lng, gender, birthdate, last_fika_at')
       .eq('market', marketSlug)
       .eq('is_active', true)
       .is('sms_opted_out_at', null)
@@ -169,6 +170,33 @@ serve(async (req: Request) => {
     }
 
     const { data: profiles } = await profilesQuery
+
+    const cutoff72h = new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString()
+    const cutoff24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+    const profileIds = (profiles ?? []).map((p: { id: string }) => p.id)
+
+    // Skip users already in any group event flow (event_invite_sent, rsvp_accepted, reveal_sent)
+    const { data: busyGlobalRows } = profileIds.length > 0
+      ? await supabase
+          .from('sms_conversation_states')
+          .select('user_id')
+          .in('user_id', profileIds)
+          .is('match_id', null)
+          .not('state', 'eq', 'global_ready')
+      : { data: [] }
+    const busyInGroupEvent = new Set((busyGlobalRows ?? []).map((r: { user_id: string }) => r.user_id))
+
+    // Skip users already active in a 1v1 intro flow (avoids both flows firing simultaneously)
+    const { data: busyMatchRows } = profileIds.length > 0
+      ? await supabase
+          .from('sms_conversation_states')
+          .select('user_id')
+          .in('user_id', profileIds)
+          .not('match_id', 'is', null)
+          .in('state', ['match_offered', 'match_accepted', 'pre_event_sent'])
+          .gte('updated_at', cutoff72h)
+      : { data: [] }
+    const busyIn1v1 = new Set((busyMatchRows ?? []).map((r: { user_id: string }) => r.user_id))
 
     let totalSent = 0
     let totalSkipped = 0
@@ -194,6 +222,15 @@ serve(async (req: Request) => {
         totalSkipped++
         continue
       }
+
+      // Skip if already in any group event flow or 1v1 flow
+      if (busyInGroupEvent.has(userId)) { totalSkipped++; continue }
+      if (busyIn1v1.has(userId)) { totalSkipped++; continue }
+
+      // Skip if in 24h post-fika cooldown
+      const lastFikaAt = profile.last_fika_at as string | null
+      if (lastFikaAt && lastFikaAt > cutoff24h) { totalSkipped++; continue }
+
 
       // Radius filter
       if (radiusMiles != null && venueLat != null && venueLng != null) {

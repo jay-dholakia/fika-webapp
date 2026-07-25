@@ -88,6 +88,7 @@ export async function GET(
       phone: (profile as { phone?: string | null }).phone,
       avatarUrl: (profile as { avatar_url?: string | null }).avatar_url,
       intentConfirmedAt: (profile as { intent_confirmed_at?: string | null }).intent_confirmed_at,
+      lastFikaAt: (profile as { last_fika_at?: string | null }).last_fika_at,
       createdAt: (profile as { created_at?: string }).created_at,
       updatedAt: (profile as { updated_at?: string }).updated_at,
     },

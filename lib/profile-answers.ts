@@ -41,19 +41,12 @@ export function getAnswersFromProfileAndIntake(
     else if (s.id === 'location' && profile?.city != null)
       answers.location = { city: profile.city, lat: profile.lat ?? 0, lng: profile.lng ?? 0 }
   }
+  if (profile?.neighborhood) answers.q_neighborhood = profile.neighborhood
   answers.gender_preference = profile?.gender_preference ?? ''
   const responses = intake?.responses ?? []
   for (const s of INTAKE_STEPS) {
     const r = responses.find((x: IntakeResponseItem) => x.question_id === s.id)
     if (r != null) answers[s.id] = normalizeIntakeAnswerForDisplay(r.answer as string | string[] | number, s.type) as string | string[] | number
-  }
-  const qRel = answers.q_relationship_status
-  const qRelEmpty =
-    qRel === undefined ||
-    qRel === '' ||
-    (typeof qRel === 'string' && (qRel === 'N/A' || !qRel.trim()))
-  if (qRelEmpty && profile?.relationship_status?.trim()) {
-    answers.q_relationship_status = profile.relationship_status
   }
   answers.gender_preference = profile?.gender_preference ?? ''
   answers.phone = profile?.phone ?? ''

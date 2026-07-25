@@ -70,6 +70,25 @@ function buildPreEventMessage(params: {
   return lines.join('\n')
 }
 
+function buildPreEventMessage1v1(params: {
+  otherFirstName: string
+  venueName: string
+  neighborhood: string
+  eventTimeFormatted: string
+  q1: string
+  q2: string
+}): string {
+  const { otherFirstName, venueName, neighborhood, eventTimeFormatted, q1, q2 } = params
+  const locationLine = neighborhood ? `${venueName} (${neighborhood})` : venueName
+  return [
+    `Your Fika with ${otherFirstName} is today at ${eventTimeFormatted} at ${locationLine} ☕`,
+    '',
+    `A couple of things to think about before you go:`,
+    `• ${q1}`,
+    `• ${q2}`,
+  ].join('\n')
+}
+
 async function sendMessage(params: {
   apiKeyId: string
   apiSecret: string
@@ -116,15 +135,9 @@ serve(async (_req: Request) => {
       .lte('event_starts_at', windowEnd)
       .is('morning_sms_sent_at', null)
 
-    if (!events?.length) {
-      return new Response(JSON.stringify({ ok: true, morning_sms_sent: 0, reason: 'no_events_in_window' }), {
-        headers: { 'Content-Type': 'application/json' },
-      })
-    }
-
     let totalSent = 0
 
-    for (const event of events) {
+    for (const event of (events ?? [])) {
       const eventId = event.id as string
       const eventStartsAt = event.event_starts_at as string
       const venueId = event.venue_id as string | null
@@ -183,7 +196,92 @@ serve(async (_req: Request) => {
         .eq('id', eventId)
     }
 
-    return new Response(JSON.stringify({ ok: true, morning_sms_sent: totalSent }), {
+    // --- 1v1 pre-event SMS block ---
+    const nowMs1v1 = Date.now()
+    const windowStart1v1 = new Date(nowMs1v1 + 5 * 60 * 60 * 1000).toISOString()
+    const windowEnd1v1 = new Date(nowMs1v1 + 5.5 * 60 * 60 * 1000).toISOString()
+
+    const { data: onev1Matches } = await supabase
+      .from('match_candidates')
+      .select('id, user_a, user_b, reasons')
+      .eq('status', 'active')
+      .filter('reasons->>source', 'eq', '1v1')
+
+    let onev1Sent = 0
+    for (const match of (onev1Matches ?? []) as Array<{
+      id: string; user_a: string; user_b: string; reasons: Record<string, unknown>
+    }>) {
+      const matchId = match.id
+      const reasons = match.reasons ?? {}
+      const eventStartsAt = typeof reasons.event_starts_at === 'string' ? reasons.event_starts_at : null
+      if (!eventStartsAt) continue
+      if (eventStartsAt < windowStart1v1 || eventStartsAt > windowEnd1v1) continue
+
+      const venueId = typeof reasons.venue_id === 'string' ? reasons.venue_id : null
+      let venueName = 'your Fika venue'
+      let neighborhood = ''
+      if (venueId) {
+        const { data: venue } = await supabase
+          .from('venues').select('name, neighborhood').eq('id', venueId).single()
+        if (venue) {
+          venueName = (venue.name as string) || venueName
+          neighborhood = (venue.neighborhood as string) || ''
+        }
+      }
+
+      const eventTimeFormatted = formatEventTimeOnly(eventStartsAt)
+      const [q1, q2] = pickFikaPromptQuestions(matchId)
+
+      // Find users who accepted (match_accepted or pre_event_sent not yet set)
+      const { data: stateRows } = await supabase
+        .from('sms_conversation_states')
+        .select('user_id')
+        .eq('match_id', matchId)
+        .eq('state', 'match_accepted')
+
+      const acceptedUserIds = (stateRows ?? []).map((r: { user_id: string }) => r.user_id)
+      if (acceptedUserIds.length === 0) continue
+
+      // Load first names for both match users for the "Your Fika with X" line
+      const { data: nameProfiles } = await supabase
+        .from('profiles').select('id, first_name, phone').in('id', [match.user_a, match.user_b])
+
+      const nameMap: Record<string, string> = {}
+      for (const p of (nameProfiles ?? []) as Array<{ id: string; first_name: string | null; phone: string | null }>) {
+        nameMap[p.id] = p.first_name?.trim() || 'Someone'
+      }
+
+      for (const uid of acceptedUserIds) {
+        const prof = (nameProfiles ?? []).find((p: { id: string }) => p.id === uid) as
+          { id: string; first_name: string | null; phone: string | null } | undefined
+        const phone = prof?.phone?.trim()
+        if (!phone) continue
+
+        const otherUserId = uid === match.user_a ? match.user_b : match.user_a
+        const otherName = nameMap[otherUserId] || 'Someone'
+
+        const message = buildPreEventMessage1v1({
+          otherFirstName: otherName,
+          venueName,
+          neighborhood,
+          eventTimeFormatted,
+          q1,
+          q2,
+        })
+
+        const sent = await sendMessage({ apiKeyId, apiSecret, phone, content: message })
+        if (sent) {
+          await supabase
+            .from('sms_conversation_states')
+            .update({ state: 'pre_event_sent', updated_at: new Date().toISOString() })
+            .eq('user_id', uid)
+            .eq('match_id', matchId)
+          onev1Sent++
+        }
+      }
+    }
+
+    return new Response(JSON.stringify({ ok: true, morning_sms_sent: totalSent, onev1_sent: onev1Sent }), {
       headers: { 'Content-Type': 'application/json' },
     })
   } catch (e) {

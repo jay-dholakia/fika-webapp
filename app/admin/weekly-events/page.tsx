@@ -31,6 +31,8 @@ type EligibleUser = {
   distance_miles: number | null
   already_invited: boolean
   already_rsvpd: boolean
+  in_active_flow: boolean
+  in_cooldown: boolean
 }
 type RsvpRow = {
   user_id: string
@@ -288,7 +290,7 @@ export default function AdminWeeklyEventsPage() {
         setEligibleUsers(p => ({ ...p, [eventId]: users }))
         setCheckedUsers(p => ({
           ...p,
-          [eventId]: new Set(users.filter(u => !u.already_invited && !u.already_rsvpd).map(u => u.id)),
+          [eventId]: new Set(users.filter(u => !u.already_invited && !u.already_rsvpd && !u.in_active_flow && !u.in_cooldown).map(u => u.id)),
         }))
       }
     } finally {
@@ -328,7 +330,7 @@ export default function AdminWeeklyEventsPage() {
   }
 
   function toggleAllUsers(eventId: string, users: EligibleUser[]) {
-    const eligible = users.filter(u => !u.already_invited && !u.already_rsvpd)
+    const eligible = users.filter(u => !u.already_invited && !u.already_rsvpd && !u.in_active_flow && !u.in_cooldown)
     const checked = checkedUsers[eventId] ?? new Set()
     const allChecked = eligible.every(u => checked.has(u.id))
     setCheckedUsers(p => ({
@@ -411,6 +413,9 @@ export default function AdminWeeklyEventsPage() {
               onChange={e => setEventStartsAt(e.target.value)}
               style={inputStyle}
             />
+            <p style={{ margin: '4px 0 0', fontSize: '0.78rem', color: '#888' }}>
+              Create events and send invites at least 3 days out — the day-before confirmation fires automatically 24h before.
+            </p>
           </div>
 
           <div>
@@ -556,6 +561,16 @@ export default function AdminWeeklyEventsPage() {
               </div>
             </div>
 
+            {/* SMS timeline */}
+            {ev.event_starts_at && (
+              <div style={{ padding: '0.4rem 1rem', borderTop: '1px solid #f0f0f0', fontSize: '0.75rem', color: '#888', display: 'flex', gap: '1.25rem', flexWrap: 'wrap', background: '#fafafa' }}>
+                <span><b style={{ color: '#555' }}>Day-before SMS</b> {formatEventTime(new Date(new Date(ev.event_starts_at).getTime() - 24 * 60 * 60 * 1000).toISOString())}</span>
+                <span><b style={{ color: '#555' }}>Cutoff</b> {formatEventTime(new Date(new Date(ev.event_starts_at).getTime() - 6 * 60 * 60 * 1000).toISOString())}</span>
+                <span><b style={{ color: '#555' }}>Pre-event SMS</b> {formatEventTime(new Date(new Date(ev.event_starts_at).getTime() - 5 * 60 * 60 * 1000).toISOString())}</span>
+                <span><b style={{ color: '#555' }}>Reveal</b> {formatEventTime(new Date(new Date(ev.event_starts_at).getTime() - 30 * 60 * 1000).toISOString())}</span>
+              </div>
+            )}
+
             {/* Panel A — Preview & Send */}
             {openPanel[ev.id] === 'preview' && (
               <div style={{ padding: '1rem', borderTop: '1px solid #eee' }}>
@@ -563,13 +578,13 @@ export default function AdminWeeklyEventsPage() {
                 {!eligibleLoading[ev.id] && eligibleUsers[ev.id] && (() => {
                   const users = eligibleUsers[ev.id]!
                   const checked = checkedUsers[ev.id] ?? new Set()
-                  const eligible = users.filter(u => !u.already_invited && !u.already_rsvpd)
+                  const eligible = users.filter(u => !u.already_invited && !u.already_rsvpd && !u.in_active_flow && !u.in_cooldown)
                   const allChecked = eligible.length > 0 && eligible.every(u => checked.has(u.id))
                   return (
                     <>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
                         <span style={{ fontSize: '0.85rem' }}>
-                          <b>{users.length}</b> eligible · <b>{eligible.length}</b> new · <b>{checked.size}</b> selected
+                          <b>{users.length}</b> in market · <b>{eligible.length}</b> will receive invite · <b>{checked.size}</b> selected
                         </span>
                         <button onClick={() => toggleAllUsers(ev.id, users)} style={{ ...btnStyle(false), padding: '0.25rem 0.6rem', fontSize: '0.75rem' }}>
                           {allChecked ? 'Deselect all' : 'Select all new'}
@@ -581,7 +596,7 @@ export default function AdminWeeklyEventsPage() {
                       <div style={{ maxHeight: 240, overflowY: 'auto', border: '1px solid #eee', borderRadius: 4, marginBottom: '0.75rem' }}>
                         {users.map(u => {
                           const isChecked = checked.has(u.id)
-                          const disabled = u.already_invited || u.already_rsvpd
+                          const disabled = u.already_invited || u.already_rsvpd || u.in_active_flow || u.in_cooldown
                           return (
                             <label key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0.4rem 0.6rem', borderBottom: '1px solid #f0f0f0', cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.5 : 1 }}>
                               <input
@@ -598,10 +613,20 @@ export default function AdminWeeklyEventsPage() {
                               </span>
                               {u.already_rsvpd && <span style={{ fontSize: '0.72rem', color: '#090' }}>RSVPd</span>}
                               {u.already_invited && !u.already_rsvpd && <span style={{ fontSize: '0.72rem', color: '#c70' }}>Invited</span>}
+                              {u.in_active_flow && !u.already_invited && !u.already_rsvpd && <span style={{ fontSize: '0.72rem', color: '#999' }}>In flow</span>}
+                              {u.in_cooldown && !u.in_active_flow && !u.already_invited && !u.already_rsvpd && <span style={{ fontSize: '0.72rem', color: '#999' }}>Cooldown</span>}
                             </label>
                           )
                         })}
                       </div>
+                      {ev.event_starts_at && (() => {
+                        const hoursUntil = (new Date(ev.event_starts_at).getTime() - Date.now()) / (1000 * 60 * 60)
+                        return hoursUntil > 0 && hoursUntil < 48
+                          ? <div style={{ background: '#fffbe6', border: '1px solid #e6c700', borderRadius: 4, padding: '0.45rem 0.7rem', fontSize: '0.81rem', color: '#7a5c00', marginBottom: '0.75rem' }}>
+                              ⚠️ This event starts in {Math.round(hoursUntil)}h — the day-before confirmation SMS may fire before users have had time to RSVP.
+                            </div>
+                          : null
+                      })()}
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
                         <button
                           onClick={() => handleSendOptIns(ev.id)}

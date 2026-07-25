@@ -42,13 +42,15 @@ function buildRevealMessage(params: {
   const locationLine = neighborhood ? `${venueName} (${neighborhood})` : venueName
 
   const lines: string[] = [
-    `Meet ${name} 👋`,
+    `Here's someone we think you'll enjoy talking with tonight 👋`,
+    '',
+    name,
     '',
     ...(workBit ? [workBit, ''] : []),
     `${eventTimeFormatted}`,
     locationLine,
     '',
-    `Spend the first 10–15 minutes just getting to know each other — then dive into those questions. See you there ☕`,
+    `Spend the first 10–15 minutes just getting to know each other, then try these:\n\n• What are you most excited about right now, work or otherwise?\n• What's something you've changed your mind about in the last year?\n\nSee you there ☕`,
   ]
   return lines.join('\n')
 }
@@ -58,7 +60,10 @@ async function sendMessage(params: {
   apiSecret: string
   phone: string
   content: string
+  mediaUrl?: string
 }): Promise<boolean> {
+  const body: Record<string, string> = { number: params.phone, content: params.content }
+  if (params.mediaUrl) body.media_url = params.mediaUrl
   const res = await fetch(SENDBLUE_URL, {
     method: 'POST',
     headers: {
@@ -66,7 +71,7 @@ async function sendMessage(params: {
       'sb-api-key-id': params.apiKeyId,
       'sb-api-secret-key': params.apiSecret,
     },
-    body: JSON.stringify({ number: params.phone, content: params.content }),
+    body: JSON.stringify(body),
   })
   return res.ok
 }
@@ -99,15 +104,9 @@ serve(async (_req: Request) => {
       .lte('event_starts_at', windowEnd)
       .is('reveals_sent_at', null)
 
-    if (!events?.length) {
-      return new Response(JSON.stringify({ ok: true, reveals_sent: 0, reason: 'no_events_in_window' }), {
-        headers: { 'Content-Type': 'application/json' },
-      })
-    }
-
     let totalRevealsSent = 0
 
-    for (const event of events) {
+    for (const event of (events ?? [])) {
       const eventId = event.id as string
       const eventStartsAt = event.event_starts_at as string
       const venueId = event.venue_id as string | null
@@ -214,15 +213,16 @@ serve(async (_req: Request) => {
         const sentB = await sendMessage({ apiKeyId, apiSecret, phone: phoneB, content: msgForB })
 
         if (sentA || sentB) {
-          // Set state to CONFIRMED for both users
+          const now = new Date().toISOString()
           for (const userId of [userA, userB]) {
             await supabase.rpc('upsert_global_sms_conversation_state', {
               p_user_id: userId,
-              p_state: 'confirmed',
+              p_state: 'reveal_sent',
               p_payload: { match_id: matchId, event_id: eventId },
               p_last_sendblue_message_handle: null,
             })
           }
+          await supabase.from('profiles').update({ last_fika_at: now }).in('id', [userA, userB])
 
           totalRevealsSent++
         }
@@ -263,6 +263,80 @@ serve(async (_req: Request) => {
         .from('weekly_fika_events')
         .update({ reveals_sent_at: new Date().toISOString() })
         .eq('id', eventId)
+    }
+
+    // --- 1v1 photo reveal block ---
+    const nowMs1v1 = Date.now()
+    const windowStart1v1 = new Date(nowMs1v1 + 25 * 60 * 1000).toISOString()
+    const windowEnd1v1 = new Date(nowMs1v1 + 35 * 60 * 1000).toISOString()
+
+    const { data: onev1Matches } = await supabase
+      .from('match_candidates')
+      .select('id, user_a, user_b, reasons')
+      .eq('status', 'active')
+      .is('reveals_sent_at', null)
+      .filter('reasons->>source', 'eq', '1v1')
+
+    for (const match of (onev1Matches ?? []) as Array<{
+      id: string; user_a: string; user_b: string; reasons: Record<string, unknown>
+    }>) {
+      const matchId = match.id
+      const reasons = match.reasons ?? {}
+      const eventStartsAt = typeof reasons.event_starts_at === 'string' ? reasons.event_starts_at : null
+      if (!eventStartsAt) continue
+      if (eventStartsAt < windowStart1v1 || eventStartsAt > windowEnd1v1) continue
+
+      const { data: profileRows } = await supabase
+        .from('profiles')
+        .select('id, first_name, phone, avatar_url')
+        .in('id', [match.user_a, match.user_b])
+
+      const profA = (profileRows ?? []).find((p: { id: string }) => p.id === match.user_a) as {
+        id: string; first_name: string | null; phone: string | null; avatar_url: string | null
+      } | undefined
+      const profB = (profileRows ?? []).find((p: { id: string }) => p.id === match.user_b) as {
+        id: string; first_name: string | null; phone: string | null; avatar_url: string | null
+      } | undefined
+
+      const phoneA = profA?.phone?.trim()
+      const phoneB = profB?.phone?.trim()
+      if (!phoneA || !phoneB) continue
+
+      const nameA = profA?.first_name?.trim() || 'Someone'
+      const nameB = profB?.first_name?.trim() || 'Someone'
+      const avatarA = profA?.avatar_url?.trim() || undefined
+      const avatarB = profB?.avatar_url?.trim() || undefined
+
+      const sentA = await sendMessage({
+        apiKeyId,
+        apiSecret,
+        phone: phoneA,
+        content: `This is ${nameB} 👋\n\nSee you soon ☕`,
+        mediaUrl: avatarB,
+      })
+      const sentB = await sendMessage({
+        apiKeyId,
+        apiSecret,
+        phone: phoneB,
+        content: `This is ${nameA} 👋\n\nSee you soon ☕`,
+        mediaUrl: avatarA,
+      })
+
+      if (sentA || sentB) {
+        const now = new Date().toISOString()
+        await supabase.from('match_candidates').update({ reveals_sent_at: now }).eq('id', matchId)
+
+        for (const uid of [match.user_a, match.user_b]) {
+          await supabase
+            .from('sms_conversation_states')
+            .update({ state: 'reveal_sent', updated_at: now })
+            .eq('user_id', uid)
+            .eq('match_id', matchId)
+        }
+        await supabase.from('profiles').update({ last_fika_at: now }).in('id', [match.user_a, match.user_b])
+
+        totalRevealsSent++
+      }
     }
 
     return new Response(JSON.stringify({ ok: true, reveals_sent: totalRevealsSent }), {

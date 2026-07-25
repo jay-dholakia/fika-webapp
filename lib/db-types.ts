@@ -10,6 +10,7 @@ export type ProfileRow = {
   age_preference: string | null
   pronouns: string | null
   relationship_status: string | null
+  neighborhood: string | null
   city: string | null
   lat: number | null
   lng: number | null

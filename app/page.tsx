@@ -78,7 +78,7 @@ export default function Home() {
                 <div className="step-content">
                   <h3 className="step-title">Get set up</h3>
                   <p className="step-text">
-                    Text our number and answer a few quick questions. We use that to match you well when there&apos;s a Fika in your area.
+                    Text our number and answer a few quick questions. We use that to find a great intro for you.
                   </p>
                 </div>
               </li>
@@ -87,7 +87,7 @@ export default function Home() {
                 <div className="step-content">
                   <h3 className="step-title">Get a text invite</h3>
                   <p className="step-text">
-                    When there&apos;s an upcoming Fika near you, we&apos;ll text you. Reply Yes to grab a spot.
+                    When we have a great intro for you, we&apos;ll reach out by text.
                   </p>
                 </div>
               </li>
@@ -96,7 +96,7 @@ export default function Home() {
                 <div className="step-content">
                   <h3 className="step-title">Find out who</h3>
                   <p className="step-text">
-                    We match you with someone we think you&apos;ll have a good conversation with. You find out who 30 minutes before.
+                    We&apos;ll pair you with someone we think you&apos;ll have a real conversation with — and send everything you need.
                   </p>
                 </div>
               </li>

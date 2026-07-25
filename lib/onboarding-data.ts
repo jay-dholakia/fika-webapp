@@ -2,7 +2,6 @@
 // Types: text | date | chips_single | location_permission | multi_select | searchable_multi | searchable_single | select | slider_snap
 
 import { ETHNICITY_OPTIONS } from '@/lib/ethnicity-options'
-import { RELATIONSHIP_STATUS_OPTIONS } from '@/lib/relationship-status-options'
 
 export type StepType =
   | 'text'
@@ -33,6 +32,72 @@ export type ProfileStep = {
   /** Short line above featured chips (e.g. work life-situation shortcuts). */
   featuredOptionsCaption?: string
 }
+
+export const NEIGHBORHOOD_OPTIONS: string[] = [
+  // Los Angeles — Eastside
+  'Silver Lake', 'Echo Park', 'Los Feliz', 'Atwater Village', 'Glassell Park',
+  'Eagle Rock', 'Highland Park', 'Cypress Park', 'Frogtown', 'Mount Washington',
+  'Elysian Park', 'Boyle Heights',
+  // Los Angeles — Downtown
+  'Downtown LA (DTLA)', 'Arts District', 'Little Tokyo', 'Chinatown',
+  'Fashion District', 'Historic Core', 'Financial District',
+  // Los Angeles — Mid-City / Koreatown
+  'Koreatown', 'Mid-Wilshire', 'Larchmont Village', 'Hancock Park',
+  'Windsor Square', 'Miracle Mile', 'Fairfax',
+  // Los Angeles — Hollywood
+  'Hollywood', 'West Hollywood', 'Hollywood Hills', 'Laurel Canyon', 'Beachwood Canyon',
+  // Los Angeles — Westside
+  'Beverly Hills', 'Bel Air', 'Brentwood', 'Pacific Palisades', 'Westwood',
+  'Century City', 'Cheviot Hills', 'Rancho Park', 'West LA',
+  // Los Angeles — Beach Cities
+  'Santa Monica', 'Venice', 'Marina del Rey', 'Playa Vista', 'Playa del Rey',
+  'El Segundo', 'Manhattan Beach', 'Hermosa Beach', 'Redondo Beach', 'Torrance', 'Malibu',
+  // Los Angeles — Culver City area
+  'Culver City', 'Mar Vista', 'Palms',
+  // Los Angeles — South
+  'Leimert Park', 'Baldwin Hills', 'View Park', 'Windsor Hills', 'Ladera Heights',
+  'Crenshaw', 'Hyde Park', 'Inglewood', 'Hawthorne', 'Gardena', 'Carson',
+  'Watts', 'Compton', 'Lynwood', 'South Gate', 'Huntington Park', 'Downey', 'Paramount',
+  // Los Angeles — San Gabriel Valley
+  'Pasadena', 'Arcadia', 'Monrovia', 'Sierra Madre', 'Temple City', 'Rosemead',
+  'San Marino', 'Duarte', 'Alhambra', 'San Gabriel', 'Monterey Park',
+  'El Monte', 'Baldwin Park', 'West Covina', 'Covina', 'Azusa', 'Glendora',
+  'La Puente', 'Irwindale',
+  // Los Angeles — Glendale / Burbank
+  'Glendale', 'Burbank', 'La Cañada Flintridge', 'Sunland-Tujunga',
+  // Los Angeles — Southeast
+  'Whittier', 'Pico Rivera', 'Montebello', 'Commerce', 'Cerritos', 'Lakewood',
+  // Long Beach
+  'Downtown Long Beach', 'Belmont Shore', 'Bixby Knolls', 'Signal Hill',
+  // San Fernando Valley
+  'Studio City', 'Sherman Oaks', 'Encino', 'Tarzana', 'Woodland Hills', 'Calabasas',
+  'Chatsworth', 'Northridge', 'Granada Hills', 'Porter Ranch', 'Reseda', 'Van Nuys',
+  'Panorama City', 'North Hollywood', 'Valley Village', 'Toluca Lake', 'Lake Balboa',
+  'West Hills', 'Canoga Park', 'Winnetka',
+  // Orange County — North
+  'Anaheim', 'Anaheim Hills', 'Fullerton', 'Brea', 'Placentia', 'Yorba Linda',
+  'Orange', 'Tustin', 'Garden Grove', 'Westminster', 'Little Saigon', 'Stanton',
+  'Buena Park', 'La Habra', 'Cypress', 'Los Alamitos', 'Seal Beach', 'La Palma',
+  // Orange County — Central
+  'Santa Ana', 'Costa Mesa', 'Irvine', 'Newport Beach', 'Corona del Mar',
+  'Fountain Valley', 'Huntington Beach',
+  // Orange County — South
+  'Laguna Beach', 'Laguna Hills', 'Laguna Niguel', 'Laguna Woods', 'Mission Viejo',
+  'Lake Forest', 'Aliso Viejo', 'Rancho Santa Margarita', 'Dana Point',
+  'San Clemente', 'San Juan Capistrano',
+  // Inland Empire — West (Pomona Valley)
+  'Pomona', 'Diamond Bar', 'Walnut', 'Chino', 'Chino Hills', 'Ontario',
+  'Rancho Cucamonga', 'Upland', 'Claremont', 'Montclair', 'La Verne', 'San Dimas',
+  // Inland Empire — Central
+  'Riverside', 'Moreno Valley', 'Corona', 'Norco', 'Jurupa Valley',
+  // Inland Empire — San Bernardino Valley
+  'San Bernardino', 'Redlands', 'Loma Linda', 'Highland', 'Rialto',
+  'Fontana', 'Colton', 'Grand Terrace',
+  // Inland Empire — Temecula Valley
+  'Murrieta', 'Temecula', 'Lake Elsinore', 'Menifee', 'Perris', 'Hemet',
+  // Inland Empire — High Desert
+  'Victorville', 'Hesperia', 'Apple Valley', 'Barstow',
+]
 
 /** Ordered stops for the “how long in this market” slider (left → right). */
 export const MARKET_TENURE_OPTIONS: string[] = [
@@ -145,13 +210,6 @@ export const INTAKE_STEPS: ProfileStep[] = [
     options: ETHNICITY_OPTIONS,
   },
   {
-    id: 'q_relationship_status',
-    question: "What's your relationship status?",
-    type: 'select',
-    required: false,
-    options: RELATIONSHIP_STATUS_OPTIONS,
-  },
-  {
     id: 'q_work',
     question: 'What do you do for work?',
     body: "Optional — be as specific or general as you like. If you're between roles or on a break, feel free to say so.",
@@ -159,6 +217,24 @@ export const INTAKE_STEPS: ProfileStep[] = [
     required: false,
     customAnswerMaxLength: 100,
     placeholder: 'e.g. Software Engineer at a Startup',
+  },
+  {
+    id: 'q_current_interest',
+    question: "What's something you're genuinely into right now?",
+    body: 'A project, obsession, phase — whatever it is.',
+    type: 'text',
+    required: false,
+    customAnswerMaxLength: 150,
+    placeholder: 'e.g. learning ceramics, deep into Roman history, training for a half marathon',
+  },
+  {
+    id: 'q_friend_description',
+    question: 'How would a close friend describe you?',
+    body: 'One sentence, in their words.',
+    type: 'text',
+    required: false,
+    customAnswerMaxLength: 150,
+    placeholder: 'e.g. the person who always has a book recommendation',
   },
   {
     id: 'q_interests',
@@ -243,7 +319,7 @@ export const INTAKE_STEPS: ProfileStep[] = [
   {
     id: 'confirm_intent',
     question: 'Before you continue',
-    body: "Fika is for meeting people in real life. We'll invite you to upcoming events — just reply Yes when you get an invite and we'll match you with someone. You'll find out who you're meeting 30 minutes before.\n\nMeet in public and use good judgment. We're here for respectful conversation. By continuing, you agree to show up with care for yourself and others.",
+    body: "Fika sets up two types of meetups: Fika socials (a group gathering where we pair you with one person 30 minutes before), and 1-on-1 intros (just the two of you — no group). We'll reach out when we have something for you — just reply Yes and we'll handle the rest.\n\nMeet in public and use good judgment. We're here for respectful conversation. By continuing, you agree to show up with care for yourself and others.",
     type: 'chips_single',
     required: true,
     options: ["I'm in"],
