@@ -204,8 +204,8 @@ export const INTAKE_STEPS: ProfileStep[] = [
   },
   {
     id: 'q_ethnicity',
-    question: "What's your ethnicity?",
-    type: 'select',
+    question: 'What cultures do you identify with?',
+    type: 'searchable_multi',
     required: false,
     options: ETHNICITY_OPTIONS,
   },
