@@ -525,13 +525,16 @@ export async function POST(request: Request) {
       }) ?? `${appBase}/images/maya-intro-agent.png`
     const { data: existing } = await supabase
       .from('onboarding_sessions')
-      .select('token')
+      .select('token, created_at')
       .eq('phone', fromPhone)
       .is('merged_into_user_id', null)
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle()
     if (existing?.token) {
+      // If the session was created within the last 60s this is a duplicate webhook delivery — drop silently
+      const sessionAgeMs = Date.now() - new Date(existing.created_at).getTime()
+      if (sessionAgeMs < 60_000) return NextResponse.json({ ok: true })
       const link = `${appBase}/signup?token=${existing.token}`
       await sendConciergeAndLog(fromNumber, messageSmsSignupLinkAlreadySent(link), 'signup_link_already_sent')
       await sleepForSmsPacing(SMS_PACING_MS.quickAck)
