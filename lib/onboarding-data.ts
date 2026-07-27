@@ -197,10 +197,16 @@ export const INTAKE_STEPS: ProfileStep[] = [
   {
     id: 'q_market_tenure',
     question: 'How long have you lived in this area?',
-    body: 'Use the slider to pick what best describes your time here. Default is “Just moved” until you change it.',
-    type: 'slider_snap',
+    type: 'chips_single',
     required: true,
-    options: [...MARKET_TENURE_OPTIONS],
+    options: [
+      'Just moved',
+      'Less than a year',
+      '1–3 years',
+      '3–10 years',
+      'Over 10 years',
+      'Grew up here',
+    ],
   },
   {
     id: 'q_ethnicity',
