@@ -17,7 +17,11 @@ export function messageSmsSignupLinkSentSequence(link: string, _sampleImageUrl?:
   return [
     { content: 'Hey! Welcome to Fika. ☕', delayAfterMs: SMS_PACING_MS.quickAck },
     {
-      content: "We do the work — find someone great, share a bit about them, set up a time and place. You just show up.",
+      content: "We bring people together for real conversations, in person, over coffee.",
+      delayAfterMs: SMS_PACING_MS.reflective,
+    },
+    {
+      content: "We find someone worth meeting, pick a local coffee shop that's convenient for both of you, and set a time. All you have to do is show up.",
       delayAfterMs: SMS_PACING_MS.reflective,
     },
     { content: 'Set up your profile to get started:', delayAfterMs: SMS_PACING_MS.beat },
