@@ -2,6 +2,7 @@
 // Types: text | date | chips_single | location_permission | multi_select | searchable_multi | searchable_single | select | slider_snap
 
 import { ETHNICITY_OPTIONS } from '@/lib/ethnicity-options'
+import { WORK_ROLE_OPTIONS, WORK_ROLE_FEATURED } from '@/lib/work-role-options'
 
 export type StepType =
   | 'text'
@@ -330,11 +331,22 @@ export const INTAKE_STEPS: ProfileStep[] = [
   {
     id: 'q_work',
     question: 'What do you do for work?',
-    body: "Optional — be as specific or general as you like. If you're between roles or on a break, feel free to say so.",
+    body: "Optional — be as specific or general as you like.",
+    type: 'searchable_single',
+    required: false,
+    options: WORK_ROLE_OPTIONS,
+    featuredOptions: WORK_ROLE_FEATURED,
+    featuredOptionsCaption: 'Not currently in a role?',
+    customAnswerMaxLength: 100,
+    placeholder: 'Search roles or type your own',
+  },
+  {
+    id: 'q_linkedin_url',
+    question: 'LinkedIn profile (optional)',
+    body: "Helps us get a fuller picture of what you do.",
     type: 'text',
     required: false,
-    customAnswerMaxLength: 100,
-    placeholder: 'e.g. Software Engineer at a Startup',
+    placeholder: 'linkedin.com/in/yourname',
   },
   {
     id: 'confirm_intent',
