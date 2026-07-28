@@ -336,7 +336,6 @@ export const INTAKE_STEPS: ProfileStep[] = [
     required: false,
     options: WORK_ROLE_OPTIONS,
     featuredOptions: WORK_ROLE_FEATURED,
-    featuredOptionsCaption: 'Not currently in a role?',
     customAnswerMaxLength: 100,
     placeholder: 'Search roles or type your own',
   },
