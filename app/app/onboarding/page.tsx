@@ -313,6 +313,95 @@ function is18Plus(isoYmd: string): boolean {
   return age >= 18
 }
 
+function MacPhoneCollectionScreen({ token }: { token: string }) {
+  const [phone, setPhone] = useState('')
+  const [sending, setSending] = useState(false)
+  const [sent, setSent] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleSend() {
+    setError(null)
+    setSending(true)
+    try {
+      const res = await fetch('/api/collect-phone', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, phone }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setError((data as { error?: string }).error ?? 'Something went wrong. Please try again.')
+        return
+      }
+      setSent(true)
+    } catch {
+      setError('Something went wrong. Please try again.')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  if (sent) {
+    return (
+      <div className="onboarding-wrap">
+        <div className="onboarding-single-page">
+          <section className="onboarding-section onboarding-section-card">
+            <h3 className="onboarding-question">Check your texts!</h3>
+            <p className="onboarding-body" style={{ marginTop: '0.75rem' }}>
+              We sent the signup link to your phone. Tap it there to complete your Fika profile.
+            </p>
+          </section>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="onboarding-wrap">
+      <div className="onboarding-single-page">
+        <section className="onboarding-section onboarding-section-card">
+          <h3 className="onboarding-question">Looks like you&apos;re on your Mac</h3>
+          <p className="onboarding-body" style={{ marginTop: '0.75rem' }}>
+            To set up your Fika profile, enter your mobile number below and we&apos;ll text you a link to complete it on your phone.
+          </p>
+          <div style={{ marginTop: '1.5rem' }}>
+            <label htmlFor="mac-phone-input" className="onboarding-location-zip-label">Your mobile number</label>
+            <input
+              id="mac-phone-input"
+              type="tel"
+              className="auth-input"
+              placeholder="(555) 867-5309"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              disabled={sending}
+              autoComplete="tel"
+              style={{ marginTop: '0.5rem' }}
+            />
+          </div>
+          {error && (
+            <p className="onboarding-avatar-photo-error" style={{ marginTop: '0.75rem' }} role="alert">{error}</p>
+          )}
+          <div className="onboarding-actions">
+            <button
+              type="button"
+              className="onboarding-nav-link onboarding-nav-link-primary"
+              onClick={() => void handleSend()}
+              disabled={sending || !phone.trim()}
+            >
+              {sending ? (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+                  <span className="spinner" aria-hidden="true" />
+                  Sending…
+                </span>
+              ) : 'Send me the link'}
+            </button>
+          </div>
+        </section>
+      </div>
+    </div>
+  )
+}
+
 function AppOnboardingContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -322,6 +411,7 @@ function AppOnboardingContent() {
   const [sessionUserId, setSessionUserId] = useState<string | null>(null)
   const [sessionChecked, setSessionChecked] = useState(false)
   const [sessionLoadedForToken, setSessionLoadedForToken] = useState(false)
+  const [isMacSession, setIsMacSession] = useState(false)
   const [showGoogleSignIn, setShowGoogleSignIn] = useState(false)
   const [tokenError, setTokenError] = useState<string | null>(null)
   const { loading: statusLoading, isComplete, profile, intake } = useOnboardingStatus(sessionUserId ?? undefined)
@@ -425,10 +515,17 @@ function AppOnboardingContent() {
           setSessionLoadedForToken(true)
           return
         }
-        return res.json() as Promise<{ payload?: Record<string, unknown> }>
+        return res.json() as Promise<{ phone?: string; payload?: Record<string, unknown> }>
       })
       .then((data) => {
-        if (cancelled || !data?.payload) return
+        if (cancelled || !data) return
+        // Mac iMessage: from_number was an Apple ID email — show phone collection instead of intake
+        if (data.phone?.includes('@')) {
+          setIsMacSession(true)
+          setSessionLoadedForToken(true)
+          return
+        }
+        if (!data.payload) return
         const nextAnswers = payloadToAnswers(data.payload as Record<string, unknown>)
         setAnswers(nextAnswers)
         setCurrentStepId(getResumeStepId(nextAnswers))
@@ -951,6 +1048,11 @@ function AppOnboardingContent() {
         </Link>
       </div>
     )
+  }
+
+  // Mac iMessage session: show phone collection, not the intake form
+  if (tokenMode && sessionLoadedForToken && isMacSession && token) {
+    return <MacPhoneCollectionScreen token={token} />
   }
 
   if (sessionUserId == null && !tokenMode) {

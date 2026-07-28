@@ -87,6 +87,7 @@ export function slotIdToDisplayTime(slotId: string): { day: string; time: string
 
 /** Normalize incoming phone to E.164 for lookup (ensure +1 for US 10-digit). */
 export function normalizeIncomingPhone(phone: string): string {
+  if (phone.includes('@')) return phone  // Apple ID email from Mac iMessage — preserve as-is
   const digits = phone.replace(/\D/g, '')
   if (digits.length === 10) return `+1${digits}`
   if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`
