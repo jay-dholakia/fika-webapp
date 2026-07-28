@@ -1,11 +1,10 @@
 'use client'
 
 import { Suspense, useEffect, useRef, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 import { getSupabase } from '@/lib/supabase'
 
 function AuthCallbackContent() {
-  const router = useRouter()
   const searchParams = useSearchParams()
   const [error, setError] = useState<string | null>(null)
   const mergeCalledRef = useRef(false)
@@ -62,12 +61,12 @@ function AuthCallbackContent() {
           })
           if (!res.ok) {
             console.error('merge-sms-signup failed', res.status)
-            router.replace(nextPath)
+            window.location.href = nextPath
             return
           }
         } catch (e) {
           console.error('merge-sms-signup timeout/error', e)
-          router.replace(nextPath)
+          window.location.href = nextPath
           return
         } finally {
           clearTimeout(timeoutId)
@@ -78,10 +77,10 @@ function AuthCallbackContent() {
         if (concierge && isLikelyMobileDevice()) {
           window.location.href = `sms:${concierge}`
           // Fallback if device/browser does not hand off to Messages.
-          setTimeout(() => router.replace(nextPath), 1200)
+          setTimeout(() => { window.location.href = nextPath }, 1200)
           return
         }
-        router.replace(nextPath)
+        window.location.href = nextPath
         return
       }
 
@@ -94,11 +93,11 @@ function AuthCallbackContent() {
 
       if (!profile) {
         await client.auth.signOut()
-        router.replace('/login?no_account=1')
+        window.location.href = '/login?no_account=1'
         return
       }
 
-      router.replace(nextPath)
+      window.location.href = nextPath
     }
 
     let mounted = true
@@ -130,7 +129,7 @@ function AuthCallbackContent() {
       if (failTimer) clearTimeout(failTimer)
       subscription.unsubscribe()
     }
-  }, [searchParams, router])
+  }, [searchParams])
 
   if (error) {
     return (
