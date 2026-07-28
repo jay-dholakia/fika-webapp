@@ -99,17 +99,14 @@ export const NEIGHBORHOOD_OPTIONS: string[] = [
   'Victorville', 'Hesperia', 'Apple Valley', 'Barstow',
 ]
 
-/** Ordered stops for the “how long in this market” slider (left → right). */
+/** Ordered stops for the “how long in this market” chips — must match `q_market_tenure` intake options exactly. */
 export const MARKET_TENURE_OPTIONS: string[] = [
   'Just moved',
-  'Less than 6 months',
-  '6 months – under 1 year',
-  '1–2 years',
-  '3–5 years',
-  '6–10 years',
-  '11–20 years',
-  '20+ years',
-  'I grew up here',
+  'Less than a year',
+  '1–3 years',
+  '3–10 years',
+  'Over 10 years',
+  'Grew up here',
 ]
 
 // PROFILE: name, demographics, location

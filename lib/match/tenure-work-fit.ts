@@ -8,8 +8,8 @@ const MARKET_TENURE_INDEX = new Map<string, number>(
   MARKET_TENURE_OPTIONS.map((label, i) => [label, i])
 )
 
-/** Inclusive index: "Just moved", "<6 months", "6mo–1yr" — treat as new-to-area band. */
-const MARKET_TENURE_NEWISH_MAX_INDEX = 2
+/** Inclusive index: "Just moved", "Less than a year" — treat as new-to-area band. */
+const MARKET_TENURE_NEWISH_MAX_INDEX = 1
 
 const WORK_STOPWORDS = new Set([
   'a',

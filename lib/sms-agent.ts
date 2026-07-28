@@ -12,9 +12,19 @@ import { isSensitiveWorkIntakeLabel, normalizeWorkIntakeLabel } from '@/lib/work
 
 export const SMS_STATES = {
   GLOBAL_READY: 'global_ready',
-  EVENT_INVITE_SENT: 'event_invite_sent',
-  RSVP_ACCEPTED: 'rsvp_accepted',
-  REVEAL_SENT: 'reveal_sent',
+  // Social flow (global rows, match_id IS NULL)
+  SOCIAL_INVITED: 'social_invited',
+  SOCIAL_RSVP_ACCEPTED: 'social_rsvp_accepted',
+  SOCIAL_MORNING_REMINDER: 'social_morning_reminder',
+  SOCIAL_REVEAL_SENT: 'social_reveal_sent',
+  // 1v1 flow (per-match rows, match_id NOT NULL)
+  ONEV1_OFFERED: '1v1_offered',
+  ONEV1_ACCEPTED: '1v1_accepted',
+  ONEV1_AWAITING_AVAILABILITY: '1v1_awaiting_availability',
+  ONEV1_PROPOSED: '1v1_proposed',
+  ONEV1_CONFIRMED: '1v1_confirmed',
+  ONEV1_MORNING_REMINDER: '1v1_morning_reminder',
+  ONEV1_REMINDER_SENT: '1v1_reminder_sent',
 } as const
 
 const READY_FOR_INTRO_VARIANTS = [
@@ -705,7 +715,7 @@ export function isCancellationSignal(text: string): boolean {
 
 /** Notify the user who said YES when the other didn't respond before the intro expired. */
 export function messageMatchExpiredOtherNoResponse(): string {
-  return `This intro didn't come together, but thanks for being open to it. We'll reach out when we find another good match.`
+  return `This intro didn't come together, but thanks for being open to it. We'll reach out when we have another great intro.`
 }
 
 /** Notify the user who didn't respond before the intro expired. */

@@ -91,7 +91,7 @@ export async function GET(
     const { data: alreadySent } = await supabase
       .from('sms_conversation_states')
       .select('user_id')
-      .in('state', ['event_invite_sent', 'weekly_opt_in_sent'])
+      .in('state', ['social_invited', 'weekly_opt_in_sent'])
       .filter('payload->>event_id', 'eq', eventId)
       .is('match_id', null)
     const alreadySentIds = new Set<string>((alreadySent ?? []).map((r: { user_id: string }) => r.user_id))
@@ -118,7 +118,7 @@ export async function GET(
       allProfileIds.length > 0
         ? supabase.from('sms_conversation_states').select('user_id')
             .in('user_id', allProfileIds).not('match_id', 'is', null)
-            .in('state', ['match_offered', 'match_accepted', 'pre_event_sent'])
+            .in('state', ['1v1_offered', '1v1_accepted', '1v1_awaiting_availability', '1v1_proposed', '1v1_confirmed', '1v1_morning_reminder'])
             .gte('updated_at', cutoff72h)
         : Promise.resolve({ data: [] }),
     ])

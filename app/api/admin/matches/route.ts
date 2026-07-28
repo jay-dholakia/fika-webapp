@@ -59,16 +59,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'pairs is required and must be a non-empty array' }, { status: 400 })
     }
 
-    const venueId = typeof body.venue_id === 'string' ? body.venue_id.trim() : ''
-    const eventStartsAt = typeof body.event_starts_at === 'string' ? body.event_starts_at.trim() : ''
+    const venueId = typeof body.venue_id === 'string' ? body.venue_id.trim() || null : null
+    const eventStartsAt = typeof body.event_starts_at === 'string' ? body.event_starts_at.trim() || null : null
     const areaLabel = typeof body.area_label === 'string' ? body.area_label.trim() : ''
 
-    if (!venueId) return NextResponse.json({ error: 'venue_id is required' }, { status: 400 })
-    if (!eventStartsAt) return NextResponse.json({ error: 'event_starts_at is required' }, { status: 400 })
-    if (isNaN(Date.parse(eventStartsAt))) return NextResponse.json({ error: 'event_starts_at is not a valid ISO date' }, { status: 400 })
+    if (eventStartsAt && isNaN(Date.parse(eventStartsAt))) {
+      return NextResponse.json({ error: 'event_starts_at is not a valid ISO date' }, { status: 400 })
+    }
 
     // Check both users in every pair for active flows before inserting anything
-    const cutoff72h = new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString()
     const cutoff24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
     const allUserIds = Array.from(new Set(pairs.flatMap(p => [p.user_a.trim(), p.user_b.trim()])))
 
@@ -78,8 +77,8 @@ export async function POST(request: Request) {
         .not('state', 'eq', 'global_ready'),
       supabase.from('sms_conversation_states').select('user_id')
         .in('user_id', allUserIds).not('match_id', 'is', null)
-        .in('state', ['match_offered', 'match_accepted', 'pre_event_sent'])
-        .gte('updated_at', cutoff72h),
+        .in('state', ['1v1_offered', '1v1_accepted', '1v1_awaiting_availability', '1v1_proposed', '1v1_confirmed', '1v1_morning_reminder'])
+        .gte('updated_at', cutoff24h),
       supabase.from('profiles').select('id')
         .in('id', allUserIds).gt('last_fika_at', cutoff24h),
     ])
@@ -109,9 +108,9 @@ export async function POST(request: Request) {
       admin_approval_status: 'approved',
       reasons: {
         source: '1v1',
-        venue_id: venueId,
-        event_starts_at: eventStartsAt,
-        area_label: areaLabel,
+        ...(venueId ? { venue_id: venueId } : {}),
+        ...(eventStartsAt ? { event_starts_at: eventStartsAt } : {}),
+        ...(areaLabel ? { area_label: areaLabel } : {}),
         signals: Array.isArray(pair.signals) ? pair.signals.filter(s => typeof s === 'string') : [],
         user_a_work: pair.user_a_work ?? null,
         user_b_work: pair.user_b_work ?? null,

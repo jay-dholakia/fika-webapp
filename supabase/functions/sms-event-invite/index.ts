@@ -140,7 +140,7 @@ serve(async (req: Request) => {
     const { data: alreadySentStates } = await supabase
       .from('sms_conversation_states')
       .select('user_id')
-      .in('state', ['event_invite_sent', 'weekly_opt_in_sent'])
+      .in('state', ['social_invited', 'weekly_opt_in_sent'])
       .filter('payload->>event_id', 'eq', eventId)
       .is('match_id', null)
     const alreadySentIds = new Set((alreadySentStates ?? []).map((r: { user_id: string }) => r.user_id))
@@ -193,7 +193,7 @@ serve(async (req: Request) => {
           .select('user_id')
           .in('user_id', profileIds)
           .not('match_id', 'is', null)
-          .in('state', ['match_offered', 'match_accepted', 'pre_event_sent'])
+          .in('state', ['1v1_offered', '1v1_accepted', '1v1_awaiting_availability', '1v1_proposed', '1v1_confirmed', '1v1_morning_reminder'])
           .gte('updated_at', cutoff72h)
       : { data: [] }
     const busyIn1v1 = new Set((busyMatchRows ?? []).map((r: { user_id: string }) => r.user_id))
@@ -268,7 +268,7 @@ serve(async (req: Request) => {
       if (res.ok) {
         await supabase.rpc('upsert_global_sms_conversation_state', {
           p_user_id: userId,
-          p_state: 'event_invite_sent',
+          p_state: 'social_invited',
           p_payload: { market_slug: marketSlug, event_id: eventId, sent_at: sentAt },
           p_last_sendblue_message_handle: null,
         })

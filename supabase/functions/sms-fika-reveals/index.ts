@@ -144,12 +144,13 @@ serve(async (_req: Request) => {
         continue
       }
 
-      // Get approved match_candidates where BOTH users are in the yes set
+      // Get approved group match_candidates where BOTH users are in the yes set
       const { data: matches } = await supabase
         .from('match_candidates')
         .select('id, user_a, user_b')
         .eq('status', 'active')
         .eq('admin_approval_status', 'approved')
+        .filter('reasons->>source', 'neq', '1v1')
 
       const matchesToReveal = (matches ?? []).filter(
         (m: { user_a: string; user_b: string }) =>
@@ -217,7 +218,7 @@ serve(async (_req: Request) => {
           for (const userId of [userA, userB]) {
             await supabase.rpc('upsert_global_sms_conversation_state', {
               p_user_id: userId,
-              p_state: 'reveal_sent',
+              p_state: 'social_reveal_sent',
               p_payload: { match_id: matchId, event_id: eventId },
               p_last_sendblue_message_handle: null,
             })
@@ -304,23 +305,35 @@ serve(async (_req: Request) => {
 
       const nameA = profA?.first_name?.trim() || 'Someone'
       const nameB = profB?.first_name?.trim() || 'Someone'
-      const avatarA = profA?.avatar_url?.trim() || undefined
-      const avatarB = profB?.avatar_url?.trim() || undefined
 
-      const sentA = await sendMessage({
-        apiKeyId,
-        apiSecret,
-        phone: phoneA,
-        content: `This is ${nameB} 👋\n\nSee you soon ☕`,
-        mediaUrl: avatarB,
-      })
-      const sentB = await sendMessage({
-        apiKeyId,
-        apiSecret,
-        phone: phoneB,
-        content: `This is ${nameA} 👋\n\nSee you soon ☕`,
-        mediaUrl: avatarA,
-      })
+      let sentA: boolean
+      let sentB: boolean
+
+      if (reasons.photo_sent_with_intro === true) {
+        // New scheduling flow — photo already sent with intro; send simple 30-min heads-up
+        sentA = await sendMessage({
+          apiKeyId, apiSecret, phone: phoneA,
+          content: `Your Fika with ${nameB} starts in 30 minutes ☕`,
+        })
+        sentB = await sendMessage({
+          apiKeyId, apiSecret, phone: phoneB,
+          content: `Your Fika with ${nameA} starts in 30 minutes ☕`,
+        })
+      } else {
+        // Old flow — reveal photo for the first time here
+        const avatarA = (profA?.avatar_url as string | null)?.trim() || undefined
+        const avatarB = (profB?.avatar_url as string | null)?.trim() || undefined
+        sentA = await sendMessage({
+          apiKeyId, apiSecret, phone: phoneA,
+          content: `This is ${nameB} 👋\n\nSee you soon ☕`,
+          mediaUrl: avatarB,
+        })
+        sentB = await sendMessage({
+          apiKeyId, apiSecret, phone: phoneB,
+          content: `This is ${nameA} 👋\n\nSee you soon ☕`,
+          mediaUrl: avatarA,
+        })
+      }
 
       if (sentA || sentB) {
         const now = new Date().toISOString()
@@ -329,7 +342,7 @@ serve(async (_req: Request) => {
         for (const uid of [match.user_a, match.user_b]) {
           await supabase
             .from('sms_conversation_states')
-            .update({ state: 'reveal_sent', updated_at: now })
+            .update({ state: '1v1_reminder_sent', updated_at: now })
             .eq('user_id', uid)
             .eq('match_id', matchId)
         }

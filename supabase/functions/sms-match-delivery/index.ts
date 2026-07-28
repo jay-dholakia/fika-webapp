@@ -8,7 +8,6 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const SENDBLUE_URL = 'https://api.sendblue.co/api/send-message'
-const DEFAULT_TZ = 'America/Los_Angeles'
 
 function getSubjectPronoun(pronouns: string | null): { cap: string; haveBeen: string } {
   const p = (pronouns ?? '').toLowerCase().trim()
@@ -17,26 +16,6 @@ function getSubjectPronoun(pronouns: string | null): { cap: string; haveBeen: st
   return { cap: 'They', haveBeen: "They've been" }
 }
 
-function formatEventDateLine(isoStr: string, tz = DEFAULT_TZ): string {
-  const d = new Date(isoStr)
-  const day = new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short' }).format(d)
-  const date = new Intl.DateTimeFormat('en-US', { timeZone: tz, month: 'short', day: 'numeric' }).format(d)
-  let time = new Intl.DateTimeFormat('en-US', {
-    timeZone: tz, hour: 'numeric', minute: '2-digit', hour12: true,
-  }).format(d).toLowerCase()
-  time = time.replace(':00', '')
-  return `${day}, ${date} — ${time}`
-}
-
-function formatDeadline(eventStartsAt: string, tz = DEFAULT_TZ): string {
-  const d = new Date(new Date(eventStartsAt).getTime() - 24 * 60 * 60 * 1000)
-  const day = new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short' }).format(d)
-  let time = new Intl.DateTimeFormat('en-US', {
-    timeZone: tz, hour: 'numeric', minute: '2-digit', hour12: true,
-  }).format(d).toLowerCase()
-  time = time.replace(':00', '')
-  return `${day} at ${time}`
-}
 
 function buildIntroMessage(params: {
   otherFirstName: string
@@ -45,14 +24,10 @@ function buildIntroMessage(params: {
   otherCurrentInterest: string | null
   otherFriendDescription: string | null
   sharedSignals: string[]
-  eventDateLine: string
-  venueName: string
-  areaLabel: string
-  deadline: string
 }): string {
   const {
     otherFirstName, otherPronouns, otherWorkLabel, otherCurrentInterest,
-    otherFriendDescription, sharedSignals, eventDateLine, venueName, areaLabel, deadline,
+    otherFriendDescription, sharedSignals,
   } = params
 
   const name = otherFirstName.trim() || 'Someone'
@@ -97,20 +72,12 @@ function buildIntroMessage(params: {
     aboutParts.push(`You both ${joined}.`)
   }
 
-  const locationLine = areaLabel ? `${venueName} (${areaLabel})` : venueName
-
   return [
     `We'd love to introduce you to ${name} ☕`,
     '',
     ...aboutParts,
     '',
-    `We picked a time and place:`,
-    eventDateLine,
-    locationLine,
-    '',
-    `This is a 1-on-1 intro — just the two of you. We'll send a photo so you can find each other the day of.`,
-    '',
-    `Reply Yes to accept the intro, or No to pass — let us know by ${deadline}.`,
+    `This is a 1-on-1 intro — just the two of you.`,
   ].join('\n')
 }
 
@@ -180,7 +147,7 @@ serve(async (req: Request) => {
 
     let sent = 0
     const skipped: string[] = []
-    const cutoff72h = new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString()
+    const cutoff24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
 
     for (const match of matches as Array<{ id: string; user_a: string; user_b: string; reasons: Record<string, unknown> }>) {
       const matchId = match.id
@@ -202,8 +169,8 @@ serve(async (req: Request) => {
           r.user_id === uid &&
           r.match_id != null &&
           r.match_id !== matchId &&
-          ['match_offered', 'match_accepted', 'pre_event_sent'].includes(r.state) &&
-          r.updated_at > cutoff72h
+          ['1v1_offered', '1v1_accepted', '1v1_awaiting_availability', '1v1_proposed', '1v1_confirmed', '1v1_morning_reminder'].includes(r.state) &&
+          r.updated_at > cutoff24h
         )
       }
 
@@ -213,16 +180,11 @@ serve(async (req: Request) => {
         continue
       }
 
-      const venueId = typeof reasons.venue_id === 'string' ? reasons.venue_id : null
-      const eventStartsAt = typeof reasons.event_starts_at === 'string' ? reasons.event_starts_at : null
-      const areaLabel = typeof reasons.area_label === 'string' ? reasons.area_label : ''
       const signals = Array.isArray(reasons.signals)
         ? (reasons.signals as unknown[]).filter((s): s is string => typeof s === 'string')
         : []
       const userAWork = typeof reasons.user_a_work === 'string' ? reasons.user_a_work : null
       const userBWork = typeof reasons.user_b_work === 'string' ? reasons.user_b_work : null
-
-      if (!eventStartsAt) continue
 
       // Load profiles for both users
       const { data: profileRows } = await supabase
@@ -271,50 +233,39 @@ serve(async (req: Request) => {
       const currentInterestB = getIntakeAnswer(userBId, 'q_current_interest')
       const friendDescB = getIntakeAnswer(userBId, 'q_friend_description')
 
-      // Load venue
-      let venueName = 'your Fika venue'
-      if (venueId) {
-        const { data: venue } = await supabase
-          .from('venues')
-          .select('name, neighborhood')
-          .eq('id', venueId)
-          .single()
-        if (venue?.name) venueName = venue.name as string
-      }
+      const nameA = profA?.first_name?.trim() || 'Someone'
+      const nameB = profB?.first_name?.trim() || 'Someone'
+      const avatarA = profA?.avatar_url ?? undefined
+      const avatarB = profB?.avatar_url ?? undefined
 
-      const eventDateLine = formatEventDateLine(eventStartsAt)
-      const deadline = formatDeadline(eventStartsAt)
-
-      // Message for A (sees B's info)
+      // Message for A (sees B's info): 1) intro text, 2) B's photo, 3) opt-in question
       const msgForA = buildIntroMessage({
-        otherFirstName: profB?.first_name ?? 'Someone',
+        otherFirstName: nameB,
         otherPronouns: profB?.pronouns ?? null,
         otherWorkLabel: userBWork,
         otherCurrentInterest: currentInterestB,
         otherFriendDescription: friendDescB,
         sharedSignals: signals,
-        eventDateLine,
-        venueName,
-        areaLabel,
-        deadline,
       })
 
-      // Message for B (sees A's info)
+      // Message for B (sees A's info): 1) intro text, 2) A's photo, 3) opt-in question
       const msgForB = buildIntroMessage({
-        otherFirstName: profA?.first_name ?? 'Someone',
+        otherFirstName: nameA,
         otherPronouns: profA?.pronouns ?? null,
         otherWorkLabel: userAWork,
         otherCurrentInterest: currentInterestA,
         otherFriendDescription: friendDescA,
         sharedSignals: signals,
-        eventDateLine,
-        venueName,
-        areaLabel,
-        deadline,
       })
 
-      const sentA = await sendSms({ apiKeyId, apiSecret, phone: phoneA, content: msgForA })
-      const sentB = await sendSms({ apiKeyId, apiSecret, phone: phoneB, content: msgForB })
+      // Send 3 messages per user: intro text → photo → opt-in question
+      await sendSms({ apiKeyId, apiSecret, phone: phoneA, content: msgForA })
+      if (avatarB) await sendSms({ apiKeyId, apiSecret, phone: phoneA, content: ' ', mediaUrl: avatarB })
+      const sentA = await sendSms({ apiKeyId, apiSecret, phone: phoneA, content: `Would you like to set up a Fika with ${nameB}? Reply Yes or No.` })
+
+      await sendSms({ apiKeyId, apiSecret, phone: phoneB, content: msgForB })
+      if (avatarA) await sendSms({ apiKeyId, apiSecret, phone: phoneB, content: ' ', mediaUrl: avatarA })
+      const sentB = await sendSms({ apiKeyId, apiSecret, phone: phoneB, content: `Would you like to set up a Fika with ${nameA}? Reply Yes or No.` })
 
       if (sentA || sentB) {
         const now = new Date().toISOString()
@@ -326,7 +277,7 @@ serve(async (req: Request) => {
               {
                 user_id: userId,
                 match_id: matchId,
-                state: 'match_offered',
+                state: '1v1_offered',
                 payload: { intro_offer_sent_at: now },
                 last_sendblue_message_handle: null,
               },

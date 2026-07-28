@@ -4,7 +4,7 @@
  */
 
 /** Reported in admin match-sim API `summary.scoring`. */
-export const MATCH_SCORING_VERSION = 'fika_structured_v14' as const
+export const MATCH_SCORING_VERSION = 'fika_structured_v15' as const
 
 /** final = clamp(0,1, FEASIBILITY_PORTION * feasibility + COMPATIBILITY_PORTION * (compatibility - penaltyTotal)) */
 export const FEASIBILITY_PORTION = 0.4
@@ -20,11 +20,12 @@ export const FEASIBILITY_WEIGHTS = {
  * Interests, talk topics, market tenure, work, plus age proximity from profile birthdates.
  */
 export const COMPATIBILITY_WEIGHTS = {
-  interests: 0.38,
+  interests: 0.34,
   marketTenure: 0.17,
-  work: 0.14,
-  likeTalkingAbout: 0.21,
-  ageFit: 0.1,
+  work: 0.12,
+  likeTalkingAbout: 0.19,
+  ageFit: 0.10,
+  socialGoal: 0.08,
 } as const
 
 /** Age fit uses `1 / (1 + ageDiffYears / AGE_FIT_SCALE_YEARS)`; missing either age → neutral 0.5. */

@@ -187,7 +187,15 @@ serve(async (_req: Request) => {
         const phone = profile.phone?.trim()
         if (!phone) continue
         const sent = await sendMessage({ apiKeyId, apiSecret, phone, content: message })
-        if (sent) totalSent++
+        if (sent) {
+          totalSent++
+          await supabase.rpc('upsert_global_sms_conversation_state', {
+            p_user_id: profile.id,
+            p_state: 'social_morning_reminder',
+            p_payload: { event_id: eventId },
+            p_last_sendblue_message_handle: null,
+          })
+        }
       }
 
       await supabase
@@ -232,12 +240,12 @@ serve(async (_req: Request) => {
       const eventTimeFormatted = formatEventTimeOnly(eventStartsAt)
       const [q1, q2] = pickFikaPromptQuestions(matchId)
 
-      // Find users who accepted (match_accepted or pre_event_sent not yet set)
+      // Find users who accepted: match_accepted (old flow) or confirmed (new scheduling flow)
       const { data: stateRows } = await supabase
         .from('sms_conversation_states')
         .select('user_id')
         .eq('match_id', matchId)
-        .eq('state', 'match_accepted')
+        .in('state', ['1v1_accepted', '1v1_confirmed'])
 
       const acceptedUserIds = (stateRows ?? []).map((r: { user_id: string }) => r.user_id)
       if (acceptedUserIds.length === 0) continue
@@ -273,7 +281,7 @@ serve(async (_req: Request) => {
         if (sent) {
           await supabase
             .from('sms_conversation_states')
-            .update({ state: 'pre_event_sent', updated_at: new Date().toISOString() })
+            .update({ state: '1v1_morning_reminder', updated_at: new Date().toISOString() })
             .eq('user_id', uid)
             .eq('match_id', matchId)
           onev1Sent++

@@ -155,10 +155,6 @@ export default function AdminSignupsPage() {
   const [simMaxUsers, setSimMaxUsers] = useState(260)
   const [simTopN, setSimTopN] = useState(220)
   const [selectedSimPairs, setSelectedSimPairs] = useState<Record<string, boolean>>({})
-  const [matchVenues, setMatchVenues] = useState<Array<{ id: string; name: string; neighborhood: string | null; city: string }>>([])
-  const [matchVenueSearch, setMatchVenueSearch] = useState('')
-  const [matchVenueId, setMatchVenueId] = useState('')
-  const [matchEventStartsAt, setMatchEventStartsAt] = useState('')
   const [matchSending, setMatchSending] = useState(false)
   const [matchSendResult, setMatchSendResult] = useState<string | null>(null)
 
@@ -208,27 +204,6 @@ export default function AdminSignupsPage() {
     load()
   }, [fetchSignups, filterMarket])
 
-  useEffect(() => {
-    if (!filterMarket) { setMatchVenues([]); setMatchVenueId(''); setMatchVenueSearch(''); return }
-    let cancelled = false
-    async function loadVenues() {
-      const supabase = getSupabase()
-      const { data: { session } } = await supabase?.auth.getSession() ?? { data: { session: null } }
-      const headers: HeadersInit = {}
-      if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`
-      const res = await fetch(`/api/admin/venues?limit=200&market_slug=${encodeURIComponent(filterMarket)}`, {
-        credentials: 'include', headers,
-      })
-      if (res.ok && !cancelled) {
-        const data = await res.json()
-        setMatchVenues(data.venues ?? [])
-      }
-    }
-    loadVenues()
-    setMatchVenueId('')
-    setMatchVenueSearch('')
-    return () => { cancelled = true }
-  }, [filterMarket])
 
   async function openModal(userId: string) {
     setModalUserId(userId)
@@ -299,14 +274,6 @@ export default function AdminSignupsPage() {
   const selectedVisibleCount = visiblePairs.filter((p) => selectedSimPairs[`${p.userAId}:${p.userBId}`]).length
   const allVisibleSelected = visiblePairs.length > 0 && selectedVisibleCount === visiblePairs.length
 
-  const filteredMatchVenues = matchVenueSearch.trim().length >= 2
-    ? matchVenues.filter(v =>
-        v.name.toLowerCase().includes(matchVenueSearch.toLowerCase()) ||
-        (v.neighborhood ?? '').toLowerCase().includes(matchVenueSearch.toLowerCase()) ||
-        v.city.toLowerCase().includes(matchVenueSearch.toLowerCase())
-      )
-    : matchVenues
-
   function toggleSimPair(pair: SimPair, checked: boolean) {
     const key = `${pair.userAId}:${pair.userBId}`
     setSelectedSimPairs((prev) => ({ ...prev, [key]: checked }))
@@ -314,7 +281,7 @@ export default function AdminSignupsPage() {
 
   async function sendIntros() {
     const selectedPairs = visiblePairs.filter(p => selectedSimPairs[`${p.userAId}:${p.userBId}`])
-    if (selectedPairs.length === 0 || !matchVenueId || !matchEventStartsAt) return
+    if (selectedPairs.length === 0) return
     setMatchSending(true)
     setMatchSendResult(null)
     try {
@@ -322,7 +289,6 @@ export default function AdminSignupsPage() {
       const { data: { session } } = await supabase?.auth.getSession() ?? { data: { session: null } }
       const headers: HeadersInit = { 'Content-Type': 'application/json' }
       if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`
-      const venue = matchVenues.find(v => v.id === matchVenueId)
       const pairs = selectedPairs.map(p => ({
         user_a: p.userAId,
         user_b: p.userBId,
@@ -334,12 +300,7 @@ export default function AdminSignupsPage() {
         method: 'POST',
         credentials: 'include',
         headers,
-        body: JSON.stringify({
-          pairs,
-          venue_id: matchVenueId,
-          event_starts_at: new Date(matchEventStartsAt).toISOString(),
-          area_label: venue?.neighborhood || venue?.city || '',
-        }),
+        body: JSON.stringify({ pairs }),
       })
       const data = await res.json()
       if (res.ok) {
@@ -564,53 +525,14 @@ export default function AdminSignupsPage() {
             <div className="admin-dashboard" style={{ marginTop: 0, marginBottom: '1.25rem' }}>
               <h2 className="admin-dashboard-title">Send 1v1 intro</h2>
               <p className="admin-description" style={{ marginBottom: '0.75rem' }}>
-                {selectedVisibleCount} pair{selectedVisibleCount === 1 ? '' : 's'} selected.
-                Pick a venue and time, then send.
-                {!filterMarket && ' Select a market above to search venues.'}
+                {selectedVisibleCount} pair{selectedVisibleCount === 1 ? '' : 's'} selected. Users will be asked for availability and a venue will be suggested automatically.
               </p>
-
-              {filterMarket && (
-                <>
-                  <div style={{ marginBottom: '0.5rem' }}>
-                    <input
-                      type="text"
-                      placeholder="Search venue..."
-                      value={matchVenueSearch}
-                      onChange={e => { setMatchVenueSearch(e.target.value); setMatchVenueId('') }}
-                      style={{ width: '100%', padding: '0.4rem 0.6rem', borderRadius: 4, border: '1px solid #ccc', fontSize: '0.875rem', marginBottom: 4, boxSizing: 'border-box' }}
-                    />
-                    <select
-                      value={matchVenueId}
-                      onChange={e => setMatchVenueId(e.target.value)}
-                      size={Math.min(filteredMatchVenues.length + 1, 6)}
-                      style={{ width: '100%', padding: '0.2rem', borderRadius: 4, border: '1px solid #ccc', fontSize: '0.875rem' }}
-                    >
-                      <option value="">— Select venue —</option>
-                      {filteredMatchVenues.map(v => (
-                        <option key={v.id} value={v.id}>
-                          {v.name}{v.neighborhood ? ` (${v.neighborhood})` : ''} — {v.city}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div style={{ marginBottom: '0.75rem' }}>
-                    <input
-                      type="datetime-local"
-                      value={matchEventStartsAt}
-                      onChange={e => setMatchEventStartsAt(e.target.value)}
-                      style={{ padding: '0.4rem 0.6rem', borderRadius: 4, border: '1px solid #ccc', fontSize: '0.875rem' }}
-                    />
-                  </div>
-                </>
-              )}
-
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
                 <button
                   type="button"
                   className="admin-btn admin-btn-primary"
                   onClick={sendIntros}
-                  disabled={matchSending || !matchVenueId || !matchEventStartsAt || selectedVisibleCount === 0}
+                  disabled={matchSending || selectedVisibleCount === 0}
                   style={{ marginBottom: 0 }}
                 >
                   {matchSending ? 'Sending…' : `Send intro${selectedVisibleCount === 1 ? '' : 's'}`}

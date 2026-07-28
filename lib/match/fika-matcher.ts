@@ -56,6 +56,7 @@ export type FikaMatchBreakdown = {
     textureFit: number
     /** 0–1 from calendar-age gap; neutral 0.5 if either age unknown. */
     ageFit: number
+    socialGoalFit: number
     total: number
   }
   penalties: {
@@ -279,6 +280,10 @@ export function scoreFikaPair(a: MatcherPerson, b: MatcherPerson, opts?: ScorePa
   const marketTenureFit = marketTenureFitScore(a.responses, b.responses)
   const workFit = workFitScore(a.responses, b.responses)
   const ageFit = ageFitScore(a.age, b.age)
+  const socialGoalFit = multiSelectChipOverlapScore(
+    getIntakeMulti(a.responses, 'q_social_goal'),
+    getIntakeMulti(b.responses, 'q_social_goal')
+  )
 
   const w = COMPATIBILITY_WEIGHTS
   const compatibilityTotal =
@@ -286,7 +291,8 @@ export function scoreFikaPair(a: MatcherPerson, b: MatcherPerson, opts?: ScorePa
     w.marketTenure * marketTenureFit +
     w.work * workFit +
     w.likeTalkingAbout * likeTalkingAboutFit +
-    w.ageFit * ageFit
+    w.ageFit * ageFit +
+    w.socialGoal * socialGoalFit
 
   const avoidTopicsPenalty = 0
   const severeMismatch = 0
@@ -318,6 +324,7 @@ export function scoreFikaPair(a: MatcherPerson, b: MatcherPerson, opts?: ScorePa
       workFit,
       textureFit: 0,
       ageFit,
+      socialGoalFit,
       total: compatibilityTotal,
     },
     penalties: {

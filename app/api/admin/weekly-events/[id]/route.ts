@@ -87,7 +87,7 @@ export async function DELETE(
     const { data: pendingStates } = await supabase
       .from('sms_conversation_states')
       .select('user_id')
-      .in('state', ['event_invite_sent', 'weekly_opt_in_sent', 'rsvp_accepted', 'reveal_sent'])
+      .in('state', ['social_invited', 'weekly_opt_in_sent', 'social_rsvp_accepted', 'social_morning_reminder', 'social_reveal_sent'])
       .filter('payload->>event_id', 'eq', eventId)
       .is('match_id', null)
 
