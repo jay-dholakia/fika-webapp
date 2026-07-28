@@ -18,7 +18,6 @@ import type { IntakeResponseItem } from '@/lib/db-types'
 import { toE164, isValidPhone } from '@/lib/phone'
 import { getMarketFromCityOrLatLngWithDb } from '@/lib/markets'
 import { SmsConciergeCta } from '@/app/app/components/SmsConciergeCta'
-import { PersonaIdVerification } from '@/app/app/components/PersonaIdVerification'
 import { VerifiedBadge } from '@/app/app/components/VerifiedBadge'
 import { SearchableMultiPicker } from '@/app/app/components/SearchableMultiPicker'
 import { SearchableSinglePicker } from '@/app/app/components/SearchableSinglePicker'
@@ -38,11 +37,6 @@ function is18Plus(dateStr: string): boolean {
   if (m < 0 || (m === 0 && today.getDate() < d.getDate())) age--
   return age >= 18
 }
-
-const PERSONA_EMBED_CONFIGURED = Boolean(
-  process.env.NEXT_PUBLIC_PERSONA_TEMPLATE_ID?.trim() &&
-    process.env.NEXT_PUBLIC_PERSONA_ENVIRONMENT_ID?.trim()
-)
 
 const BACKGROUND_INTAKE_IDS = new Set(['q_market_tenure', 'q_ethnicity'])
 
@@ -490,22 +484,6 @@ export default function SettingsProfilePage() {
             <span>{answers.first_name.trim()}</span>
             <VerifiedBadge />
           </div>
-        ) : null}
-
-        {PERSONA_EMBED_CONFIGURED ? (
-          <section className="profile-section">
-            <h3 className="profile-section-title">Get ID verified</h3>
-            <p style={{ color: 'var(--color-textSecondary)', marginBottom: '0.75rem', fontSize: '0.95rem' }}>
-              Confirm your identity with Persona. When you&apos;re verified, a blue check appears next to your name on intros.
-            </p>
-            {userId && (
-              <PersonaIdVerification
-                userId={userId}
-                idVerifiedAt={profile?.id_verified_at ?? null}
-                onVerified={refetch}
-              />
-            )}
-          </section>
         ) : null}
 
         <section className="profile-section">

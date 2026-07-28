@@ -4,16 +4,10 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useOnboardingStatus } from '@/lib/use-onboarding'
 import { getSupabase } from '@/lib/supabase'
-import { PersonaIdVerification } from '@/app/app/components/PersonaIdVerification'
 import { NewQuestionsSection } from '@/app/app/components/NewQuestionsSection'
 import { getMarketBySlug, getMarketFromCity } from '@/lib/markets'
 
 const SHARE_URL = 'https://letsfika.vercel.app'
-
-const PERSONA_EMBED_CONFIGURED = Boolean(
-  process.env.NEXT_PUBLIC_PERSONA_TEMPLATE_ID?.trim() &&
-    process.env.NEXT_PUBLIC_PERSONA_ENVIRONMENT_ID?.trim()
-)
 
 export default function HowItWorksPage() {
   const [userId, setUserId] = useState<string | null>(null)
@@ -202,24 +196,6 @@ export default function HowItWorksPage() {
         <Link href="/app/settings/how-it-works">FAQ &amp; more answers</Link>
       </p>
 
-      {PERSONA_EMBED_CONFIGURED &&
-        userId &&
-        !onboardingLoading &&
-        !profile?.id_verified_at && (
-          <section
-            className="app-card app-welcome-id-verify"
-            style={{ marginTop: '1rem' }}
-            aria-labelledby="welcome-id-verify-heading"
-          >
-            <h2 id="welcome-id-verify-heading" className="app-how-it-works-section-title" style={{ marginTop: 0 }}>
-              Get ID verified
-            </h2>
-            <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.9375rem', margin: '0 0 0.75rem 0' }}>
-              A blue check helps people say yes with confidence. About a minute with Persona.
-            </p>
-            <PersonaIdVerification userId={userId} idVerifiedAt={profile?.id_verified_at ?? null} onVerified={refetch} />
-          </section>
-        )}
     </div>
 
       <NewQuestionsSection
