@@ -86,15 +86,13 @@ function hasStepAnswer(step: OnboardingRenderableStep, answers: AnswersState): b
   }
   const raw = answers[step.id]
   if (step.id === 'location') {
-    const citySet =
+    return (
       typeof raw === 'object' &&
       raw !== null &&
       'city' in raw &&
       typeof (raw as { city?: string }).city === 'string' &&
       ((raw as { city?: string }).city?.trim() ?? '') !== ''
-    const neighborhoodSet =
-      typeof answers.q_neighborhood === 'string' && answers.q_neighborhood.trim() !== ''
-    return citySet && neighborhoodSet
+    )
   }
   if (step.type === 'multi_select' || step.type === 'searchable_multi') {
     return Array.isArray(raw) && raw.length > 0

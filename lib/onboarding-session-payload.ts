@@ -61,6 +61,7 @@ export function buildOnboardingSessionPayload(answers: AnswersState): Record<str
     city: loc?.city ?? null,
     lat: typeof loc?.lat === 'number' ? loc.lat : null,
     lng: typeof loc?.lng === 'number' ? loc.lng : null,
+    neighborhood: typeof answers.q_neighborhood === 'string' ? answers.q_neighborhood.trim() || null : null,
     avatar_url: typeof answers.avatar_url === 'string' ? answers.avatar_url : null,
     avatar_path: typeof answers.avatar_path === 'string' ? answers.avatar_path : null,
     responses,
@@ -89,6 +90,9 @@ export function payloadToAnswers(payload: Record<string, unknown>): AnswersState
     typeof payload.lng === 'number'
   ) {
     answers.location = { city: payload.city, lat: payload.lat, lng: payload.lng }
+  }
+  if (typeof payload.neighborhood === 'string' && payload.neighborhood.trim()) {
+    answers.q_neighborhood = payload.neighborhood
   }
   const responses = Array.isArray(payload.responses) ? payload.responses : []
   for (const r of responses as Array<{ question_id?: string; answer?: unknown }>) {
