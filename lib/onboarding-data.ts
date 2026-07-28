@@ -340,14 +340,6 @@ export const INTAKE_STEPS: ProfileStep[] = [
     placeholder: 'Search roles or type your own',
   },
   {
-    id: 'q_linkedin_url',
-    question: 'LinkedIn profile (optional)',
-    body: "Helps us get a fuller picture of what you do.",
-    type: 'text',
-    required: false,
-    placeholder: 'linkedin.com/in/yourname',
-  },
-  {
     id: 'confirm_intent',
     question: 'Before you continue',
     body: "Meet in public and use good judgment.",
