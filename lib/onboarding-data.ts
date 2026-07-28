@@ -196,7 +196,7 @@ export const PROFILE_STEPS: ProfileStep[] = [
 export const INTAKE_STEPS: ProfileStep[] = [
   {
     id: 'q_market_tenure',
-    question: 'How long have you lived in this area?',
+    question: 'How long have you been in this area?',
     type: 'chips_single',
     required: true,
     options: [

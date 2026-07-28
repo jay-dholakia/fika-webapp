@@ -296,7 +296,7 @@ function marketTenureHeadline(answers: AnswersState): string {
   const loc = answers.location as { city?: string } | undefined
   const city = loc && typeof loc.city === 'string' && loc.city.trim() ? loc.city.trim() : ''
   if (!city || city === 'Unknown') return 'How long have you lived in this area?'
-  return `How long have you lived in ${city}?`
+  return `How long have you been in ${city}?`
 }
 
 function is18Plus(isoYmd: string): boolean {
@@ -346,12 +346,7 @@ function AppOnboardingContent() {
 
   const visibleSteps = useMemo(() => getVisibleStepsForAnswers(answers), [answers])
 
-  useEffect(() => {
-    if (currentStepId !== 'q_market_tenure') return
-    const raw = answers.q_market_tenure
-    if (typeof raw === 'string' && raw.trim()) return
-    setAnswers((a) => ({ ...a, q_market_tenure: MARKET_TENURE_OPTIONS[0] }))
-  }, [currentStepId, answers.q_market_tenure])
+  // No default chip for q_market_tenure — user must pick explicitly.
 
   useEffect(() => {
     fetch('/api/intake-questions')
@@ -642,8 +637,7 @@ function AppOnboardingContent() {
       setAnswers((a) => ({
         ...a,
         location: locRes.location,
-        q_market_tenure:
-          typeof a.q_market_tenure === 'string' && a.q_market_tenure.trim() ? a.q_market_tenure : MARKET_TENURE_OPTIONS[0],
+        q_market_tenure: typeof a.q_market_tenure === 'string' ? a.q_market_tenure : '',
       }))
     }
 
@@ -804,8 +798,7 @@ function AppOnboardingContent() {
       setAnswers((a) => ({
         ...a,
         location: locRes.location,
-        q_market_tenure:
-          typeof a.q_market_tenure === 'string' && a.q_market_tenure.trim() ? a.q_market_tenure : MARKET_TENURE_OPTIONS[0],
+        q_market_tenure: typeof a.q_market_tenure === 'string' ? a.q_market_tenure : '',
       }))
 
       if (tokenMode && token) {
