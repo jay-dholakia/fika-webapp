@@ -575,7 +575,7 @@ export function formatMatchRevealSentence(params: {
     ? `${subjectHave} been ${currentInterestClean.charAt(0).toLowerCase() + currentInterestClean.slice(1).replace(/\.$/, '')}.`
     : ''
   const friendDescriptionSentence = friendDescriptionClean
-    ? `A close friend would say ${friendDescriptionClean.charAt(0).toLowerCase() + friendDescriptionClean.slice(1).replace(/\.$/, '')}.`
+    ? `Their friends describe them as ${friendDescriptionClean.charAt(0).toLowerCase() + friendDescriptionClean.slice(1).replace(/\.$/, '')}.`
     : ''
 
   if (dateLine?.trim() || venueLine?.trim()) {
