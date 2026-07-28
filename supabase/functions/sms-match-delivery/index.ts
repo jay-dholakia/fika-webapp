@@ -101,8 +101,6 @@ function buildIntroMessage(params: {
     `We'd love to introduce you to ${name} ☕`,
     '',
     ...aboutParts,
-    '',
-    `This is a 1-on-1 intro — just the two of you.`,
   ].join('\n')
 }
 
