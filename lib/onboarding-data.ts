@@ -339,7 +339,7 @@ export const INTAKE_STEPS: ProfileStep[] = [
   {
     id: 'confirm_intent',
     question: 'Before you continue',
-    body: "Fika sets up two types of meetups: Fika socials (a group gathering where we pair you with one person 30 minutes before), and 1-on-1 intros (just the two of you — no group). We'll reach out when we have something for you — just reply Yes and we'll handle the rest.\n\nMeet in public and use good judgment. We're here for respectful conversation. By continuing, you agree to show up with care for yourself and others.",
+    body: "Meet in public and use good judgment.",
     type: 'chips_single',
     required: true,
     options: ["I'm in"],

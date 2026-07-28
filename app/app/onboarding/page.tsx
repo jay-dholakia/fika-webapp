@@ -1090,7 +1090,7 @@ function AppOnboardingContent() {
             ))}
             {step.id === 'confirm_intent' && (
               <p className="onboarding-body-links">
-                By continuing, you agree to our{' '}
+                By continuing, you agree to show up with care for yourself and others, and to our{' '}
                 <Link href="/terms" target="_blank" rel="noopener noreferrer">Terms of Service</Link>
                 {' '}and{' '}
                 <Link href="/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</Link>.
