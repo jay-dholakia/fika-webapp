@@ -17,17 +17,33 @@ function getSubjectPronoun(pronouns: string | null): { cap: string; haveBeen: st
 }
 
 
+// Life situations we skip mentioning in an intro (too personal / implies unemployment)
+const WORK_SKIP_IN_INTRO = new Set([
+  'between jobs', 'taking a break', 'on sabbatical', 'n/a',
+])
+
+function articleFor(word: string): string {
+  return /^[aeiou]/i.test(word) ? 'an' : 'a'
+}
+
+function joinList(items: string[]): string {
+  if (items.length === 1) return items[0]
+  return items.slice(0, -1).join(', ') + ' and ' + items[items.length - 1]
+}
+
 function buildIntroMessage(params: {
   otherFirstName: string
   otherPronouns: string | null
-  otherWorkLabel: string | null
+  otherWork: string | null
   otherCurrentInterest: string | null
   otherFriendDescription: string | null
+  sharedInterests: string[]
+  sharedTopics: string[]
   sharedSignals: string[]
 }): string {
   const {
-    otherFirstName, otherPronouns, otherWorkLabel, otherCurrentInterest,
-    otherFriendDescription, sharedSignals,
+    otherFirstName, otherPronouns, otherWork, otherCurrentInterest,
+    otherFriendDescription, sharedInterests, sharedTopics, sharedSignals,
   } = params
 
   const name = otherFirstName.trim() || 'Someone'
@@ -35,14 +51,18 @@ function buildIntroMessage(params: {
 
   const aboutParts: string[] = []
 
-  if (otherWorkLabel?.trim() && otherCurrentInterest?.trim()) {
-    const work = otherWorkLabel.trim()
+  const workClean = otherWork?.trim() || null
+  const showWork = workClean && !WORK_SKIP_IN_INTRO.has(workClean.toLowerCase())
+
+  if (showWork && otherCurrentInterest?.trim()) {
+    const art = articleFor(workClean)
     const interest = otherCurrentInterest.trim().replace(/\.$/, '')
     const lc = interest.charAt(0).toLowerCase() + interest.slice(1)
-    aboutParts.push(`${name} works in ${work} and ${haveBeen.toLowerCase()} ${lc}.`)
+    aboutParts.push(`${name} is ${art} ${workClean} and ${haveBeen.toLowerCase()} ${lc}.`)
   } else {
-    if (otherWorkLabel?.trim()) {
-      aboutParts.push(`${name} works in ${otherWorkLabel.trim()}.`)
+    if (showWork) {
+      const art = articleFor(workClean)
+      aboutParts.push(`${name} is ${art} ${workClean}.`)
     }
     if (otherCurrentInterest?.trim()) {
       const interest = otherCurrentInterest.trim().replace(/\.$/, '')
@@ -54,7 +74,6 @@ function buildIntroMessage(params: {
   if (otherFriendDescription?.trim()) {
     const desc = otherFriendDescription.trim().replace(/\.$/, '')
     const lc = desc.charAt(0).toLowerCase() + desc.slice(1)
-    // If description already starts with a pronoun or name, use as-is; otherwise prefix
     const firstWord = lc.split(' ')[0] ?? ''
     const pronounWords = ['she', 'he', 'they', 'i']
     if (pronounWords.includes(firstWord)) {
@@ -64,12 +83,18 @@ function buildIntroMessage(params: {
     }
   }
 
+  if (sharedInterests.length > 0) {
+    const items = sharedInterests.slice(0, 3).map(s => s.toLowerCase())
+    aboutParts.push(`You both enjoy ${joinList(items)}.`)
+  }
+
+  if (sharedTopics.length > 0) {
+    const items = sharedTopics.slice(0, 2).map(s => s.toLowerCase())
+    aboutParts.push(`You're both into talking about ${joinList(items)}.`)
+  }
+
   if (sharedSignals.length > 0) {
-    const joined =
-      sharedSignals.length === 1
-        ? sharedSignals[0]
-        : sharedSignals.slice(0, -1).join(', ') + ' and ' + sharedSignals[sharedSignals.length - 1]
-    aboutParts.push(`You both ${joined}.`)
+    aboutParts.push(`You both ${joinList(sharedSignals)}.`)
   }
 
   return [
@@ -183,8 +208,6 @@ serve(async (req: Request) => {
       const signals = Array.isArray(reasons.signals)
         ? (reasons.signals as unknown[]).filter((s): s is string => typeof s === 'string')
         : []
-      const userAWork = typeof reasons.user_a_work === 'string' ? reasons.user_a_work : null
-      const userBWork = typeof reasons.user_b_work === 'string' ? reasons.user_b_work : null
 
       // Load profiles for both users
       const { data: profileRows } = await supabase
@@ -211,8 +234,7 @@ serve(async (req: Request) => {
         continue
       }
 
-
-      // Load intake for both users (q_current_interest, q_friend_description)
+      // Load intake for both users
       const { data: intakeRows } = await supabase
         .from('intake_responses_v5')
         .select('user_id, responses')
@@ -228,10 +250,29 @@ serve(async (req: Request) => {
         return typeof item?.answer === 'string' ? item.answer.trim() || null : null
       }
 
+      const getIntakeAnswerMulti = (userId: string, questionId: string): string[] => {
+        const row = (intakeRows ?? []).find((r: { user_id: string }) => r.user_id === userId)
+        if (!row) return []
+        const responses = Array.isArray(row.responses) ? (row.responses as IntakeItem[]) : []
+        const item = responses.find(r => r.question_id === questionId)
+        if (!Array.isArray(item?.answer)) return []
+        return (item.answer as unknown[]).filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
+      }
+
+      const workA = getIntakeAnswer(userAId, 'q_work')
+      const workB = getIntakeAnswer(userBId, 'q_work')
       const currentInterestA = getIntakeAnswer(userAId, 'q_current_interest')
       const friendDescA = getIntakeAnswer(userAId, 'q_friend_description')
       const currentInterestB = getIntakeAnswer(userBId, 'q_current_interest')
       const friendDescB = getIntakeAnswer(userBId, 'q_friend_description')
+
+      const interestsA = getIntakeAnswerMulti(userAId, 'q_interests')
+      const interestsB = getIntakeAnswerMulti(userBId, 'q_interests')
+      const sharedInterests = interestsA.filter(x => interestsB.includes(x))
+
+      const topicsA = getIntakeAnswerMulti(userAId, 'q_like_talking_about')
+      const topicsB = getIntakeAnswerMulti(userBId, 'q_like_talking_about')
+      const sharedTopics = topicsA.filter(x => topicsB.includes(x))
 
       const nameA = profA?.first_name?.trim() || 'Someone'
       const nameB = profB?.first_name?.trim() || 'Someone'
@@ -242,9 +283,11 @@ serve(async (req: Request) => {
       const msgForA = buildIntroMessage({
         otherFirstName: nameB,
         otherPronouns: profB?.pronouns ?? null,
-        otherWorkLabel: userBWork,
+        otherWork: workB,
         otherCurrentInterest: currentInterestB,
         otherFriendDescription: friendDescB,
+        sharedInterests,
+        sharedTopics,
         sharedSignals: signals,
       })
 
@@ -252,9 +295,11 @@ serve(async (req: Request) => {
       const msgForB = buildIntroMessage({
         otherFirstName: nameA,
         otherPronouns: profA?.pronouns ?? null,
-        otherWorkLabel: userAWork,
+        otherWork: workA,
         otherCurrentInterest: currentInterestA,
         otherFriendDescription: friendDescA,
+        sharedInterests,
+        sharedTopics,
         sharedSignals: signals,
       })
 
