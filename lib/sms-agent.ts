@@ -220,38 +220,30 @@ export function buildConciergeSignupInviteSmsHref(): string | null {
 function firstTimeEntryInviteBlock(): string {
   const inviteHref = buildConciergeSignupInviteSmsHref()
   return inviteHref
-    ? `Know someone nearby who'd like this? Send them this link:\n${inviteHref}`
-    : `Know someone nearby who'd like this? They can text us with:\n${CONCIERGE_SIGNUP_SMS_BODY}`
+    ? `Know someone who'd want to join? Send them this:\n${inviteHref}`
+    : `Know someone who'd want to join? They can text us:\n${CONCIERGE_SIGNUP_SMS_BODY}`
 }
 
-/** First-time sequence after signup (active market). Two SMS: intro + invite, then profile edit link. */
+/** First-time sequence after signup (active market). Two SMS: confirmation, then referral. */
 export function messageEntryFirstTimeMessages(
   _isAfterDeadline: boolean,
   _nextMondayPhrase: string = 'next Monday',
-  appBase: string = 'https://letsfika.vercel.app'
+  _appBase: string = 'https://letsfika.vercel.app'
 ): TimedSmsMessage[] {
-  const base = appBase.trim().replace(/\/$/, '') || 'https://letsfika.vercel.app'
-  const lead =
-    "You're in ☕ We'll text you when there's a Fika coming up near you — just reply Yes to join and we'll handle the rest.\n" +
-    firstTimeEntryInviteBlock()
   return [
-    { content: lead, delayAfterMs: SMS_PACING_MS.quickAck },
-    { content: `To update your profile: ${base}/app`, delayAfterMs: SMS_PACING_MS.quickAck },
+    { content: "You're in ☕ We'll reach out when we have a great intro for you.", delayAfterMs: SMS_PACING_MS.quickAck },
+    { content: firstTimeEntryInviteBlock(), delayAfterMs: SMS_PACING_MS.quickAck },
   ]
 }
 
-/** First-time entry when user's market is inactive. Two SMS: intro + invite, then profile edit link. */
+/** First-time entry when user's market is inactive. Two SMS: confirmation, then referral. */
 export function messageEntryFirstTimeMessagesInactiveMarket(
-  appBase: string = 'https://letsfika.vercel.app',
+  _appBase: string = 'https://letsfika.vercel.app',
   _cityLabel?: string | null
 ): TimedSmsMessage[] {
-  const base = appBase.trim().replace(/\/$/, '') || 'https://letsfika.vercel.app'
-  const lead =
-    "We're growing Fika in your area — we'll reach out when we have a great intro for you.\n" +
-    firstTimeEntryInviteBlock()
   return [
-    { content: lead, delayAfterMs: SMS_PACING_MS.quickAck },
-    { content: `To update your profile: ${base}/app`, delayAfterMs: SMS_PACING_MS.quickAck },
+    { content: "We're growing Fika in your area — we'll reach out when we have a great intro for you.", delayAfterMs: SMS_PACING_MS.quickAck },
+    { content: firstTimeEntryInviteBlock(), delayAfterMs: SMS_PACING_MS.quickAck },
   ]
 }
 
