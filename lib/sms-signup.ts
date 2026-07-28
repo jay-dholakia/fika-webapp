@@ -21,7 +21,7 @@ export function messageSmsSignupLinkSentSequence(link: string, _sampleImageUrl?:
       delayAfterMs: SMS_PACING_MS.reflective,
     },
     {
-      content: "We find someone worth meeting, pick a local coffee shop that's convenient for both of you, and set a time. All you have to do is show up.",
+      content: "We'll find someone worth meeting, pick a local coffee shop that's convenient for both of you, and set a time based on when you're both free. All you have to do is show up.",
       delayAfterMs: SMS_PACING_MS.reflective,
     },
     { content: 'Set up your profile to get started:', delayAfterMs: SMS_PACING_MS.beat },
