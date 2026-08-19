@@ -43,10 +43,6 @@ import { getIntakeSingle } from '@/lib/intake-response-utils'
 import { isOnboardingComplete } from '@/lib/onboarding'
 import { localDateTimeInTzToUtcMs } from '@/lib/wall-time-to-utc'
 import type { ProfileRow, IntakeResponsesV5Row } from '@/lib/db-types'
-import {
-  messageSmsSignupLinkSentSequence,
-  messageSmsSignupLinkAlreadySent,
-} from '@/lib/sms-signup'
 import { handleSmsOnboarding } from '@/lib/sms-onboarding'
 import { insertMessageLedger } from '@/lib/message-ledger'
 import {

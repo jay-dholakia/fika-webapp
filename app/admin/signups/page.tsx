@@ -68,6 +68,9 @@ type FikaMatchBreakdown = {
     workFit: number
     textureFit: number
     ageFit: number
+    socialGoalFit: number
+    fikaVibeFit?: number
+    socialStyleFit?: number
     total: number
   }
   penalties: {
@@ -467,12 +470,12 @@ export default function AdminSignupsPage() {
                       const topFactors = bd
                         ? [
                             ['interests', bd.compatibility.interestsFit],
-                            ['talk topics', bd.compatibility.likeTalkingAboutFit],
+                            ['fika vibe', bd.compatibility.fikaVibeFit ?? 0],
+                            ['social goal', bd.compatibility.socialGoalFit],
                             ['market tenure', bd.compatibility.marketTenureFit],
+                            ['social style', bd.compatibility.socialStyleFit ?? 0],
                             ['work', bd.compatibility.workFit],
                             ['age', bd.compatibility.ageFit],
-                            ['great Fika', bd.compatibility.greatFikaFit],
-                            ['life chapter', bd.compatibility.lifeChapterFit],
                             ['feasibility', bd.feasibility.total],
                           ]
                             .sort((a, b) => (b[1] as number) - (a[1] as number))
@@ -740,8 +743,10 @@ export default function AdminSignupsPage() {
                     <h4 className="admin-modal-meta" style={{ marginTop: '0.75rem', fontWeight: 600 }}>Compatibility</h4>
                     <dl className="admin-modal-dl">
                       <span><dt>Interests</dt><dd>{simPairModal.matchBreakdown.compatibility.interestsFit.toFixed(3)}</dd></span>
-                      <span><dt>Talk topics</dt><dd>{simPairModal.matchBreakdown.compatibility.likeTalkingAboutFit.toFixed(3)}</dd></span>
+                      <span><dt>Fika vibe</dt><dd>{(simPairModal.matchBreakdown.compatibility.fikaVibeFit ?? 0).toFixed(3)}</dd></span>
+                      <span><dt>Social goal</dt><dd>{simPairModal.matchBreakdown.compatibility.socialGoalFit.toFixed(3)}</dd></span>
                       <span><dt>Market tenure</dt><dd>{simPairModal.matchBreakdown.compatibility.marketTenureFit.toFixed(3)}</dd></span>
+                      <span><dt>Social style</dt><dd>{(simPairModal.matchBreakdown.compatibility.socialStyleFit ?? 0).toFixed(3)}</dd></span>
                       <span><dt>Work</dt><dd>{simPairModal.matchBreakdown.compatibility.workFit.toFixed(3)}</dd></span>
                       <span><dt>Age fit</dt><dd>{simPairModal.matchBreakdown.compatibility.ageFit.toFixed(3)}</dd></span>
                       <span><dt>Total (pre-penalty)</dt><dd>{simPairModal.matchBreakdown.compatibility.total.toFixed(3)}</dd></span>

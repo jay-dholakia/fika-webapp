@@ -12,7 +12,7 @@ function SignupContent() {
 
   useEffect(() => {
     if (token) {
-      window.location.href = `/app/onboarding?token=${encodeURIComponent(token)}`
+      window.location.href = `/finish?token=${encodeURIComponent(token)}`
     } else {
       window.location.href = '/'
     }
