@@ -84,6 +84,7 @@ function calculateDistanceKm(lat1: number, lng1: number, lat2: number, lng2: num
 export function multiSelectChipOverlapScore(a: string[], b: string[]): number {
   const sa = Array.from(new Set(a.map((x) => x.trim()).filter(Boolean)))
   const sb = Array.from(new Set(b.map((x) => x.trim()).filter(Boolean)))
+  if (sa.length === 0 && sb.length === 0) return 0.5 // both have no data → neutral
   if (sa.length === 0 || sb.length === 0) return 0
   const setA = new Set(sa)
   const setB = new Set(sb)
@@ -116,7 +117,10 @@ function distanceFitScore(distanceKm: number | null, combinedRadiusKm: number): 
 function intakeFieldPresent(responses: unknown, questionId: string): boolean {
   const multi = ['q_interests', 'q_like_talking_about']
   if (multi.includes(questionId)) {
-    return getIntakeMulti(responses, questionId).length > 0
+    if (getIntakeMulti(responses, questionId).length > 0) return true
+    // SMS onboarding stores interests as free text under a different key
+    if (questionId === 'q_interests') return getIntakeMulti(responses, 'q_interests_freetext').length > 0
+    return false
   }
   const s = getIntakeSingle(responses, questionId)
   return s != null && s.length > 0
