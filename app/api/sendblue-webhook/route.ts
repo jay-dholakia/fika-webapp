@@ -47,6 +47,7 @@ import {
   messageSmsSignupLinkSentSequence,
   messageSmsSignupLinkAlreadySent,
 } from '@/lib/sms-signup'
+import { handleSmsOnboarding } from '@/lib/sms-onboarding'
 import { insertMessageLedger } from '@/lib/message-ledger'
 import {
   countGlobalReadyAiRepliesLast24h,
@@ -508,61 +509,23 @@ export async function POST(request: Request) {
     content_snippet: content,
   })
   if (!userId) {
-    // ----- Phone-first: unknown number → send link to profile builder; they finalize with Google -----
-    // Use hardcoded production URL so the link is never the deployment/preview URL.
-    // Override only by setting APP_CANONICAL_URL in Vercel (e.g. https://letsfika.co).
-    const DEFAULT_SIGNUP_BASE = 'https://letsfika.vercel.app'
+    // ----- Phone-first: unknown number → conversational SMS onboarding -----
+    const DEFAULT_APP_BASE = 'https://letsfika.vercel.app'
     const appBase = (process.env.APP_CANONICAL_URL ?? '').trim()
       ? process.env.APP_CANONICAL_URL!.trim().replace(/\/$/, '')
-      : DEFAULT_SIGNUP_BASE
-    // Sample intro card: Maya / 32 + "fika" via /api/intro-card. Override avatar with SIGNUP_SAMPLE_AVATAR_URL if needed.
-    const defaultSampleAvatarUrl = `${appBase}/images/maya-intro-agent.png`
-    const sampleAvatarUrl = process.env.SIGNUP_SAMPLE_AVATAR_URL?.trim() || defaultSampleAvatarUrl
-    const signupSampleImageUrl =
-      buildIntroCardUrl({
+      : DEFAULT_APP_BASE
+    const openaiKey = process.env.EXPO_PUBLIC_OPENAI_API_KEY || process.env.OPENAI_API_KEY
+    try {
+      await handleSmsOnboarding({
+        supabase,
+        fromPhone,
+        content,
+        send: async (msg, ctx) => { await sendConciergeAndLog(fromNumber, msg, ctx) },
         appBase,
-        avatarUrl: sampleAvatarUrl,
-        firstName: 'Maya',
-        age: '32',
-      }) ?? `${appBase}/images/maya-intro-agent.png`
-    const { data: existing } = await supabase
-      .from('onboarding_sessions')
-      .select('token, created_at')
-      .eq('phone', fromPhone)
-      .is('merged_into_user_id', null)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-    if (existing?.token) {
-      // If the session was created within the last 60s this is a duplicate webhook delivery — drop silently
-      const sessionAgeMs = Date.now() - new Date(existing.created_at).getTime()
-      if (sessionAgeMs < 60_000) return NextResponse.json({ ok: true })
-      const link = `${appBase}/signup?token=${existing.token}`
-      await sendConciergeAndLog(fromNumber, messageSmsSignupLinkAlreadySent(link), 'signup_link_already_sent')
-      await sleepForSmsPacing(SMS_PACING_MS.quickAck)
-      await sendConciergeAndLog(fromNumber, link, 'signup_link_already_sent_url')
-      return NextResponse.json({ ok: true })
-    }
-    const token = crypto.randomUUID()
-    const { error: insertErr } = await supabase.from('onboarding_sessions').insert({
-      token,
-      phone: fromPhone,
-      payload: {},
-      updated_at: new Date().toISOString(),
-    })
-    if (insertErr) {
-      console.error('[sendblue-webhook] onboarding_sessions insert', insertErr.message)
-      return smsFail('onboarding_sessions_insert_failed', { message: insertErr.message })
-    }
-    const link = `${appBase}/signup?token=${token}`
-    const signupMessages = messageSmsSignupLinkSentSequence(link, signupSampleImageUrl)
-    for (let i = 0; i < signupMessages.length; i++) {
-      await sendConciergeAndLog(fromNumber, signupMessages[i].content, i === signupMessages.length - 1 ? 'signup_link_sent_url' : 'signup_link_sent', {
-        mediaUrl: signupMessages[i].mediaUrl ?? null,
+        openaiKey,
       })
-      if (i < signupMessages.length - 1) {
-        await sleepForSmsPacing(signupMessages[i].delayAfterMs ?? SMS_PACING_MS.quickAck)
-      }
+    } catch (e) {
+      console.error('[sendblue-webhook] sms-onboarding error', e)
     }
     return NextResponse.json({ ok: true })
   }

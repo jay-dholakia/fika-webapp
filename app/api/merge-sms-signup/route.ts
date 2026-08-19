@@ -83,6 +83,30 @@ export async function POST(request: Request) {
   const responses = Array.isArray(payload.responses) ? payload.responses : []
   const avatarPath = typeof payload.avatar_path === 'string' ? payload.avatar_path : null
 
+  // SMS onboarding fields → intake_responses_v5 entries
+  const SMS_INTAKE_FIELDS: Array<{ key: string; question_id: string; question_text: string }> = [
+    { key: 'q_market_tenure', question_id: 'q_market_tenure', question_text: 'How long have you lived there?' },
+    { key: 'q_work', question_id: 'q_work', question_text: 'What do you do for work?' },
+    { key: 'q_interests_freetext', question_id: 'q_interests_freetext', question_text: 'What do you like to do?' },
+    { key: 'q_social_style', question_id: 'q_social_style', question_text: "In social situations you're usually..." },
+    { key: 'q_fika_vibe', question_id: 'q_fika_vibe', question_text: 'When you picture a great Fika, what matters most?' },
+    { key: 'q_social_goal', question_id: 'q_social_goal', question_text: 'What are you hoping to get out of Fika?' },
+    { key: 'q_anything_else', question_id: 'q_anything_else', question_text: 'Anything else?' },
+  ]
+  const smsResponses: Array<{ question_id: string; question_text: string; answer: unknown; type: string; answered_at: string }> = []
+  for (const field of SMS_INTAKE_FIELDS) {
+    const val = payload[field.key as keyof typeof payload]
+    if (val !== undefined && val !== null) {
+      smsResponses.push({
+        question_id: field.question_id,
+        question_text: field.question_text,
+        answer: val,
+        type: 'text',
+        answered_at: new Date().toISOString(),
+      })
+    }
+  }
+
   let avatarUrl: string | null = null
   if (avatarPath) {
     const ext = avatarPath.includes('.') ? avatarPath.split('.').pop() ?? 'jpg' : 'jpg'
@@ -116,14 +140,15 @@ export async function POST(request: Request) {
     { onConflict: 'id' }
   )
 
-  if (responses.length > 0) {
+  const allResponses = [...responses, ...smsResponses]
+  if (allResponses.length > 0) {
     const { data: existing } = await supabase
       .from('intake_responses_v5')
       .select('responses')
       .eq('user_id', user.id)
       .maybeSingle()
     const merged = Array.isArray(existing?.responses) ? [...(existing.responses as object[])] : []
-    for (const r of responses as Array<{ question_id: string; answer: unknown; question_text?: string; type?: string; answered_at?: string }>) {
+    for (const r of allResponses as Array<{ question_id: string; answer: unknown; question_text?: string; type?: string; answered_at?: string }>) {
       const idx = merged.findIndex((m: { question_id?: string }) => m?.question_id === r.question_id)
       const item = {
         question_id: r.question_id,
