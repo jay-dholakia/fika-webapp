@@ -37,7 +37,7 @@ import { pickVenueForMatch } from '@/lib/sms-agent'
 import { parseAvailability, findEarliestOverlap, formatProposedTime, windowStartToUtc, type TimeWindow } from '@/lib/match/availability'
 import { getActiveMarketSlugs } from '@/lib/admin-markets'
 import { getMarketBySlug } from '@/lib/markets'
-import { sendConcierge, isSendblueConfigured, prepareOutboundAiPresence } from '@/lib/sendblue'
+import { sendConcierge, isSendblueConfigured, prepareOutboundAiPresence, markConversationRead } from '@/lib/sendblue'
 import { DEFAULT_RADIUS_KM } from '@/lib/intake-radius'
 import { getIntakeSingle } from '@/lib/intake-response-utils'
 import { isOnboardingComplete } from '@/lib/onboarding'
@@ -305,6 +305,9 @@ export async function POST(request: Request) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   )
   const fromPhone = normalizeIncomingPhone(fromNumber)
+
+  // Fire-and-forget: mark conversation as read so the user sees the read receipt
+  markConversationRead(fromPhone).catch(() => {})
 
   function smsFail(message: string, payload: Record<string, unknown>) {
     console.error('[sendblue-webhook]', message, payload)

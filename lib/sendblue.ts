@@ -257,6 +257,31 @@ export async function setContactSharingProfile(params: {
   }
 }
 
+/** Send the Fika contact card to a specific recipient so they can save the number. Call once at end of onboarding. */
+export async function sendContactCardToRecipient(toPhone: string): Promise<{ ok: boolean; error?: string }> {
+  const config = getConfig()
+  if (!config) return { ok: false, error: 'Sendblue not configured' }
+  const number = toPhone.startsWith('+') ? toPhone : `+${toPhone.replace(/\D/g, '')}`
+  try {
+    const res = await fetch(`${SENDBLUE_CONTACT_SHARING_URL}/send`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'sb-api-key-id': config.apiKeyId,
+        'sb-api-secret-key': config.apiSecretKey,
+      },
+      body: JSON.stringify({ toNumber: number, fromNumber: config.conciergeNumber }),
+    })
+    if (!res.ok) {
+      const t = await res.text().catch(() => '')
+      return { ok: false, error: t.slice(0, 200) }
+    }
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'send_contact_card_failed' }
+  }
+}
+
 /** Set the Concierge number's contact card to "Fika ☕". Run once (e.g. after deploy). Requires SENDBLUE_CONCIERGE_CONTACT_PHOTO_URL (public JPEG/PNG). */
 export async function setConciergeContactCard(photoUrl: string): Promise<{ ok: boolean; error?: string }> {
   const config = getConfig()
