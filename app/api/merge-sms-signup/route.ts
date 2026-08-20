@@ -6,7 +6,7 @@
 
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { sendMessage, sendContactCardToRecipient } from '@/lib/sendblue'
+import { sendMessage } from '@/lib/sendblue'
 import { geocodeZip } from '@/lib/geocode'
 import { insertMessageLedger } from '@/lib/message-ledger'
 import { getOrCreateSmsState, messageEntryFirstTimeMessages, messageEntryFirstTimeMessagesInactiveMarket, SMS_STATES } from '@/lib/sms-agent'
@@ -243,10 +243,6 @@ export async function POST(request: Request) {
           updated_at: new Date().toISOString(),
         }).eq('user_id', user.id).is('match_id', null)
       }
-      // Send Fika contact card so they can save the number
-      sendContactCardToRecipient(session.phone).catch((e) => {
-        console.error('merge-sms-signup: sendContactCard failed', e)
-      })
     } catch {
       // Non-fatal
     }
