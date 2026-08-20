@@ -103,6 +103,7 @@ function getQuestionText(step: number, payload: OnboardingPayload): string {
 export interface OnboardingPayload {
   onboarding_step?: number
   onboarding_retry_count?: number
+  last_message_handle?: string
   first_name?: string
   birthdate?: string
   gender?: string
@@ -236,11 +237,12 @@ export async function handleSmsOnboarding(params: {
   supabase: SupabaseClient
   fromPhone: string
   content: string
+  messageHandle?: string
   send: OnboardingSendFn
   appBase: string
   openaiKey?: string
 }): Promise<void> {
-  const { supabase, fromPhone, content, send, appBase, openaiKey } = params
+  const { supabase, fromPhone, content, messageHandle, send, appBase, openaiKey } = params
 
   // Look up existing unmerged session
   const { data: session } = await supabase
@@ -275,6 +277,12 @@ export async function handleSmsOnboarding(params: {
   const step = payload.onboarding_step ?? 0
   const retryCount = payload.onboarding_retry_count ?? 0
 
+  // Dedup: SendBlue occasionally double-delivers. Drop if we've already processed this handle.
+  if (messageHandle && payload.last_message_handle && payload.last_message_handle === messageHandle) {
+    console.warn('[sms-onboarding] duplicate message_handle, dropping', messageHandle.slice(-8))
+    return
+  }
+
   // ── Duplicate delivery guard (session updated within last 60s, step=0) ─────
   if (step === 0) {
     const ageMs = Date.now() - new Date(session.updated_at).getTime()
@@ -302,13 +310,14 @@ export async function handleSmsOnboarding(params: {
   }
 
   // ── Process answer for current step ───────────────────────────────────────
-  await processAnswer({ supabase, fromPhone, content, send, appBase, openaiKey, session, payload, step, retryCount })
+  await processAnswer({ supabase, fromPhone, content, messageHandle, send, appBase, openaiKey, session, payload, step, retryCount })
 }
 
 async function processAnswer(params: {
   supabase: SupabaseClient
   fromPhone: string
   content: string
+  messageHandle?: string
   send: OnboardingSendFn
   appBase: string
   openaiKey?: string
@@ -317,11 +326,16 @@ async function processAnswer(params: {
   step: number
   retryCount: number
 }): Promise<void> {
-  const { supabase, fromPhone, content, send, appBase, openaiKey, session, payload, step, retryCount } = params
+  const { supabase, fromPhone, content, messageHandle, send, appBase, openaiKey, session, payload, step, retryCount } = params
   const q = getQuestion(step)
   if (!q) return
 
   const text = content.trim()
+
+  // Claim this message handle before any sends to prevent a concurrent duplicate from running
+  if (messageHandle) {
+    await updateSession(supabase, fromPhone, { last_message_handle: messageHandle })
+  }
 
   // ── Q1: First name ────────────────────────────────────────────────────────
   if (step === 1) {

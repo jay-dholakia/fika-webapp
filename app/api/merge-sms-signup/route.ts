@@ -7,6 +7,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { sendMessage, sendContactCardToRecipient } from '@/lib/sendblue'
+import { geocodeZip } from '@/lib/geocode'
 import { insertMessageLedger } from '@/lib/message-ledger'
 import { getOrCreateSmsState, messageEntryFirstTimeMessages, messageEntryFirstTimeMessagesInactiveMarket, SMS_STATES } from '@/lib/sms-agent'
 import { getTimezoneFromLatLng, getNextMondayPhrase } from '@/lib/sms-day-aware'
@@ -76,9 +77,14 @@ export async function POST(request: Request) {
   const gender_preference = payload.gender_preference as string | null
   const age_preference = payload.age_preference as string | null
   const languages = Array.isArray(payload.languages) ? payload.languages : null
-  const city = (payload.city as string) ?? null
-  const lat = typeof payload.lat === 'number' ? payload.lat : null
-  const lng = typeof payload.lng === 'number' ? payload.lng : null
+  let city = (payload.city as string) ?? null
+  let lat = typeof payload.lat === 'number' ? payload.lat : null
+  let lng = typeof payload.lng === 'number' ? payload.lng : null
+  // If geocode failed during onboarding (e.g. rate-limited), retry now at merge time
+  if ((lat == null || lng == null) && typeof payload.zip === 'string' && payload.zip) {
+    const geo = await geocodeZip(payload.zip as string).catch(() => null)
+    if (geo) { city = city ?? geo.city; lat = geo.lat; lng = geo.lng }
+  }
   const market = (await getMarketFromCityOrLatLngWithDb(supabase, city, lat, lng))?.slug ?? null
   const responses = Array.isArray(payload.responses) ? payload.responses : []
   const avatarPath = typeof payload.avatar_path === 'string' ? payload.avatar_path : null

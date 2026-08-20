@@ -519,6 +519,7 @@ export async function POST(request: Request) {
         supabase,
         fromPhone,
         content,
+        messageHandle: messageHandle || undefined,
         send: async (msg, ctx) => { await sendConciergeAndLog(fromNumber, msg, ctx) },
         appBase,
         openaiKey,
