@@ -92,10 +92,11 @@ export async function POST(request: Request) {
   // SMS onboarding fields → intake_responses_v5 entries
   const SMS_INTAKE_FIELDS: Array<{ key: string; question_id: string; question_text: string }> = [
     { key: 'q_market_tenure', question_id: 'q_market_tenure', question_text: 'How long have you lived there?' },
+    { key: 'q_neighborhood', question_id: 'q_neighborhood', question_text: 'What neighborhood are you in?' },
+    { key: 'q_relationship_status', question_id: 'q_relationship_status', question_text: 'Relationship status' },
+    { key: 'q_kids', question_id: 'q_kids', question_text: 'Do you have kids?' },
     { key: 'q_work', question_id: 'q_work', question_text: 'What do you do for work?' },
-    { key: 'q_interests_freetext', question_id: 'q_interests_freetext', question_text: 'What do you like to do?' },
-    { key: 'q_social_style', question_id: 'q_social_style', question_text: "In social situations you're usually..." },
-    { key: 'q_fika_vibe', question_id: 'q_fika_vibe', question_text: 'When you picture a great Fika, what matters most?' },
+    { key: 'q_interests_freetext', question_id: 'q_interests_freetext', question_text: 'Tell me about your life outside of work' },
     { key: 'q_social_goal', question_id: 'q_social_goal', question_text: 'What are you hoping to get out of Fika?' },
     { key: 'q_anything_else', question_id: 'q_anything_else', question_text: 'Anything else?' },
   ]
@@ -243,6 +244,11 @@ export async function POST(request: Request) {
           updated_at: new Date().toISOString(),
         }).eq('user_id', user.id).is('match_id', null)
       }
+      await sleepForSmsPacing(SMS_PACING_MS.quickAck)
+      await sendMessage(session.phone, 'Save our contact so you don\'t miss your intro 👇', {
+        fromNumber: 'concierge',
+        mediaUrl: `${appBase}/fika.vcf`,
+      }).catch(() => {})
     } catch {
       // Non-fatal
     }

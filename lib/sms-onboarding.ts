@@ -25,9 +25,9 @@ const QUESTIONS: Question[] = [
   { step: 2, text: "When's your birthday?", type: 'birthdate' },
   {
     step: 3,
-    text: "What gender do you identify as?\n1. Woman\n2. Man\n3. Non-binary\n4. Prefer not to say",
+    text: "What gender do you identify as?\n1. Female\n2. Male\n3. Non-binary\n4. Prefer not to say",
     type: 'choice',
-    choices: ['Woman', 'Man', 'Non-binary', 'Prefer not to say'],
+    choices: ['Female', 'Male', 'Non-binary', 'Prefer not to say'],
   },
   {
     step: 4,
@@ -46,34 +46,38 @@ const QUESTIONS: Question[] = [
     type: 'choice',
     choices: ['Just moved', 'Less than a year', '1–3 years', '3–10 years', 'Over 10 years', 'Grew up here'],
   },
-  { step: 7, text: "What do you do for work?", type: 'free' },
-  { step: 8, text: "What do you like to do? Tell me whatever comes to mind.", type: 'free' },
+  {
+    step: 7,
+    text: "What neighborhood are you in? (e.g. Silver Lake, West Village, Lincoln Park)",
+    type: 'free',
+  },
+  {
+    step: 8,
+    text: "What's your relationship status?\n1. Single\n2. Dating someone\n3. In a relationship\n4. Married / partnered",
+    type: 'choice',
+    choices: ['Single', 'Dating someone', 'In a relationship', 'Married / partnered'],
+  },
   {
     step: 9,
-    text: "In social situations you're usually...\n1. The one starting conversations\n2. Warm once comfortable, slow to open up\n3. More one-on-one than group\n4. Depends on the day",
-    type: 'choice',
-    choices: ['The one starting conversations', 'Warm once comfortable, slow to open up', 'More one-on-one than group', 'Depends on the day'],
+    text: "Do you have kids? (ages, genders, whatever you'd like — or just say 'No')",
+    type: 'free',
   },
+  { step: 10, text: "What do you do for work? (be as specific as you want)", type: 'free' },
+  { step: 11, text: "Tell me about your life outside of work — hobbies, lifestyle, what matters to you. (the more detail the better — this helps us intro you to the right people)", type: 'free' },
   {
-    step: 10,
-    text: "When you picture a great Fika, what matters most?\n1. Someone who challenges how I think\n2. Good laughs, easy conversation\n3. Real talk, no performance\n4. A totally different perspective\n5. Wherever it goes, I'm in",
-    type: 'choice',
-    choices: ['Someone who challenges how I think', 'Good laughs, easy conversation', 'Real talk, no performance', 'A totally different perspective', "Wherever it goes, I'm in"],
-  },
-  {
-    step: 11,
+    step: 12,
     text: "What are you hoping to get out of Fika?\n1. Expand my circle\n2. Find activity buddies\n3. Have more interesting conversations\n4. Make actual friends\n5. Just see who's out there",
     type: 'choice',
     choices: ['Expand my circle', 'Find activity buddies', 'Have more interesting conversations', 'Make actual friends', "Just see who's out there"],
   },
   {
-    step: 12,
+    step: 13,
     text: "Last one — anything else about you that might help us find the right person to intro you to? (say 'skip' if not)",
     type: 'anything_else',
   },
 ]
 
-const TOTAL_STEPS = 12
+const TOTAL_STEPS = 13
 const FINISH_STEP = TOTAL_STEPS + 1
 
 function getQuestion(step: number): Question | null {
@@ -113,10 +117,11 @@ export interface OnboardingPayload {
   lat?: number
   lng?: number
   q_market_tenure?: string
+  q_neighborhood?: string
+  q_relationship_status?: string
+  q_kids?: string
   q_work?: string
   q_interests_freetext?: string
-  q_social_style?: string
-  q_fika_vibe?: string
   q_social_goal?: string
   q_anything_else?: string
 }
@@ -181,6 +186,35 @@ function parseChoice(text: string, choices: string[]): number | null {
   return null
 }
 
+async function generateContextualAck(
+  systemPrompt: string,
+  userContent: string,
+  fallback: string,
+  openaiKey: string
+): Promise<string> {
+  try {
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${openaiKey}` },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userContent },
+        ],
+        max_tokens: 40,
+        temperature: 0.8,
+      }),
+    })
+    if (!res.ok) return fallback
+    const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> }
+    const result = (data?.choices?.[0]?.message?.content ?? '').trim().replace(/—/g, '-')
+    return result || fallback
+  } catch {
+    return fallback
+  }
+}
+
 async function parseBirthdate(text: string, openaiKey: string): Promise<string | null> {
   try {
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -220,15 +254,14 @@ async function sendIntro(send: OnboardingSendFn): Promise<void> {
   await send("Hey! Welcome to Fika ☕", 'onboarding_intro_1')
   await sleepForSmsPacing(SMS_PACING_MS.quickAck)
   await send(
-    "We match you with someone worth meeting for a real in-person coffee. We pick the spot, set the time — all you have to do is show up.",
+    "Fika's pretty simple — we find someone in your city worth grabbing coffee with and make the intro. Real people, real conversation.",
     'onboarding_intro_2'
   )
   await sleepForSmsPacing(SMS_PACING_MS.quickAck)
   await send(
-    "I'll ask you 12 quick questions to set up your profile. Takes about 2 minutes.",
+    "I'm going to ask you 13 questions so we can find the right match. Shouldn't take long. Ready to start?",
     'onboarding_intro_3'
   )
-  await sleepForSmsPacing(SMS_PACING_MS.quickAck)
 }
 
 // ─── Main handler ─────────────────────────────────────────────────────────────
@@ -268,8 +301,7 @@ export async function handleSmsOnboarding(params: {
       return
     }
     await sendIntro(send)
-    await send(QUESTIONS[0].text, 'onboarding_q1')
-    await updateSession(supabase, fromPhone, { onboarding_step: 1, onboarding_retry_count: 0 })
+    // Stay at step 0 — wait for user confirmation before firing Q1
     return
   }
 
@@ -283,13 +315,12 @@ export async function handleSmsOnboarding(params: {
     return
   }
 
-  // ── Duplicate delivery guard (session updated within last 60s, step=0) ─────
+  // ── Confirmation gate: step=0 means intro was sent, waiting for user to confirm ──
   if (step === 0) {
-    const ageMs = Date.now() - new Date(session.updated_at).getTime()
-    if (ageMs < 60_000) return // duplicate webhook, drop
-    // Intro sent but Q1 not yet asked — resend Q1
-    await send(QUESTIONS[0].text, 'onboarding_q1_resend')
+    // Any reply at step=0 is treated as confirmation — fire Q1
     await updateSession(supabase, fromPhone, { onboarding_step: 1, onboarding_retry_count: 0 })
+    await sleepForSmsPacing(SMS_PACING_MS.quickAck)
+    await send(QUESTIONS[0].text, 'onboarding_q1')
     return
   }
 
@@ -344,7 +375,15 @@ async function processAnswer(params: {
       return
     }
     const firstName = text.split(/\s+/)[0]
-    await send(`Nice to meet you, ${firstName}! 🙂`, 'onboarding_q1_ack')
+    const nameAck = openaiKey
+      ? await generateContextualAck(
+          'You are a friendly SMS concierge for Fika, a social meetup app. The user just told you their first name. Write a warm, natural one-sentence greeting using their name. Sound like a real person texting, not a bot. No em dashes (—). Keep it under 10 words.',
+          firstName,
+          `Nice to meet you, ${firstName}!`,
+          openaiKey
+        )
+      : `Nice to meet you, ${firstName}!`
+    await send(nameAck, 'onboarding_q1_ack')
     await advanceTo(supabase, fromPhone, send, payload, { first_name: firstName }, 2)
     return
   }
@@ -431,62 +470,78 @@ async function processAnswer(params: {
     return
   }
 
-  // ── Q7: Work ──────────────────────────────────────────────────────────────
+  // ── Q7: Neighborhood ─────────────────────────────────────────────────────
   if (step === 7) {
-    await send('Got it.', 'onboarding_q7_ack')
-    await advanceTo(supabase, fromPhone, send, payload, { q_work: text }, 8)
+    await advanceTo(supabase, fromPhone, send, payload, { q_neighborhood: text }, 8)
     return
   }
 
-  // ── Q8: Interests ─────────────────────────────────────────────────────────
+  // ── Q8: Relationship status ───────────────────────────────────────────────
   if (step === 8) {
-    await send('Love that.', 'onboarding_q8_ack')
-    await advanceTo(supabase, fromPhone, send, payload, { q_interests_freetext: text }, 9)
+    const idx = parseChoice(text, q.choices!)
+    if (idx === null) {
+      await sendChoiceReAsk(send, q, step, retryCount, payload, supabase, fromPhone)
+      return
+    }
+    await advanceTo(supabase, fromPhone, send, payload, { q_relationship_status: q.choices![idx] }, 9)
     return
   }
 
-  // ── Q9: Social style ──────────────────────────────────────────────────────
+  // ── Q9: Kids ──────────────────────────────────────────────────────────────
   if (step === 9) {
-    const idx = parseChoice(text, q.choices!)
-    if (idx === null) {
-      await sendChoiceReAsk(send, q, step, retryCount, payload, supabase, fromPhone)
-      return
-    }
-    await advanceTo(supabase, fromPhone, send, payload, { q_social_style: q.choices![idx] }, 10)
+    const kids = isSkip(text) ? null : text
+    await advanceTo(supabase, fromPhone, send, payload, { q_kids: kids ?? undefined }, 10)
     return
   }
 
-  // ── Q10: Fika vibe ────────────────────────────────────────────────────────
+  // ── Q10: Work ─────────────────────────────────────────────────────────────
   if (step === 10) {
-    const idx = parseChoice(text, q.choices!)
-    if (idx === null) {
-      await sendChoiceReAsk(send, q, step, retryCount, payload, supabase, fromPhone)
-      return
-    }
-    await advanceTo(supabase, fromPhone, send, payload, { q_fika_vibe: q.choices![idx] }, 11)
+    const ack = openaiKey
+      ? await generateContextualAck(
+          'You are a friendly SMS concierge for Fika, a social meetup app. The user just told you what they do for work. Write a single short acknowledgment, one sentence, casual and warm, like a real person texting. React specifically to what they said. No em dashes (—). No more than one exclamation mark. Keep it under 12 words.',
+          text,
+          "That's cool!",
+          openaiKey
+        )
+      : "That's cool!"
+    await send(ack, 'onboarding_q10_ack')
+    await advanceTo(supabase, fromPhone, send, payload, { q_work: text }, 11)
     return
   }
 
-  // ── Q11: Social goal ──────────────────────────────────────────────────────
+  // ── Q11: Life outside work ────────────────────────────────────────────────
   if (step === 11) {
+    const ack = openaiKey
+      ? await generateContextualAck(
+          'You are a friendly SMS concierge for Fika, a social meetup app. The user just shared details about their life outside of work. Write a single warm, genuine acknowledgment — one sentence, like a real person texting. React to something specific they mentioned. No em dashes (—). No more than one exclamation mark. Keep it under 12 words.',
+          text,
+          'Perfect, thank you for that!',
+          openaiKey
+        )
+      : 'Perfect, thank you for that!'
+    await send(ack, 'onboarding_q11_ack')
+    await advanceTo(supabase, fromPhone, send, payload, { q_interests_freetext: text }, 12)
+    return
+  }
+
+  // ── Q12: Social goal ──────────────────────────────────────────────────────
+  if (step === 12) {
     const idx = parseChoice(text, q.choices!)
     if (idx === null) {
       await sendChoiceReAsk(send, q, step, retryCount, payload, supabase, fromPhone)
       return
     }
-    await advanceTo(supabase, fromPhone, send, payload, { q_social_goal: q.choices![idx] }, 12)
+    await advanceTo(supabase, fromPhone, send, payload, { q_social_goal: q.choices![idx] }, 13)
     return
   }
 
-  // ── Q12: Anything else ────────────────────────────────────────────────────
-  if (step === 12) {
+  // ── Q13: Anything else ────────────────────────────────────────────────────
+  if (step === 13) {
     const anything = isSkip(text) ? null : text
     await updateSession(supabase, fromPhone, { q_anything_else: anything ?? undefined, onboarding_step: FINISH_STEP, onboarding_retry_count: 0 })
     const firstName = payload.first_name ? `, ${payload.first_name}` : ''
     await sleepForSmsPacing(SMS_PACING_MS.quickAck)
     await send(`That's it${firstName}! 🎉 One last step — tap here to add a photo and sign in with Google to verify your account: ${appBase}/finish?token=${session.token}`, 'onboarding_finish')
-    await sleepForSmsPacing(SMS_PACING_MS.quickAck)
-    await send('Save our contact so you don\'t miss your intro 👇', 'onboarding_vcf', { mediaUrl: `${appBase}/fika.vcf` })
     return
   }
 }
