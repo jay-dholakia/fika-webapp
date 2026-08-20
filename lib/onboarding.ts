@@ -2,6 +2,17 @@ import { getSupabase } from './supabase'
 import type { IntakeResponseItem, ProfileRow, IntakeResponsesV5Row } from './db-types'
 import { INTAKE_STEPS, type ProfileStep } from './onboarding-data'
 
+// Current SMS onboarding question IDs — used to detect missing answers for existing users
+const SMS_REQUIRED_QUESTION_IDS = [
+  'q_market_tenure',
+  'q_neighborhood',
+  'q_relationship_status',
+  'q_kids',
+  'q_work',
+  'q_interests_freetext',
+  'q_social_goal',
+]
+
 function getStringAnswerFromResponses(responses: IntakeResponseItem[], questionId: string): string | null {
   const r = responses.find((x) => x.question_id === questionId)
   const a = r?.answer
@@ -101,52 +112,22 @@ export function isPastOptInDeadline(weekAnchorMonday?: string): boolean {
 }
 
 /**
- * Returns intake step ids that have no answer (LA Beta: no branching).
- * When intake already has completed_at, we do not count confirm_intent as missing.
+ * Returns SMS question ids that have no answer for the current onboarding flow.
  */
 export function getMissingIntakeStepIds(intake: IntakeResponsesV5Row | null): string[] {
   const responses = Array.isArray(intake?.responses) ? intake.responses : []
   const answered = new Set(
     responses
-      .filter(
-        (r) =>
-          r.answer != null &&
-          (r.answer !== '' || (Array.isArray(r.answer) && r.answer.length >= 0))
-      )
+      .filter((r) => r.answer != null && r.answer !== '')
       .map((r) => r.question_id)
   )
-  const homeCountry = getStringAnswerFromResponses(responses, 'q_home_country')
-  const missing: string[] = []
-  for (const s of INTAKE_STEPS) {
-    if (intake?.completed_at && s.id === 'confirm_intent') continue
-    if (s.id === 'gender_preference') continue
-    if (s.id === 'q_home_state' && homeCountry !== 'United States') continue
-    if (!answered.has(s.id)) missing.push(s.id)
-  }
-  return missing
+  return SMS_REQUIRED_QUESTION_IDS.filter((id) => !answered.has(id))
 }
 
 /**
- * Returns missing intake steps in display order (LA Beta: no branching).
+ * Returns missing intake steps in display order — kept for compatibility but now uses SMS question ids.
  */
 export function getOrderedMissingIntakeSteps(intake: IntakeResponsesV5Row | null): ProfileStep[] {
-  const responses = Array.isArray(intake?.responses) ? intake.responses : []
-  const answered = new Set(
-    responses
-      .filter(
-        (r) =>
-          r.answer != null &&
-          (r.answer !== '' || (Array.isArray(r.answer) && r.answer.length >= 0))
-      )
-      .map((r) => r.question_id)
-  )
-  const homeCountry = getStringAnswerFromResponses(responses, 'q_home_country')
-  const out: ProfileStep[] = []
-  for (const s of INTAKE_STEPS) {
-    if (intake?.completed_at && s.id === 'confirm_intent') continue
-    if (s.id === 'gender_preference') continue
-    if (s.id === 'q_home_state' && homeCountry !== 'United States') continue
-    if (!answered.has(s.id)) out.push(s)
-  }
-  return out
+  const missing = new Set(getMissingIntakeStepIds(intake))
+  return INTAKE_STEPS.filter((s) => missing.has(s.id))
 }
