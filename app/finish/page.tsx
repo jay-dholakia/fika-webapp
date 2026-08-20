@@ -4,6 +4,7 @@ import { Suspense, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { getSupabase } from '@/lib/supabase'
 import { GoogleIcon } from '@/app/app/components/GoogleIcon'
+import { checkProfilePhotoSingleFace } from '@/lib/avatar-face-check'
 
 function FinishContent() {
   const searchParams = useSearchParams()
@@ -11,37 +12,56 @@ function FinishContent() {
 
   const [avatarSrc, setAvatarSrc] = useState<string | null>(null)
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
+  const [faceChecking, setFaceChecking] = useState(false)
+  const [faceError, setFaceError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const [signingIn, setSigningIn] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
+    const input = e.currentTarget
     if (!file) return
-    setAvatarFile(file)
-    setAvatarSrc(URL.createObjectURL(file))
+    setFaceError(null)
     setError(null)
+    setFaceChecking(true)
+    try {
+      const result = await checkProfilePhotoSingleFace(file)
+      if (!result.ok) {
+        setFaceError(result.message)
+        input.value = ''
+        return
+      }
+      setAvatarFile(file)
+      setAvatarSrc((prev) => {
+        if (prev?.startsWith('blob:')) URL.revokeObjectURL(prev)
+        return URL.createObjectURL(file)
+      })
+    } finally {
+      setFaceChecking(false)
+    }
   }
 
   async function handleSignIn() {
+    if (!avatarFile) {
+      setError('Please add a profile photo before continuing.')
+      return
+    }
     setError(null)
     setSigningIn(true)
     try {
-      // Upload photo first if selected
-      if (avatarFile) {
-        setUploading(true)
-        const form = new FormData()
-        form.set('file', avatarFile)
-        const res = await fetch(`/api/avatar-upload-sms?token=${encodeURIComponent(token)}`, {
-          method: 'POST',
-          body: form,
-        })
-        setUploading(false)
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}))
-          throw new Error((data as { error?: string }).error ?? 'Photo upload failed.')
-        }
+      setUploading(true)
+      const form = new FormData()
+      form.set('file', avatarFile)
+      const res = await fetch(`/api/avatar-upload-sms?token=${encodeURIComponent(token)}`, {
+        method: 'POST',
+        body: form,
+      })
+      setUploading(false)
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error((data as { error?: string }).error ?? 'Photo upload failed.')
       }
 
       const supabase = getSupabase()
@@ -64,6 +84,8 @@ function FinishContent() {
     )
   }
 
+  const busy = faceChecking || uploading || signingIn
+
   return (
     <div style={{ maxWidth: 400, margin: '0 auto', padding: '2.5rem 1.5rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1.5rem' }}>
       <h1 style={{ fontSize: '1.5rem', fontWeight: 700, textAlign: 'center', margin: 0 }}>
@@ -75,17 +97,21 @@ function FinishContent() {
 
       {/* Avatar picker */}
       <div
-        onClick={() => fileRef.current?.click()}
+        onClick={() => !busy && fileRef.current?.click()}
         style={{
           width: 110,
           height: 110,
           borderRadius: '50%',
           background: avatarSrc ? 'transparent' : 'var(--color-bg-soft)',
-          border: '2px dashed var(--color-border)',
+          border: faceError
+            ? '2px solid var(--color-error)'
+            : avatarSrc
+            ? '2px solid var(--color-primary)'
+            : '2px dashed var(--color-border)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          cursor: 'pointer',
+          cursor: busy ? 'default' : 'pointer',
           overflow: 'hidden',
           flexShrink: 0,
         }}
@@ -94,24 +120,33 @@ function FinishContent() {
       >
         {avatarSrc ? (
           <img src={avatarSrc} alt="Your photo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        ) : faceChecking ? (
+          <span className="spinner" style={{ width: 24, height: 24 }} aria-hidden />
         ) : (
           <span style={{ fontSize: '2rem' }}>📷</span>
         )}
       </div>
-      <button
-        onClick={() => fileRef.current?.click()}
-        style={{
-          background: 'none',
-          border: 'none',
-          color: 'var(--color-primary)',
-          cursor: 'pointer',
-          fontSize: '0.9rem',
-          marginTop: -8,
-          padding: 0,
-        }}
-      >
-        {avatarSrc ? 'Change photo' : 'Choose photo'} (optional)
-      </button>
+
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.35rem', marginTop: -8 }}>
+        <button
+          onClick={() => !busy && fileRef.current?.click()}
+          disabled={busy}
+          style={{
+            background: 'none',
+            border: 'none',
+            color: 'var(--color-primary)',
+            cursor: busy ? 'default' : 'pointer',
+            fontSize: '0.9rem',
+            padding: 0,
+          }}
+        >
+          {faceChecking ? 'Checking photo…' : avatarSrc ? 'Change photo' : 'Add your photo'}
+        </button>
+        <span style={{ fontSize: '0.78rem', color: 'var(--color-textSecondary)' }}>
+          Must show your face clearly — one person only
+        </span>
+      </div>
+
       <input
         ref={fileRef}
         type="file"
@@ -120,8 +155,14 @@ function FinishContent() {
         onChange={handleFileChange}
       />
 
+      {faceError && (
+        <p style={{ color: 'var(--color-error)', fontSize: '0.875rem', textAlign: 'center', margin: 0, lineHeight: 1.5 }}>
+          {faceError}
+        </p>
+      )}
+
       {error && (
-        <p style={{ color: 'var(--color-error)', fontSize: '0.9rem', textAlign: 'center', margin: 0 }}>
+        <p style={{ color: 'var(--color-error)', fontSize: '0.875rem', textAlign: 'center', margin: 0 }}>
           {error}
         </p>
       )}
@@ -129,7 +170,7 @@ function FinishContent() {
       <button
         className="btn-google"
         onClick={handleSignIn}
-        disabled={signingIn || uploading}
+        disabled={busy}
         style={{ marginTop: '0.5rem' }}
       >
         {uploading ? (
