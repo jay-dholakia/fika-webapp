@@ -520,7 +520,7 @@ export async function POST(request: Request) {
         fromPhone,
         content,
         messageHandle: messageHandle || undefined,
-        send: async (msg, ctx) => { await sendConciergeAndLog(fromNumber, msg, ctx) },
+        send: async (msg, ctx, opts) => { await sendConciergeAndLog(fromNumber, msg, ctx, { mediaUrl: opts?.mediaUrl }) },
         appBase,
         openaiKey,
       })

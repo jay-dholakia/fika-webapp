@@ -7,7 +7,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { geocodeZip } from '@/lib/geocode'
 import { sleepForSmsPacing, SMS_PACING_MS } from '@/lib/sms-pacing'
 
-export type OnboardingSendFn = (content: string, context: string) => Promise<void>
+export type OnboardingSendFn = (content: string, context: string, opts?: { mediaUrl?: string }) => Promise<void>
 
 // ─── Questions ───────────────────────────────────────────────────────────────
 
@@ -485,6 +485,8 @@ async function processAnswer(params: {
     const firstName = payload.first_name ? `, ${payload.first_name}` : ''
     await sleepForSmsPacing(SMS_PACING_MS.quickAck)
     await send(`That's it${firstName}! 🎉 One last step — tap here to add a photo and sign in with Google to verify your account: ${appBase}/finish?token=${session.token}`, 'onboarding_finish')
+    await sleepForSmsPacing(SMS_PACING_MS.quickAck)
+    await send('Save our contact so you don\'t miss your intro 👇', 'onboarding_vcf', { mediaUrl: `${appBase}/fika.vcf` })
     return
   }
 }
