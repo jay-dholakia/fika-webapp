@@ -330,8 +330,8 @@ async function processAnswer(params: {
       return
     }
     const firstName = text.split(/\s+/)[0]
-    const updated: Partial<OnboardingPayload> = { first_name: firstName }
-    await advanceTo(supabase, fromPhone, send, payload, updated, 2)
+    await send(`Nice to meet you, ${firstName}! 🙂`, 'onboarding_q1_ack')
+    await advanceTo(supabase, fromPhone, send, payload, { first_name: firstName }, 2)
     return
   }
 
@@ -419,12 +419,14 @@ async function processAnswer(params: {
 
   // ── Q7: Work ──────────────────────────────────────────────────────────────
   if (step === 7) {
+    await send('Got it.', 'onboarding_q7_ack')
     await advanceTo(supabase, fromPhone, send, payload, { q_work: text }, 8)
     return
   }
 
   // ── Q8: Interests ─────────────────────────────────────────────────────────
   if (step === 8) {
+    await send('Love that.', 'onboarding_q8_ack')
     await advanceTo(supabase, fromPhone, send, payload, { q_interests_freetext: text }, 9)
     return
   }
