@@ -14,6 +14,7 @@ function FinishContent() {
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
   const [faceChecking, setFaceChecking] = useState(false)
   const [faceError, setFaceError] = useState<string | null>(null)
+  const [confirmedIntent, setConfirmedIntent] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [signingIn, setSigningIn] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -48,13 +49,17 @@ function FinishContent() {
       setError('Please add a profile photo before continuing.')
       return
     }
+    if (!confirmedIntent) {
+      setError('Please confirm the commitments above before continuing.')
+      return
+    }
     setError(null)
     setSigningIn(true)
     try {
       setUploading(true)
       const form = new FormData()
       form.set('file', avatarFile)
-      const res = await fetch(`/api/avatar-upload-sms?token=${encodeURIComponent(token)}`, {
+      const res = await fetch(`/api/avatar-upload-sms?token=${encodeURIComponent(token)}&confirm_intent=1`, {
         method: 'POST',
         body: form,
       })
@@ -67,7 +72,7 @@ function FinishContent() {
       const supabase = getSupabase()
       if (!supabase) throw new Error('App not configured.')
       const origin = window.location.origin
-      const redirectTo = `${origin}/auth/exchange?next=/app/how-it-works&sms_token=${encodeURIComponent(token)}`
+      const redirectTo = `${origin}/auth/callback?next=/app/how-it-works&sms_token=${encodeURIComponent(token)}`
       await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo } })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.')
@@ -161,6 +166,44 @@ function FinishContent() {
         </p>
       )}
 
+      {/* Safety commitment */}
+      <div style={{
+        background: 'var(--color-bg-soft)',
+        borderRadius: 12,
+        padding: '1.25rem',
+        width: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '0.75rem',
+      }}>
+        <p style={{ fontWeight: 700, fontSize: '1rem', margin: 0 }}>Before your first Fika</p>
+        <p style={{ fontSize: '0.85rem', color: 'var(--color-textSecondary)', margin: 0, lineHeight: 1.5 }}>
+          Fika sets you up 1-on-1 with a real person for in-person coffee. They'll show up having agreed to the same things you're about to.
+        </p>
+        <ul style={{ fontSize: '0.85rem', color: 'var(--color-textSecondary)', margin: 0, paddingLeft: '1.25rem', lineHeight: 1.6, display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+          <li>Your photo is recent and actually you. Your name and answers are accurate.</li>
+          <li>You're 18 or older.</li>
+          <li>You're here to genuinely connect — not to recruit, sell, or solicit.</li>
+          <li>You'll show up when you confirm a time. If plans change, you'll let us know rather than ghosting.</li>
+          <li>You'll treat your match with respect — no harassment, no sharing their info or photos.</li>
+          <li>You'll meet at the venue Fika suggests (always a public spot).</li>
+          <li>Fika reserves the right to remove or block any member at any time for behavior that makes others feel unsafe.</li>
+          <li>If something feels off, text us at +1 (310) 210-2404. We take reports seriously and respond quickly.</li>
+        </ul>
+        <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', cursor: busy ? 'default' : 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={confirmedIntent}
+            onChange={(e) => !busy && setConfirmedIntent(e.target.checked)}
+            disabled={busy}
+            style={{ marginTop: 3, flexShrink: 0, accentColor: 'var(--color-primary)', width: 16, height: 16 }}
+          />
+          <span style={{ fontSize: '0.85rem', lineHeight: 1.5, color: 'var(--color-text)' }}>
+            I confirm all of the above — I'm here to make a genuine in-person connection.
+          </span>
+        </label>
+      </div>
+
       {error && (
         <p style={{ color: 'var(--color-error)', fontSize: '0.875rem', textAlign: 'center', margin: 0 }}>
           {error}
@@ -170,7 +213,7 @@ function FinishContent() {
       <button
         className="btn-google"
         onClick={handleSignIn}
-        disabled={busy}
+        disabled={busy || !avatarFile || !confirmedIntent}
         style={{ marginTop: '0.5rem' }}
       >
         {uploading ? (

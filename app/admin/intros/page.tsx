@@ -38,6 +38,8 @@ type SimPair = {
   llmReason: string
   userALastFeedback: FeedbackInfo
   userBLastFeedback: FeedbackInfo
+  projectedVenue: { id: string; name: string; neighborhood: string | null; city: string } | null
+  projectedQuestions: { qForA: string; qForB: string } | null
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -130,7 +132,7 @@ export default function AdminIntrosPage() {
   // Simulator
   const [simOpen, setSimOpen] = useState(false)
   const [simMarket, setSimMarket] = useState('')
-  const [simTopN, setSimTopN] = useState(30)
+  const [simTopN, setSimTopN] = useState(100)
   const [simPairs, setSimPairs] = useState<SimPair[] | null>(null)
   const [simRunning, setSimRunning] = useState(false)
   const [simError, setSimError] = useState<string | null>(null)
@@ -187,7 +189,14 @@ export default function AdminIntrosPage() {
         method: 'POST',
         credentials: 'include',
         headers: await authHeaders(),
-        body: JSON.stringify({ pairs: [{ user_a: pair.userAId, user_b: pair.userBId }] }),
+        body: JSON.stringify({
+          pairs: [{
+            user_a: pair.userAId,
+            user_b: pair.userBId,
+            pregenerated_questions: pair.projectedQuestions ?? undefined,
+          }],
+          venue_id: pair.projectedVenue?.id ?? null,
+        }),
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error ?? 'Fire failed')
@@ -286,6 +295,8 @@ export default function AdminIntrosPage() {
                       <th>Person A</th>
                       <th>Person B</th>
                       <th>Why</th>
+                      <th>Questions</th>
+                      <th>Venue</th>
                       <th>Last feedback</th>
                       <th></th>
                     </tr>
@@ -305,6 +316,26 @@ export default function AdminIntrosPage() {
                             {p.userBWorkLabel && <div style={{ fontSize: 12, color: '#666' }}>{p.userBWorkLabel}</div>}
                           </td>
                           <td style={{ fontSize: 12, color: '#555', maxWidth: 260 }}>{p.llmReason || '—'}</td>
+                          <td style={{ fontSize: 12, color: '#555', maxWidth: 300 }}>
+                            {p.projectedQuestions ? (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                <div><span style={{ fontWeight: 600, color: '#888' }}>For {p.userAName.split(' ')[0]}:</span> {p.projectedQuestions.qForA}</div>
+                                <div><span style={{ fontWeight: 600, color: '#888' }}>For {p.userBName.split(' ')[0]}:</span> {p.projectedQuestions.qForB}</div>
+                              </div>
+                            ) : (
+                              <span style={{ color: '#bbb' }}>—</span>
+                            )}
+                          </td>
+                          <td style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
+                            {p.projectedVenue ? (
+                              <>
+                                <div style={{ fontWeight: 600 }}>{p.projectedVenue.name}</div>
+                                <div style={{ color: '#888' }}>{p.projectedVenue.neighborhood ?? p.projectedVenue.city}</div>
+                              </>
+                            ) : (
+                              <span style={{ color: '#bbb' }}>TBD</span>
+                            )}
+                          </td>
                           <td style={{ fontSize: 12 }}>
                             {p.userALastFeedback && (
                               <div style={{ marginBottom: 2 }}>

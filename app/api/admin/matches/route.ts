@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase-server'
 import { isAdminByUserId } from '@/lib/admin-markets'
 import { invokeSmsMatchDelivery } from '@/lib/invoke-sms-match-delivery'
-import { buildUserProfileText, generateMatchIntroCopy } from '@/lib/match/llm-pair-score'
+import { buildUserProfileText, generateFikaQuestions, generateMatchIntroCopy } from '@/lib/match/llm-pair-score'
 
 export const dynamic = 'force-dynamic'
 
@@ -37,6 +37,7 @@ type PairInput = {
   signals?: string[]
   user_a_work?: string | null
   user_b_work?: string | null
+  pregenerated_questions?: { qForA: string; qForB: string } | null
 }
 
 /** POST /api/admin/matches — create 1v1 match_candidates rows and fire intro SMS */
@@ -112,26 +113,47 @@ export async function POST(request: Request) {
     const profileMapForCopy = new Map((profileRowsForCopy ?? []).map((r: { id: string }) => [r.id, r]))
     const intakeMapForCopy = new Map((intakeRowsForCopy ?? []).map((r: { user_id: string }) => [r.user_id, r]))
 
-    const copyResults = await Promise.all(
-      eligiblePairs.map(async (pair) => {
-        if (!openaiKey) return null
-        const profA = profileMapForCopy.get(pair.user_a.trim()) as { id: string; first_name?: string | null; birthdate?: string | null; pronouns?: string | null; city?: string | null } | undefined
-        const profB = profileMapForCopy.get(pair.user_b.trim()) as { id: string; first_name?: string | null; birthdate?: string | null; pronouns?: string | null; city?: string | null } | undefined
-        const intakeA = intakeMapForCopy.get(pair.user_a.trim()) as { user_id: string; responses: unknown } | undefined
-        const intakeB = intakeMapForCopy.get(pair.user_b.trim()) as { user_id: string; responses: unknown } | undefined
-        if (!profA || !profB) return null
-        const nameA = profA.first_name?.trim() || 'Someone'
-        const nameB = profB.first_name?.trim() || 'Someone'
-        return generateMatchIntroCopy(
-          nameA, buildUserProfileText(profA, intakeA?.responses ?? []),
-          nameB, buildUserProfileText(profB, intakeB?.responses ?? []),
-          openaiKey
-        ).catch(() => null)
-      })
-    )
+    const [copyResults, questionResults] = await Promise.all([
+      Promise.all(
+        eligiblePairs.map(async (pair) => {
+          if (!openaiKey) return null
+          const profA = profileMapForCopy.get(pair.user_a.trim()) as { id: string; first_name?: string | null; birthdate?: string | null; pronouns?: string | null; city?: string | null } | undefined
+          const profB = profileMapForCopy.get(pair.user_b.trim()) as { id: string; first_name?: string | null; birthdate?: string | null; pronouns?: string | null; city?: string | null } | undefined
+          const intakeA = intakeMapForCopy.get(pair.user_a.trim()) as { user_id: string; responses: unknown } | undefined
+          const intakeB = intakeMapForCopy.get(pair.user_b.trim()) as { user_id: string; responses: unknown } | undefined
+          if (!profA || !profB) return null
+          const nameA = profA.first_name?.trim() || 'Someone'
+          const nameB = profB.first_name?.trim() || 'Someone'
+          return generateMatchIntroCopy(
+            nameA, buildUserProfileText(profA, intakeA?.responses ?? []),
+            nameB, buildUserProfileText(profB, intakeB?.responses ?? []),
+            openaiKey
+          ).catch(() => null)
+        })
+      ),
+      Promise.all(
+        eligiblePairs.map(async (pair) => {
+          if (pair.pregenerated_questions?.qForA && pair.pregenerated_questions?.qForB) {
+            return pair.pregenerated_questions
+          }
+          if (!openaiKey) return null
+          const profA = profileMapForCopy.get(pair.user_a.trim()) as { id: string; first_name?: string | null; birthdate?: string | null; pronouns?: string | null; city?: string | null } | undefined
+          const profB = profileMapForCopy.get(pair.user_b.trim()) as { id: string; first_name?: string | null; birthdate?: string | null; pronouns?: string | null; city?: string | null } | undefined
+          const intakeA = intakeMapForCopy.get(pair.user_a.trim()) as { user_id: string; responses: unknown } | undefined
+          const intakeB = intakeMapForCopy.get(pair.user_b.trim()) as { user_id: string; responses: unknown } | undefined
+          if (!profA || !profB) return null
+          return generateFikaQuestions(
+            buildUserProfileText(profA, intakeA?.responses ?? []),
+            buildUserProfileText(profB, intakeB?.responses ?? []),
+            openaiKey
+          ).catch(() => null)
+        })
+      ),
+    ])
 
     const insertRows = eligiblePairs.map((pair, idx) => {
       const copy = copyResults[idx]
+      const questions = questionResults[idx]
       return {
         user_a: pair.user_a.trim(),
         user_b: pair.user_b.trim(),
@@ -146,6 +168,7 @@ export async function POST(request: Request) {
           user_a_work: pair.user_a_work ?? null,
           user_b_work: pair.user_b_work ?? null,
           ...(copy ? { copy: { messageForA: copy.messageForA, messageForB: copy.messageForB, llm_generated: true } } : {}),
+          ...(questions ? { questions } : {}),
         },
       }
     })

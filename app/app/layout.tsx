@@ -7,7 +7,6 @@ import { getSupabase } from '@/lib/supabase'
 import { useOnboardingStatus } from '@/lib/use-onboarding'
 import { authLog } from '@/lib/auth-log'
 
-const CONCIERGE_NUMBER = process.env.NEXT_PUBLIC_SENDBLUE_CONCIERGE_NUMBER?.trim() || null
 
 /** Portal feedback corner: SMS to this number with prefilled intro (not necessarily concierge). */
 const FEEDBACK_SMS_E164 = '+19496789729'
@@ -117,12 +116,6 @@ function AppLayoutInner({
     router.replace('/')
   }
 
-  function buildConciergeSmsHref() {
-    if (!CONCIERGE_NUMBER) return undefined
-    const body = 'Hey'
-    return `sms:${CONCIERGE_NUMBER}?body=${encodeURIComponent(body)}`
-  }
-
   if (!sessionChecked || loading) {
     authLog('app-layout:render', { show: 'Loading', sessionChecked, loading, hasUserId: !!userId })
     return (
@@ -154,7 +147,7 @@ function AppLayoutInner({
   return (
     <div className="app-shell">
       <header className="app-mobile-header" aria-label="Mobile menu">
-        <Link href="/app/how-it-works" className="app-sidebar-logo" onClick={() => setMobileMenuOpen(false)}>
+        <Link href="/app/yourfika" className="app-sidebar-logo" onClick={() => setMobileMenuOpen(false)}>
           fika
         </Link>
         <button
@@ -181,7 +174,7 @@ function AppLayoutInner({
         aria-label="App navigation"
       >
         <div className="app-sidebar-header app-sidebar-header-desktop">
-          <Link href="/app/how-it-works" className="app-sidebar-logo" onClick={() => setMobileMenuOpen(false)}>
+          <Link href="/app/yourfika" className="app-sidebar-logo" onClick={() => setMobileMenuOpen(false)}>
             fika
           </Link>
         </div>
@@ -233,12 +226,6 @@ function AppLayoutInner({
           <Link href="/app/settings/profile" className={pathname === '/app/settings/profile' ? 'app-sidebar-link active' : 'app-sidebar-link'} onClick={() => setMobileMenuOpen(false)}>
             Edit profile
           </Link>
-          <Link href="/app/how-it-works" className={pathname === '/app/how-it-works' ? 'app-sidebar-link active' : 'app-sidebar-link'} onClick={() => setMobileMenuOpen(false)}>
-            Welcome to Fika
-          </Link>
-          <a href={buildConciergeSmsHref()} className="app-sidebar-link" onClick={() => setMobileMenuOpen(false)}>
-            Text Us
-          </a>
         </nav>
         <div className="app-sidebar-footer">
           <Link href="/app/settings/how-it-works" className={pathname === '/app/settings/how-it-works' ? 'app-sidebar-link active' : 'app-sidebar-link'} onClick={() => setMobileMenuOpen(false)}>

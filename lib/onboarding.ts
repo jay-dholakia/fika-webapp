@@ -10,7 +10,9 @@ const SMS_REQUIRED_QUESTION_IDS = [
   'q_kids',
   'q_work',
   'q_interests_freetext',
+  'q_on_mind',
   'q_social_goal',
+  'q_fika_time_pref',
 ]
 
 function getStringAnswerFromResponses(responses: IntakeResponseItem[], questionId: string): string | null {

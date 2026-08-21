@@ -27,6 +27,7 @@ export async function POST(request: Request) {
 
   const { searchParams } = new URL(request.url)
   const sessionToken = searchParams.get('token')
+  const confirmIntent = searchParams.get('confirm_intent') === '1'
   if (!sessionToken) {
     return NextResponse.json({ error: 'Missing token' }, { status: 400 })
   }
@@ -69,10 +70,12 @@ export async function POST(request: Request) {
   }
 
   const existing = (session.payload as Record<string, unknown>) ?? {}
+  const payloadUpdate: Record<string, unknown> = { ...existing, avatar_path: storagePath }
+  if (confirmIntent) payloadUpdate.confirm_intent_at = new Date().toISOString()
   await supabase
     .from('onboarding_sessions')
     .update({
-      payload: { ...existing, avatar_path: storagePath },
+      payload: payloadUpdate,
       updated_at: new Date().toISOString(),
     })
     .eq('id', session.id)

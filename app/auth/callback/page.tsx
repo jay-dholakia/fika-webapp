@@ -25,7 +25,7 @@ function AuthCallbackContent() {
     function toFriendlyAuthError(message: string): string {
       const m = message.toLowerCase()
       if (m.includes('pkce code verifier not found')) {
-        return 'Could not complete sign-in on this browser. Please return to Login and try Google sign-in again from the same browser window.'
+        return 'Sign-in didn\'t complete. This usually works on the second try — tap below to try again.'
       }
       return message
     }
@@ -109,6 +109,25 @@ function AuthCallbackContent() {
     })
 
     async function finishAuth() {
+      const code = searchParams.get('code')
+
+      if (code) {
+        // Exchange client-side: PKCE verifier lives in the browser that started
+        // the OAuth flow, so doing this here avoids the server-side exchange
+        // that fails when iOS delivers the callback to a different browser context.
+        const { data, error } = await client.auth.exchangeCodeForSession(code)
+        if (!mounted) return
+        if (error) {
+          setError(toFriendlyAuthError(error.message))
+          return
+        }
+        if (data.session) {
+          await checkExistingAccountAndRedirect(data.session)
+          return
+        }
+      }
+
+      // Fallback: session may already be set (prior exchange or implicit flow)
       const { data: { session } } = await client.auth.getSession()
       if (session) {
         await checkExistingAccountAndRedirect(session)
@@ -137,12 +156,14 @@ function AuthCallbackContent() {
         <p className="auth-message auth-message-error" role="alert">
           {error}
         </p>
-        <a href="/" className="btn btn-primary" style={{ marginTop: '1rem' }}>
-          Back to home
-        </a>
-        <a href="/login" className="btn btn-secondary" style={{ marginTop: '0.75rem', marginLeft: '0.5rem' }}>
-          Try login again
-        </a>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem', marginTop: '1.25rem' }}>
+          <a href="/login" className="btn btn-primary">
+            Try again
+          </a>
+          <a href="/" style={{ fontSize: '0.85rem', color: 'var(--color-textSecondary)', textDecoration: 'none' }}>
+            Back to home
+          </a>
+        </div>
       </div>
     )
   }

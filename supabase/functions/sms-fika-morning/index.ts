@@ -37,6 +37,62 @@ function pickFikaPromptQuestions(eventId: string): [string, string] {
   return [FIKA_PROMPT_QUESTIONS[i]!, FIKA_PROMPT_QUESTIONS[j]!]
 }
 
+type IntakeResponse = { question_id: string; answer: unknown }
+
+function getIntakeText(responses: IntakeResponse[], id: string): string {
+  const item = responses.find(r => r.question_id === id)
+  if (!item?.answer) return ''
+  return Array.isArray(item.answer) ? item.answer.join(', ') : String(item.answer)
+}
+
+function buildProfileSummary(firstName: string | null, responses: IntakeResponse[]): string {
+  const parts: string[] = [firstName?.trim() || 'Someone']
+  const work = getIntakeText(responses, 'q_work')
+  const interests = getIntakeText(responses, 'q_interests_freetext')
+  const goal = getIntakeText(responses, 'q_social_goal')
+  if (work) parts.push(`Works as: ${work}`)
+  if (interests) parts.push(`Interests: ${interests}`)
+  if (goal) parts.push(`Looking for: ${goal}`)
+  return parts.join('. ')
+}
+
+async function generatePersonalizedQuestions(
+  summaryA: string,
+  summaryB: string,
+  openaiKey: string
+): Promise<[string, string] | null> {
+  try {
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${openaiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        temperature: 0.8,
+        response_format: { type: 'json_object' },
+        messages: [
+          {
+            role: 'system',
+            content: 'Generate 2 short, thoughtful conversation starter questions for two people meeting for a platonic coffee. Look for what they have in common or what makes them genuinely curious about each other — shared interests, life experiences, values, or what they\'re both looking for. Do not ask about their jobs. Open-ended, warm, specific to this pair — not generic icebreakers. Return JSON only: {"q1": string, "q2": string}.',
+          },
+          {
+            role: 'user',
+            content: `Person A: ${summaryA}\n\nPerson B: ${summaryB}`,
+          },
+        ],
+      }),
+    })
+    if (!res.ok) return null
+    const data = await res.json() as { choices?: Array<{ message?: { content?: string } }> }
+    const raw = data.choices?.[0]?.message?.content
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as { q1?: unknown; q2?: unknown }
+    if (typeof parsed.q1 !== 'string' || typeof parsed.q2 !== 'string') return null
+    return [parsed.q1.trim(), parsed.q2.trim()]
+  } catch {
+    return null
+  }
+}
+
 function formatEventTimeOnly(isoStr: string, tz = 'America/Los_Angeles'): string {
   const d = new Date(isoStr)
   let time = new Intl.DateTimeFormat('en-US', {
@@ -75,17 +131,17 @@ function buildPreEventMessage1v1(params: {
   venueName: string
   neighborhood: string
   eventTimeFormatted: string
-  q1: string
-  q2: string
+  qForThis: string
+  qForOther: string
 }): string {
-  const { otherFirstName, venueName, neighborhood, eventTimeFormatted, q1, q2 } = params
+  const { otherFirstName, venueName, neighborhood, eventTimeFormatted, qForThis, qForOther } = params
   const locationLine = neighborhood ? `${venueName} (${neighborhood})` : venueName
   return [
     `Your Fika with ${otherFirstName} is today at ${eventTimeFormatted} at ${locationLine} ☕`,
     '',
-    `A couple of things to think about before you go:`,
-    `• ${q1}`,
-    `• ${q2}`,
+    `If you need an icebreaker:`,
+    `• For you: ${qForThis}`,
+    `• For ${otherFirstName}: ${qForOther}`,
   ].join('\n')
 }
 
@@ -204,6 +260,8 @@ serve(async (_req: Request) => {
         .eq('id', eventId)
     }
 
+    const openaiKey = Deno.env.get('EXPO_PUBLIC_OPENAI_API_KEY') || Deno.env.get('OPENAI_API_KEY') || ''
+
     // --- 1v1 pre-event SMS block ---
     const nowMs1v1 = Date.now()
     const windowStart1v1 = new Date(nowMs1v1 + 5 * 60 * 60 * 1000).toISOString()
@@ -238,7 +296,47 @@ serve(async (_req: Request) => {
       }
 
       const eventTimeFormatted = formatEventTimeOnly(eventStartsAt)
-      const [q1, q2] = pickFikaPromptQuestions(matchId)
+
+      // Use pre-generated questions from sim if available, otherwise generate fresh (or fall back to hash)
+      type StoredQuestions = { qForA: string; qForB: string }
+      const rawQ = reasons.questions
+      const storedQuestions: StoredQuestions | null =
+        rawQ && typeof rawQ === 'object' && !Array.isArray(rawQ) &&
+        typeof (rawQ as StoredQuestions).qForA === 'string' && typeof (rawQ as StoredQuestions).qForB === 'string'
+          ? rawQ as StoredQuestions
+          : null
+
+      // Always need profiles for phone numbers and names; only load intake if we need to generate questions
+      const [{ data: nameProfiles }, { data: intakeRows }] = await Promise.all([
+        supabase.from('profiles').select('id, first_name, phone').in('id', [match.user_a, match.user_b]),
+        storedQuestions
+          ? Promise.resolve({ data: [] })
+          : supabase.from('intake_responses_v5').select('user_id, responses').in('user_id', [match.user_a, match.user_b]),
+      ])
+
+      const profileList = (nameProfiles ?? []) as Array<{ id: string; first_name: string | null; phone: string | null }>
+
+      let qForA: string
+      let qForB: string
+      if (storedQuestions) {
+        qForA = storedQuestions.qForA
+        qForB = storedQuestions.qForB
+      } else {
+        const intakeMap = new Map<string, IntakeResponse[]>()
+        for (const row of (intakeRows ?? []) as Array<{ user_id: string; responses: IntakeResponse[] }>) {
+          intakeMap.set(row.user_id, row.responses ?? [])
+        }
+        const summaryA = buildProfileSummary(profileList.find(p => p.id === match.user_a)?.first_name ?? null, intakeMap.get(match.user_a) ?? [])
+        const summaryB = buildProfileSummary(profileList.find(p => p.id === match.user_b)?.first_name ?? null, intakeMap.get(match.user_b) ?? [])
+        const aiQuestions = openaiKey ? await generatePersonalizedQuestions(summaryA, summaryB, openaiKey) : null
+        if (aiQuestions) {
+          [qForA, qForB] = aiQuestions
+        } else {
+          const [fb1, fb2] = pickFikaPromptQuestions(matchId)
+          qForA = fb1
+          qForB = fb2
+        }
+      }
 
       // Find users who accepted: match_accepted (old flow) or confirmed (new scheduling flow)
       const { data: stateRows } = await supabase
@@ -250,12 +348,8 @@ serve(async (_req: Request) => {
       const acceptedUserIds = (stateRows ?? []).map((r: { user_id: string }) => r.user_id)
       if (acceptedUserIds.length === 0) continue
 
-      // Load first names for both match users for the "Your Fika with X" line
-      const { data: nameProfiles } = await supabase
-        .from('profiles').select('id, first_name, phone').in('id', [match.user_a, match.user_b])
-
       const nameMap: Record<string, string> = {}
-      for (const p of (nameProfiles ?? []) as Array<{ id: string; first_name: string | null; phone: string | null }>) {
+      for (const p of profileList) {
         nameMap[p.id] = p.first_name?.trim() || 'Someone'
       }
 
@@ -267,14 +361,15 @@ serve(async (_req: Request) => {
 
         const otherUserId = uid === match.user_a ? match.user_b : match.user_a
         const otherName = nameMap[otherUserId] || 'Someone'
+        const isUserA = uid === match.user_a
 
         const message = buildPreEventMessage1v1({
           otherFirstName: otherName,
           venueName,
           neighborhood,
           eventTimeFormatted,
-          q1,
-          q2,
+          qForThis: isUserA ? qForA : qForB,
+          qForOther: isUserA ? qForB : qForA,
         })
 
         const sent = await sendMessage({ apiKeyId, apiSecret, phone, content: message })

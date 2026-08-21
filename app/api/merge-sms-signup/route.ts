@@ -76,7 +76,9 @@ export async function POST(request: Request) {
   }
   const gender_preference = payload.gender_preference as string | null
   const age_preference = payload.age_preference as string | null
-  const languages = Array.isArray(payload.languages) ? payload.languages : null
+  const rawLanguages = Array.isArray(payload.languages) ? (payload.languages as string[]) : []
+  // Always include English — the entire onboarding and concierge is in English, so all users speak it.
+  const languages = Array.from(new Set(['English', ...rawLanguages]))
   let city = (payload.city as string) ?? null
   let lat = typeof payload.lat === 'number' ? payload.lat : null
   let lng = typeof payload.lng === 'number' ? payload.lng : null
@@ -88,6 +90,7 @@ export async function POST(request: Request) {
   const market = (await getMarketFromCityOrLatLngWithDb(supabase, city, lat, lng))?.slug ?? null
   const responses = Array.isArray(payload.responses) ? payload.responses : []
   const avatarPath = typeof payload.avatar_path === 'string' ? payload.avatar_path : null
+  const confirmIntentAt = typeof payload.confirm_intent_at === 'string' ? payload.confirm_intent_at : null
 
   // SMS onboarding fields → intake_responses_v5 entries
   const SMS_INTAKE_FIELDS: Array<{ key: string; question_id: string; question_text: string }> = [
@@ -98,7 +101,8 @@ export async function POST(request: Request) {
     { key: 'q_work', question_id: 'q_work', question_text: 'What do you do for work?' },
     { key: 'q_interests_freetext', question_id: 'q_interests_freetext', question_text: 'Tell me about your life outside of work' },
     { key: 'q_social_goal', question_id: 'q_social_goal', question_text: 'What are you hoping to get out of Fika?' },
-    { key: 'q_anything_else', question_id: 'q_anything_else', question_text: 'Anything else?' },
+    { key: 'q_on_mind', question_id: 'q_on_mind', question_text: "What's been on your mind lately?" },
+    { key: 'q_fika_time_pref', question_id: 'q_fika_time_pref', question_text: 'What times work best for your Fika meetups?' },
   ]
   const smsResponses: Array<{ question_id: string; question_text: string; answer: unknown; type: string; answered_at: string }> = []
   for (const field of SMS_INTAKE_FIELDS) {
@@ -125,12 +129,17 @@ export async function POST(request: Request) {
     }
   }
 
+  const derivedGender =
+    pronouns === 'He/him' ? 'Male' :
+    pronouns === 'She/her' ? 'Female' :
+    legacyGender || null
+
   await supabase.from('profiles').upsert(
     {
       id: user.id,
       first_name,
       birthdate: birthdate || null,
-      gender: null,
+      gender: derivedGender,
       pronouns,
       gender_preference: gender_preference || null,
       age_preference: age_preference || null,
@@ -146,6 +155,16 @@ export async function POST(request: Request) {
     },
     { onConflict: 'id' }
   )
+
+  if (confirmIntentAt) {
+    smsResponses.push({
+      question_id: 'confirm_intent',
+      question_text: 'Safety & community commitments',
+      answer: "I'm in",
+      type: 'text',
+      answered_at: confirmIntentAt,
+    })
+  }
 
   const allResponses = [...responses, ...smsResponses]
   if (allResponses.length > 0) {

@@ -14,7 +14,8 @@ import {
   computeAdminPairPayload,
 } from '@/lib/match/admin-match-pair'
 import { MATCH_SCORING_VERSION, MATCH_SCORING_VERSION_LLM } from '@/lib/match/weights'
-import { buildUserProfileText, scorePairWithLLM } from '@/lib/match/llm-pair-score'
+import { buildUserProfileText, generateFikaQuestions, scorePairWithLLM } from '@/lib/match/llm-pair-score'
+import { pickVenueFromDatabase } from '@/lib/sms-agent'
 
 /** Admin simulation: config-driven structured matcher (eligibility + feasibility + compatibility). */
 export const dynamic = 'force-dynamic'
@@ -138,6 +139,43 @@ export async function POST(request: Request) {
   const intakeById = new Map<string, IntakeRow>()
   for (const r of (intakeRows ?? []) as IntakeRow[]) intakeById.set(r.user_id, r)
 
+  // Build a set of already-introduced pairs so the sim never surfaces them again
+  const { data: priorMatches } = await supabase
+    .from('match_candidates')
+    .select('user_a, user_b')
+    .in('user_a', ids)
+    .in('user_b', ids)
+  const priorPairKeys = new Set<string>()
+  for (const m of (priorMatches ?? []) as Array<{ user_a: string; user_b: string }>) {
+    const key = [m.user_a, m.user_b].sort().join(':')
+    priorPairKeys.add(key)
+  }
+
+  // Bulk-load past questions per user so we can avoid repeating them
+  const { data: pastMatchRows } = await supabase
+    .from('match_candidates')
+    .select('user_a, user_b, reasons')
+    .or(`user_a.in.(${ids.join(',')}),user_b.in.(${ids.join(',')})`)
+  type PastMatchRow = { user_a: string; user_b: string; reasons: Record<string, unknown> }
+  const pastQuestionsMap = new Map<string, string[]>()
+  function addPastQ(userId: string, q: string | undefined) {
+    if (!q) return
+    const arr = pastQuestionsMap.get(userId) ?? []
+    arr.push(q)
+    pastQuestionsMap.set(userId, arr)
+  }
+  for (const row of (pastMatchRows ?? []) as PastMatchRow[]) {
+    const q = row.reasons?.questions as { qForA?: string; qForB?: string } | [string, string] | undefined
+    if (!q) continue
+    if (Array.isArray(q)) {
+      addPastQ(row.user_a, q[0])
+      addPastQ(row.user_b, q[1])
+    } else {
+      addPastQ(row.user_a, q.qForA)
+      addPastQ(row.user_b, q.qForB)
+    }
+  }
+
   // Load most recent fika feedback per user so past Fika quality is visible when scoring pairs
   const { data: feedbackRows } = await supabase
     .from('fika_feedback')
@@ -196,6 +234,11 @@ export async function POST(request: Request) {
     for (let j = i + 1; j < candidates.length; j++) {
       const ca = candidates[i]
       const cb = candidates[j]
+      const pairKey = [ca.profile.id, cb.profile.id].sort().join(':')
+      if (priorPairKeys.has(pairKey)) {
+        filteredOut++
+        continue
+      }
       const scoreOpts = logMatrix ? { logMatrixUnknown: logMatrix } : undefined
       const p = computeAdminPairPayload(ca, cb, scoreOpts)
       if (!p.breakdown.eligible) {
@@ -214,16 +257,35 @@ export async function POST(request: Request) {
   }
 
   // Score all eligible pairs in parallel via LLM; fall back to structured score on failure
-  const llmResults = await Promise.all(
-    eligibleIntermediate.map(({ textA, textB, p }) =>
-      openaiKey
-        ? scorePairWithLLM(textA, textB, openaiKey).catch(() => ({ score: Math.round(p.score * 100), reason: '' }))
-        : Promise.resolve({ score: Math.round(p.score * 100), reason: '' })
-    )
-  )
+  const [llmResults, venueResults, questionResults] = await Promise.all([
+    Promise.all(
+      eligibleIntermediate.map(({ textA, textB, p }) =>
+        openaiKey
+          ? scorePairWithLLM(textA, textB, openaiKey).catch(() => ({ score: Math.round(p.score * 100), reason: '' }))
+          : Promise.resolve({ score: Math.round(p.score * 100), reason: '' })
+      )
+    ),
+    Promise.all(
+      eligibleIntermediate.map(({ ca, cb }) =>
+        pickVenueFromDatabase(supabase, { lat: ca.profile.lat, lng: ca.profile.lng }, { lat: cb.profile.lat, lng: cb.profile.lng }).catch(() => null)
+      )
+    ),
+    Promise.all(
+      eligibleIntermediate.map(({ ca, cb, textA, textB }) =>
+        openaiKey
+          ? generateFikaQuestions(textA, textB, openaiKey, {
+              avoidForA: pastQuestionsMap.get(ca.profile.id),
+              avoidForB: pastQuestionsMap.get(cb.profile.id),
+            }).catch(() => null)
+          : Promise.resolve(null)
+      )
+    ),
+  ])
 
   const pairs = eligibleIntermediate.map(({ ca, cb, p, compareRows, userAWorkLabel, userBWorkLabel }, idx) => {
     const llm = llmResults[idx]
+    const venue = venueResults[idx] ?? null
+    const projectedQuestions = questionResults[idx] ?? null
     return {
       userAId: ca.profile.id,
       userAName: ca.profile.first_name?.trim() || 'Unknown',
@@ -258,6 +320,8 @@ export async function POST(request: Request) {
       matchBreakdown: p.breakdown,
       userALastFeedback: latestFeedbackByUser.get(ca.profile.id) ?? null,
       userBLastFeedback: latestFeedbackByUser.get(cb.profile.id) ?? null,
+      projectedVenue: venue ? { id: venue.id, name: venue.name, neighborhood: venue.neighborhood, city: venue.city } : null,
+      projectedQuestions,
     }
   })
 

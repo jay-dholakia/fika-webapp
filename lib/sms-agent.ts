@@ -637,44 +637,8 @@ export function messageIntroWithPlan(params: {
   return `You've been paired with ${otherFirstName}.\n\nYou both live near ${areaLabel} and are free ${day} evening.\n\nFika plan\n\n${day} — ${time}\n${venueName} (${neighborhood})\n\nReply Yes to confirm by 9 PM tonight.`
 }
 
-export function messageConversationContext(params: {
-  sharedInterests: string[]
-  starterQuestion: string
-}): string {
-  const { sharedInterests, starterQuestion } = params
-  let text = `Here's a little context for your Fika:\n\nYou both mentioned:\n${sharedInterests.join(' and ')}\n\nA question you could kick things off with:\n\n"${starterQuestion}"`
-  return text
-}
-
 export function messageVenueProposed(day: string, time: string, venueName: string, neighborhood: string): string {
   return `Looks like ${day} ${time.toLowerCase()} works for you both.\n\nHow about:\n\n${time} at ${venueName} in ${neighborhood}\n\nReply Confirm or Change`
-}
-
-export const FIKA_PROMPT_QUESTIONS: string[] = [
-  "What's something you've changed your mind about in the last year?",
-  "What does your ideal Saturday look like — and how close is your life to that?",
-  "Is there a version of your life you almost lived?",
-  "What are you most proud of that has nothing to do with work?",
-  "What's a belief you hold that most people around you disagree with?",
-  "What's something most people don't know about you that you wish they did?",
-  "What's the best piece of advice you've ever received — and do you actually follow it?",
-  "When did you last do something for the first time?",
-  "What's a chapter of your life you rarely talk about but that shaped who you are?",
-  "What does success look like for you in five years — and is that what you actually want?",
-  "Is there something you keep putting off that you know would be good for you?",
-  "What's a risk you've taken that you're glad you took?",
-  "What's something you think about often that most people wouldn't expect?",
-  "If your closest friend described you to a stranger, what would they say — and would you agree?",
-  "What's the hardest thing you've navigated in the last couple of years?",
-]
-
-/** Deterministically pick two questions for a match so both users get the same prompts. */
-export function pickFikaPromptQuestions(matchId: string): [string, string] {
-  const hash = matchId.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0)
-  const n = FIKA_PROMPT_QUESTIONS.length
-  const i = hash % n
-  const j = (hash * 31 + 7) % n === i ? (hash * 31 + 7 + 1) % n : (hash * 31 + 7) % n
-  return [FIKA_PROMPT_QUESTIONS[i], FIKA_PROMPT_QUESTIONS[j]]
 }
 
 export function messageDayOfReminder(time: string, venueName: string, neighborhood: string): string {

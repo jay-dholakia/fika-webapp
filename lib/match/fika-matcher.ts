@@ -251,6 +251,10 @@ export function checkPairEligibility(
     reasons.push('confirm_intent')
   }
 
+  if (a.age != null && b.age != null && Math.abs(a.age - b.age) > 5) {
+    reasons.push('age_gap')
+  }
+
   return {
     eligible: reasons.length === 0,
     rejectReasons: reasons,

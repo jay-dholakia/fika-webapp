@@ -10,7 +10,7 @@ import { useRouter } from 'next/navigation'
 export default function AppIndexPage() {
   const router = useRouter()
   useEffect(() => {
-    router.replace('/app/how-it-works')
+    router.replace('/app/yourfika')
   }, [router])
   return (
     <div style={{ padding: '2rem', textAlign: 'center' }}>

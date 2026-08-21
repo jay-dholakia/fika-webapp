@@ -4,49 +4,42 @@ import { useState } from 'react'
 
 const portalFaqItems = [
   {
-    q: "How do intros work?",
-    a: "We use your profile and preferences to find good intros nearby. When we have a strong one, we’ll text you a short intro on this number. If you’re both in, we take care of the rest—we pick a public spot nearby and send you the details.",
+    q: 'What is Fika?',
+    a: 'A platonic coffee meetup, set up by text. One conversation, in person. That\'s it.',
+  },
+  {
+    q: 'How do intros work?',
+    a: 'When we find a good fit nearby, we text you a snapshot — who they are and what you share. If you\'re both in, we pick a café and send the details. No back-and-forth needed.',
   },
   {
     q: 'How long do I have to respond?',
-    a: 'Each message says how long you have. If a window expires, we keep looking and will text you again when we have another good intro.',
+    a: 'Each message says how long you have. If the window closes, we keep looking and will text you again when there\'s another good intro.',
   },
   {
-    q: "I can't make my Fika anymore—what should I do?",
-    a: 'Text us as soon as you know. We’ll notify your intro and help with next steps.',
+    q: 'I can\'t make my Fika — what do I do?',
+    a: 'Text us as soon as you know. We\'ll handle it from there.',
   },
   {
-    q: 'Is meeting through Fika safe?',
-    a: 'Meet in public, well-lit places, trust your instincts, and don’t share personal details until you’re comfortable. If anything feels off, contact support@letsfika.co.',
+    q: 'Is it safe to meet someone this way?',
+    a: 'All meetups are in public spots. Trust your instincts — if something feels off, reach out at support@letsfika.co.',
   },
   {
     q: 'How much does it cost?',
-    a: 'Fika is currently free to use.',
+    a: 'Free.',
   },
   {
-    q: 'Can I use Fika to make friends?',
-    a: 'Yes. It’s built for a real first conversation—if you click, stay in touch; if not, no pressure.',
-  },
-  {
-    q: "My intro didn't show up—what now?",
-    a: 'Text us. We’ll follow up with your intro and make expectations clear. Repeated no-shows without a good reason can lead to removal from intros.',
+    q: 'My match didn\'t show up.',
+    a: 'Text us. We\'ll follow up with them. Repeated no-shows can lead to removal from intros.',
   },
 ]
 
 export default function SettingsHowItWorksPage() {
   const [openIndex, setOpenIndex] = useState<number | null>(null)
 
-  const toggle = (index: number) => {
-    setOpenIndex((prev) => (prev === index ? null : index))
-  }
-
   return (
     <div className="app-card">
-      <h2>How it Works</h2>
-      <p style={{ color: 'var(--color-textSecondary)', fontSize: '0.95rem', marginBottom: '1.5rem' }}>
-        Quick answers to how intros work.
-      </p>
-      <div className="faq-list">
+      <h2>FAQ</h2>
+      <div className="faq-list" style={{ marginTop: '1rem' }}>
         {portalFaqItems.map((item, index) => (
           <div
             key={index}
@@ -55,7 +48,7 @@ export default function SettingsHowItWorksPage() {
             <button
               type="button"
               className="faq-q"
-              onClick={() => toggle(index)}
+              onClick={() => setOpenIndex((prev) => (prev === index ? null : index))}
               aria-expanded={openIndex === index}
               aria-controls={`portal-faq-answer-${index}`}
               id={`portal-faq-question-${index}`}

@@ -233,6 +233,45 @@ function getReactionTargetHandle(body: Record<string, unknown>): string | null {
   return null
 }
 
+type FikaSlotOption = { label: string; date: string; startHour: number; endHour: number }
+
+function getSharedFikaHours(prefA: string | null, prefB: string | null): number[] {
+  function toHours(pref: string | null): Set<number> {
+    if (!pref) return new Set([10, 18])
+    const p = pref.toLowerCase()
+    if (p.includes('both')) return new Set([10, 18])
+    if (p.includes('10am') || p.includes('morning')) return new Set([10])
+    if (p.includes('6pm') || p.includes('evening')) return new Set([18])
+    return new Set([10, 18])
+  }
+  const hoursA = toHours(prefA)
+  const hoursB = toHours(prefB)
+  const shared = [10, 18].filter(h => hoursA.has(h) && hoursB.has(h))
+  return shared.length > 0 ? shared : [10, 18]
+}
+
+function generateFikaSlotOptions(from: Date, hours: number[], maxSlots = 6): FikaSlotOption[] {
+  const slots: FikaSlotOption[] = []
+  const d = new Date(from)
+  const tz = 'America/Los_Angeles'
+  while (slots.length < maxSlots) {
+    const dow = d.getDay()
+    if (dow !== 0 && dow !== 6) {
+      const date = d.toISOString().slice(0, 10)
+      for (const h of hours) {
+        if (slots.length >= maxSlots) break
+        const timeLabel = h < 12 ? `${h}am` : `${h - 12}pm`
+        const dayAbbr = d.toLocaleDateString('en-US', { timeZone: tz, weekday: 'short' })
+        const month = d.toLocaleDateString('en-US', { timeZone: tz, month: 'numeric' })
+        const day = d.toLocaleDateString('en-US', { timeZone: tz, day: 'numeric' })
+        slots.push({ label: `${dayAbbr} ${month}/${day} at ${timeLabel}`, date, startHour: h, endHour: h + 2 })
+      }
+    }
+    d.setDate(d.getDate() + 1)
+  }
+  return slots
+}
+
 export async function POST(request: Request) {
   if (!isSendblueConfigured()) {
     return NextResponse.json({ error: 'Sendblue not configured' }, { status: 503 })
@@ -786,12 +825,17 @@ export async function POST(request: Request) {
           const windowStart = tomorrow.toISOString()
 
           const venuePayload = venue ? { venue_id: venue.id, venue_name: venue.name, venue_neighborhood: venue.neighborhood ?? null } : {}
-          const weekdays = getNextWeekdays(tomorrow, 5)
-          const listLines = weekdays.map((d, i) => `${i + 1}. ${d.label}`).join('\n')
-          const sharedPayload = { both_accepted_at: new Date().toISOString(), window_start: windowStart, day_options: weekdays, ...venuePayload }
+
+          // Compute intersecting time slots from each user's preference
+          const myTimePref = getIntakeSingle(myIntake?.responses, 'q_fika_time_pref')
+          const otherTimePref = getIntakeSingle(otherIntake?.responses, 'q_fika_time_pref')
+          const sharedHours = getSharedFikaHours(myTimePref, otherTimePref)
+          const slotOptions = generateFikaSlotOptions(tomorrow, sharedHours, 6)
+          const listLines = slotOptions.map((s, i) => `${i + 1}. ${s.label}`).join('\n')
+          const sharedPayload = { both_accepted_at: new Date().toISOString(), window_start: windowStart, slot_options: slotOptions, ...venuePayload }
 
           const availMsg = (partnerName: string) =>
-            `Which of these evenings work for a 6pm Fika with ${partnerName}?\n\n${listLines}\n\nReply with the numbers that work — if we find a match, we'll lock it in for both of you!`
+            `Which of these work for a Fika with ${partnerName}?\n\n${listLines}\n\nReply with the numbers that work — if we find a match, we'll lock it in!`
 
           await Promise.all([
             setPerMatchSmsState({ userId, matchId: activeMatchId, state: '1v1_awaiting_availability', payload: sharedPayload }),
@@ -871,24 +915,39 @@ export async function POST(request: Request) {
     }
 
     if (matchState === '1v1_awaiting_availability') {
-      // Parse numbered reply against the stored day options list
-      const dayOptions = Array.isArray(matchPayload.day_options)
+      type SlotOption = { label: string; date: string; startHour: number; endHour: number }
+      const slotOptions = Array.isArray(matchPayload.slot_options)
+        ? (matchPayload.slot_options as SlotOption[])
+        : null
+      // Legacy fallback: old day_options (fixed 6pm)
+      const dayOptions = !slotOptions && Array.isArray(matchPayload.day_options)
         ? (matchPayload.day_options as { label: string; date: string }[])
         : []
-      const chosenDates = extractChosenDates(content, dayOptions)
 
-      if (chosenDates.length === 0) {
-        await sendConciergeAndLog(
-          fromNumber,
-          `Just reply with the numbers that work — e.g. 1, 3`,
-          'avail_parse_failed',
-          { userId, matchId: activeMatchId }
-        )
-        return NextResponse.json({ ok: true })
+      let windows: TimeWindow[]
+      if (slotOptions) {
+        const max = slotOptions.length
+        const seen = new Set<number>()
+        const chosenSlots: SlotOption[] = []
+        const re = /\b([1-9])\b/g
+        let m: RegExpExecArray | null
+        while ((m = re.exec(content)) !== null) {
+          const n = parseInt(m[1])
+          if (n >= 1 && n <= max && !seen.has(n)) { seen.add(n); chosenSlots.push(slotOptions[n - 1]) }
+        }
+        if (chosenSlots.length === 0) {
+          await sendConciergeAndLog(fromNumber, `Just reply with the numbers that work — e.g. 1, 3`, 'avail_parse_failed', { userId, matchId: activeMatchId })
+          return NextResponse.json({ ok: true })
+        }
+        windows = chosenSlots.map(s => ({ date: s.date, startHour: s.startHour, endHour: s.endHour }))
+      } else {
+        const chosenDates = extractChosenDates(content, dayOptions)
+        if (chosenDates.length === 0) {
+          await sendConciergeAndLog(fromNumber, `Just reply with the numbers that work — e.g. 1, 3`, 'avail_parse_failed', { userId, matchId: activeMatchId })
+          return NextResponse.json({ ok: true })
+        }
+        windows = chosenDates.map(date => ({ date, startHour: 18, endHour: 20 }))
       }
-
-      // Convert chosen dates to TimeWindows (fixed 6pm slot)
-      const windows: TimeWindow[] = chosenDates.map(date => ({ date, startHour: 18, endHour: 20 }))
 
       // Store this user's parsed availability in payload
       const updatedPayload = { ...matchPayload, availability: windows }
@@ -942,15 +1001,19 @@ export async function POST(request: Request) {
       }
 
       // Overlap found — lock it in immediately (no proposal round trip)
-      const slot = { date: overlap.date, startHour: 18, endHour: 20 }
-      const matchedLabel = dayOptions.find(d => d.date === slot.date)?.label
+      const slot = { date: overlap.date, startHour: overlap.startHour, endHour: overlap.endHour }
+      type SlotOption2 = { label: string; date: string; startHour: number; endHour: number }
+      const storedSlotOptions = Array.isArray(matchPayload.slot_options) ? (matchPayload.slot_options as SlotOption2[]) : null
+      const matchedSlot = storedSlotOptions?.find(s => s.date === slot.date && s.startHour === slot.startHour)
+      const matchedLabel = matchedSlot?.label ?? null
       const venueNameStored = typeof matchPayload.venue_name === 'string' ? matchPayload.venue_name : null
       const venueNeighborhoodStored = typeof matchPayload.venue_neighborhood === 'string' ? matchPayload.venue_neighborhood : null
       const venueLine2 = venueNameStored
         ? (venueNeighborhoodStored ? `${venueNameStored} (${venueNeighborhoodStored})` : venueNameStored)
         : 'the venue'
       const confirmedPayload = { ...matchPayload, proposed_slot: slot }
-      const confirmMsg = `You're both free on ${matchedLabel ?? formatProposedTime(slot)} — you're set ☕ 6pm at ${venueLine2}. Let me know if anything comes up.`
+      const slotTimeLabel = slot.startHour < 12 ? `${slot.startHour}am` : `${slot.startHour - 12}pm`
+      const confirmMsg = `You're both free on ${matchedLabel ?? formatProposedTime(slot)} — you're set ☕ ${slotTimeLabel} at ${venueLine2}. Let me know if anything comes up.`
 
       await Promise.all([
         setPerMatchSmsState({ userId, matchId: activeMatchId, state: '1v1_confirmed', payload: confirmedPayload }),
