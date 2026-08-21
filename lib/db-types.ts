@@ -73,6 +73,9 @@ export type VenueRow = {
   address: string | null
   lat: number | null
   lng: number | null
+  google_place_id: string | null
+  google_business_status: string | null
+  google_permanently_closed: boolean | null
   created_at: string | null
 }
 
