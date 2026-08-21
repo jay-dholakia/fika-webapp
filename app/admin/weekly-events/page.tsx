@@ -393,7 +393,7 @@ export default function AdminWeeklyEventsPage() {
 
   return (
     <main style={{ maxWidth: 900, margin: '0 auto', padding: '2rem 1rem' }}>
-      <h1 style={{ fontSize: '1.4rem', fontWeight: 700, marginBottom: '1.5rem' }}>Weekly events</h1>
+      <h1 style={{ fontSize: '1.4rem', fontWeight: 700, marginBottom: '1.5rem' }}>Group Events</h1>
 
       <section style={{ marginBottom: '2.5rem' }}>
         <h2 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '1rem' }}>Create event</h2>

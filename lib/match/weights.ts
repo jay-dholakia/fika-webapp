@@ -4,7 +4,8 @@
  */
 
 /** Reported in admin match-sim API `summary.scoring`. */
-export const MATCH_SCORING_VERSION = 'fika_structured_v15' as const
+export const MATCH_SCORING_VERSION = 'fika_structured_v16' as const
+export const MATCH_SCORING_VERSION_LLM = 'llm_qualitative_v1' as const
 
 /** final = clamp(0,1, FEASIBILITY_PORTION * feasibility + COMPATIBILITY_PORTION * (compatibility - penaltyTotal)) */
 export const FEASIBILITY_PORTION = 0.4
@@ -17,15 +18,16 @@ export const FEASIBILITY_WEIGHTS = {
 
 /**
  * Per-dimension weights inside compatibility_score (sum = 1).
- * Interests, talk topics, market tenure, work, plus age proximity from profile birthdates.
+ * Reflects SMS-first onboarding: fika vibe + social style replace q_like_talking_about chips.
  */
 export const COMPATIBILITY_WEIGHTS = {
-  interests: 0.34,
-  marketTenure: 0.17,
-  work: 0.12,
-  likeTalkingAbout: 0.19,
-  ageFit: 0.10,
-  socialGoal: 0.08,
+  interests: 0.22,      // chip overlap or 0.5 neutral (SMS users have free text, not chips)
+  fikaVibe: 0.18,       // what kind of conversation they want from a Fika
+  socialGoal: 0.15,     // what they want to get out of Fika
+  marketTenure: 0.15,   // how long in the city
+  ageFit: 0.10,         // age proximity
+  work: 0.10,           // fuzzy work role similarity
+  socialStyle: 0.10,    // personality fit in social situations
 } as const
 
 /** Age fit uses `1 / (1 + ageDiffYears / AGE_FIT_SCALE_YEARS)`; missing either age → neutral 0.5. */
@@ -50,13 +52,13 @@ export const DISTANCE_FIT_MISSING_COORDS = 0.6
 export const SEVERE_MISMATCH_PENALTY_CAP = 0.06
 
 /**
- * Intake fields counted toward data-confidence feasibility (platonic confirm is eligibility-only, not scored).
- * Optional fields (ethnicity, relationship, work) are not included.
+ * Intake fields counted toward data-confidence feasibility.
+ * q_interests_freetext is the SMS-onboarding equivalent of q_interests chips.
  */
 export const DATA_CONFIDENCE_FIELD_IDS = [
   'q_market_tenure',
-  'q_interests',
-  'q_like_talking_about',
+  'q_interests',       // web onboarding chips (checked with q_interests_freetext fallback)
+  'q_social_goal',
 ] as const
 
 export const CONFIRM_INTENT_REQUIRED_VALUE = "I'm in"

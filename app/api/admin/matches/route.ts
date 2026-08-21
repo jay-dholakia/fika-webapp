@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase-server'
 import { isAdminByUserId } from '@/lib/admin-markets'
 import { invokeSmsMatchDelivery } from '@/lib/invoke-sms-match-delivery'
+import { buildUserProfileText, generateMatchIntroCopy } from '@/lib/match/llm-pair-score'
 
 export const dynamic = 'force-dynamic'
 
@@ -101,21 +102,53 @@ export async function POST(request: Request) {
       })
     }
 
-    const insertRows = eligiblePairs.map(pair => ({
-      user_a: pair.user_a.trim(),
-      user_b: pair.user_b.trim(),
-      status: 'active',
-      admin_approval_status: 'approved',
-      reasons: {
-        source: '1v1',
-        ...(venueId ? { venue_id: venueId } : {}),
-        ...(eventStartsAt ? { event_starts_at: eventStartsAt } : {}),
-        ...(areaLabel ? { area_label: areaLabel } : {}),
-        signals: Array.isArray(pair.signals) ? pair.signals.filter(s => typeof s === 'string') : [],
-        user_a_work: pair.user_a_work ?? null,
-        user_b_work: pair.user_b_work ?? null,
-      },
-    }))
+    // Load profiles + intake to generate LLM intro copy before inserting
+    const openaiKey = (process.env.EXPO_PUBLIC_OPENAI_API_KEY || process.env.OPENAI_API_KEY)?.trim() || ''
+    const eligibleUserIds = Array.from(new Set(eligiblePairs.flatMap(p => [p.user_a.trim(), p.user_b.trim()])))
+    const [{ data: profileRowsForCopy }, { data: intakeRowsForCopy }] = await Promise.all([
+      supabase.from('profiles').select('id, first_name, birthdate, pronouns, city').in('id', eligibleUserIds),
+      supabase.from('intake_responses_v5').select('user_id, responses').in('user_id', eligibleUserIds),
+    ])
+    const profileMapForCopy = new Map((profileRowsForCopy ?? []).map((r: { id: string }) => [r.id, r]))
+    const intakeMapForCopy = new Map((intakeRowsForCopy ?? []).map((r: { user_id: string }) => [r.user_id, r]))
+
+    const copyResults = await Promise.all(
+      eligiblePairs.map(async (pair) => {
+        if (!openaiKey) return null
+        const profA = profileMapForCopy.get(pair.user_a.trim()) as { id: string; first_name?: string | null; birthdate?: string | null; pronouns?: string | null; city?: string | null } | undefined
+        const profB = profileMapForCopy.get(pair.user_b.trim()) as { id: string; first_name?: string | null; birthdate?: string | null; pronouns?: string | null; city?: string | null } | undefined
+        const intakeA = intakeMapForCopy.get(pair.user_a.trim()) as { user_id: string; responses: unknown } | undefined
+        const intakeB = intakeMapForCopy.get(pair.user_b.trim()) as { user_id: string; responses: unknown } | undefined
+        if (!profA || !profB) return null
+        const nameA = profA.first_name?.trim() || 'Someone'
+        const nameB = profB.first_name?.trim() || 'Someone'
+        return generateMatchIntroCopy(
+          nameA, buildUserProfileText(profA, intakeA?.responses ?? []),
+          nameB, buildUserProfileText(profB, intakeB?.responses ?? []),
+          openaiKey
+        ).catch(() => null)
+      })
+    )
+
+    const insertRows = eligiblePairs.map((pair, idx) => {
+      const copy = copyResults[idx]
+      return {
+        user_a: pair.user_a.trim(),
+        user_b: pair.user_b.trim(),
+        status: 'active',
+        admin_approval_status: 'approved',
+        reasons: {
+          source: '1v1',
+          ...(venueId ? { venue_id: venueId } : {}),
+          ...(eventStartsAt ? { event_starts_at: eventStartsAt } : {}),
+          ...(areaLabel ? { area_label: areaLabel } : {}),
+          signals: Array.isArray(pair.signals) ? pair.signals.filter(s => typeof s === 'string') : [],
+          user_a_work: pair.user_a_work ?? null,
+          user_b_work: pair.user_b_work ?? null,
+          ...(copy ? { copy: { messageForA: copy.messageForA, messageForB: copy.messageForB, llm_generated: true } } : {}),
+        },
+      }
+    })
 
     const { data: inserted, error: insertErr } = await supabase
       .from('match_candidates')

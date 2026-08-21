@@ -13,7 +13,8 @@ import {
   adminSimCandidateFromProfileRow,
   computeAdminPairPayload,
 } from '@/lib/match/admin-match-pair'
-import { MATCH_SCORING_VERSION } from '@/lib/match/weights'
+import { MATCH_SCORING_VERSION, MATCH_SCORING_VERSION_LLM } from '@/lib/match/weights'
+import { buildUserProfileText, scorePairWithLLM } from '@/lib/match/llm-pair-score'
 
 /** Admin simulation: config-driven structured matcher (eligibility + feasibility + compatibility). */
 export const dynamic = 'force-dynamic'
@@ -137,6 +138,18 @@ export async function POST(request: Request) {
   const intakeById = new Map<string, IntakeRow>()
   for (const r of (intakeRows ?? []) as IntakeRow[]) intakeById.set(r.user_id, r)
 
+  // Load most recent fika feedback per user so past Fika quality is visible when scoring pairs
+  const { data: feedbackRows } = await supabase
+    .from('fika_feedback')
+    .select('user_id, content, sentiment, created_at')
+    .in('user_id', ids)
+    .order('created_at', { ascending: false })
+  type FeedbackEntry = { user_id: string; content: string; sentiment: string | null; created_at: string }
+  const latestFeedbackByUser = new Map<string, FeedbackEntry>()
+  for (const f of (feedbackRows ?? []) as FeedbackEntry[]) {
+    if (!latestFeedbackByUser.has(f.user_id)) latestFeedbackByUser.set(f.user_id, f)
+  }
+
   let usersSkippedNoIntake = 0
   const candidates: SimCandidate[] = []
   for (const p of userProfiles) {
@@ -163,39 +176,21 @@ export async function POST(request: Request) {
     })
   }
 
+  const openaiKey = (process.env.EXPO_PUBLIC_OPENAI_API_KEY || process.env.OPENAI_API_KEY)?.trim() || ''
+
   let filteredOut = 0
-  const pairs: Array<{
-    userAId: string
-    userAName: string
-    userAAge: number | null
-    userAGender: string | null
-    userAPronouns: string | null
-    userAWorkLabel: string | null
-    userACity: string | null
-    userBId: string
-    userBName: string
-    userBAge: number | null
-    userBGender: string | null
-    userBPronouns: string | null
-    userBWorkLabel: string | null
-    userBCity: string | null
-    score: number
-    distanceKm: number | null
-    sharedLanguages: string[]
-    likeTalkingAboutA: string | null
-    likeTalkingAboutB: string | null
-    overlapGreatFika: string[]
-    overlapLikeTalkingAbout: string[]
-    overlapInterests: string[]
-    overlapCuriosity: string[]
-    overlapLifeChapter: string[]
-    overlapEverydayAnchor: string[]
-    textureOverlap: string[]
-    topCopyDimensions: CopyDimensionKey[]
+
+  type EligiblePairIntermediate = {
+    ca: SimCandidate
+    cb: SimCandidate
+    p: ReturnType<typeof computeAdminPairPayload>
     compareRows: CompareRow[]
-    sectionScores: Record<string, number>
-    matchBreakdown: FikaMatchBreakdown
-  }> = []
+    userAWorkLabel: string | null
+    userBWorkLabel: string | null
+    textA: string
+    textB: string
+  }
+  const eligibleIntermediate: EligiblePairIntermediate[] = []
 
   for (let i = 0; i < candidates.length; i++) {
     for (let j = i + 1; j < candidates.length; j++) {
@@ -207,43 +202,64 @@ export async function POST(request: Request) {
         filteredOut++
         continue
       }
-      const compareRows = buildComparisonRows(ca, cb)
-      const userAWorkLabel = getIntakeSingle(ca.intake.responses, 'q_work')
-      const userBWorkLabel = getIntakeSingle(cb.intake.responses, 'q_work')
-      pairs.push({
-        userAId: ca.profile.id,
-        userAName: ca.profile.first_name?.trim() || 'Unknown',
-        userAAge: ca.age,
-        userAGender: ca.profile.gender ?? null,
-        userAPronouns: ca.profile.pronouns ?? null,
-        userAWorkLabel,
-        userACity: ca.profile.city ?? null,
-        userBId: cb.profile.id,
-        userBName: cb.profile.first_name?.trim() || 'Unknown',
-        userBAge: cb.age,
-        userBGender: cb.profile.gender ?? null,
-        userBPronouns: cb.profile.pronouns ?? null,
-        userBWorkLabel,
-        userBCity: cb.profile.city ?? null,
-        score: p.score,
-        distanceKm: p.distanceKm,
-        sharedLanguages: p.sharedLanguages,
-        likeTalkingAboutA: p.likeTalkingAboutA,
-        likeTalkingAboutB: p.likeTalkingAboutB,
-        overlapGreatFika: p.overlapGreatFika,
-        overlapLikeTalkingAbout: p.overlapLikeTalkingAbout,
-        overlapInterests: p.overlapInterests,
-        overlapCuriosity: p.overlapCuriosity,
-        overlapLifeChapter: p.overlapLifeChapter,
-        overlapEverydayAnchor: p.overlapEverydayAnchor,
-        textureOverlap: p.textureOverlap,
-        topCopyDimensions: p.topCopyDimensions,
-        compareRows,
-        sectionScores: p.sectionScores,
-        matchBreakdown: p.breakdown,
+      eligibleIntermediate.push({
+        ca, cb, p,
+        compareRows: buildComparisonRows(ca, cb),
+        userAWorkLabel: getIntakeSingle(ca.intake.responses, 'q_work'),
+        userBWorkLabel: getIntakeSingle(cb.intake.responses, 'q_work'),
+        textA: buildUserProfileText(ca.profile, ca.intake.responses),
+        textB: buildUserProfileText(cb.profile, cb.intake.responses),
       })
     }
   }
+
+  // Score all eligible pairs in parallel via LLM; fall back to structured score on failure
+  const llmResults = await Promise.all(
+    eligibleIntermediate.map(({ textA, textB, p }) =>
+      openaiKey
+        ? scorePairWithLLM(textA, textB, openaiKey).catch(() => ({ score: Math.round(p.score * 100), reason: '' }))
+        : Promise.resolve({ score: Math.round(p.score * 100), reason: '' })
+    )
+  )
+
+  const pairs = eligibleIntermediate.map(({ ca, cb, p, compareRows, userAWorkLabel, userBWorkLabel }, idx) => {
+    const llm = llmResults[idx]
+    return {
+      userAId: ca.profile.id,
+      userAName: ca.profile.first_name?.trim() || 'Unknown',
+      userAAge: ca.age,
+      userAGender: ca.profile.gender ?? null,
+      userAPronouns: ca.profile.pronouns ?? null,
+      userAWorkLabel,
+      userACity: ca.profile.city ?? null,
+      userBId: cb.profile.id,
+      userBName: cb.profile.first_name?.trim() || 'Unknown',
+      userBAge: cb.age,
+      userBGender: cb.profile.gender ?? null,
+      userBPronouns: cb.profile.pronouns ?? null,
+      userBWorkLabel,
+      userBCity: cb.profile.city ?? null,
+      score: llm.score,
+      llmReason: llm.reason,
+      distanceKm: p.distanceKm,
+      sharedLanguages: p.sharedLanguages,
+      likeTalkingAboutA: p.likeTalkingAboutA,
+      likeTalkingAboutB: p.likeTalkingAboutB,
+      overlapGreatFika: p.overlapGreatFika,
+      overlapLikeTalkingAbout: p.overlapLikeTalkingAbout,
+      overlapInterests: p.overlapInterests,
+      overlapCuriosity: p.overlapCuriosity,
+      overlapLifeChapter: p.overlapLifeChapter,
+      overlapEverydayAnchor: p.overlapEverydayAnchor,
+      textureOverlap: p.textureOverlap,
+      topCopyDimensions: p.topCopyDimensions,
+      compareRows,
+      sectionScores: p.sectionScores,
+      matchBreakdown: p.breakdown,
+      userALastFeedback: latestFeedbackByUser.get(ca.profile.id) ?? null,
+      userBLastFeedback: latestFeedbackByUser.get(cb.profile.id) ?? null,
+    }
+  })
 
   pairs.sort((a, b) => b.score - a.score)
   const top = pairs.slice(0, topN)
@@ -256,7 +272,7 @@ export async function POST(request: Request) {
       pairsScored: pairs.length,
       filteredOut,
       market,
-      scoring: MATCH_SCORING_VERSION,
+      scoring: openaiKey ? MATCH_SCORING_VERSION_LLM : MATCH_SCORING_VERSION,
     },
     pairs: top,
   })

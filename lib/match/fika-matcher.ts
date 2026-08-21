@@ -1,5 +1,6 @@
 import { getIntakeMulti, getIntakeSingle } from '@/lib/intake-response-utils'
 import { marketTenureFitScore, workFitScore } from '@/lib/match/tenure-work-fit'
+import { fikaVibeCompatibilityScore, socialStyleCompatibilityScore } from '@/lib/match/compatibility-matrices'
 import {
   AGE_FIT_SCALE_YEARS,
   COMPATIBILITY_PORTION,
@@ -57,6 +58,8 @@ export type FikaMatchBreakdown = {
     /** 0–1 from calendar-age gap; neutral 0.5 if either age unknown. */
     ageFit: number
     socialGoalFit: number
+    fikaVibeFit: number
+    socialStyleFit: number
     total: number
   }
   penalties: {
@@ -277,10 +280,7 @@ export function scoreFikaPair(a: MatcherPerson, b: MatcherPerson, opts?: ScorePa
     getIntakeMulti(a.responses, 'q_interests'),
     getIntakeMulti(b.responses, 'q_interests')
   )
-  const likeTalkingAboutFit = multiSelectChipOverlapScore(
-    getIntakeMulti(a.responses, 'q_like_talking_about'),
-    getIntakeMulti(b.responses, 'q_like_talking_about')
-  )
+  const likeTalkingAboutFit = 0 // field removed from SMS onboarding — kept in breakdown for schema compat
   const marketTenureFit = marketTenureFitScore(a.responses, b.responses)
   const workFit = workFitScore(a.responses, b.responses)
   const ageFit = ageFitScore(a.age, b.age)
@@ -288,15 +288,26 @@ export function scoreFikaPair(a: MatcherPerson, b: MatcherPerson, opts?: ScorePa
     getIntakeMulti(a.responses, 'q_social_goal'),
     getIntakeMulti(b.responses, 'q_social_goal')
   )
+  const fikaVibeFit = fikaVibeCompatibilityScore(
+    getIntakeSingle(a.responses, 'q_fika_vibe'),
+    getIntakeSingle(b.responses, 'q_fika_vibe'),
+    opts?.logMatrixUnknown
+  )
+  const socialStyleFit = socialStyleCompatibilityScore(
+    getIntakeSingle(a.responses, 'q_social_style'),
+    getIntakeSingle(b.responses, 'q_social_style'),
+    opts?.logMatrixUnknown
+  )
 
   const w = COMPATIBILITY_WEIGHTS
   const compatibilityTotal =
     w.interests * interestsFit +
     w.marketTenure * marketTenureFit +
     w.work * workFit +
-    w.likeTalkingAbout * likeTalkingAboutFit +
+    w.fikaVibe * fikaVibeFit +
     w.ageFit * ageFit +
-    w.socialGoal * socialGoalFit
+    w.socialGoal * socialGoalFit +
+    w.socialStyle * socialStyleFit
 
   const avoidTopicsPenalty = 0
   const severeMismatch = 0
@@ -329,6 +340,8 @@ export function scoreFikaPair(a: MatcherPerson, b: MatcherPerson, opts?: ScorePa
       textureFit: 0,
       ageFit,
       socialGoalFit,
+      fikaVibeFit,
+      socialStyleFit,
       total: compatibilityTotal,
     },
     penalties: {

@@ -245,7 +245,11 @@ export async function POST(request: Request) {
         }).eq('user_id', user.id).is('match_id', null)
       }
       await sleepForSmsPacing(SMS_PACING_MS.quickAck)
-      await sendMessage(session.phone, 'Save our contact so you don\'t miss your intro 👇', {
+      await sendMessage(session.phone, "Save our contact so you don't miss your intro 👇", {
+        fromNumber: 'concierge',
+      }).catch(() => {})
+      await sleepForSmsPacing(SMS_PACING_MS.quickAck)
+      await sendMessage(session.phone, '', {
         fromNumber: 'concierge',
         mediaUrl: `${appBase}/fika.vcf`,
       }).catch(() => {})

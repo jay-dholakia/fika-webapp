@@ -9,12 +9,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const isMarkets = pathname === '/admin' || pathname === '/admin/'
   const isMap = pathname?.startsWith('/admin/map')
-  const isFikas = pathname?.startsWith('/admin/fikas')
+  const isIntros = pathname?.startsWith('/admin/intros')
   const isSignups = pathname?.startsWith('/admin/signups')
   const isSmsControl = pathname?.startsWith('/admin/sms-control')
   const isVenues = pathname?.startsWith('/admin/venues')
   const isWeeklyEvents = pathname?.startsWith('/admin/weekly-events')
-  const isIntakeQuestions = pathname?.startsWith('/admin/intake-questions')
 
   useEffect(() => {
     setMobileMenuOpen(false)
@@ -22,15 +21,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   const links = useMemo(() => ([
     { href: '/admin', label: 'Cities', active: isMarkets },
-    { href: '/admin/map', label: 'Geo map', active: isMap },
-    { href: '/admin/fikas', label: 'Fikas', active: isFikas },
+    { href: '/admin/intros', label: '1v1 Intros', active: isIntros },
     { href: '/admin/signups', label: 'People', active: isSignups },
     { href: '/admin/sms-control', label: 'SMS control', active: isSmsControl },
     { href: '/admin/venues', label: 'Venues', active: isVenues },
-    { href: '/admin/weekly-events', label: 'Weekly events', active: isWeeklyEvents },
-    { href: '/admin/intake-questions', label: "Intake Q's", active: isIntakeQuestions },
+    { href: '/admin/weekly-events', label: 'Group Events', active: isWeeklyEvents },
+    { href: '/admin/map', label: 'Geo map', active: isMap },
     { href: '/app/yourfika', label: 'Back to app', active: false },
-  ]), [isMarkets, isMap, isFikas, isSignups, isSmsControl, isVenues, isWeeklyEvents, isIntakeQuestions])
+  ]), [isMarkets, isMap, isIntros, isSignups, isSmsControl, isVenues, isWeeklyEvents])
 
   return (
     <div className="admin-layout">

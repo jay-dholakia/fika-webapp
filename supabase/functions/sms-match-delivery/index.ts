@@ -277,38 +277,42 @@ serve(async (req: Request) => {
       const avatarA = profA?.avatar_url ?? undefined
       const avatarB = profB?.avatar_url ?? undefined
 
-      // Message for A (sees B's info): 1) intro text, 2) B's photo, 3) opt-in question
-      const msgForA = buildIntroMessage({
-        otherFirstName: nameB,
-        otherPronouns: profB?.pronouns ?? null,
-        otherWork: workB,
-        otherCurrentInterest: currentInterestB,
-        otherFriendDescription: friendDescB,
-        sharedInterests,
-        sharedTopics,
-        sharedSignals: signals,
-      })
+      // Use LLM-generated copy if stored, otherwise fall back to template
+      const llmCopy = reasons.copy as { messageForA?: string; messageForB?: string; llm_generated?: boolean } | undefined
+      const useLlmCopy = llmCopy?.llm_generated === true && llmCopy.messageForA && llmCopy.messageForB
 
-      // Message for B (sees A's info): 1) intro text, 2) A's photo, 3) opt-in question
-      const msgForB = buildIntroMessage({
-        otherFirstName: nameA,
-        otherPronouns: profA?.pronouns ?? null,
-        otherWork: workA,
-        otherCurrentInterest: currentInterestA,
-        otherFriendDescription: friendDescA,
-        sharedInterests,
-        sharedTopics,
-        sharedSignals: signals,
-      })
+      const msgForA = useLlmCopy
+        ? llmCopy!.messageForA!
+        : buildIntroMessage({
+            otherFirstName: nameB,
+            otherPronouns: profB?.pronouns ?? null,
+            otherWork: workB,
+            otherCurrentInterest: currentInterestB,
+            otherFriendDescription: friendDescB,
+            sharedInterests,
+            sharedTopics,
+            sharedSignals: signals,
+          })
 
-      // Send 3 messages per user: intro text → photo → opt-in question
-      await sendSms({ apiKeyId, apiSecret, phone: phoneA, content: msgForA })
+      const msgForB = useLlmCopy
+        ? llmCopy!.messageForB!
+        : buildIntroMessage({
+            otherFirstName: nameA,
+            otherPronouns: profA?.pronouns ?? null,
+            otherWork: workA,
+            otherCurrentInterest: currentInterestA,
+            otherFriendDescription: friendDescA,
+            sharedInterests,
+            sharedTopics,
+            sharedSignals: signals,
+          })
+
+      // Send 2 messages per user: intro text → photo (LLM copy ends with CTA, no separate opt-in needed)
+      const sentA = await sendSms({ apiKeyId, apiSecret, phone: phoneA, content: msgForA })
       if (avatarB) await sendSms({ apiKeyId, apiSecret, phone: phoneA, content: ' ', mediaUrl: avatarB })
-      const sentA = await sendSms({ apiKeyId, apiSecret, phone: phoneA, content: `Would you like to set up a Fika with ${nameB}? Reply Yes or No.` })
 
-      await sendSms({ apiKeyId, apiSecret, phone: phoneB, content: msgForB })
+      const sentB = await sendSms({ apiKeyId, apiSecret, phone: phoneB, content: msgForB })
       if (avatarA) await sendSms({ apiKeyId, apiSecret, phone: phoneB, content: ' ', mediaUrl: avatarA })
-      const sentB = await sendSms({ apiKeyId, apiSecret, phone: phoneB, content: `Would you like to set up a Fika with ${nameA}? Reply Yes or No.` })
 
       if (sentA || sentB) {
         const now = new Date().toISOString()

@@ -56,6 +56,77 @@ serve(async (_req: Request) => {
       .not('match_id', 'is', null)
       .lt('updated_at', sevenDaysAgo)
 
+    // --- Day-picker nudge (12h) ---
+    // If one user in 1v1_awaiting_availability hasn't submitted day choices after 12h,
+    // send them the numbered list again. Only fires once per match (avail_nudge_sent flag).
+    const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString()
+    const twentyThreeHoursAgo = new Date(Date.now() - 23 * 60 * 60 * 1000).toISOString()
+
+    const { data: nudgeRows } = await supabase
+      .from('sms_conversation_states')
+      .select('user_id, match_id, payload')
+      .eq('state', '1v1_awaiting_availability')
+      .not('match_id', 'is', null)
+      .lt('updated_at', twelveHoursAgo)
+      .gt('updated_at', twentyThreeHoursAgo)
+
+    const nudgeSendApiKeyId = Deno.env.get('SENDBLUE_API_KEY_ID')
+    const nudgeSendApiSecret = Deno.env.get('SENDBLUE_API_SECRET_KEY')
+
+    for (const row of (nudgeRows ?? []) as Array<{ user_id: string; match_id: string; payload: Record<string, unknown> }>) {
+      const pl = row.payload ?? {}
+      // Skip if already nudged or if they already submitted availability
+      if (pl.avail_nudge_sent || Array.isArray(pl.availability)) continue
+
+      const dayOptions = Array.isArray(pl.day_options)
+        ? (pl.day_options as Array<{ label: string; date: string }>)
+        : []
+      if (dayOptions.length === 0) continue
+
+      // Load this user's phone and their partner's name
+      const { data: matchRow } = await supabase
+        .from('match_candidates')
+        .select('user_a, user_b')
+        .eq('id', row.match_id)
+        .maybeSingle()
+      if (!matchRow) continue
+
+      const otherUserId = matchRow.user_a === row.user_id ? matchRow.user_b : matchRow.user_a
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, first_name, phone')
+        .in('id', [row.user_id, otherUserId])
+      type P = { id: string; first_name: string | null; phone: string | null }
+      const profMap: Record<string, P> = {}
+      for (const p of (profiles ?? []) as P[]) profMap[p.id] = p
+
+      const phone = profMap[row.user_id]?.phone?.trim()
+      const otherName = profMap[otherUserId]?.first_name?.trim() || 'your Fika partner'
+      if (!phone || !nudgeSendApiKeyId || !nudgeSendApiSecret) continue
+      if (Deno.env.get('SMS_OUTBOUND_DISABLED') === 'true') continue
+
+      const listLines = dayOptions.map((d, i) => `${i + 1}. ${d.label}`).join('\n')
+      const nudgeMsg = `Just a reminder — which of these evenings work for a 6pm Fika with ${otherName}?\n\n${listLines}\n\nReply with the numbers that work!`
+
+      const ok = await fetch('https://api.sendblue.co/api/send-message', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'sb-api-key-id': nudgeSendApiKeyId,
+          'sb-api-secret-key': nudgeSendApiSecret,
+        },
+        body: JSON.stringify({ number: phone, content: nudgeMsg }),
+      }).then(r => r.ok).catch(() => false)
+
+      if (ok) {
+        await supabase
+          .from('sms_conversation_states')
+          .update({ payload: { ...pl, avail_nudge_sent: true } })
+          .eq('user_id', row.user_id)
+          .eq('match_id', row.match_id)
+      }
+    }
+
     // --- 1v1 stale flow cleanup (24h) ---
     // Finds matches where any per-match row has been stuck in an active scheduling state
     // for >24h, then sends a rain-check message and resets both users.

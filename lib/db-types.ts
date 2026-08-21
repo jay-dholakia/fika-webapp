@@ -82,5 +82,6 @@ export type FikaFeedbackRow = {
   match_id: string
   user_id: string
   content: string
+  sentiment: 'positive' | 'neutral' | 'negative' | null
   created_at: string // ISO
 }

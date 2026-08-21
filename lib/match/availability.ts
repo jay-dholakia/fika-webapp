@@ -164,6 +164,50 @@ export function formatProposedTime(window: TimeWindow): string {
   return `${day}, ${date} at ${time}`
 }
 
+/**
+ * Returns the next `n` weekday (Mon–Fri) dates starting from `from`, formatted for SMS display.
+ * e.g. [{ label: "Wed 8/20", date: "2025-08-20" }, ...]
+ */
+export function getNextWeekdays(from: Date, n = 5): { label: string; date: string }[] {
+  const result: { label: string; date: string }[] = []
+  const d = new Date(from)
+  d.setHours(0, 0, 0, 0)
+  while (result.length < n) {
+    const dow = d.getDay()
+    if (dow !== 0 && dow !== 6) {
+      const dayAbbr = d.toLocaleDateString('en-US', { timeZone: FIKA_TIMEZONE, weekday: 'short' })
+      const month = d.toLocaleDateString('en-US', { timeZone: FIKA_TIMEZONE, month: 'numeric' })
+      const day = d.toLocaleDateString('en-US', { timeZone: FIKA_TIMEZONE, day: 'numeric' })
+      result.push({ label: `${dayAbbr} ${month}/${day}`, date: d.toISOString().slice(0, 10) })
+    }
+    d.setDate(d.getDate() + 1)
+  }
+  return result
+}
+
+/**
+ * Extract chosen dates from a numbered reply (e.g. "1 and 3" or "2, 4").
+ * Maps 1-based indices to the corresponding day_options entries.
+ */
+export function extractChosenDates(
+  text: string,
+  dayOptions: { label: string; date: string }[]
+): string[] {
+  const max = dayOptions.length
+  const seen = new Set<number>()
+  const result: string[] = []
+  const re = /\b([1-9])\b/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(text)) !== null) {
+    const n = parseInt(m[1])
+    if (n >= 1 && n <= max && !seen.has(n)) {
+      seen.add(n)
+      result.push(dayOptions[n - 1].date)
+    }
+  }
+  return result
+}
+
 /** Convert a TimeWindow start to UTC, handling PST/PDT automatically. */
 export function windowStartToUtc(window: TimeWindow): Date {
   const hh = String(window.startHour).padStart(2, '0')

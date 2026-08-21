@@ -42,9 +42,8 @@ const QUESTIONS: Question[] = [
   // Step 6 text is dynamically built with the city from step 5
   {
     step: 6,
-    text: 'How long have you lived there?\n1. Just moved\n2. Less than a year\n3. 1–3 years\n4. 3–10 years\n5. Over 10 years\n6. Grew up here',
-    type: 'choice',
-    choices: ['Just moved', 'Less than a year', '1–3 years', '3–10 years', 'Over 10 years', 'Grew up here'],
+    text: "How long have you lived there? (e.g. just moved, 3 years, born and raised)",
+    type: 'free',
   },
   {
     step: 7,
@@ -53,9 +52,8 @@ const QUESTIONS: Question[] = [
   },
   {
     step: 8,
-    text: "What's your relationship status?\n1. Single\n2. Dating someone\n3. In a relationship\n4. Married / partnered",
-    type: 'choice',
-    choices: ['Single', 'Dating someone', 'In a relationship', 'Married / partnered'],
+    text: "What's your relationship status? (e.g. single, married, it's complicated)",
+    type: 'free',
   },
   {
     step: 9,
@@ -86,10 +84,7 @@ function getQuestion(step: number): Question | null {
 
 function buildQ6Text(city: string): string {
   const cityShort = city.split(',')[0].trim()
-  return (
-    `How long have you lived in ${cityShort}?\n` +
-    '1. Just moved\n2. Less than a year\n3. 1–3 years\n4. 3–10 years\n5. Over 10 years\n6. Grew up here'
-  )
+  return `How long have you lived in ${cityShort}? (e.g. just moved, 3 years, born and raised)`
 }
 
 function getQuestionText(step: number, payload: OnboardingPayload): string {
@@ -461,12 +456,7 @@ async function processAnswer(params: {
 
   // ── Q6: Time in city ──────────────────────────────────────────────────────
   if (step === 6) {
-    const idx = parseChoice(text, q.choices!)
-    if (idx === null) {
-      await sendChoiceReAsk(send, q, step, retryCount, payload, supabase, fromPhone)
-      return
-    }
-    await advanceTo(supabase, fromPhone, send, payload, { q_market_tenure: q.choices![idx] }, 7)
+    await advanceTo(supabase, fromPhone, send, payload, { q_market_tenure: text }, 7)
     return
   }
 
@@ -478,12 +468,7 @@ async function processAnswer(params: {
 
   // ── Q8: Relationship status ───────────────────────────────────────────────
   if (step === 8) {
-    const idx = parseChoice(text, q.choices!)
-    if (idx === null) {
-      await sendChoiceReAsk(send, q, step, retryCount, payload, supabase, fromPhone)
-      return
-    }
-    await advanceTo(supabase, fromPhone, send, payload, { q_relationship_status: q.choices![idx] }, 9)
+    await advanceTo(supabase, fromPhone, send, payload, { q_relationship_status: text }, 9)
     return
   }
 
@@ -498,7 +483,7 @@ async function processAnswer(params: {
   if (step === 10) {
     const ack = openaiKey
       ? await generateContextualAck(
-          'You are a friendly SMS concierge for Fika, a social meetup app. The user just told you what they do for work. Write a single short acknowledgment, one sentence, casual and warm, like a real person texting. React specifically to what they said. No em dashes (—). No more than one exclamation mark. Keep it under 12 words.',
+          'You are a friendly SMS concierge for Fika, a social meetup app. The user just told you what they do for work. Write a single short acknowledgment, one sentence, casual and warm, like a real person texting. React specifically to what they said. Do NOT offer help, advice, or resources. Do NOT say things like "let me know if you need anything". Just acknowledge. No em dashes (—). No more than one exclamation mark. Keep it under 12 words.',
           text,
           "That's cool!",
           openaiKey
@@ -513,7 +498,7 @@ async function processAnswer(params: {
   if (step === 11) {
     const ack = openaiKey
       ? await generateContextualAck(
-          'You are a friendly SMS concierge for Fika, a social meetup app. The user just shared details about their life outside of work. Write a single warm, genuine acknowledgment — one sentence, like a real person texting. React to something specific they mentioned. No em dashes (—). No more than one exclamation mark. Keep it under 12 words.',
+          'You are a friendly SMS concierge for Fika, a social meetup app. The user just shared details about their life outside of work. Write a single warm, genuine acknowledgment — one sentence, like a real person texting. React to something specific they mentioned. Do NOT offer help, advice, or resources. Just acknowledge what they said. No em dashes (—). No more than one exclamation mark. Keep it under 12 words.',
           text,
           'Perfect, thank you for that!',
           openaiKey

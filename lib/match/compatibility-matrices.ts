@@ -91,6 +91,75 @@ export function hopingForCompatibilityScore(
   return matrixPairScore(a, b, HOPING_SCORES, 'q_hoping_for', logUnknown)
 }
 
+// --- Fika vibe (q_fika_vibe): what kind of conversation they want ---
+
+const FIKA_VIBE_SCORES: Record<string, Record<string, number>> = {
+  'Someone who challenges how I think': {
+    'Someone who challenges how I think': 1.0,
+    'Good laughs, easy conversation': 0.25,
+    'Real talk, no performance': 0.80,
+    'A totally different perspective': 0.75,
+    "Wherever it goes, I'm in": 0.70,
+  },
+  'Good laughs, easy conversation': {
+    'Good laughs, easy conversation': 1.0,
+    'Real talk, no performance': 0.50,
+    'A totally different perspective': 0.65,
+    "Wherever it goes, I'm in": 0.75,
+  },
+  'Real talk, no performance': {
+    'Real talk, no performance': 1.0,
+    'A totally different perspective': 0.75,
+    "Wherever it goes, I'm in": 0.75,
+  },
+  'A totally different perspective': {
+    'A totally different perspective': 0.75,
+    "Wherever it goes, I'm in": 0.80,
+  },
+  "Wherever it goes, I'm in": {
+    "Wherever it goes, I'm in": 0.70,
+  },
+}
+
+export function fikaVibeCompatibilityScore(
+  a: string | null,
+  b: string | null,
+  logUnknown?: (msg: string) => void
+): number {
+  return matrixPairScore(a, b, FIKA_VIBE_SCORES, 'q_fika_vibe', logUnknown)
+}
+
+// --- Social style (q_social_style): personality fit for 1-on-1 Fika ---
+
+const SOCIAL_STYLE_SCORES: Record<string, Record<string, number>> = {
+  'The one starting conversations': {
+    'The one starting conversations': 0.70,
+    'Warm once comfortable, slow to open up': 0.90,
+    'More one-on-one than group': 0.80,
+    'Depends on the day': 0.80,
+  },
+  'Warm once comfortable, slow to open up': {
+    'Warm once comfortable, slow to open up': 0.70,
+    'More one-on-one than group': 0.85,
+    'Depends on the day': 0.75,
+  },
+  'More one-on-one than group': {
+    'More one-on-one than group': 0.95,
+    'Depends on the day': 0.80,
+  },
+  'Depends on the day': {
+    'Depends on the day': 0.75,
+  },
+}
+
+export function socialStyleCompatibilityScore(
+  a: string | null,
+  b: string | null,
+  logUnknown?: (msg: string) => void
+): number {
+  return matrixPairScore(a, b, SOCIAL_STYLE_SCORES, 'q_social_style', logUnknown)
+}
+
 // --- Life chapter (multi_select): cluster → cluster compatibility ---
 
 export type LifeCluster =

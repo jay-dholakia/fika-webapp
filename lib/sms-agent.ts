@@ -196,8 +196,15 @@ export async function pickVenueForMatch(
     userB,
     meetingAtUtc: undefined,
   })
-  if (!place) return null
-  return upsertVenueFromGooglePlace(supabase, place)
+  if (place) return upsertVenueFromGooglePlace(supabase, place)
+
+  // Final fallback: ignore user radius constraints and return closest DB venue to the pair
+  if (hasValidLatLng(userA) && hasValidLatLng(userB)) {
+    const anyVenue = await pickVenueFromDatabase(supabase, { ...userA, radius_km: 100 }, { ...userB, radius_km: 100 })
+    if (anyVenue) return anyVenue
+  }
+
+  return null
 }
 
 // ---------- Message templates ----------

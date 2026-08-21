@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useOnboardingStatus } from '@/lib/use-onboarding'
 import { getSupabase } from '@/lib/supabase'
-import { NewQuestionsSection } from '@/app/app/components/NewQuestionsSection'
+
 import { getMarketBySlug, getMarketFromCity } from '@/lib/markets'
 
 const SHARE_URL = 'https://letsfika.vercel.app'
@@ -18,7 +18,6 @@ export default function HowItWorksPage() {
     isComplete: questionnaireComplete,
     intake,
     profile,
-    refetch,
   } = useOnboardingStatus(userId ?? undefined)
 
   useEffect(() => {
@@ -198,13 +197,6 @@ export default function HowItWorksPage() {
 
     </div>
 
-      <NewQuestionsSection
-        userId={userId}
-        intake={intake}
-        onboardingLoading={onboardingLoading}
-        onboardingComplete={questionnaireComplete}
-        refetch={refetch}
-      />
     </>
   )
 }

@@ -34,7 +34,7 @@ import {
   messageWeeklyOptInNo,
 } from '@/lib/sms-agent'
 import { pickVenueForMatch } from '@/lib/sms-agent'
-import { parseAvailability, findEarliestOverlap, formatProposedTime, windowStartToUtc, type TimeWindow } from '@/lib/match/availability'
+import { findEarliestOverlap, formatProposedTime, windowStartToUtc, getNextWeekdays, extractChosenDates, type TimeWindow } from '@/lib/match/availability'
 import { getActiveMarketSlugs } from '@/lib/admin-markets'
 import { getMarketBySlug } from '@/lib/markets'
 import { sendConcierge, isSendblueConfigured, prepareOutboundAiPresence, markConversationRead } from '@/lib/sendblue'
@@ -631,6 +631,40 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true })
   }
 
+  // Profile edit via SMS — intercept before state machine
+  {
+    const editSend = (msg: string, ctx: string) =>
+      sendConciergeAndLog(fromNumber, msg, ctx, { userId })
+
+    // 1. Pending choice edit — user is replying to a numbered list the bot sent
+    const pendingProfileEdit = payload?.pending_profile_edit
+    if (typeof pendingProfileEdit === 'string' && pendingProfileEdit) {
+      const { handlePendingEdit } = await import('@/lib/sms-profile-edit')
+      const handled = await handlePendingEdit({
+        supabase,
+        userId,
+        pendingQuestionId: pendingProfileEdit,
+        content,
+        send: editSend,
+      })
+      if (handled) return NextResponse.json({ ok: true })
+    }
+
+    // 2. New edit command: [edit:q_xxx] optional body
+    const editMatch = content.match(/^\[edit:([\w_]+)\]\s*([\s\S]*)$/)
+    if (editMatch) {
+      const { handleEditCommand } = await import('@/lib/sms-profile-edit')
+      await handleEditCommand({
+        supabase,
+        userId,
+        questionId: editMatch[1],
+        body: editMatch[2].trim(),
+        send: editSend,
+      })
+      return NextResponse.json({ ok: true })
+    }
+  }
+
   let matchState = matchStateRow?.state
   let matchId = matchStateRow?.match_id
   let matchPayload = (matchStateRow?.payload as Record<string, unknown>) ?? {}
@@ -639,7 +673,7 @@ export async function POST(request: Request) {
 
   // --- 1v1 per-match state handlers ---
   // These run before global state handlers so a user with an active 1v1 intro always goes here first.
-  if (matchId && ['1v1_offered', '1v1_accepted', '1v1_awaiting_availability', '1v1_proposed', '1v1_confirmed', '1v1_morning_reminder'].includes(matchState ?? '')) {
+  if (matchId && ['1v1_offered', '1v1_accepted', '1v1_awaiting_availability', '1v1_proposed', '1v1_confirmed', '1v1_morning_reminder', '1v1_feedback'].includes(matchState ?? '')) {
     const activeMatchId = matchId as string
 
     const { data: matchRow } = await supabase
@@ -655,7 +689,7 @@ export async function POST(request: Request) {
 
     const cancelMatch = async () => {
       // Load other user's state and profile before deleting rows
-      const NOTIFIABLE_STATES = ['1v1_accepted', '1v1_awaiting_availability', '1v1_proposed', '1v1_confirmed', '1v1_morning_reminder']
+      const NOTIFIABLE_STATES = ['1v1_accepted', '1v1_awaiting_availability', '1v1_proposed', '1v1_confirmed', '1v1_morning_reminder', '1v1_feedback']
       let otherShouldBeNotified = false
       let otherPhone: string | null = null
       let otherFirstName: string | null = null
@@ -683,12 +717,20 @@ export async function POST(request: Request) {
       )
 
       if (otherShouldBeNotified && otherPhone && otherUserId) {
-        const myName = (await supabase.from('profiles').select('first_name').eq('id', userId).maybeSingle())
-          .data?.first_name?.trim() ?? null
-        const partnerLine = myName ? `Unfortunately ${myName} had to cancel` : `Unfortunately your Fika had to be cancelled`
+        // If current user is still in the offer stage, they declined — not cancelled a commitment
+        const isDecline = matchState === '1v1_offered'
+        let otherMsg: string
+        if (isDecline) {
+          otherMsg = "This one didn't work out — we'll reach back out with another intro soon ☕"
+        } else {
+          const myName = (await supabase.from('profiles').select('first_name').eq('id', userId).maybeSingle())
+            .data?.first_name?.trim() ?? null
+          const partnerLine = myName ? `Unfortunately ${myName} had to cancel` : `Unfortunately your Fika had to be cancelled`
+          otherMsg = `${partnerLine} — we're sorry about that. We'll find you another great intro soon ☕`
+        }
         await sendConciergeAndLog(
           otherPhone,
-          `${partnerLine} — we're sorry about that. We'll find you another great intro soon ☕`,
+          otherMsg,
           'match_cancelled_other',
           { userId: otherUserId, matchId: activeMatchId }
         )
@@ -744,16 +786,12 @@ export async function POST(request: Request) {
           const windowStart = tomorrow.toISOString()
 
           const venuePayload = venue ? { venue_id: venue.id, venue_name: venue.name, venue_neighborhood: venue.neighborhood ?? null } : {}
-          const sharedPayload = { both_accepted_at: new Date().toISOString(), window_start: windowStart, ...venuePayload }
+          const weekdays = getNextWeekdays(tomorrow, 5)
+          const listLines = weekdays.map((d, i) => `${i + 1}. ${d.label}`).join('\n')
+          const sharedPayload = { both_accepted_at: new Date().toISOString(), window_start: windowStart, day_options: weekdays, ...venuePayload }
 
-          const availMsg = (partnerName: string) => [
-            `You're both down to meet each other for Fika! ☕`,
-            '',
-            venueLine ? `It looks like ${venueLine} is a great spot that's not too far from either of you.` : '',
-            '',
-            `Send over your availability for the next 5 days starting tomorrow and let's make it happen!`,
-            `(e.g. "Tomorrow after 5, Thursday 3–6pm, Friday anytime after noon")`,
-          ].filter(Boolean).join('\n')
+          const availMsg = (partnerName: string) =>
+            `Which of these evenings work for a 6pm Fika with ${partnerName}?\n\n${listLines}\n\nReply with the numbers that work — if we find a match, we'll lock it in for both of you!`
 
           await Promise.all([
             setPerMatchSmsState({ userId, matchId: activeMatchId, state: '1v1_awaiting_availability', payload: sharedPayload }),
@@ -822,10 +860,10 @@ export async function POST(request: Request) {
         return NextResponse.json({ ok: true })
       }
 
-      // Both accepted — nudge that we're waiting on availability
+      // Both accepted — nudge that we're waiting on days from the other person
       await sendConciergeAndLog(
         fromNumber,
-        `Still waiting on availability from ${otherFirstNameForNudge} — we'll set up a time as soon as we hear back.`,
+        `Still waiting to hear which days work for ${otherFirstNameForNudge} — we'll lock in a time as soon as we have both of you ☕`,
         'match_accepted_nudge',
         { userId, matchId: activeMatchId }
       )
@@ -833,19 +871,24 @@ export async function POST(request: Request) {
     }
 
     if (matchState === '1v1_awaiting_availability') {
-      // Treat any incoming message as a free-text availability reply
-      const windowStart = typeof matchPayload.window_start === 'string' ? new Date(matchPayload.window_start) : new Date()
-      const windows = await parseAvailability(content, windowStart)
+      // Parse numbered reply against the stored day options list
+      const dayOptions = Array.isArray(matchPayload.day_options)
+        ? (matchPayload.day_options as { label: string; date: string }[])
+        : []
+      const chosenDates = extractChosenDates(content, dayOptions)
 
-      if (windows.length === 0) {
+      if (chosenDates.length === 0) {
         await sendConciergeAndLog(
           fromNumber,
-          `We had trouble reading that — could you be a bit more specific?\n(e.g. "Thursday after 4pm, Friday noon to 6pm")`,
+          `Just reply with the numbers that work — e.g. 1, 3`,
           'avail_parse_failed',
           { userId, matchId: activeMatchId }
         )
         return NextResponse.json({ ok: true })
       }
+
+      // Convert chosen dates to TimeWindows (fixed 6pm slot)
+      const windows: TimeWindow[] = chosenDates.map(date => ({ date, startHour: 18, endHour: 20 }))
 
       // Store this user's parsed availability in payload
       const updatedPayload = { ...matchPayload, availability: windows }
@@ -869,7 +912,6 @@ export async function POST(request: Request) {
       }
 
       if (!otherAvailability) {
-        // Other user hasn't sent availability yet — acknowledge and wait
         await sendConciergeAndLog(
           fromNumber,
           `Got it! Waiting to hear from ${otherFirstName2} and we'll lock in a time ☕`,
@@ -879,11 +921,10 @@ export async function POST(request: Request) {
         return NextResponse.json({ ok: true })
       }
 
-      // Both availability collected — find overlap
+      // Both availability collected — find earliest shared day
       const overlap = findEarliestOverlap(windows, otherAvailability as Parameters<typeof findEarliestOverlap>[0])
 
       if (!overlap) {
-        // No overlap — graceful exit
         await supabase.from('match_candidates').update({ status: 'scheduling_stalled' }).eq('id', activeMatchId)
         const exitMsg = `Looks like timing is a bit tricky right now — we'll circle back when things open up ☕`
         await Promise.all([
@@ -894,40 +935,46 @@ export async function POST(request: Request) {
           setGlobalSmsState({ userId, state: SMS_STATES.GLOBAL_READY, payload: {} }),
           otherUserId ? setGlobalSmsState({ userId: otherUserId, state: SMS_STATES.GLOBAL_READY, payload: {} }) : Promise.resolve(),
         ])
-        // Clean up per-match rows
         for (const uid of [userId, ...(otherUserId ? [otherUserId] : [])]) {
           await supabase.from('sms_conversation_states').delete().eq('user_id', uid).eq('match_id', activeMatchId)
         }
         return NextResponse.json({ ok: true })
       }
 
-      // Overlap found — propose time + venue
+      // Overlap found — lock it in immediately (no proposal round trip)
+      const slot = { date: overlap.date, startHour: 18, endHour: 20 }
+      const matchedLabel = dayOptions.find(d => d.date === slot.date)?.label
       const venueNameStored = typeof matchPayload.venue_name === 'string' ? matchPayload.venue_name : null
       const venueNeighborhoodStored = typeof matchPayload.venue_neighborhood === 'string' ? matchPayload.venue_neighborhood : null
       const venueLine2 = venueNameStored
         ? (venueNeighborhoodStored ? `${venueNameStored} (${venueNeighborhoodStored})` : venueNameStored)
         : 'the venue'
-      const proposedTimeStr = formatProposedTime(overlap)
-      const proposalMsg = `How does ${proposedTimeStr} at ${venueLine2} sound?\nReply Yes to confirm, or No if that doesn't work.`
-      // Store both users' availability so we can try another slot if one is rejected
-      const availKeyMe = userId === matchUserA ? 'availability_a' : 'availability_b'
-      const availKeyOther = userId === matchUserA ? 'availability_b' : 'availability_a'
-      const proposedPayload = {
-        ...matchPayload,
-        proposed_slot: overlap,
-        proposal_attempt: 1,
-        [availKeyMe]: windows,
-        [availKeyOther]: otherAvailability,
-      }
+      const confirmedPayload = { ...matchPayload, proposed_slot: slot }
+      const confirmMsg = `You're both free on ${matchedLabel ?? formatProposedTime(slot)} — you're set ☕ 6pm at ${venueLine2}. Let me know if anything comes up.`
 
       await Promise.all([
-        setPerMatchSmsState({ userId, matchId: activeMatchId, state: '1v1_proposed', payload: proposedPayload }),
-        otherUserId ? setPerMatchSmsState({ userId: otherUserId, matchId: activeMatchId, state: '1v1_proposed', payload: proposedPayload }) : Promise.resolve(),
-        sendConciergeAndLog(fromNumber, proposalMsg, 'schedule_proposed', { userId, matchId: activeMatchId }),
+        setPerMatchSmsState({ userId, matchId: activeMatchId, state: '1v1_confirmed', payload: confirmedPayload }),
+        otherUserId ? setPerMatchSmsState({ userId: otherUserId, matchId: activeMatchId, state: '1v1_confirmed', payload: confirmedPayload }) : Promise.resolve(),
+        sendConciergeAndLog(fromNumber, confirmMsg, 'fika_confirmed', { userId, matchId: activeMatchId }),
         otherPhone2 && otherUserId
-          ? sendConciergeAndLog(otherPhone2, proposalMsg, 'schedule_proposed', { userId: otherUserId, matchId: activeMatchId })
+          ? sendConciergeAndLog(otherPhone2, confirmMsg, 'fika_confirmed', { userId: otherUserId, matchId: activeMatchId })
           : Promise.resolve(),
       ])
+
+      // Write event_starts_at into match_candidates.reasons for crons
+      const { data: mcRow } = await supabase.from('match_candidates').select('reasons').eq('id', activeMatchId).maybeSingle()
+      const existingReasons = (mcRow?.reasons as Record<string, unknown>) ?? {}
+      const slotUtc = windowStartToUtc(slot)
+      const payloadVenueId = typeof matchPayload.venue_id === 'string' ? matchPayload.venue_id : null
+      await supabase.from('match_candidates').update({
+        reasons: {
+          ...existingReasons,
+          event_starts_at: slotUtc.toISOString(),
+          photo_sent_with_intro: true,
+          ...(payloadVenueId && !existingReasons.venue_id ? { venue_id: payloadVenueId } : {}),
+        },
+      }).eq('id', activeMatchId)
+
       return NextResponse.json({ ok: true })
     }
 
@@ -1042,6 +1089,57 @@ export async function POST(request: Request) {
           await supabase.from('sms_conversation_states').delete().eq('user_id', uid).eq('match_id', activeMatchId)
         }
       }
+      return NextResponse.json({ ok: true })
+    }
+
+    // 1v1_feedback — user is replying to "How was your Fika?" SMS
+    if (matchState === '1v1_feedback') {
+      const openaiKey = (process.env.EXPO_PUBLIC_OPENAI_API_KEY || process.env.OPENAI_API_KEY)?.trim() || ''
+      let sentiment: 'positive' | 'neutral' | 'negative' | null = null
+
+      if (openaiKey && content.trim()) {
+        try {
+          const res = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${openaiKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              model: 'gpt-4o-mini',
+              temperature: 0,
+              response_format: { type: 'json_object' },
+              messages: [
+                { role: 'system', content: 'Classify this post-Fika coffee feedback as positive, neutral, or negative. Return JSON only: {"sentiment": "positive"|"neutral"|"negative"}' },
+                { role: 'user', content: content.trim() },
+              ],
+            }),
+          })
+          if (res.ok) {
+            const data = await res.json() as { choices?: Array<{ message?: { content?: string } }> }
+            const parsed = JSON.parse(data.choices?.[0]?.message?.content ?? '{}') as { sentiment?: string }
+            if (['positive', 'neutral', 'negative'].includes(parsed.sentiment ?? '')) {
+              sentiment = parsed.sentiment as 'positive' | 'neutral' | 'negative'
+            }
+          }
+        } catch { /* fall through with null sentiment */ }
+      }
+
+      await supabase.from('fika_feedback').insert({
+        match_id: activeMatchId,
+        user_id: userId,
+        content: content.trim(),
+        sentiment,
+      })
+
+      const ack = sentiment === 'positive'
+        ? "Love that! We'll keep an eye out for your next one ☕"
+        : sentiment === 'negative'
+          ? "Thanks for being honest — that helps us find better intros for you next time ☕"
+          : "Thanks for sharing — helpful to know ☕"
+
+      await sendConciergeAndLog(fromNumber, ack, 'post_fika_feedback', { userId, matchId: activeMatchId })
+
+      // Clean up per-match state and reset global
+      await supabase.from('sms_conversation_states').delete().eq('user_id', userId).eq('match_id', activeMatchId)
+      await setGlobalSmsState({ userId, state: SMS_STATES.GLOBAL_READY, payload: {} })
       return NextResponse.json({ ok: true })
     }
 
