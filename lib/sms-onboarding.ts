@@ -39,15 +39,14 @@ const QUESTIONS: Question[] = [
     text: "What's your zip code? (This helps us match you with people nearby.)",
     type: 'zip',
   },
-  // Step 6 text is dynamically built with the city from step 5
   {
     step: 6,
-    text: "How long have you lived there? (e.g. just moved, 3 years, born and raised)",
+    text: "What neighborhood are you in? (e.g. Silver Lake, West Village, Lincoln Park)",
     type: 'free',
   },
   {
     step: 7,
-    text: "What neighborhood are you in? (e.g. Silver Lake, West Village, Lincoln Park)",
+    text: "How long have you lived there? (e.g. just moved, 3 years, born and raised)",
     type: 'free',
   },
   {
@@ -93,19 +92,8 @@ function getQuestion(step: number): Question | null {
   return QUESTIONS.find(q => q.step === step) ?? null
 }
 
-function buildQ6Text(city: string): string {
-  const cityShort = city.split(',')[0].trim()
-  return `How long have you lived in ${cityShort}? (e.g. just moved, 3 years, born and raised)`
-}
-
-function getQuestionText(step: number, payload: OnboardingPayload): string {
-  const q = getQuestion(step)
-  if (!q) return ''
-  if (step === 6) {
-    const city = payload.city ?? 'there'
-    return buildQ6Text(city)
-  }
-  return q.text
+function getQuestionText(step: number, _payload: OnboardingPayload): string {
+  return getQuestion(step)?.text ?? ''
 }
 
 // ─── Payload type ─────────────────────────────────────────────────────────────
@@ -479,15 +467,15 @@ async function processAnswer(params: {
     return
   }
 
-  // ── Q6: Time in city ──────────────────────────────────────────────────────
+  // ── Q6: Neighborhood ─────────────────────────────────────────────────────
   if (step === 6) {
-    await advanceTo(supabase, fromPhone, send, payload, { q_market_tenure: text }, 7)
+    await advanceTo(supabase, fromPhone, send, payload, { q_neighborhood: text }, 7)
     return
   }
 
-  // ── Q7: Neighborhood ─────────────────────────────────────────────────────
+  // ── Q7: Time in area ──────────────────────────────────────────────────────
   if (step === 7) {
-    await advanceTo(supabase, fromPhone, send, payload, { q_neighborhood: text }, 8)
+    await advanceTo(supabase, fromPhone, send, payload, { q_market_tenure: text }, 8)
     return
   }
 
