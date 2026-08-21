@@ -104,18 +104,27 @@ function formatEventTimeOnly(isoStr: string, tz = 'America/Los_Angeles'): string
   return time.replace(':00', '')
 }
 
+function buildVenueMapsUrl(venue: { name?: string; address?: string | null; lat?: number | null; lng?: number | null }): string | null {
+  if (venue.address) return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(venue.address)}`
+  if (venue.lat != null && venue.lng != null) return `https://www.google.com/maps/search/?api=1&query=${venue.lat},${venue.lng}`
+  if (venue.name) return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(venue.name)}`
+  return null
+}
+
 function buildPreEventMessage(params: {
   venueName: string
   neighborhood: string
   eventTimeFormatted: string
   q1: string
   q2: string
+  mapsUrl?: string | null
 }): string {
-  const { venueName, neighborhood, eventTimeFormatted, q1, q2 } = params
+  const { venueName, neighborhood, eventTimeFormatted, q1, q2, mapsUrl } = params
   const locationLine = neighborhood ? `${venueName} (${neighborhood})` : venueName
 
   const lines: string[] = [
     `Your Fika is today at ${eventTimeFormatted} at ${locationLine} ☕`,
+    ...(mapsUrl ? [`📍 ${mapsUrl}`] : []),
     '',
     `A couple of things to think about before you go:`,
     `• ${q1}`,
@@ -133,11 +142,13 @@ function buildPreEventMessage1v1(params: {
   eventTimeFormatted: string
   qForThis: string
   qForOther: string
+  mapsUrl?: string | null
 }): string {
-  const { otherFirstName, venueName, neighborhood, eventTimeFormatted, qForThis, qForOther } = params
+  const { otherFirstName, venueName, neighborhood, eventTimeFormatted, qForThis, qForOther, mapsUrl } = params
   const locationLine = neighborhood ? `${venueName} (${neighborhood})` : venueName
   return [
     `Your Fika with ${otherFirstName} is today at ${eventTimeFormatted} at ${locationLine} ☕`,
+    ...(mapsUrl ? [`📍 ${mapsUrl}`] : []),
     '',
     `If you need an icebreaker:`,
     `• For you: ${qForThis}`,
@@ -203,20 +214,22 @@ serve(async (_req: Request) => {
       // Get venue info
       let venueName = 'your Fika venue'
       let neighborhood = ''
+      let mapsUrl: string | null = null
       if (venueId) {
         const { data: venue } = await supabase
           .from('venues')
-          .select('name, neighborhood, city')
+          .select('name, neighborhood, city, address, lat, lng')
           .eq('id', venueId)
           .single()
         if (venue) {
           venueName = (venue.name as string) || venueName
           neighborhood = (venue.neighborhood as string) || (venue.city as string) || ''
+          mapsUrl = buildVenueMapsUrl(venue as { name?: string; address?: string | null; lat?: number | null; lng?: number | null })
         }
       }
 
       const [q1, q2] = pickFikaPromptQuestions(eventId)
-      const message = buildPreEventMessage({ venueName, neighborhood, eventTimeFormatted, q1, q2 })
+      const message = buildPreEventMessage({ venueName, neighborhood, eventTimeFormatted, q1, q2, mapsUrl })
 
       // Get all yes-RSVP users and their phone numbers
       const { data: rsvps } = await supabase
@@ -286,12 +299,14 @@ serve(async (_req: Request) => {
       const venueId = typeof reasons.venue_id === 'string' ? reasons.venue_id : null
       let venueName = 'your Fika venue'
       let neighborhood = ''
+      let mapsUrl1v1: string | null = null
       if (venueId) {
         const { data: venue } = await supabase
-          .from('venues').select('name, neighborhood').eq('id', venueId).single()
+          .from('venues').select('name, neighborhood, address, lat, lng').eq('id', venueId).single()
         if (venue) {
           venueName = (venue.name as string) || venueName
           neighborhood = (venue.neighborhood as string) || ''
+          mapsUrl1v1 = buildVenueMapsUrl(venue as { name?: string; address?: string | null; lat?: number | null; lng?: number | null })
         }
       }
 
@@ -370,6 +385,7 @@ serve(async (_req: Request) => {
           eventTimeFormatted,
           qForThis: isUserA ? qForA : qForB,
           qForOther: isUserA ? qForB : qForA,
+          mapsUrl: mapsUrl1v1,
         })
 
         const sent = await sendMessage({ apiKeyId, apiSecret, phone, content: message })

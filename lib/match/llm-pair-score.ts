@@ -11,7 +11,8 @@ export function buildUserProfileText(
     pronouns?: string | null
     city?: string | null
   },
-  responses: unknown
+  responses: unknown,
+  feedbackContext?: { lastSentiment?: string | null }
 ): string {
   const name = profile.first_name?.trim() || 'Unknown'
 
@@ -43,6 +44,8 @@ export function buildUserProfileText(
   if (interests) lines.push(`Life outside work: ${interests}.`)
   if (onMind) lines.push(`On their mind lately: ${onMind}.`)
   if (goal) lines.push(`Looking to get out of Fika: ${goal}.`)
+  if (feedbackContext?.lastSentiment === 'negative') lines.push('Note: rated their last Fika poorly — look for a stronger match on interests.')
+  if (feedbackContext?.lastSentiment === 'positive') lines.push('Note: enjoyed their last Fika — open and engaged.')
 
   return lines.join('\n').trim()
 }

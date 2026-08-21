@@ -188,14 +188,25 @@ serve(async (_req: Request) => {
 
       // Send message to each user if SMS is enabled and we have credentials
       if (apiKeyId && apiSecret && Deno.env.get('SMS_OUTBOUND_DISABLED') !== 'true') {
+        // One-sided = someone accepted but the other person never responded
+        const oneSided = anyEngaged && matchRows.some((r: { state: string }) => r.state === '1v1_offered')
+
         for (const uid of userIds) {
           const prof = profMap[uid]
           const phone = prof?.phone?.trim()
           if (!phone) continue
 
           let message: string
-          if (anyEngaged) {
-            const otherId = userIds.find(id => id !== uid)
+          if (oneSided) {
+            const userRow = matchRows.find((r: { user_id: string }) => r.user_id === uid)
+            const didAccept = userRow?.state !== '1v1_offered'
+            if (didAccept) {
+              message = "The other person wasn't able to respond in time — we'll find you another great intro soon ☕"
+            } else {
+              message = "This intro has expired. We'll be in touch when we have another one for you ☕"
+            }
+          } else if (anyEngaged) {
+            const otherId = userIds.find((id: string) => id !== uid)
             const otherName = otherId ? profMap[otherId]?.first_name?.trim() || null : null
             message = `Looks like timing isn't working out this week — we'll try to set up a Fika with ${otherName ?? 'them'} again soon ☕`
           } else {

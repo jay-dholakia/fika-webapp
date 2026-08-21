@@ -139,16 +139,33 @@ export async function POST(request: Request) {
   const intakeById = new Map<string, IntakeRow>()
   for (const r of (intakeRows ?? []) as IntakeRow[]) intakeById.set(r.user_id, r)
 
-  // Build a set of already-introduced pairs so the sim never surfaces them again
+  // Build a set of already-introduced pairs so the sim never surfaces them again.
+  // Use .or() union so cross-pool prior matches are also caught.
   const { data: priorMatches } = await supabase
     .from('match_candidates')
     .select('user_a, user_b')
-    .in('user_a', ids)
-    .in('user_b', ids)
+    .or(`user_a.in.(${ids.join(',')}),user_b.in.(${ids.join(',')})`)
   const priorPairKeys = new Set<string>()
   for (const m of (priorMatches ?? []) as Array<{ user_a: string; user_b: string }>) {
     const key = [m.user_a, m.user_b].sort().join(':')
     priorPairKeys.add(key)
+  }
+
+  // Also hard-exclude any pair where either user left negative feedback about the other
+  const { data: negativeFeedbackRows } = await supabase
+    .from('fika_feedback')
+    .select('user_id, match_id')
+    .eq('sentiment', 'negative')
+    .in('user_id', ids)
+  if (negativeFeedbackRows?.length) {
+    const negMatchIds = Array.from(new Set((negativeFeedbackRows as Array<{ user_id: string; match_id: string }>).map(r => r.match_id)))
+    const { data: negMatches } = await supabase
+      .from('match_candidates')
+      .select('user_a, user_b')
+      .in('id', negMatchIds)
+    for (const m of (negMatches ?? []) as Array<{ user_a: string; user_b: string }>) {
+      priorPairKeys.add([m.user_a, m.user_b].sort().join(':'))
+    }
   }
 
   // Bulk-load past questions per user so we can avoid repeating them
@@ -250,8 +267,8 @@ export async function POST(request: Request) {
         compareRows: buildComparisonRows(ca, cb),
         userAWorkLabel: getIntakeSingle(ca.intake.responses, 'q_work'),
         userBWorkLabel: getIntakeSingle(cb.intake.responses, 'q_work'),
-        textA: buildUserProfileText(ca.profile, ca.intake.responses),
-        textB: buildUserProfileText(cb.profile, cb.intake.responses),
+        textA: buildUserProfileText(ca.profile, ca.intake.responses, { lastSentiment: latestFeedbackByUser.get(ca.profile.id)?.sentiment ?? null }),
+        textB: buildUserProfileText(cb.profile, cb.intake.responses, { lastSentiment: latestFeedbackByUser.get(cb.profile.id)?.sentiment ?? null }),
       })
     }
   }
