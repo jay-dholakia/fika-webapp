@@ -257,7 +257,7 @@ async function sendIntro(send: OnboardingSendFn): Promise<void> {
   await send("Hey! Welcome to Fika ☕", 'onboarding_intro_1')
   await sleepForSmsPacing(SMS_PACING_MS.quickAck)
   await send(
-    "Fika's pretty simple — we find someone in your city worth grabbing coffee with and make the intro. Real people, real conversation.",
+    "Fika connects you with someone new for coffee — we find the right person, find a time that works for both of you, and pick a cafe nearby.",
     'onboarding_intro_2'
   )
   await sleepForSmsPacing(SMS_PACING_MS.quickAck)
