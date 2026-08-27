@@ -37,7 +37,7 @@ import { pickVenueForMatch } from '@/lib/sms-agent'
 import { findEarliestOverlap, formatProposedTime, windowStartToUtc, getNextWeekdays, extractChosenDates, type TimeWindow } from '@/lib/match/availability'
 import { getActiveMarketSlugs } from '@/lib/admin-markets'
 import { getMarketBySlug } from '@/lib/markets'
-import { sendConcierge, isSendblueConfigured, prepareOutboundAiPresence, markConversationRead } from '@/lib/sendblue'
+import { sendConcierge, isSendblueConfigured, prepareOutboundAiPresence, markConversationRead, sendTypingIndicatorToPeer } from '@/lib/sendblue'
 import { DEFAULT_RADIUS_KM } from '@/lib/intake-radius'
 import { getIntakeSingle } from '@/lib/intake-response-utils'
 import { isOnboardingComplete } from '@/lib/onboarding'
@@ -554,6 +554,7 @@ export async function POST(request: Request) {
       : DEFAULT_APP_BASE
     const openaiKey = process.env.EXPO_PUBLIC_OPENAI_API_KEY || process.env.OPENAI_API_KEY
     try {
+      sendTypingIndicatorToPeer(fromPhone).catch(() => {})
       await handleSmsOnboarding({
         supabase,
         fromPhone,
