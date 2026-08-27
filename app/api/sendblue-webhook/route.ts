@@ -359,6 +359,7 @@ export async function POST(request: Request) {
     context: string,
     opts?: { userId?: string | null; matchId?: string; mediaUrl?: string | null }
   ) {
+    sendTypingIndicatorToPeer(toPhone).catch(() => {})
     const result = await sendConcierge(toPhone, content, opts?.mediaUrl)
     if (!result.ok) {
       console.error('[sendblue-webhook] sendConcierge failed', {
@@ -554,7 +555,6 @@ export async function POST(request: Request) {
       : DEFAULT_APP_BASE
     const openaiKey = process.env.EXPO_PUBLIC_OPENAI_API_KEY || process.env.OPENAI_API_KEY
     try {
-      sendTypingIndicatorToPeer(fromPhone).catch(() => {})
       await handleSmsOnboarding({
         supabase,
         fromPhone,
