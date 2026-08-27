@@ -109,12 +109,21 @@ function AuthCallbackContent() {
     })
 
     async function finishAuth() {
-      const code = searchParams.get('code')
+      // detectSessionInUrl:true may have already auto-exchanged the code.
+      // Check for an existing session first to avoid double-exchanging the
+      // same code (which produces a "pkce code verifier not found" error).
+      const { data: { session: existingSession } } = await client.auth.getSession()
+      if (!mounted) return
+      if (existingSession) {
+        await checkExistingAccountAndRedirect(existingSession)
+        return
+      }
 
+      const code = searchParams.get('code')
       if (code) {
-        // Exchange client-side: PKCE verifier lives in the browser that started
-        // the OAuth flow, so doing this here avoids the server-side exchange
-        // that fails when iOS delivers the callback to a different browser context.
+        // Manual exchange as fallback: handles iOS cases where the OAuth
+        // callback opens in a different browser context from the one that
+        // started the flow (auto-detection would have already run above).
         const { data, error } = await client.auth.exchangeCodeForSession(code)
         if (!mounted) return
         if (error) {
@@ -127,14 +136,8 @@ function AuthCallbackContent() {
         }
       }
 
-      // Fallback: session may already be set (prior exchange or implicit flow)
-      const { data: { session } } = await client.auth.getSession()
-      if (session) {
-        await checkExistingAccountAndRedirect(session)
-        return
-      }
-
-      // Prevent infinite "Signing you in..." spinner if no session arrives.
+      // No code, no session yet — onAuthStateChange will handle it if it arrives.
+      // Set a timeout to avoid an infinite spinner.
       failTimer = setTimeout(() => {
         if (!mounted) return
         setError('Could not complete sign-in. Please try again.')
