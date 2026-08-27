@@ -23,12 +23,7 @@ interface Question {
 const QUESTIONS: Question[] = [
   { step: 1, text: "What's your first name?", type: 'free' },
   { step: 2, text: "When's your birthday? (month, day, and year — e.g. June 12, 1992)", type: 'birthdate' },
-  {
-    step: 3,
-    text: "What gender do you identify as?\n1. Female\n2. Male\n3. Non-binary\n4. Prefer not to say",
-    type: 'choice',
-    choices: ['Female', 'Male', 'Non-binary', 'Prefer not to say'],
-  },
+  { step: 3, text: "What gender do you identify as? (e.g. female, male, non-binary — or skip)", type: 'free' },
   {
     step: 4,
     text: "Do you speak any languages besides English? (e.g. Spanish, Mandarin — or just say 'No')",
@@ -267,7 +262,7 @@ async function sendIntro(send: OnboardingSendFn): Promise<void> {
   )
   await sleepForSmsPacing(SMS_PACING_MS.quickAck)
   await send(
-    "I'm going to ask you 14 quick questions so we can find you a good intro. Ready to start?",
+    "I'll ask you 14 questions — most take 5 seconds. Ready to start?",
     'onboarding_intro_3'
   )
 }
@@ -428,12 +423,8 @@ async function processAnswer(params: {
 
   // ── Q3: Gender ────────────────────────────────────────────────────────────
   if (step === 3) {
-    const idx = parseChoice(text, q.choices!)
-    if (idx === null) {
-      await sendChoiceReAsk(send, q, step, retryCount, payload, supabase, fromPhone)
-      return
-    }
-    await advanceTo(supabase, fromPhone, send, payload, { gender: q.choices![idx] }, 4)
+    const isSkip = /^(skip|prefer not|no|n\/a|-)$/i.test(text)
+    await advanceTo(supabase, fromPhone, send, payload, { gender: isSkip ? undefined : (text || undefined) }, 4)
     return
   }
 
