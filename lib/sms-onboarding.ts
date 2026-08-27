@@ -317,10 +317,23 @@ export async function handleSmsOnboarding(params: {
   const step = payload.onboarding_step ?? 0
   const retryCount = payload.onboarding_retry_count ?? 0
 
-  // Dedup: SendBlue occasionally double-delivers. Drop if we've already processed this handle.
-  if (messageHandle && payload.last_message_handle && payload.last_message_handle === messageHandle) {
-    console.warn('[sms-onboarding] duplicate message_handle, dropping', messageHandle.slice(-8))
-    return
+  // Dedup: atomically claim this handle so concurrent duplicate deliveries can't both proceed.
+  if (messageHandle) {
+    const { data: claimed } = await supabase.rpc('try_claim_onboarding_handle', {
+      p_phone: fromPhone,
+      p_handle: messageHandle,
+    })
+    if (!claimed) {
+      console.warn('[sms-onboarding] duplicate handle, dropping', messageHandle.slice(-8))
+      return
+    }
+  } else {
+    // No handle (delivery/status event): drop if session was touched in the last 4 seconds.
+    const sessionAge = Date.now() - new Date(session.updated_at).getTime()
+    if (sessionAge < 4000) {
+      console.warn('[sms-onboarding] no handle + session updated <4s ago, dropping likely status event')
+      return
+    }
   }
 
   // ── Confirmation gate: step=0 means intro was sent, waiting for user to confirm ──
@@ -370,11 +383,6 @@ async function processAnswer(params: {
   if (!q) return
 
   const text = content.trim()
-
-  // Claim this message handle before any sends to prevent a concurrent duplicate from running
-  if (messageHandle) {
-    await updateSession(supabase, fromPhone, { last_message_handle: messageHandle })
-  }
 
   // ── Q1: First name ────────────────────────────────────────────────────────
   if (step === 1) {
