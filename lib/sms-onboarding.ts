@@ -341,7 +341,7 @@ export async function handleSmsOnboarding(params: {
   // ── Already finished ──────────────────────────────────────────────────────
   if (step >= FINISH_STEP) {
     const finishLink = `${appBase}/finish?token=${session.token}`
-    await send(`Last step — tap here to add a photo and sign in with Google to verify your account: ${finishLink}`, 'onboarding_finish_resend')
+    await send(`Last step — add a photo, a face to put to the intro: ${finishLink}`, 'onboarding_finish_resend')
     return
   }
 
@@ -557,7 +557,7 @@ async function processAnswer(params: {
     await updateSession(supabase, fromPhone, { q_fika_time_pref: timePref, onboarding_step: FINISH_STEP, onboarding_retry_count: 0 })
     const firstName = payload.first_name ? `, ${payload.first_name}` : ''
     await sleepForSmsPacing(SMS_PACING_MS.quickAck)
-    await send(`That's it${firstName}! 🎉 One last step — tap here to add a photo and sign in with Google to verify your account: ${appBase}/finish?token=${session.token}`, 'onboarding_finish')
+    await send(`Last step${firstName} — add a photo, a face to put to the intro: ${appBase}/finish?token=${session.token}`, 'onboarding_finish')
     return
   }
 }
