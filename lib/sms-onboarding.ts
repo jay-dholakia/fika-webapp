@@ -52,11 +52,10 @@ const QUESTIONS: Question[] = [
   { step: 9, text: "What do you do for work? (be as specific as you want)", type: 'free' },
   { step: 10, text: "What are you into outside of work? (hobbies, how you spend your time)", type: 'free' },
   { step: 11, text: "What's been taking up mental space lately? Could be a project, a decision, something you're building or excited about.", type: 'free' },
-  { step: 12, text: "What's something most people are surprised to find out about you?", type: 'free' },
-  { step: 13, text: "What's a topic you could talk about for hours?", type: 'free' },
-  { step: 14, text: "What's something you've been wanting to try or do more of?", type: 'free' },
+  { step: 12, text: "What's a topic you could talk about for hours?", type: 'free' },
+  { step: 13, text: "What's something you've been wanting to try or do more of?", type: 'free' },
   {
-    step: 15,
+    step: 14,
     text: "What are you hoping to get out of Fika? Reply with all that apply:\n1. A coworking buddy\n2. A creative collaborator\n3. Someone in a similar industry\n4. Someone in a similar life stage\n5. Someone to hang out with\n6. Just a good coffee conversation\n\n(e.g. reply 1, 3)",
     type: 'multi_choice',
     choices: [
@@ -69,14 +68,14 @@ const QUESTIONS: Question[] = [
     ],
   },
   {
-    step: 16,
+    step: 15,
     text: "Last one — what times work best for your Fika meetups?\n1. Weekday mornings at 10am\n2. Weekday evenings at 6pm\n3. Both work for me",
     type: 'choice',
     choices: ['Weekday mornings at 10am', 'Weekday evenings at 6pm', 'Both work for me'],
   },
 ]
 
-const TOTAL_STEPS = 16
+const TOTAL_STEPS = 15
 const FINISH_STEP = TOTAL_STEPS + 1
 
 function getQuestion(step: number): Question | null {
@@ -111,7 +110,6 @@ export interface OnboardingPayload {
   q_work?: string
   q_interests_freetext?: string
   q_on_mind?: string
-  q_surprising_fact?: string
   q_talk_forever?: string
   q_want_to_try?: string
   q_social_goal?: string
@@ -264,7 +262,7 @@ async function sendIntro(send: OnboardingSendFn): Promise<void> {
   )
   await sleepForSmsPacing(SMS_PACING_MS.quickAck)
   await send(
-    "I'll ask you 16 questions — most take 5 seconds. Ready to start?",
+    "I'll ask you 15 questions — most take 5 seconds. Ready to start?",
     'onboarding_intro_3'
   )
 }
@@ -532,44 +530,38 @@ async function processAnswer(params: {
     return
   }
 
-  // ── Q12: Something most people are surprised to find out ─────────────────
+  // ── Q12: Topic you could talk about for hours ─────────────────────────────
   if (step === 12) {
-    await advanceTo(supabase, fromPhone, send, payload, { q_surprising_fact: text }, 13)
+    await advanceTo(supabase, fromPhone, send, payload, { q_talk_forever: text }, 13)
     return
   }
 
-  // ── Q13: Topic you could talk about for hours ─────────────────────────────
+  // ── Q13: Something you've been wanting to try ─────────────────────────────
   if (step === 13) {
-    await advanceTo(supabase, fromPhone, send, payload, { q_talk_forever: text }, 14)
+    await advanceTo(supabase, fromPhone, send, payload, { q_want_to_try: text }, 14)
     return
   }
 
-  // ── Q14: Something you've been wanting to try ─────────────────────────────
+  // ── Q14: Social goal (multi-select) ───────────────────────────────────────
   if (step === 14) {
-    await advanceTo(supabase, fromPhone, send, payload, { q_want_to_try: text }, 15)
-    return
-  }
-
-  // ── Q15: Social goal (multi-select) ───────────────────────────────────────
-  if (step === 15) {
     const selected = parseMultiChoice(text, q.choices!)
     if (selected.length === 0) {
       await sendChoiceReAsk(send, q, step, retryCount, payload, supabase, fromPhone)
       return
     }
-    await advanceTo(supabase, fromPhone, send, payload, { q_social_goal: selected.join(', ') }, 16)
+    await advanceTo(supabase, fromPhone, send, payload, { q_social_goal: selected.join(', ') }, 15)
     return
   }
 
-  // ── Q16: Fika time preference ─────────────────────────────────────────────
-  if (step === 16) {
-    const q16 = getQuestion(16)!
-    const idx = parseChoice(text, q16.choices!)
+  // ── Q15: Fika time preference ─────────────────────────────────────────────
+  if (step === 15) {
+    const q15 = getQuestion(15)!
+    const idx = parseChoice(text, q15.choices!)
     if (idx === null) {
-      await sendChoiceReAsk(send, q16, step, retryCount, payload, supabase, fromPhone)
+      await sendChoiceReAsk(send, q15, step, retryCount, payload, supabase, fromPhone)
       return
     }
-    const timePref = q16.choices![idx]
+    const timePref = q15.choices![idx]
     await updateSession(supabase, fromPhone, { q_fika_time_pref: timePref, onboarding_step: FINISH_STEP, onboarding_retry_count: 0 })
     const firstName = payload.first_name ? `, ${payload.first_name}` : ''
     await sleepForSmsPacing(SMS_PACING_MS.quickAck)

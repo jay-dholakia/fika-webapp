@@ -27,6 +27,8 @@ const SMS_QUESTIONS: SmsQuestion[] = [
   { id: 'q_work', label: 'Work', isChoice: false },
   { id: 'q_interests_freetext', label: 'What you\'re into outside work', isChoice: false },
   { id: 'q_on_mind', label: 'What\'s been on your mind', isChoice: false },
+  { id: 'q_talk_forever', label: 'Could talk for hours about', isChoice: false },
+  { id: 'q_want_to_try', label: 'Wants to try or do more of', isChoice: false },
   {
     id: 'q_social_goal',
     label: 'What you want from Fika',

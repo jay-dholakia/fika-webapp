@@ -32,17 +32,23 @@ export function buildUserProfileText(
   if (tenure) locationStr += locationStr ? ` (${tenure} in the city)` : tenure
 
   const relStatus = getIntakeSingle(responses, 'q_relationship_status')
+  const kids = getIntakeSingle(responses, 'q_kids')
   const work = getIntakeSingle(responses, 'q_work')
   const interests = getIntakeSingle(responses, 'q_interests_freetext')
   const onMind = getIntakeSingle(responses, 'q_on_mind')
+  const talkForever = getIntakeSingle(responses, 'q_talk_forever')
+  const wantToTry = getIntakeSingle(responses, 'q_want_to_try')
   const goal = getIntakeSingle(responses, 'q_social_goal')
 
   const headline = `${name}${ageStr}${pronounStr}`
   const lines: string[] = [locationStr ? `${headline} — ${locationStr}.` : `${headline}.`]
   if (relStatus) lines.push(`Life context: ${relStatus}.`)
+  if (kids) lines.push(`Kids: ${kids}.`)
   if (work) lines.push(`Works as: ${work}.`)
   if (interests) lines.push(`Life outside work: ${interests}.`)
   if (onMind) lines.push(`On their mind lately: ${onMind}.`)
+  if (talkForever) lines.push(`Could talk for hours about: ${talkForever}.`)
+  if (wantToTry) lines.push(`Wants to try more of: ${wantToTry}.`)
   if (goal) lines.push(`Looking to get out of Fika: ${goal}.`)
   if (feedbackContext?.lastSentiment === 'negative') lines.push('Note: rated their last Fika poorly — look for a stronger match on interests.')
   if (feedbackContext?.lastSentiment === 'positive') lines.push('Note: enjoyed their last Fika — open and engaged.')

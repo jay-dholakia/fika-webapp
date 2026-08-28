@@ -102,6 +102,8 @@ export async function POST(request: Request) {
     { key: 'q_interests_freetext', question_id: 'q_interests_freetext', question_text: 'Tell me about your life outside of work' },
     { key: 'q_social_goal', question_id: 'q_social_goal', question_text: 'What are you hoping to get out of Fika?' },
     { key: 'q_on_mind', question_id: 'q_on_mind', question_text: "What's been on your mind lately?" },
+    { key: 'q_talk_forever', question_id: 'q_talk_forever', question_text: "What's a topic you could talk about for hours?" },
+    { key: 'q_want_to_try', question_id: 'q_want_to_try', question_text: "What's something you've been wanting to try or do more of?" },
     { key: 'q_fika_time_pref', question_id: 'q_fika_time_pref', question_text: 'What times work best for your Fika meetups?' },
   ]
   const smsResponses: Array<{ question_id: string; question_text: string; answer: unknown; type: string; answered_at: string }> = []
