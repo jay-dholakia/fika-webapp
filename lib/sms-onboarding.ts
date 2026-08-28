@@ -36,29 +36,27 @@ const QUESTIONS: Question[] = [
   },
   {
     step: 6,
-    text: "What neighborhood are you in? (e.g. Silver Lake, West Village, Lincoln Park)",
-    type: 'free',
-  },
-  {
-    step: 7,
     text: "How long have you lived there? (e.g. just moved, 3 years, born and raised)",
     type: 'free',
   },
   {
-    step: 8,
+    step: 7,
     text: "What's your relationship status? (e.g. single, married, it's complicated)",
     type: 'free',
   },
   {
-    step: 9,
+    step: 8,
     text: "Do you have kids? (ages, genders, whatever you'd like — or just say 'No')",
     type: 'free',
   },
-  { step: 10, text: "What do you do for work? (be as specific as you want)", type: 'free' },
-  { step: 11, text: "What are you into outside of work? (hobbies, how you spend your time)", type: 'free' },
-  { step: 12, text: "What's been taking up mental space lately? Could be a project, a decision, something you're building or excited about.", type: 'free' },
+  { step: 9, text: "What do you do for work? (be as specific as you want)", type: 'free' },
+  { step: 10, text: "What are you into outside of work? (hobbies, how you spend your time)", type: 'free' },
+  { step: 11, text: "What's been taking up mental space lately? Could be a project, a decision, something you're building or excited about.", type: 'free' },
+  { step: 12, text: "What's something most people are surprised to find out about you?", type: 'free' },
+  { step: 13, text: "What's a topic you could talk about for hours?", type: 'free' },
+  { step: 14, text: "What's something you've been wanting to try or do more of?", type: 'free' },
   {
-    step: 13,
+    step: 15,
     text: "What are you hoping to get out of Fika? Reply with all that apply:\n1. A coworking buddy\n2. A creative collaborator\n3. Someone in a similar industry\n4. Someone in a similar life stage\n5. Someone to hang out with\n6. Just a good coffee conversation\n\n(e.g. reply 1, 3)",
     type: 'multi_choice',
     choices: [
@@ -71,21 +69,25 @@ const QUESTIONS: Question[] = [
     ],
   },
   {
-    step: 14,
+    step: 16,
     text: "Last one — what times work best for your Fika meetups?\n1. Weekday mornings at 10am\n2. Weekday evenings at 6pm\n3. Both work for me",
     type: 'choice',
     choices: ['Weekday mornings at 10am', 'Weekday evenings at 6pm', 'Both work for me'],
   },
 ]
 
-const TOTAL_STEPS = 14
+const TOTAL_STEPS = 16
 const FINISH_STEP = TOTAL_STEPS + 1
 
 function getQuestion(step: number): Question | null {
   return QUESTIONS.find(q => q.step === step) ?? null
 }
 
-function getQuestionText(step: number, _payload: OnboardingPayload): string {
+function getQuestionText(step: number, payload: OnboardingPayload): string {
+  if (step === 6) {
+    const place = payload.city ?? 'there'
+    return `How long have you lived in ${place}? (e.g. just moved, 3 years, born and raised)`
+  }
   return getQuestion(step)?.text ?? ''
 }
 
@@ -104,13 +106,15 @@ export interface OnboardingPayload {
   lat?: number
   lng?: number
   q_market_tenure?: string
-  q_neighborhood?: string
   q_relationship_status?: string
   q_kids?: string
   q_work?: string
   q_interests_freetext?: string
-  q_social_goal?: string
   q_on_mind?: string
+  q_surprising_fact?: string
+  q_talk_forever?: string
+  q_want_to_try?: string
+  q_social_goal?: string
   q_fika_time_pref?: string
 }
 
@@ -260,7 +264,7 @@ async function sendIntro(send: OnboardingSendFn): Promise<void> {
   )
   await sleepForSmsPacing(SMS_PACING_MS.quickAck)
   await send(
-    "I'll ask you 14 questions — most take 5 seconds. Ready to start?",
+    "I'll ask you 16 questions — most take 5 seconds. Ready to start?",
     'onboarding_intro_3'
   )
 }
@@ -464,33 +468,27 @@ async function processAnswer(params: {
     return
   }
 
-  // ── Q6: Neighborhood ─────────────────────────────────────────────────────
+  // ── Q6: Time in area (city injected dynamically via getQuestionText) ────────
   if (step === 6) {
-    await advanceTo(supabase, fromPhone, send, payload, { q_neighborhood: text }, 7)
+    await advanceTo(supabase, fromPhone, send, payload, { q_market_tenure: text }, 7)
     return
   }
 
-  // ── Q7: Time in area ──────────────────────────────────────────────────────
+  // ── Q7: Relationship status ───────────────────────────────────────────────
   if (step === 7) {
-    await advanceTo(supabase, fromPhone, send, payload, { q_market_tenure: text }, 8)
+    await advanceTo(supabase, fromPhone, send, payload, { q_relationship_status: text }, 8)
     return
   }
 
-  // ── Q8: Relationship status ───────────────────────────────────────────────
+  // ── Q8: Kids ──────────────────────────────────────────────────────────────
   if (step === 8) {
-    await advanceTo(supabase, fromPhone, send, payload, { q_relationship_status: text }, 9)
-    return
-  }
-
-  // ── Q9: Kids ──────────────────────────────────────────────────────────────
-  if (step === 9) {
     const kids = isSkip(text) ? null : text
-    await advanceTo(supabase, fromPhone, send, payload, { q_kids: kids ?? undefined }, 10)
+    await advanceTo(supabase, fromPhone, send, payload, { q_kids: kids ?? undefined }, 9)
     return
   }
 
-  // ── Q10: Work ─────────────────────────────────────────────────────────────
-  if (step === 10) {
+  // ── Q9: Work ──────────────────────────────────────────────────────────────
+  if (step === 9) {
     const ack = openaiKey
       ? await generateContextualAck(
           'You are a friendly SMS concierge for Fika, a social meetup app. The user just told you what they do for work. Write a one-sentence acknowledgment, casual and breezy, like a real person texting. Keep the tone light — never sympathetic, never offer support or help, never say things like "I\'m here for you", "that can be tough", or "let me know if you need anything". Just a quick natural reaction. No em dashes (—). Under 10 words.',
@@ -499,13 +497,13 @@ async function processAnswer(params: {
           openaiKey
         )
       : "Nice!"
-    await send(ack, 'onboarding_q10_ack')
-    await advanceTo(supabase, fromPhone, send, payload, { q_work: text }, 11)
+    await send(ack, 'onboarding_q9_ack')
+    await advanceTo(supabase, fromPhone, send, payload, { q_work: text }, 10)
     return
   }
 
-  // ── Q11: What are you into outside work ──────────────────────────────────
-  if (step === 11) {
+  // ── Q10: What are you into outside work ──────────────────────────────────
+  if (step === 10) {
     const ack = openaiKey
       ? await generateContextualAck(
           'You are a friendly SMS concierge for Fika, a social meetup app. The user just shared what they are into outside of work. Write a one-sentence acknowledgment, casual and breezy, like a real person texting. React to something specific they mentioned. Never sympathetic, never offer support or help. Just a quick natural reaction. No em dashes (—). Under 10 words.',
@@ -514,13 +512,13 @@ async function processAnswer(params: {
           openaiKey
         )
       : 'Love that!'
-    await send(ack, 'onboarding_q11_ack')
-    await advanceTo(supabase, fromPhone, send, payload, { q_interests_freetext: text }, 12)
+    await send(ack, 'onboarding_q10_ack')
+    await advanceTo(supabase, fromPhone, send, payload, { q_interests_freetext: text }, 11)
     return
   }
 
-  // ── Q12: What's on your mind ──────────────────────────────────────────────
-  if (step === 12) {
+  // ── Q11: What's on your mind ──────────────────────────────────────────────
+  if (step === 11) {
     const ack = openaiKey
       ? await generateContextualAck(
           'You are a friendly SMS concierge for Fika, a social meetup app. The user just shared what has been on their mind lately. Write a one-sentence acknowledgment, casual and light, like a real person texting. React naturally — never offer advice, support, or say things like "I\'m here for you" or "that sounds hard". Just a quick genuine reaction. No em dashes (—). Under 10 words.',
@@ -529,31 +527,49 @@ async function processAnswer(params: {
           openaiKey
         )
       : 'Really appreciate you sharing that.'
-    await send(ack, 'onboarding_q12_ack')
-    await advanceTo(supabase, fromPhone, send, payload, { q_on_mind: text }, 13)
+    await send(ack, 'onboarding_q11_ack')
+    await advanceTo(supabase, fromPhone, send, payload, { q_on_mind: text }, 12)
     return
   }
 
-  // ── Q13: Social goal (multi-select) ───────────────────────────────────────
+  // ── Q12: Something most people are surprised to find out ─────────────────
+  if (step === 12) {
+    await advanceTo(supabase, fromPhone, send, payload, { q_surprising_fact: text }, 13)
+    return
+  }
+
+  // ── Q13: Topic you could talk about for hours ─────────────────────────────
   if (step === 13) {
+    await advanceTo(supabase, fromPhone, send, payload, { q_talk_forever: text }, 14)
+    return
+  }
+
+  // ── Q14: Something you've been wanting to try ─────────────────────────────
+  if (step === 14) {
+    await advanceTo(supabase, fromPhone, send, payload, { q_want_to_try: text }, 15)
+    return
+  }
+
+  // ── Q15: Social goal (multi-select) ───────────────────────────────────────
+  if (step === 15) {
     const selected = parseMultiChoice(text, q.choices!)
     if (selected.length === 0) {
       await sendChoiceReAsk(send, q, step, retryCount, payload, supabase, fromPhone)
       return
     }
-    await advanceTo(supabase, fromPhone, send, payload, { q_social_goal: selected.join(', ') }, 14)
+    await advanceTo(supabase, fromPhone, send, payload, { q_social_goal: selected.join(', ') }, 16)
     return
   }
 
-  // ── Q14: Fika time preference ─────────────────────────────────────────────
-  if (step === 14) {
-    const q14 = getQuestion(14)!
-    const idx = parseChoice(text, q14.choices!)
+  // ── Q16: Fika time preference ─────────────────────────────────────────────
+  if (step === 16) {
+    const q16 = getQuestion(16)!
+    const idx = parseChoice(text, q16.choices!)
     if (idx === null) {
-      await sendChoiceReAsk(send, q14, step, retryCount, payload, supabase, fromPhone)
+      await sendChoiceReAsk(send, q16, step, retryCount, payload, supabase, fromPhone)
       return
     }
-    const timePref = q14.choices![idx]
+    const timePref = q16.choices![idx]
     await updateSession(supabase, fromPhone, { q_fika_time_pref: timePref, onboarding_step: FINISH_STEP, onboarding_retry_count: 0 })
     const firstName = payload.first_name ? `, ${payload.first_name}` : ''
     await sleepForSmsPacing(SMS_PACING_MS.quickAck)
