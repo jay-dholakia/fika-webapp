@@ -1,4 +1,5 @@
 /** @type {import('next').NextConfig} */
+// cache-bust: 2026-08-27
 const nextConfig = {
   async redirects() {
     return [
