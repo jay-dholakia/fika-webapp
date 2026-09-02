@@ -23,7 +23,7 @@ interface Question {
 const QUESTIONS: Question[] = [
   { step: 1, text: "What's your first name?", type: 'free' },
   { step: 2, text: "When's your birthday? (month, day, and year — e.g. June 12, 1992)", type: 'birthdate' },
-  { step: 3, text: "What gender do you identify as? (e.g. female, male, non-binary — or skip)", type: 'free' },
+  { step: 3, text: "What gender do you identify as? (e.g. female, male, non-binary)", type: 'free' },
   {
     step: 4,
     text: "Do you speak any languages besides English? (e.g. Spanish, Mandarin — or just say 'No')",
@@ -31,7 +31,7 @@ const QUESTIONS: Question[] = [
   },
   {
     step: 5,
-    text: "What's your zip code? (This helps us match you with people nearby.)",
+    text: "What's your zip code? (This helps us match you with people nearby)",
     type: 'zip',
   },
   {
@@ -51,10 +51,10 @@ const QUESTIONS: Question[] = [
   },
   { step: 9, text: "What do you do for work? (be as specific as you want)", type: 'free' },
   { step: 10, text: "What are you into outside of work? (hobbies, how you spend your time)", type: 'free' },
-  { step: 11, text: "What's been taking up mental space lately? Could be a project, a decision, something you're building or excited about.", type: 'free' },
-  { step: 12, text: "What's something most people are surprised to find out about you?", type: 'free' },
+  { step: 11, text: "What are you most excited about right now?", type: 'free' },
+  { step: 12, text: "What's something on your bucket list?", type: 'free' },
   { step: 13, text: "What's a topic you could talk about for hours?", type: 'free' },
-  { step: 14, text: "What's something you've been wanting to try or do more of?", type: 'free' },
+  { step: 14, text: "What would you do more of if you had extra time?", type: 'free' },
   {
     step: 15,
     text: "What are you hoping to get out of Fika? Reply with all that apply:\n1. A coworking buddy\n2. A creative collaborator\n3. Someone in a similar industry\n4. Someone in a similar life stage\n5. Someone to hang out with\n6. Just a good coffee conversation\n\n(e.g. reply 1, 3)",
