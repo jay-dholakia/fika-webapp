@@ -120,6 +120,22 @@ export interface OnboardingPayload {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+const NAME_BLOCKLIST = new Set([
+  'fuck', 'shit', 'ass', 'asshole', 'bitch', 'cunt', 'dick', 'cock',
+  'pussy', 'bastard', 'slut', 'whore', 'nigga', 'nigger', 'faggot', 'fag',
+  'retard', 'nazi',
+])
+
+function isValidName(name: string): boolean {
+  if (name.replace(/\s/g, '').length < 2) return false
+  if (/^\d+$/.test(name)) return false
+  return !NAME_BLOCKLIST.has(name.toLowerCase())
+}
+
+function isMeaningfulResponse(text: string): boolean {
+  return text.replace(/[^a-zA-Z0-9]/g, '').length >= 2
+}
+
 const RE_ENTRY_TRIGGERS = new Set([
   'hi', 'hey', 'hello', 'yo', 'sup', 'continue', 'ready', 'start', 'back',
   'resume', 'still there', 'still here', 'ok', 'okay', 'yes', 'yep', 'sure',
@@ -383,11 +399,16 @@ async function processAnswer(params: {
 
   // ── Q1: First name ────────────────────────────────────────────────────────
   if (step === 1) {
-    if (!text) {
-      await sendReAsk(send, q, step, retryCount, payload, supabase, fromPhone)
+    const firstName = text.split(/\s+/)[0]
+    if (!isValidName(firstName)) {
+      if (retryCount >= 1) {
+        await advanceTo(supabase, fromPhone, send, payload, {}, 2)
+        return
+      }
+      await send("Hmm, that doesn't quite work — what's your first name?", 'onboarding_q1_name_invalid')
+      await updateSession(supabase, fromPhone, { onboarding_retry_count: 1 })
       return
     }
-    const firstName = text.split(/\s+/)[0]
     const nameAck = openaiKey
       ? await generateContextualAck(
           'You are a friendly SMS concierge for Fika, a social meetup app. The user just told you their first name. Write a warm, natural one-sentence greeting using their name. Sound like a real person texting, not a bot. No em dashes (—). Keep it under 10 words.',
@@ -470,12 +491,20 @@ async function processAnswer(params: {
 
   // ── Q6: Time in area (city injected dynamically via getQuestionText) ────────
   if (step === 6) {
+    if (!isMeaningfulResponse(text)) {
+      await sendReAsk(send, q, step, retryCount, payload, supabase, fromPhone)
+      return
+    }
     await advanceTo(supabase, fromPhone, send, payload, { q_market_tenure: text }, 7)
     return
   }
 
   // ── Q7: Relationship status ───────────────────────────────────────────────
   if (step === 7) {
+    if (!isMeaningfulResponse(text)) {
+      await sendReAsk(send, q, step, retryCount, payload, supabase, fromPhone)
+      return
+    }
     await advanceTo(supabase, fromPhone, send, payload, { q_relationship_status: text }, 8)
     return
   }
@@ -489,6 +518,10 @@ async function processAnswer(params: {
 
   // ── Q9: Work ──────────────────────────────────────────────────────────────
   if (step === 9) {
+    if (!isMeaningfulResponse(text)) {
+      await sendReAsk(send, q, step, retryCount, payload, supabase, fromPhone)
+      return
+    }
     const ack = openaiKey
       ? await generateContextualAck(
           'You are a friendly SMS concierge for Fika, a social meetup app. The user just told you what they do for work. Write a one-sentence acknowledgment, casual and breezy, like a real person texting. Keep the tone light — never sympathetic, never offer support or help, never say things like "I\'m here for you", "that can be tough", or "let me know if you need anything". Just a quick natural reaction. No em dashes (—). Under 10 words.',
@@ -504,6 +537,10 @@ async function processAnswer(params: {
 
   // ── Q10: What are you into outside work ──────────────────────────────────
   if (step === 10) {
+    if (!isMeaningfulResponse(text)) {
+      await sendReAsk(send, q, step, retryCount, payload, supabase, fromPhone)
+      return
+    }
     const ack = openaiKey
       ? await generateContextualAck(
           'You are a friendly SMS concierge for Fika, a social meetup app. The user just shared what they are into outside of work. Write a one-sentence acknowledgment, casual and breezy, like a real person texting. React to something specific they mentioned. Never sympathetic, never offer support or help. Just a quick natural reaction. No em dashes (—). Under 10 words.',
@@ -519,6 +556,10 @@ async function processAnswer(params: {
 
   // ── Q11: What's on your mind ──────────────────────────────────────────────
   if (step === 11) {
+    if (!isMeaningfulResponse(text)) {
+      await sendReAsk(send, q, step, retryCount, payload, supabase, fromPhone)
+      return
+    }
     const ack = openaiKey
       ? await generateContextualAck(
           'You are a friendly SMS concierge for Fika, a social meetup app. The user just shared what has been on their mind lately. Write a one-sentence acknowledgment, casual and light, like a real person texting. React naturally — never offer advice, support, or say things like "I\'m here for you" or "that sounds hard". Just a quick genuine reaction. No em dashes (—). Under 10 words.',
@@ -534,18 +575,30 @@ async function processAnswer(params: {
 
   // ── Q12: Something most people are surprised to find out ─────────────────
   if (step === 12) {
+    if (!isMeaningfulResponse(text)) {
+      await sendReAsk(send, q, step, retryCount, payload, supabase, fromPhone)
+      return
+    }
     await advanceTo(supabase, fromPhone, send, payload, { q_surprising_fact: text }, 13)
     return
   }
 
   // ── Q13: Topic you could talk about for hours ─────────────────────────────
   if (step === 13) {
+    if (!isMeaningfulResponse(text)) {
+      await sendReAsk(send, q, step, retryCount, payload, supabase, fromPhone)
+      return
+    }
     await advanceTo(supabase, fromPhone, send, payload, { q_talk_forever: text }, 14)
     return
   }
 
   // ── Q14: Something you've been wanting to try ─────────────────────────────
   if (step === 14) {
+    if (!isMeaningfulResponse(text)) {
+      await sendReAsk(send, q, step, retryCount, payload, supabase, fromPhone)
+      return
+    }
     await advanceTo(supabase, fromPhone, send, payload, { q_want_to_try: text }, 15)
     return
   }
