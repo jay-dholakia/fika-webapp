@@ -250,7 +250,7 @@ async function parseBirthdate(text: string, openaiKey: string): Promise<string |
           {
             role: 'system',
             content:
-              'Extract the birthdate from the user message. Return ONLY a date in YYYY-MM-DD format. If you cannot determine a valid birthdate, return exactly: null',
+              'Extract the birthdate from the user message. Return ONLY a date in YYYY-MM-DD format. Treat two-digit years as 1900s (e.g. "93" = 1993, "85" = 1985). If you cannot determine a valid birthdate, return exactly: null',
           },
           { role: 'user', content: text },
         ],
