@@ -236,7 +236,36 @@ async function generateContextualAck(
   }
 }
 
+function tryParseDateLocally(text: string): string | null {
+  const t = text.trim()
+  // YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t
+  // M/D/YYYY or M/D/YY or MM/DD/YYYY or MM/DD/YY
+  const slash = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/)
+  if (slash) {
+    const [, m, d, rawY] = slash
+    const y = rawY.length === 2 ? `19${rawY}` : rawY
+    const mm = m.padStart(2, '0')
+    const dd = d.padStart(2, '0')
+    const date = new Date(`${y}-${mm}-${dd}`)
+    if (!isNaN(date.getTime())) return `${y}-${mm}-${dd}`
+  }
+  // M-D-YYYY or MM-DD-YYYY
+  const dash = t.match(/^(\d{1,2})-(\d{1,2})-(\d{2,4})$/)
+  if (dash) {
+    const [, m, d, rawY] = dash
+    const y = rawY.length === 2 ? `19${rawY}` : rawY
+    const mm = m.padStart(2, '0')
+    const dd = d.padStart(2, '0')
+    const date = new Date(`${y}-${mm}-${dd}`)
+    if (!isNaN(date.getTime())) return `${y}-${mm}-${dd}`
+  }
+  return null
+}
+
 async function parseBirthdate(text: string, openaiKey: string): Promise<string | null> {
+  const local = tryParseDateLocally(text)
+  if (local) return local
   try {
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
