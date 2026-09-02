@@ -397,6 +397,15 @@ async function processAnswer(params: {
 
   const text = content.trim()
 
+  // ── Confusion detection: if they're asking a question, re-send the current Q ─
+  const isChoiceStep = q.type === 'choice' || q.type === 'multi_choice'
+  if (!isChoiceStep && text.includes('?')) {
+    await send("Just reply with your answer and we'll keep moving!", `onboarding_q${step}_confusion`)
+    await sleepForSmsPacing(SMS_PACING_MS.quickAck)
+    await send(getQuestionText(step, payload), `onboarding_q${step}_resend`)
+    return
+  }
+
   // ── Q1: First name ────────────────────────────────────────────────────────
   if (step === 1) {
     const firstName = text.split(/\s+/)[0]
@@ -432,7 +441,7 @@ async function processAnswer(params: {
     const parsed = await parseBirthdate(text, openaiKey)
     if (!parsed) {
       if (retryCount >= 1) {
-        // Give up and advance without birthdate
+        await send("No worries, we'll skip that one!", 'onboarding_q2_skip')
         await advanceTo(supabase, fromPhone, send, payload, {}, 3)
         return
       }
@@ -643,7 +652,7 @@ async function sendReAsk(
   fromPhone: string
 ) {
   if (retryCount >= 1) {
-    // Give up and move on
+    await send("No worries, we'll skip that one!", `onboarding_q${step}_skip`)
     await advanceTo(supabase, fromPhone, send, payload, {}, step + 1)
     return
   }
@@ -661,7 +670,7 @@ async function sendChoiceReAsk(
   fromPhone: string
 ) {
   if (retryCount >= 1) {
-    // Skip and advance
+    await send("No worries, we'll skip that one!", `onboarding_q${step}_skip`)
     await advanceTo(supabase, fromPhone, send, payload, {}, step + 1)
     return
   }
