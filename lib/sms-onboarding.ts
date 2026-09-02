@@ -70,7 +70,7 @@ const QUESTIONS: Question[] = [
   },
   {
     step: 16,
-    text: "Last one — what times work best for your Fika meetups?\n1. Weekday mornings at 10am\n2. Weekday evenings at 6pm\n3. Both work for me",
+    text: "Last one — what times typically work best for your Fika meetups?\n1. Weekday mornings at 10am\n2. Weekday evenings at 6pm\n3. Both work for me\n\n(reply 1, 2, or 3)",
     type: 'choice',
     choices: ['Weekday mornings at 10am', 'Weekday evenings at 6pm', 'Both work for me'],
   },
