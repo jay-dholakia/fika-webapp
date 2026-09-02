@@ -280,7 +280,7 @@ async function sendIntro(send: OnboardingSendFn): Promise<void> {
   )
   await sleepForSmsPacing(SMS_PACING_MS.quickAck)
   await send(
-    "I'll ask you 16 questions — most take 5 seconds. Ready to start?",
+    "16 quick questions so we can intro you to someone you'd actually enjoy connecting with — most take 5 seconds. Ready to start?",
     'onboarding_intro_3'
   )
 }
