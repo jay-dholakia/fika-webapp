@@ -57,15 +57,16 @@ const QUESTIONS: Question[] = [
   { step: 14, text: "What would you do more of if you had extra time?", type: 'free' },
   {
     step: 15,
-    text: "What are you hoping to get out of Fika? Reply with all that apply:\n1. A coworking buddy\n2. A creative collaborator\n3. Someone in a similar industry\n4. Someone in a similar life stage\n5. Someone to hang out with\n6. Just a good coffee conversation\n\n(e.g. reply 1, 3)",
+    text: "What are you hoping to get out of Fika? Reply with all that apply:\n1. Just a good coffee conversation\n2. Someone to hang out with\n3. A friend I haven't met yet\n4. Someone in a similar life stage\n5. Someone to explore the city with\n6. A creative collaborator\n7. A coworking buddy\n\n(e.g. reply 1, 3)",
     type: 'multi_choice',
     choices: [
-      'A coworking buddy',
-      'A creative collaborator',
-      'Someone in a similar industry',
-      'Someone in a similar life stage',
-      'Someone to hang out with',
       'Just a good coffee conversation',
+      'Someone to hang out with',
+      "A friend I haven't met yet",
+      'Someone in a similar life stage',
+      'Someone to explore the city with',
+      'A creative collaborator',
+      'A coworking buddy',
     ],
   },
   {
