@@ -491,6 +491,10 @@ async function processAnswer(params: {
 
   // ── Q4: Languages ─────────────────────────────────────────────────────────
   if (step === 4) {
+    if (!isEnglishOnly(text) && !isMeaningfulResponse(text)) {
+      await sendReAsk(send, q, step, retryCount, payload, supabase, fromPhone)
+      return
+    }
     const langs = isEnglishOnly(text) ? null : parseLanguages(text)
     await advanceTo(supabase, fromPhone, send, payload, { languages: langs }, 5)
     return
