@@ -161,6 +161,25 @@ function isEnglishOnly(text: string): boolean {
   return ENGLISH_ONLY_PHRASES.has(text.toLowerCase().trim())
 }
 
+const KNOWN_LANGUAGES = [
+  'spanish', 'mandarin', 'cantonese', 'chinese', 'french', 'german', 'italian',
+  'portuguese', 'japanese', 'korean', 'arabic', 'hindi', 'russian', 'tagalog',
+  'vietnamese', 'thai', 'polish', 'turkish', 'dutch', 'swedish', 'norwegian',
+  'danish', 'finnish', 'greek', 'hebrew', 'persian', 'farsi', 'urdu', 'bengali',
+  'punjabi', 'gujarati', 'tamil', 'telugu', 'kannada', 'malayalam', 'marathi',
+  'swahili', 'amharic', 'somali', 'hausa', 'yoruba', 'igbo', 'zulu', 'afrikaans',
+  'indonesian', 'malay', 'filipino', 'cebuano', 'ilocano', 'czech', 'slovak',
+  'hungarian', 'romanian', 'ukrainian', 'serbian', 'croatian', 'bosnian',
+  'bulgarian', 'slovenian', 'albanian', 'latvian', 'lithuanian', 'estonian',
+  'catalan', 'galician', 'welsh', 'irish', 'gaelic', 'asl', 'bsl', 'sign language',
+  'creole', 'haitian', 'wolof', 'twi', 'yoruba', 'tigrinya', 'oromo',
+]
+
+function looksLikeLanguageResponse(text: string): boolean {
+  const lower = text.toLowerCase()
+  return KNOWN_LANGUAGES.some(lang => lower.includes(lang))
+}
+
 function parseLanguages(text: string): string[] {
   return text
     .split(/[,\/&]|\band\b/i)
@@ -491,7 +510,7 @@ async function processAnswer(params: {
 
   // ── Q4: Languages ─────────────────────────────────────────────────────────
   if (step === 4) {
-    if (!isEnglishOnly(text) && !isMeaningfulResponse(text)) {
+    if (!isEnglishOnly(text) && !looksLikeLanguageResponse(text)) {
       await sendReAsk(send, q, step, retryCount, payload, supabase, fromPhone)
       return
     }
