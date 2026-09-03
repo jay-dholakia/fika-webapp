@@ -41,7 +41,7 @@ export async function GET(request: Request) {
       .limit(500),
     supabase
       .from('onboarding_sessions')
-      .select('id, phone, sms_mode, sms_human_until, updated_at')
+      .select('id, phone, payload, sms_mode, sms_human_until, updated_at')
       .is('merged_into_user_id', null)
       .not('phone', 'is', null)
       .order('updated_at', { ascending: false })
@@ -70,7 +70,7 @@ export async function GET(request: Request) {
     .map((s) => ({
       id: `onboarding:${s.id}`,
       source: 'onboarding' as const,
-      firstName: null,
+      firstName: (s as { payload?: { first_name?: string } }).payload?.first_name ?? null,
       phone: (s as { phone?: string | null }).phone ?? null,
       city: null,
       market: null,

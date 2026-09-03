@@ -161,9 +161,11 @@ export default function AdminSmsControlPage() {
                 {filtered.map((u) => (
                   <tr key={u.id}>
                     <td>
-                      {u.firstName ?? (u.source === 'onboarding'
-                        ? <span style={{ fontSize: 11, padding: '1px 6px', borderRadius: 3, background: '#fff3cd', color: '#856404', border: '1px solid #ffc107', fontWeight: 600 }}>onboarding</span>
-                        : '—')}
+                      {u.firstName
+                        ? <>{u.firstName}{u.source === 'onboarding' && <span style={{ marginLeft: 6, fontSize: 11, padding: '1px 6px', borderRadius: 3, background: '#fff3cd', color: '#856404', border: '1px solid #ffc107', fontWeight: 600 }}>onboarding</span>}</>
+                        : u.source === 'onboarding'
+                          ? <span style={{ fontSize: 11, padding: '1px 6px', borderRadius: 3, background: '#fff3cd', color: '#856404', border: '1px solid #ffc107', fontWeight: 600 }}>onboarding</span>
+                          : '—'}
                     </td>
                     <td>{u.phone ?? '—'}</td>
                     <td>{u.city ?? u.market ?? '—'}</td>
