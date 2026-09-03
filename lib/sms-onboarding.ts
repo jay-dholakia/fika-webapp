@@ -585,12 +585,12 @@ async function processAnswer(params: {
     }
     const ack = openaiKey
       ? await generateContextualAck(
-          'You are a friendly SMS concierge for Fika, a social meetup app. The user just told you what they do for work. Write a one-sentence acknowledgment, casual and breezy, like a real person texting. Keep the tone light — never sympathetic, never offer support or help, never say things like "I\'m here for you", "that can be tough", or "let me know if you need anything". Just a quick natural reaction. No em dashes (—). Under 10 words.',
+          'You are a concierge for Fika, a social meetup app. The user just said what they do for work. Write a one-sentence reaction, like a real person texting — direct, a little personality, no filler. Never sympathetic, never offer help. No hollow affirmations ("Nice!", "That\'s cool!", "Awesome!"). No em dashes (—). Under 10 words.',
           text,
-          "Nice!",
+          'Good to know.',
           openaiKey
         )
-      : "Nice!"
+      : 'Good to know.'
     await send(ack, 'onboarding_q9_ack')
     await advanceTo(supabase, fromPhone, send, payload, { q_work: text }, 10)
     return
@@ -604,12 +604,12 @@ async function processAnswer(params: {
     }
     const ack = openaiKey
       ? await generateContextualAck(
-          'You are a friendly SMS concierge for Fika, a social meetup app. The user just shared what they are into outside of work. Write a one-sentence acknowledgment, casual and breezy, like a real person texting. React to something specific they mentioned. Never sympathetic, never offer support or help. Just a quick natural reaction. No em dashes (—). Under 10 words.',
+          'You are a concierge for Fika, a social meetup app. The user just shared their hobbies and interests. Write a one-sentence reaction, like a real person texting — direct, genuine, a little personality. Pick up on something specific they said. No hollow affirmations ("Love that!", "That\'s awesome!", "So cool!"). No em dashes (—). Under 10 words.',
           text,
-          'Love that!',
+          'Nice — good mix.',
           openaiKey
         )
-      : 'Love that!'
+      : 'Nice — good mix.'
     await send(ack, 'onboarding_q10_ack')
     await advanceTo(supabase, fromPhone, send, payload, { q_interests_freetext: text }, 11)
     return
@@ -623,12 +623,12 @@ async function processAnswer(params: {
     }
     const ack = openaiKey
       ? await generateContextualAck(
-          'You are a friendly SMS concierge for Fika, a social meetup app. The user just shared what has been on their mind lately. Write a one-sentence acknowledgment, casual and light, like a real person texting. React naturally — never offer advice, support, or say things like "I\'m here for you" or "that sounds hard". Just a quick genuine reaction. No em dashes (—). Under 10 words.',
+          'You are a concierge for Fika, a social meetup app. The user just shared what they\'re excited about right now. Write a one-sentence reaction, like a real person texting — direct, genuine, a little personality. Never offer advice or support. No hollow affirmations. No em dashes (—). Under 10 words.',
           text,
-          'That\'s real.',
+          'That\'s a good one.',
           openaiKey
         )
-      : 'Really appreciate you sharing that.'
+      : "That's a good one."
     await send(ack, 'onboarding_q11_ack')
     await advanceTo(supabase, fromPhone, send, payload, { q_on_mind: text }, 12)
     return
