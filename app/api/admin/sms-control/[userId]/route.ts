@@ -48,6 +48,21 @@ export async function PATCH(
     ? (hours == null ? null : new Date(Date.now() + hours * 60 * 60 * 1000).toISOString())
     : null
 
+  // IDs prefixed with "onboarding:" target onboarding_sessions, not profiles
+  const isOnboarding = userId.startsWith('onboarding:')
+  const rawId = isOnboarding ? userId.slice('onboarding:'.length) : userId.trim()
+
+  if (isOnboarding) {
+    const { data, error } = await supabase
+      .from('onboarding_sessions')
+      .update({ sms_mode: mode, sms_human_until: smsHumanUntil, updated_at: new Date().toISOString() })
+      .eq('id', rawId)
+      .select('id, sms_mode, sms_human_until')
+      .single()
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ ok: true, userId, smsMode: data.sms_mode, smsHumanUntil: data.sms_human_until })
+  }
+
   const { data, error } = await supabase
     .from('profiles')
     .update({
@@ -55,7 +70,7 @@ export async function PATCH(
       sms_human_until: smsHumanUntil,
       updated_at: new Date().toISOString(),
     })
-    .eq('id', userId.trim())
+    .eq('id', rawId)
     .select('id, sms_mode, sms_human_until')
     .single()
 

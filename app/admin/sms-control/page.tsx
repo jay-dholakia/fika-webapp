@@ -5,6 +5,7 @@ import { getSupabase } from '@/lib/supabase'
 
 type SmsUser = {
   id: string
+  source?: 'profile' | 'onboarding'
   firstName: string | null
   phone: string | null
   city: string | null
@@ -159,7 +160,11 @@ export default function AdminSmsControlPage() {
               <tbody>
                 {filtered.map((u) => (
                   <tr key={u.id}>
-                    <td>{u.firstName ?? '—'}</td>
+                    <td>
+                      {u.firstName ?? (u.source === 'onboarding'
+                        ? <span style={{ fontSize: 11, padding: '1px 6px', borderRadius: 3, background: '#fff3cd', color: '#856404', border: '1px solid #ffc107', fontWeight: 600 }}>onboarding</span>
+                        : '—')}
+                    </td>
                     <td>{u.phone ?? '—'}</td>
                     <td>{u.city ?? u.market ?? '—'}</td>
                     <td>

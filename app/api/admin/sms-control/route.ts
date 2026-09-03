@@ -32,17 +32,30 @@ export async function GET(request: Request) {
   const isAdmin = await isAdminByUserId(supabase, userId)
   if (!isAdmin) return NextResponse.json({ error: 'Admin role required', code: 'NOT_ADMIN' }, { status: 403 })
 
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('id, first_name, phone, city, market, sms_mode, sms_human_until, updated_at')
-    .not('phone', 'is', null)
-    .order('updated_at', { ascending: false })
-    .limit(500)
+  const [profilesResult, sessionsResult] = await Promise.all([
+    supabase
+      .from('profiles')
+      .select('id, first_name, phone, city, market, sms_mode, sms_human_until, updated_at')
+      .not('phone', 'is', null)
+      .order('updated_at', { ascending: false })
+      .limit(500),
+    supabase
+      .from('onboarding_sessions')
+      .select('id, phone, sms_mode, sms_human_until, updated_at')
+      .is('merged_into_user_id', null)
+      .not('phone', 'is', null)
+      .order('updated_at', { ascending: false })
+      .limit(200),
+  ])
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (profilesResult.error) return NextResponse.json({ error: profilesResult.error.message }, { status: 500 })
 
-  const users = (data ?? []).map((p) => ({
-    id: p.id,
+  // Phone numbers already covered by a profile — don't double-list them
+  const profilePhones = new Set((profilesResult.data ?? []).map((p) => (p as { phone?: string | null }).phone).filter(Boolean))
+
+  const profileUsers = (profilesResult.data ?? []).map((p) => ({
+    id: p.id as string,
+    source: 'profile' as const,
     firstName: (p as { first_name?: string | null }).first_name ?? null,
     phone: (p as { phone?: string | null }).phone ?? null,
     city: (p as { city?: string | null }).city ?? null,
@@ -51,6 +64,24 @@ export async function GET(request: Request) {
     smsHumanUntil: (p as { sms_human_until?: string | null }).sms_human_until ?? null,
     updatedAt: (p as { updated_at?: string | null }).updated_at ?? null,
   }))
+
+  const sessionUsers = (sessionsResult.data ?? [])
+    .filter((s) => !profilePhones.has((s as { phone?: string | null }).phone ?? ''))
+    .map((s) => ({
+      id: `onboarding:${s.id}`,
+      source: 'onboarding' as const,
+      firstName: null,
+      phone: (s as { phone?: string | null }).phone ?? null,
+      city: null,
+      market: null,
+      smsMode: (s as { sms_mode?: string | null }).sms_mode ?? 'auto',
+      smsHumanUntil: (s as { sms_human_until?: string | null }).sms_human_until ?? null,
+      updatedAt: (s as { updated_at?: string | null }).updated_at ?? null,
+    }))
+
+  const users = [...profileUsers, ...sessionUsers].sort((a, b) =>
+    (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '')
+  )
 
   return NextResponse.json({ users })
 }

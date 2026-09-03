@@ -549,6 +549,25 @@ export async function POST(request: Request) {
   })
   if (!userId) {
     // ----- Phone-first: unknown number → conversational SMS onboarding -----
+    // Check if admin has put this onboarding session in human mode first.
+    const { data: onboardingSession } = await supabase
+      .from('onboarding_sessions')
+      .select('sms_mode, sms_human_until')
+      .eq('phone', fromPhone)
+      .is('merged_into_user_id', null)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    const onboardingHumanActive =
+      onboardingSession?.sms_mode === 'human' &&
+      (
+        onboardingSession.sms_human_until == null ||
+        new Date(onboardingSession.sms_human_until).getTime() > Date.now()
+      )
+    if (onboardingHumanActive) {
+      return NextResponse.json({ ok: true, suppressed: 'human_mode_onboarding' })
+    }
+
     const DEFAULT_APP_BASE = 'https://letsfika.vercel.app'
     const appBase = (process.env.APP_CANONICAL_URL ?? '').trim()
       ? process.env.APP_CANONICAL_URL!.trim().replace(/\/$/, '')
