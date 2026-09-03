@@ -250,7 +250,8 @@ async function generateContextualAck(
     if (!res.ok) return fallback
     const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> }
     const result = (data?.choices?.[0]?.message?.content ?? '').trim().replace(/—/g, '-')
-    return result || fallback
+    if (!result || result.includes('?')) return fallback
+    return result
   } catch {
     return fallback
   }
@@ -586,7 +587,7 @@ async function processAnswer(params: {
     }
     const ack = openaiKey
       ? await generateContextualAck(
-          'Someone just texted you what they do for work. Reply like a real friend would — pick up on one specific thing they said and react to it genuinely. Short, natural, no filler. Never say "Nice!", "That\'s cool!", "Awesome!", "Great!" or anything hollow. No em dashes (—). Max 8 words.',
+          'Someone just texted you what they do for work. Reply like a real friend would — pick up on one specific thing they said and react to it genuinely. Short, natural, no filler. Never say "Nice!", "That\'s cool!", "Awesome!", "Great!" or anything hollow. Never ask a question. No question marks. No em dashes (—). Max 8 words.',
           text,
           'Respect.',
           openaiKey
@@ -605,7 +606,7 @@ async function processAnswer(params: {
     }
     const ack = openaiKey
       ? await generateContextualAck(
-          'Someone just texted you their hobbies and interests. Reply like a real friend — pick up on one specific thing they mentioned and react to it naturally. Could be a short observation, a connection, even a little dry humor. Never say "Love that!", "That\'s awesome!", "So cool!" or anything that sounds like a bot. No em dashes (—). Max 8 words.',
+          'Someone just texted you their hobbies and interests. Reply like a real friend — pick up on one specific thing they mentioned and react to it naturally. Could be a short observation, a connection, even a little dry humor. Never say "Love that!", "That\'s awesome!", "So cool!" or anything that sounds like a bot. Never ask a question. No question marks. No em dashes (—). Max 8 words.',
           text,
           'Good mix.',
           openaiKey
@@ -624,7 +625,7 @@ async function processAnswer(params: {
     }
     const ack = openaiKey
       ? await generateContextualAck(
-          'Someone just texted you what they\'re most excited about right now. Reply like a real friend — engage with the actual thing they said, not just acknowledge that they said something. Could be curiosity, a take, even light humor. Never say "That\'s exciting!", "Love that!", "So cool!" or anything hollow. No em dashes (—). Max 8 words.',
+          'Someone just texted you what they\'re most excited about right now. Reply like a real friend — engage with the actual thing they said, not just acknowledge that they said something. Could be curiosity, a take, even light humor. Never say "That\'s exciting!", "Love that!", "So cool!" or anything hollow. Never ask a question. No question marks. No em dashes (—). Max 8 words.',
           text,
           'That tracks.',
           openaiKey
