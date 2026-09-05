@@ -118,13 +118,16 @@ function distanceFitScore(distanceKm: number | null, combinedRadiusKm: number): 
 }
 
 function intakeFieldPresent(responses: unknown, questionId: string): boolean {
-  const multi = ['q_interests', 'q_like_talking_about']
-  if (multi.includes(questionId)) {
-    if (getIntakeMulti(responses, questionId).length > 0) return true
-    // SMS onboarding stores interests as free text under a different key
-    if (questionId === 'q_interests') return getIntakeMulti(responses, 'q_interests_freetext').length > 0
-    return false
+  if (getIntakeMulti(responses, questionId).length > 0) return true
+  // SMS onboarding equivalents for structured fields
+  if (questionId === 'q_interests') {
+    return (
+      (getIntakeSingle(responses, 'q_interests_freetext') ?? '').length > 0 ||
+      (getIntakeSingle(responses, 'q_on_mind') ?? '').length > 0
+    )
   }
+  if (questionId === 'q_like_talking_about') return (getIntakeSingle(responses, 'q_talk_forever') ?? '').length > 0
+  if (questionId === 'q_social_goal') return (getIntakeSingle(responses, 'q_hoping_for') ?? '').length > 0
   const s = getIntakeSingle(responses, questionId)
   return s != null && s.length > 0
 }

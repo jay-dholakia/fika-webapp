@@ -30,16 +30,30 @@ type IntrosData = { active: IntroRow[]; completed: IntroRow[] }
 type SimPair = {
   userAId: string
   userAName: string
+  userAAge: number | null
+  userAPronouns: string | null
+  userAGender: string | null
   userAWorkLabel: string | null
+  userACity: string | null
   userBId: string
   userBName: string
+  userBAge: number | null
+  userBPronouns: string | null
+  userBGender: string | null
   userBWorkLabel: string | null
+  userBCity: string | null
   score: number
   llmReason: string
+  overlapInterests: string[]
+  overlapGreatFika: string[]
+  overlapLikeTalkingAbout?: string[]
+  likeTalkingAboutA: string | null
+  likeTalkingAboutB: string | null
   userALastFeedback: FeedbackInfo
   userBLastFeedback: FeedbackInfo
   projectedVenue: { id: string; name: string; neighborhood: string | null; city: string } | null
   projectedQuestions: { qForA: string; qForB: string } | null
+  introMessages: { messageForA: string; messageForB: string } | null
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -294,8 +308,8 @@ export default function AdminIntrosPage() {
                       <th style={{ width: 52 }}>Score</th>
                       <th>Person A</th>
                       <th>Person B</th>
-                      <th>Why</th>
-                      <th>Questions</th>
+                      <th>Why matched</th>
+                      <th>Intro preview</th>
                       <th>Venue</th>
                       <th>Last feedback</th>
                       <th></th>
@@ -304,23 +318,59 @@ export default function AdminIntrosPage() {
                   <tbody>
                     {simPairs.map((p) => {
                       const key = `${p.userAId}:${p.userBId}`
+                      // Build shared topics sentence from overlapping data
+                      const sharedTopics = [
+                        ...(p.overlapLikeTalkingAbout ?? []),
+                        ...p.overlapInterests,
+                        ...p.overlapGreatFika,
+                      ].filter(Boolean).slice(0, 5)
+                      const sharedLine = sharedTopics.length > 0
+                        ? `You both may enjoy talking about ${sharedTopics.join(', ')}, based on your responses.`
+                        : null
                       return (
                         <tr key={key}>
                           <td style={{ fontWeight: 700, fontSize: 15, textAlign: 'center' }}>{p.score}</td>
-                          <td>
+                          <td style={{ minWidth: 140 }}>
                             <div style={{ fontWeight: 600 }}>{p.userAName}</div>
-                            {p.userAWorkLabel && <div style={{ fontSize: 12, color: '#666' }}>{p.userAWorkLabel}</div>}
+                            <div style={{ fontSize: 12, color: '#666' }}>
+                              {[p.userAAge != null ? `${p.userAAge}` : null, p.userAPronouns ?? p.userAGender].filter(Boolean).join(' · ')}
+                            </div>
+                            {p.userAWorkLabel && <div style={{ fontSize: 12, color: '#888' }}>{p.userAWorkLabel}</div>}
+                            {p.userACity && <div style={{ fontSize: 11, color: '#aaa' }}>{p.userACity}</div>}
                           </td>
-                          <td>
+                          <td style={{ minWidth: 140 }}>
                             <div style={{ fontWeight: 600 }}>{p.userBName}</div>
-                            {p.userBWorkLabel && <div style={{ fontSize: 12, color: '#666' }}>{p.userBWorkLabel}</div>}
+                            <div style={{ fontSize: 12, color: '#666' }}>
+                              {[p.userBAge != null ? `${p.userBAge}` : null, p.userBPronouns ?? p.userBGender].filter(Boolean).join(' · ')}
+                            </div>
+                            {p.userBWorkLabel && <div style={{ fontSize: 12, color: '#888' }}>{p.userBWorkLabel}</div>}
+                            {p.userBCity && <div style={{ fontSize: 11, color: '#aaa' }}>{p.userBCity}</div>}
                           </td>
-                          <td style={{ fontSize: 12, color: '#555', maxWidth: 260 }}>{p.llmReason || '—'}</td>
-                          <td style={{ fontSize: 12, color: '#555', maxWidth: 300 }}>
-                            {p.projectedQuestions ? (
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                                <div><span style={{ fontWeight: 600, color: '#888' }}>For {p.userAName.split(' ')[0]}:</span> {p.projectedQuestions.qForA}</div>
-                                <div><span style={{ fontWeight: 600, color: '#888' }}>For {p.userBName.split(' ')[0]}:</span> {p.projectedQuestions.qForB}</div>
+                          <td style={{ fontSize: 12, color: '#555', maxWidth: 220 }}>{p.llmReason || '—'}</td>
+                          <td style={{ fontSize: 12, maxWidth: 300 }}>
+                            {p.introMessages ? (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                <div>
+                                  <div style={{ fontWeight: 600, color: '#888', fontSize: 11, marginBottom: 2 }}>
+                                    → {p.userAName.split(' ')[0]}
+                                  </div>
+                                  <div style={{ color: '#222', lineHeight: 1.5, fontStyle: 'italic' }}>
+                                    &ldquo;{p.introMessages.messageForA}&rdquo;
+                                  </div>
+                                </div>
+                                <div>
+                                  <div style={{ fontWeight: 600, color: '#888', fontSize: 11, marginBottom: 2 }}>
+                                    → {p.userBName.split(' ')[0]}
+                                  </div>
+                                  <div style={{ color: '#222', lineHeight: 1.5, fontStyle: 'italic' }}>
+                                    &ldquo;{p.introMessages.messageForB}&rdquo;
+                                  </div>
+                                </div>
+                                {sharedLine && (
+                                  <div style={{ fontSize: 11, color: '#888', borderTop: '1px solid #eee', paddingTop: 4 }}>
+                                    {sharedLine}
+                                  </div>
+                                )}
                               </div>
                             ) : (
                               <span style={{ color: '#bbb' }}>—</span>

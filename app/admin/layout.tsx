@@ -8,9 +8,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const isMarkets = pathname === '/admin' || pathname === '/admin/'
-  const isMap = pathname?.startsWith('/admin/map')
+  const isMap = pathname?.startsWith('/admin/map') || pathname?.startsWith('/admin/signups')
   const isIntros = pathname?.startsWith('/admin/intros')
-  const isSignups = pathname?.startsWith('/admin/signups')
+  const isSignups = false
   const isSmsControl = pathname?.startsWith('/admin/sms-control')
   const isVenues = pathname?.startsWith('/admin/venues')
   const isWeeklyEvents = pathname?.startsWith('/admin/weekly-events')
@@ -22,11 +22,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const links = useMemo(() => ([
     { href: '/admin', label: 'Cities', active: isMarkets },
     { href: '/admin/intros', label: '1v1 Intros', active: isIntros },
-    { href: '/admin/signups', label: 'People', active: isSignups },
     { href: '/admin/sms-control', label: 'SMS control', active: isSmsControl },
     { href: '/admin/venues', label: 'Venues', active: isVenues },
     { href: '/admin/weekly-events', label: 'Group Events', active: isWeeklyEvents },
-    { href: '/admin/map', label: 'Geo map', active: isMap },
+    { href: '/admin/map', label: 'People & Map', active: isMap },
     { href: '/app/yourfika', label: 'Back to app', active: false },
   ]), [isMarkets, isMap, isIntros, isSignups, isSmsControl, isVenues, isWeeklyEvents])
 

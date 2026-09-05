@@ -2,9 +2,11 @@
 
 import { Suspense, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { getSupabase } from '@/lib/supabase'
-import { GoogleIcon } from '@/app/app/components/GoogleIcon'
 import { checkProfilePhotoSingleFace } from '@/lib/avatar-face-check'
+
+const CONCIERGE_NUMBER = process.env.NEXT_PUBLIC_SENDBLUE_CONCIERGE_NUMBER?.trim() || '+13102102404'
+
+type Step = 'photo' | 'otp' | 'done'
 
 function FinishContent() {
   const searchParams = useSearchParams()
@@ -16,9 +18,16 @@ function FinishContent() {
   const [faceError, setFaceError] = useState<string | null>(null)
   const [confirmedIntent, setConfirmedIntent] = useState(false)
   const [uploading, setUploading] = useState(false)
-  const [signingIn, setSigningIn] = useState(false)
+  const [step, setStep] = useState<Step>('photo')
+  const [phoneLast4, setPhoneLast4] = useState('')
+  const [otpCode, setOtpCode] = useState('')
+  const [sending, setSending] = useState(false)
+  const [verifying, setVerifying] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [resendCooldown, setResendCooldown] = useState(0)
+  const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+  const otpRef = useRef<HTMLInputElement>(null)
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -44,40 +53,107 @@ function FinishContent() {
     }
   }
 
-  async function handleSignIn() {
-    if (!avatarFile) {
-      setError('Please add a profile photo before continuing.')
-      return
-    }
-    if (!confirmedIntent) {
-      setError('Please confirm the commitments above before continuing.')
-      return
-    }
-    setError(null)
-    setSigningIn(true)
-    try {
-      setUploading(true)
-      const form = new FormData()
-      form.set('file', avatarFile)
-      const res = await fetch(`/api/avatar-upload-sms?token=${encodeURIComponent(token)}&confirm_intent=1`, {
-        method: 'POST',
-        body: form,
+  function startResendCooldown() {
+    setResendCooldown(30)
+    if (cooldownRef.current) clearInterval(cooldownRef.current)
+    cooldownRef.current = setInterval(() => {
+      setResendCooldown((prev) => {
+        if (prev <= 1) {
+          clearInterval(cooldownRef.current!)
+          return 0
+        }
+        return prev - 1
       })
-      setUploading(false)
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error((data as { error?: string }).error ?? 'Photo upload failed.')
-      }
+    }, 1000)
+  }
 
-      const supabase = getSupabase()
-      if (!supabase) throw new Error('App not configured.')
-      const origin = window.location.origin
-      const redirectTo = `${origin}/auth/callback?next=/app/how-it-works&sms_token=${encodeURIComponent(token)}`
-      await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo } })
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong.')
-      setSigningIn(false)
-      setUploading(false)
+  async function uploadPhoto(): Promise<boolean> {
+    if (!avatarFile) return false
+    setUploading(true)
+    const form = new FormData()
+    form.set('file', avatarFile)
+    const res = await fetch(`/api/avatar-upload-sms?token=${encodeURIComponent(token)}&confirm_intent=1`, {
+      method: 'POST',
+      body: form,
+    })
+    setUploading(false)
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      setError((data as { error?: string }).error ?? 'Photo upload failed.')
+      return false
+    }
+    return true
+  }
+
+  async function handleSendCode() {
+    if (!avatarFile) { setError('Please add a profile photo before continuing.'); return }
+    if (!confirmedIntent) { setError('Please confirm the commitments above before continuing.'); return }
+    setError(null)
+    setSending(true)
+    try {
+      const uploaded = await uploadPhoto()
+      if (!uploaded) return
+      const res = await fetch('/api/send-finish-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error((data as { error?: string }).error ?? 'Failed to send code.')
+      setPhoneLast4((data as { phoneLast4?: string }).phoneLast4 ?? '')
+      setStep('otp')
+      startResendCooldown()
+      setTimeout(() => otpRef.current?.focus(), 100)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Something went wrong.')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  async function handleResend() {
+    if (resendCooldown > 0) return
+    setError(null)
+    setSending(true)
+    try {
+      const res = await fetch('/api/send-finish-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error((data as { error?: string }).error ?? 'Failed to resend.')
+      startResendCooldown()
+      setOtpCode('')
+      setTimeout(() => otpRef.current?.focus(), 100)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not resend.')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  async function handleVerify() {
+    if (otpCode.length !== 6) { setError('Enter the 6-digit code from your texts.'); return }
+    setError(null)
+    setVerifying(true)
+    try {
+      const res = await fetch('/api/verify-finish-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, code: otpCode }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error((data as { error?: string }).error ?? 'Verification failed.')
+      const magicLink = (data as { magic_link?: string | null }).magic_link
+      if (magicLink) {
+        window.location.href = magicLink
+      } else {
+        setStep('done')
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Verification failed.')
+      setVerifying(false)
     }
   }
 
@@ -89,7 +165,89 @@ function FinishContent() {
     )
   }
 
-  const busy = faceChecking || uploading || signingIn
+  if (step === 'done') {
+    return (
+      <div style={{ maxWidth: 400, margin: '0 auto', padding: '3rem 1.5rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1.5rem', textAlign: 'center' }}>
+        <span style={{ fontSize: '3rem' }}>☕</span>
+        <h1 style={{ fontSize: '1.5rem', fontWeight: 700, margin: 0 }}>You're in!</h1>
+        <p style={{ color: 'var(--color-textSecondary)', margin: 0, lineHeight: 1.5 }}>
+          Head back to your texts with Fika — we'll be in touch soon.
+        </p>
+        <a
+          href={`sms:${CONCIERGE_NUMBER}`}
+          className="btn btn-primary"
+          style={{ width: '100%', textAlign: 'center', textDecoration: 'none' }}
+        >
+          Open messages
+        </a>
+      </div>
+    )
+  }
+
+  if (step === 'otp') {
+    const busy = sending || verifying
+    return (
+      <div style={{ maxWidth: 400, margin: '0 auto', padding: '2.5rem 1.5rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1.5rem' }}>
+        <h1 style={{ fontSize: '1.5rem', fontWeight: 700, textAlign: 'center', margin: 0 }}>
+          Check your texts 📱
+        </h1>
+        <p style={{ color: 'var(--color-textSecondary)', textAlign: 'center', margin: 0, lineHeight: 1.5 }}>
+          We sent a 6-digit code to the number ending in <strong>…{phoneLast4}</strong>.
+        </p>
+
+        <input
+          ref={otpRef}
+          type="text"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          autoComplete="one-time-code"
+          className="auth-input"
+          placeholder="123456"
+          maxLength={6}
+          value={otpCode}
+          onChange={(e) => { setOtpCode(e.target.value.replace(/\D/g, '')); setError(null) }}
+          onKeyDown={(e) => e.key === 'Enter' && !busy && handleVerify()}
+          disabled={busy}
+          style={{ textAlign: 'center', fontSize: '1.5rem', letterSpacing: '0.3em', width: '100%' }}
+        />
+
+        {error && (
+          <p style={{ color: 'var(--color-error)', fontSize: '0.875rem', textAlign: 'center', margin: 0 }} role="alert">
+            {error}
+          </p>
+        )}
+
+        <button
+          className="btn btn-primary"
+          onClick={handleVerify}
+          disabled={busy || otpCode.length !== 6}
+          style={{ width: '100%' }}
+        >
+          {verifying ? (
+            <><span className="spinner" aria-hidden /> Verifying…</>
+          ) : 'Verify & finish'}
+        </button>
+
+        <button
+          type="button"
+          onClick={handleResend}
+          disabled={busy || resendCooldown > 0}
+          style={{
+            background: 'none',
+            border: 'none',
+            color: resendCooldown > 0 ? 'var(--color-textSecondary)' : 'var(--color-primary)',
+            cursor: busy || resendCooldown > 0 ? 'default' : 'pointer',
+            fontSize: '0.875rem',
+            padding: 0,
+          }}
+        >
+          {resendCooldown > 0 ? `Resend code in ${resendCooldown}s` : sending ? 'Sending…' : 'Resend code'}
+        </button>
+      </div>
+    )
+  }
+
+  const busy = faceChecking || uploading || sending
 
   return (
     <div style={{ maxWidth: 400, margin: '0 auto', padding: '2.5rem 1.5rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1.5rem' }}>
@@ -97,7 +255,7 @@ function FinishContent() {
         One last step ☕
       </h1>
       <p style={{ color: 'var(--color-textSecondary)', textAlign: 'center', margin: 0, lineHeight: 1.5 }}>
-        Add a photo so your match knows who to look for, then sign in with Google to verify your account.
+        Add a photo so your match knows who to look for, then verify with a quick code to your phone.
       </p>
 
       {/* Avatar picker */}
@@ -211,31 +369,22 @@ function FinishContent() {
       )}
 
       <button
-        className="btn-google"
-        onClick={handleSignIn}
+        className="btn btn-primary"
+        onClick={handleSendCode}
         disabled={busy || !avatarFile || !confirmedIntent}
-        style={{ marginTop: '0.5rem' }}
+        style={{ width: '100%', marginTop: '0.5rem' }}
       >
         {uploading ? (
-          <>
-            <span className="spinner spinner-dark" aria-hidden />
-            Uploading photo…
-          </>
-        ) : signingIn ? (
-          <>
-            <span className="spinner spinner-dark" aria-hidden />
-            Signing in…
-          </>
+          <><span className="spinner" aria-hidden /> Uploading photo…</>
+        ) : sending ? (
+          <><span className="spinner" aria-hidden /> Sending code…</>
         ) : (
-          <>
-            <GoogleIcon className="auth-google-icon" />
-            Continue with Google
-          </>
+          'Send verification code'
         )}
       </button>
 
       <p style={{ fontSize: '0.8rem', color: 'var(--color-textSecondary)', textAlign: 'center', margin: 0 }}>
-        We use Google to verify your identity. We won't post anything.
+        We'll text a 6-digit code to the number you signed up with.
       </p>
     </div>
   )

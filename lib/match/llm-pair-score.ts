@@ -1,4 +1,4 @@
-import { getIntakeSingle } from '@/lib/intake-response-utils'
+import { getIntakeMulti, getIntakeSingle } from '@/lib/intake-response-utils'
 
 /**
  * Build a compact narrative profile text from a user's profile fields and SMS intake responses.
@@ -31,24 +31,56 @@ export function buildUserProfileText(
   let locationStr = neighborhood && city ? `${neighborhood}, ${city}` : city
   if (tenure) locationStr += locationStr ? ` (${tenure} in the city)` : tenure
 
-  const relStatus = getIntakeSingle(responses, 'q_relationship_status')
-  const kids = getIntakeSingle(responses, 'q_kids')
   const work = getIntakeSingle(responses, 'q_work')
-  const interests = getIntakeSingle(responses, 'q_interests_freetext')
+
+  // Interests: web onboarding chips (q_interests) + SMS free text (q_interests_freetext, q_on_mind)
+  const interestsChips = getIntakeMulti(responses, 'q_interests')
+  const interestsFreetext = getIntakeSingle(responses, 'q_interests_freetext')
   const onMind = getIntakeSingle(responses, 'q_on_mind')
+
+  // Talking topics: web chips (q_like_talking_about) + SMS free text (q_talk_forever)
+  const talkChips = getIntakeMulti(responses, 'q_like_talking_about')
   const talkForever = getIntakeSingle(responses, 'q_talk_forever')
+
+  // Curiosity: web chips (q_curiosity) + SMS free text (q_want_to_try)
+  const curiosityChips = getIntakeMulti(responses, 'q_curiosity')
   const wantToTry = getIntakeSingle(responses, 'q_want_to_try')
-  const goal = getIntakeSingle(responses, 'q_social_goal')
+
+  // Web-only multi-select fields
+  const greatFika = getIntakeMulti(responses, 'q_what_makes_great_fika')
+  const lifeChapter = getIntakeMulti(responses, 'q_life_chapter')
+  const everydayAnchor = getIntakeMulti(responses, 'q_everyday_anchor')
+
+  // Goal: web uses q_hoping_for; SMS uses q_social_goal
+  const goal = getIntakeSingle(responses, 'q_hoping_for') || getIntakeSingle(responses, 'q_social_goal')
 
   const headline = `${name}${ageStr}${pronounStr}`
   const lines: string[] = [locationStr ? `${headline} — ${locationStr}.` : `${headline}.`]
-  if (relStatus) lines.push(`Life context: ${relStatus}.`)
-  if (kids) lines.push(`Kids: ${kids}.`)
+  if (lifeChapter.length) lines.push(`Life chapter: ${lifeChapter.join(', ')}.`)
+  if (everydayAnchor.length) lines.push(`Day-to-day anchor: ${everydayAnchor.join(', ')}.`)
   if (work) lines.push(`Works as: ${work}.`)
-  if (interests) lines.push(`Life outside work: ${interests}.`)
-  if (onMind) lines.push(`On their mind lately: ${onMind}.`)
-  if (talkForever) lines.push(`Could talk for hours about: ${talkForever}.`)
-  if (wantToTry) lines.push(`Wants to try more of: ${wantToTry}.`)
+
+  // Interests — combine chips and free-text so LLM has the full picture
+  const interestParts: string[] = []
+  if (interestsChips.length) interestParts.push(interestsChips.join(', '))
+  if (interestsFreetext) interestParts.push(interestsFreetext)
+  if (onMind) interestParts.push(onMind)
+  if (interestParts.length) lines.push(`Interests: ${interestParts.join(' | ')}.`)
+
+  // Talking topics — combine chips and free-text
+  const talkParts: string[] = []
+  if (talkChips.length) talkParts.push(talkChips.join(', '))
+  if (talkForever) talkParts.push(talkForever)
+  if (talkParts.length) lines.push(`Enjoys talking about: ${talkParts.join(' | ')}.`)
+
+  if (greatFika.length) lines.push(`What makes a great Fika for them: ${greatFika.join(', ')}.`)
+
+  // Curiosity — combine chips and free-text
+  const curioParts: string[] = []
+  if (curiosityChips.length) curioParts.push(curiosityChips.join(', '))
+  if (wantToTry) curioParts.push(wantToTry)
+  if (curioParts.length) lines.push(`Curious to try: ${curioParts.join(' | ')}.`)
+
   if (goal) lines.push(`Looking to get out of Fika: ${goal}.`)
   if (feedbackContext?.lastSentiment === 'negative') lines.push('Note: rated their last Fika poorly — look for a stronger match on interests.')
   if (feedbackContext?.lastSentiment === 'positive') lines.push('Note: enjoyed their last Fika — open and engaged.')

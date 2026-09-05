@@ -14,7 +14,7 @@ import {
   computeAdminPairPayload,
 } from '@/lib/match/admin-match-pair'
 import { MATCH_SCORING_VERSION, MATCH_SCORING_VERSION_LLM } from '@/lib/match/weights'
-import { buildUserProfileText, generateFikaQuestions, scorePairWithLLM } from '@/lib/match/llm-pair-score'
+import { buildUserProfileText, generateFikaQuestions, generateMatchIntroCopy, scorePairWithLLM } from '@/lib/match/llm-pair-score'
 import { pickVenueFromDatabase } from '@/lib/sms-agent'
 
 /** Admin simulation: config-driven structured matcher (eligibility + feasibility + compatibility). */
@@ -274,7 +274,7 @@ export async function POST(request: Request) {
   }
 
   // Score all eligible pairs in parallel via LLM; fall back to structured score on failure
-  const [llmResults, venueResults, questionResults] = await Promise.all([
+  const [llmResults, venueResults, questionResults, introCopyResults] = await Promise.all([
     Promise.all(
       eligibleIntermediate.map(({ textA, textB, p }) =>
         openaiKey
@@ -297,12 +297,26 @@ export async function POST(request: Request) {
           : Promise.resolve(null)
       )
     ),
+    Promise.all(
+      eligibleIntermediate.map(({ ca, cb, textA, textB }) =>
+        openaiKey
+          ? generateMatchIntroCopy(
+              ca.profile.first_name?.trim() || 'them',
+              textA,
+              cb.profile.first_name?.trim() || 'them',
+              textB,
+              openaiKey,
+            ).catch(() => null)
+          : Promise.resolve(null)
+      )
+    ),
   ])
 
   const pairs = eligibleIntermediate.map(({ ca, cb, p, compareRows, userAWorkLabel, userBWorkLabel }, idx) => {
     const llm = llmResults[idx]
     const venue = venueResults[idx] ?? null
     const projectedQuestions = questionResults[idx] ?? null
+    const introMessages = introCopyResults[idx] ?? null
     return {
       userAId: ca.profile.id,
       userAName: ca.profile.first_name?.trim() || 'Unknown',
@@ -339,6 +353,7 @@ export async function POST(request: Request) {
       userBLastFeedback: latestFeedbackByUser.get(cb.profile.id) ?? null,
       projectedVenue: venue ? { id: venue.id, name: venue.name, neighborhood: venue.neighborhood, city: venue.city } : null,
       projectedQuestions,
+      introMessages,
     }
   })
 

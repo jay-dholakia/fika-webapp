@@ -276,9 +276,39 @@ export function computeAdminPairPayload(
   const overlapLikeTalkingAbout = intakeMulti(ca.intake, 'q_like_talking_about').filter((x) =>
     intakeMulti(cb.intake, 'q_like_talking_about').includes(x)
   )
-  const overlapInterests = intakeMulti(ca.intake, 'q_interests').filter((x) =>
-    intakeMulti(cb.intake, 'q_interests').includes(x)
-  )
+
+  // Interest overlap: exact set match when both have chips; cross-format fuzzy match when one
+  // side used free-text SMS onboarding (q_interests_freetext, q_on_mind) and the other has chips.
+  const aInterestChips = intakeMulti(ca.intake, 'q_interests')
+  const bInterestChips = intakeMulti(cb.intake, 'q_interests')
+  let overlapInterests: string[]
+  if (aInterestChips.length > 0 && bInterestChips.length > 0) {
+    overlapInterests = aInterestChips.filter((x) => bInterestChips.includes(x))
+  } else {
+    // At least one side is SMS free-text — extract keywords and fuzzy-match against chips
+    const extractFreeTextTokens = (intake: AdminMatchIntakeRow): string[] => {
+      const chips = intakeMulti(intake, 'q_interests')
+      if (chips.length > 0) return chips.map((x) => x.toLowerCase())
+      const sources = [
+        getIntakeSingle(intake.responses, 'q_interests_freetext'),
+        getIntakeSingle(intake.responses, 'q_on_mind'),
+      ].filter(Boolean).join(', ')
+      return sources.split(/[,;]/).map((x) => x.trim().toLowerCase()).filter((x) => x.length > 2)
+    }
+    const tokensA = extractFreeTextTokens(ca.intake)
+    const tokensB = extractFreeTextTokens(cb.intake)
+    // A token matches if it appears as a substring in the other side
+    const matched = new Set<string>()
+    for (const ta of tokensA) {
+      for (const tb of tokensB) {
+        if (ta === tb || (ta.length > 4 && tb.includes(ta)) || (tb.length > 4 && ta.includes(tb))) {
+          matched.add(ta.length >= tb.length ? ta : tb)
+        }
+      }
+    }
+    overlapInterests = Array.from(matched).slice(0, 5)
+  }
+
   const overlapCuriosity = intakeMulti(ca.intake, 'q_curiosity').filter((x) =>
     intakeMulti(cb.intake, 'q_curiosity').includes(x)
   )
