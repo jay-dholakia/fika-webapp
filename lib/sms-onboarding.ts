@@ -425,7 +425,7 @@ async function finishOnboarding(
 ): Promise<void> {
   await updateSession(supabase, fromPhone, { ...patch, onboarding_step: FINISH_STEP, onboarding_retry_count: 0 })
   const firstName = payload.first_name ? `, ${payload.first_name}` : ''
-  const finishMsg = `That's everything${firstName} ✨ Last step — add a photo and confirm your account: ${appBase}/finish?token=${session.token}`
+  const finishMsg = `That's everything${firstName} — add a photo here to finish up: ${appBase}/finish?token=${session.token}`
   await sleepForSmsPacing(SMS_PACING_MS.beat)
   await prepareOutboundAiPresence(fromPhone)
   await sleepForSmsPacing(typingDurationMs(finishMsg))
