@@ -13,6 +13,7 @@ import { isSensitiveWorkIntakeLabel, normalizeWorkIntakeLabel } from '@/lib/work
 export const SMS_STATES = {
   GLOBAL_READY: 'global_ready',
   PENDING_CALL: 'pending_call',
+  CALL_SCHEDULED: 'call_scheduled',
   // Social flow (global rows, match_id IS NULL)
   SOCIAL_INVITED: 'social_invited',
   SOCIAL_RSVP_ACCEPTED: 'social_rsvp_accepted',

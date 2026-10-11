@@ -1461,9 +1461,9 @@ export async function POST(request: Request) {
 
   const appBase = getAppBase()
 
-  // pending_call: Jay handles replies manually — no bot response
-  if (!matchId && state === SMS_STATES.PENDING_CALL) {
-    console.log('[sendblue-webhook] pending_call state — no auto-reply, Jay handles manually', { userId })
+  // pending_call / call_scheduled: Jay handles replies manually — no bot response
+  if (!matchId && (state === SMS_STATES.PENDING_CALL || state === SMS_STATES.CALL_SCHEDULED)) {
+    console.log('[sendblue-webhook] manual state — no auto-reply, Jay handles manually', { userId, state })
     return NextResponse.json({ ok: true })
   }
 
