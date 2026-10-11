@@ -14,7 +14,6 @@ function normalizePhone(raw: string): string {
 export async function POST(request: Request) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()
-  const appBase = (process.env.APP_CANONICAL_URL ?? '').trim().replace(/\/$/, '') || 'https://letsfika.vercel.app'
   if (!supabaseUrl || !serviceKey) return NextResponse.json({ error: 'Not configured' }, { status: 500 })
 
   const body = await request.json().catch(() => ({}))
@@ -56,7 +55,6 @@ export async function POST(request: Request) {
   const derivedEmail = `${crypto.randomUUID()}@phone.letsfika.app`
 
   let userId: string
-  let userEmail: string = derivedEmail
 
   const { data: created, error: createErr } = await supabase.auth.admin.createUser({
     phone,
@@ -78,9 +76,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Could not create account. Please try again.' }, { status: 500 })
     }
     userId = profile.id
-    // Get their actual email from auth.users so magic link works
-    const { data: { user: existingUser } } = await supabase.auth.admin.getUserById(userId)
-    userEmail = existingUser?.email ?? derivedEmail
   }
 
   const openaiKey = process.env.EXPO_PUBLIC_OPENAI_API_KEY || process.env.OPENAI_API_KEY
@@ -89,18 +84,5 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: mergeResult.error }, { status: 500 })
   }
 
-  const { data: linkData, error: linkErr } = await supabase.auth.admin.generateLink({
-    type: 'magiclink',
-    email: userEmail,
-    options: {
-      redirectTo: `${appBase}/auth/callback?next=${encodeURIComponent('/app/how-it-works')}`,
-    },
-  })
-
-  if (linkErr || !linkData?.properties?.action_link) {
-    // Merge succeeded — fall back gracefully with no redirect
-    return NextResponse.json({ ok: true, magic_link: null })
-  }
-
-  return NextResponse.json({ ok: true, magic_link: linkData.properties.action_link })
+  return NextResponse.json({ ok: true })
 }

@@ -12,6 +12,7 @@ type SignupRow = {
   city: string | null
   market: string | null
   createdAt: string | null
+  callCompletedAt: string | null
 }
 type ProfileDetail = {
   id: string
@@ -28,6 +29,7 @@ type ProfileDetail = {
   avatarUrl: string | null
   intentConfirmedAt: string | null
   lastFikaAt: string | null
+  callCompletedAt: string | null
   createdAt: string | null
   updatedAt: string | null
 }
@@ -36,6 +38,21 @@ type IntakeDetail = {
   availabilityTimes: string[] | null
   completedAt: string | null
 }
+const SOCIAL_GOAL_OPTIONS = [
+  'Just a great coffee conversation',
+  'Someone to hang out with',
+  "A friend I haven't met yet",
+  'Someone in a similar life stage',
+  'Someone to explore the city with',
+  'A creative or career collaborator',
+]
+
+const TIME_PREF_OPTIONS = [
+  { value: 'weekday_mornings', label: 'Weekday mornings' },
+  { value: 'weekday_evenings', label: 'Weekday evenings' },
+  { value: 'both', label: 'Both' },
+]
+
 function formatDate(iso: string | null): string {
   if (!iso) return '—'
   try {
@@ -56,6 +73,11 @@ export default function AdminSignupsPage() {
   const [modalProfile, setModalProfile] = useState<ProfileDetail | null>(null)
   const [modalIntake, setModalIntake] = useState<IntakeDetail | null>(null)
   const [modalLoading, setModalLoading] = useState(false)
+  const [chatAboutMe, setChatAboutMe] = useState('')
+  const [chatTimePref, setChatTimePref] = useState('')
+  const [chatSocialGoal, setChatSocialGoal] = useState<string[]>([])
+  const [chatSaving, setChatSaving] = useState(false)
+  const [chatSaved, setChatSaved] = useState(false)
   const fetchSignups = useCallback(async (market?: string) => {
     const supabase = getSupabase()
     const { data: { session } } = await supabase?.auth.getSession() ?? { data: { session: null } }
@@ -121,6 +143,12 @@ export default function AdminSignupsPage() {
       if (!res.ok) throw new Error(data?.error ?? 'Failed to load')
       setModalProfile(data.profile ?? null)
       setModalIntake(data.intake ?? null)
+      const responses: IntakeResponseItem[] = data.intake?.responses ?? []
+      const findAnswer = (id: string) => responses.find((r) => r.question_id === id)?.answer
+      setChatAboutMe((findAnswer('q_about_me') as string) ?? '')
+      setChatTimePref((findAnswer('q_fika_time_pref') as string) ?? '')
+      setChatSocialGoal((findAnswer('q_social_goal') as string[]) ?? [])
+      setChatSaved(false)
     } catch (e) {
       setModalProfile(null)
       setModalIntake(null)
@@ -134,6 +162,46 @@ export default function AdminSignupsPage() {
     setModalUserId(null)
     setModalProfile(null)
     setModalIntake(null)
+    setChatAboutMe('')
+    setChatTimePref('')
+    setChatSocialGoal([])
+    setChatSaved(false)
+  }
+
+  async function saveChatNotes(markComplete: boolean) {
+    if (!modalUserId) return
+    setChatSaving(true)
+    setChatSaved(false)
+    const supabase = getSupabase()
+    const { data: { session } } = await supabase?.auth.getSession() ?? { data: { session: null } }
+    const headers: HeadersInit = { 'Content-Type': 'application/json' }
+    if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`
+    try {
+      const body: Record<string, unknown> = {
+        q_about_me: chatAboutMe,
+        q_social_goal: chatSocialGoal,
+        q_fika_time_pref: chatTimePref,
+      }
+      if (markComplete) body.mark_call_complete = true
+      const res = await fetch(`/api/admin/signups/${encodeURIComponent(modalUserId)}`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers,
+        body: JSON.stringify(body),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data?.error ?? 'Save failed')
+      setChatSaved(true)
+      if (markComplete) {
+        const now = new Date().toISOString()
+        setModalProfile((p) => p ? { ...p, callCompletedAt: now } : p)
+        setSignups((list) => list.map((s) => s.id === modalUserId ? { ...s, callCompletedAt: now } : s))
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Save failed')
+    } finally {
+      setChatSaving(false)
+    }
   }
 
   if (loading) {
@@ -207,6 +275,7 @@ export default function AdminSignupsPage() {
                     <th>Date</th>
                     <th>Name</th>
                     <th>Location</th>
+                    <th>Chat</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -227,6 +296,17 @@ export default function AdminSignupsPage() {
                       <td>{formatDate(s.createdAt)}</td>
                       <td>{s.firstName ?? '—'}</td>
                       <td>{s.city ?? s.market ?? '—'}</td>
+                      <td>
+                        {s.callCompletedAt ? (
+                          <span style={{ background: '#dcfce7', color: '#166534', borderRadius: 6, padding: '2px 8px', fontSize: '0.75rem', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                            Chat done
+                          </span>
+                        ) : (
+                          <span style={{ background: '#fef3c7', color: '#92400e', borderRadius: 6, padding: '2px 8px', fontSize: '0.75rem', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                            Pending chat
+                          </span>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -341,6 +421,104 @@ export default function AdminSignupsPage() {
                       )}
                     </section>
                   )}
+
+                  {/* Chat notes form */}
+                  <section className="admin-modal-section">
+                    <h3 className="admin-modal-section-title">Chat notes</h3>
+                    {modalProfile?.callCompletedAt ? (
+                      <p style={{ fontSize: '0.82rem', color: '#166534', background: '#dcfce7', borderRadius: 6, padding: '4px 10px', display: 'inline-block', marginBottom: 12 }}>
+                        Chat complete · {formatDate(modalProfile.callCompletedAt)}
+                      </p>
+                    ) : (
+                      <p style={{ fontSize: '0.82rem', color: '#92400e', background: '#fef3c7', borderRadius: 6, padding: '4px 10px', display: 'inline-block', marginBottom: 12 }}>
+                        Pending chat
+                      </p>
+                    )}
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                      <div>
+                        <label style={{ fontWeight: 600, fontSize: '0.85rem', display: 'block', marginBottom: 6 }}>
+                          About them (notes from call)
+                        </label>
+                        <textarea
+                          value={chatAboutMe}
+                          onChange={(e) => setChatAboutMe(e.target.value)}
+                          rows={4}
+                          placeholder="Personality, vibe, what they're looking for…"
+                          style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--color-border)', fontSize: '0.875rem', resize: 'vertical', background: 'var(--color-bg-soft)', color: 'var(--color-text)', boxSizing: 'border-box' }}
+                        />
+                      </div>
+
+                      <div>
+                        <label style={{ fontWeight: 600, fontSize: '0.85rem', display: 'block', marginBottom: 6 }}>
+                          Time preference
+                        </label>
+                        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                          {TIME_PREF_OPTIONS.map((opt) => (
+                            <label key={opt.value} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.875rem', cursor: 'pointer' }}>
+                              <input
+                                type="radio"
+                                name="chat-time-pref"
+                                value={opt.value}
+                                checked={chatTimePref === opt.value}
+                                onChange={() => setChatTimePref(opt.value)}
+                                style={{ accentColor: 'var(--color-primary)' }}
+                              />
+                              {opt.label}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <label style={{ fontWeight: 600, fontSize: '0.85rem', display: 'block', marginBottom: 6 }}>
+                          What they&apos;re hoping to get out of Fika
+                        </label>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                          {SOCIAL_GOAL_OPTIONS.map((opt) => (
+                            <label key={opt} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.875rem', cursor: 'pointer' }}>
+                              <input
+                                type="checkbox"
+                                checked={chatSocialGoal.includes(opt)}
+                                onChange={(e) => {
+                                  setChatSocialGoal((prev) =>
+                                    e.target.checked ? [...prev, opt] : prev.filter((v) => v !== opt)
+                                  )
+                                }}
+                                style={{ accentColor: 'var(--color-primary)', width: 15, height: 15, flexShrink: 0 }}
+                              />
+                              {opt}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+
+                      {chatSaved && (
+                        <p style={{ color: '#166534', fontSize: '0.85rem', margin: 0 }}>Saved ✓</p>
+                      )}
+
+                      <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                        <button
+                          type="button"
+                          className="admin-btn admin-btn-secondary"
+                          onClick={() => saveChatNotes(false)}
+                          disabled={chatSaving}
+                        >
+                          {chatSaving ? 'Saving…' : 'Save notes'}
+                        </button>
+                        {!modalProfile?.callCompletedAt && (
+                          <button
+                            type="button"
+                            className="admin-btn admin-btn-primary"
+                            onClick={() => saveChatNotes(true)}
+                            disabled={chatSaving}
+                          >
+                            {chatSaving ? 'Saving…' : 'Mark chat complete + save'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </section>
                 </>
               )}
             </div>

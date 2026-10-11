@@ -255,15 +255,18 @@ serve(async (_req: Request) => {
 
       const eventTimeFormatted = formatEventTimeOnly(eventStartsAt)
 
-      // Extract shared topics from sim overlap data stored in reasons
+      // Prefer AI-generated shared topics; fall back to mechanical overlap arrays
+      const aiSharedTopics = Array.isArray(reasons.aiSharedTopics) ? reasons.aiSharedTopics as string[] : []
       const overlapLikeTalkingAbout = Array.isArray(reasons.overlapLikeTalkingAbout) ? reasons.overlapLikeTalkingAbout as string[] : []
       const overlapInterests = Array.isArray(reasons.overlapInterests) ? reasons.overlapInterests as string[] : []
       const overlapGreatFika = Array.isArray(reasons.overlapGreatFika) ? reasons.overlapGreatFika as string[] : []
-      const sharedTopics = [...overlapLikeTalkingAbout, ...overlapInterests, ...overlapGreatFika]
-        .map((t: unknown) => String(t).trim().toLowerCase())
-        .filter(Boolean)
-        .filter((t, i, arr) => arr.indexOf(t) === i)
-        .slice(0, 5)
+      const sharedTopics = aiSharedTopics.length
+        ? aiSharedTopics.slice(0, 5)
+        : [...overlapLikeTalkingAbout, ...overlapInterests, ...overlapGreatFika]
+            .map((t: unknown) => String(t).trim().toLowerCase())
+            .filter(Boolean)
+            .filter((t, i, arr) => arr.indexOf(t) === i)
+            .slice(0, 5)
 
       const { data: nameProfiles } = await supabase
         .from('profiles').select('id, first_name, phone').in('id', [match.user_a, match.user_b])

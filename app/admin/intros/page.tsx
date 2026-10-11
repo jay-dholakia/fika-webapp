@@ -35,6 +35,7 @@ type SimPair = {
   userAGender: string | null
   userAWorkLabel: string | null
   userACity: string | null
+  userAAvatar: string | null
   userBId: string
   userBName: string
   userBAge: number | null
@@ -42,6 +43,7 @@ type SimPair = {
   userBGender: string | null
   userBWorkLabel: string | null
   userBCity: string | null
+  userBAvatar: string | null
   score: number
   llmReason: string
   overlapInterests: string[]
@@ -54,6 +56,7 @@ type SimPair = {
   projectedVenue: { id: string; name: string; neighborhood: string | null; city: string } | null
   projectedQuestions: { qForA: string; qForB: string } | null
   introMessages: { messageForA: string; messageForB: string } | null
+  aiSharedTopics: string[]
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -120,6 +123,19 @@ function StateChip({ state }: { state: string | null }) {
   )
 }
 
+function AvatarThumb({ url, name, onExpand }: { url: string | null; name: string; onExpand: (url: string) => void }) {
+  if (!url) return null
+  return (
+    <img
+      src={url}
+      alt={name}
+      title={`View ${name}'s photo`}
+      onClick={() => onExpand(url)}
+      style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover', cursor: 'pointer', marginRight: 6, flexShrink: 0, border: '1.5px solid #e5e7eb', verticalAlign: 'middle' }}
+    />
+  )
+}
+
 function SentimentChip({ sentiment }: { sentiment: string | null | undefined }) {
   if (!sentiment) return null
   const map: Record<string, { label: string; color: string; bg: string }> = {
@@ -139,6 +155,7 @@ function SentimentChip({ sentiment }: { sentiment: string | null | undefined }) 
 // ── Main Component ─────────────────────────────────────────────────────────
 
 export default function AdminIntrosPage() {
+  const [tab, setTab] = useState<'sim' | 'active' | 'completed'>('sim')
   const [data, setData] = useState<IntrosData | null>(null)
   const [loadingData, setLoadingData] = useState(true)
   const [dataError, setDataError] = useState<string | null>(null)
@@ -150,6 +167,67 @@ export default function AdminIntrosPage() {
   const [simPairs, setSimPairs] = useState<SimPair[] | null>(null)
   const [simRunning, setSimRunning] = useState(false)
   const [simError, setSimError] = useState<string | null>(null)
+
+  // Manual pair
+  type UserOption = { id: string; first_name: string | null; market: string | null; city: string | null }
+  const [allUsers, setAllUsers] = useState<UserOption[] | null>(null)
+  const [manualQueryA, setManualQueryA] = useState('')
+  const [manualQueryB, setManualQueryB] = useState('')
+  const [manualUserA, setManualUserA] = useState<UserOption | null>(null)
+  const [manualUserB, setManualUserB] = useState<UserOption | null>(null)
+  const [manualDropdownA, setManualDropdownA] = useState(false)
+  const [manualDropdownB, setManualDropdownB] = useState(false)
+  const [manualPair, setManualPair] = useState<SimPair | null>(null)
+  const [manualRunning, setManualRunning] = useState(false)
+  const [manualError, setManualError] = useState<string | null>(null)
+
+  const loadAllUsers = useCallback(async () => {
+    if (allUsers !== null) return
+    const res = await fetch('/api/admin/users', { credentials: 'include', headers: await authHeaders() })
+    if (res.ok) setAllUsers((await res.json()).users ?? [])
+  }, [allUsers])
+
+  const filteredUsers = (query: string) => {
+    if (!allUsers || query.trim().length < 1) return []
+    const q = query.toLowerCase()
+    return allUsers.filter(u => (u.first_name ?? '').toLowerCase().includes(q)).slice(0, 8)
+  }
+
+  async function runManualPair() {
+    if (!manualUserA || !manualUserB) return
+
+    // If this pair already exists in the regular sim results, reuse it — same messages, no extra LLM call
+    const existing = simPairs?.find(p =>
+      (p.userAId === manualUserA.id && p.userBId === manualUserB.id) ||
+      (p.userAId === manualUserB.id && p.userBId === manualUserA.id)
+    )
+    if (existing) {
+      setManualPair(existing)
+      return
+    }
+
+    setManualRunning(true)
+    setManualError(null)
+    setManualPair(null)
+    try {
+      const res = await fetch('/api/admin/match-sim', {
+        method: 'POST',
+        credentials: 'include',
+        headers: await authHeaders(),
+        body: JSON.stringify({ manual_pair: { user_a_id: manualUserA.id, user_b_id: manualUserB.id } }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'Preview failed')
+      setManualPair(json.pairs?.[0] ?? null)
+    } catch (e) {
+      setManualError(e instanceof Error ? e.message : 'Preview failed')
+    } finally {
+      setManualRunning(false)
+    }
+  }
+
+  // Avatar lightbox
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
 
   // Firing
   const [firingKey, setFiringKey] = useState<string | null>(null)
@@ -208,6 +286,8 @@ export default function AdminIntrosPage() {
             user_a: pair.userAId,
             user_b: pair.userBId,
             pregenerated_questions: pair.projectedQuestions ?? undefined,
+            pregenerated_copy: pair.introMessages ?? undefined,
+            ai_shared_topics: pair.aiSharedTopics?.length ? pair.aiSharedTopics : undefined,
           }],
           venue_id: pair.projectedVenue?.id ?? null,
         }),
@@ -227,10 +307,188 @@ export default function AdminIntrosPage() {
     }
   }
 
+  const tabStyle = (t: typeof tab): React.CSSProperties => ({
+    padding: '6px 18px',
+    fontSize: 13,
+    fontWeight: tab === t ? 700 : 500,
+    borderRadius: 99,
+    border: 'none',
+    cursor: 'pointer',
+    background: tab === t ? '#111' : 'transparent',
+    color: tab === t ? '#fff' : '#666',
+    transition: 'all 0.15s',
+  })
+
   return (
     <main className="admin-main">
+      {/* ── Avatar lightbox ── */}
+      {lightboxUrl && (
+        <div
+          onClick={() => setLightboxUrl(null)}
+          style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'zoom-out' }}
+        >
+          <img src={lightboxUrl} alt="Profile photo" style={{ maxWidth: '90vw', maxHeight: '90vh', borderRadius: 12, objectFit: 'contain', boxShadow: '0 8px 40px rgba(0,0,0,0.5)' }} />
+        </div>
+      )}
+
+      {/* ── Tab bar ── */}
+      <div style={{ display: 'flex', gap: 4, marginBottom: '1rem', background: '#f3f4f6', borderRadius: 99, padding: 4, width: 'fit-content' }}>
+        <button style={tabStyle('sim')} onClick={() => setTab('sim')}>Simulator</button>
+        <button style={tabStyle('active')} onClick={() => setTab('active')}>
+          Active Intros{data ? ` (${data.active.length})` : ''}
+        </button>
+        <button style={tabStyle('completed')} onClick={() => setTab('completed')}>
+          Completed{data ? ` (${data.completed.length})` : ''}
+        </button>
+      </div>
+
+      {/* ── Manual Pair ── */}
+      {tab === 'sim' && <div className="admin-card" style={{ marginBottom: '1.25rem' }}>
+        <h2 className="admin-title" style={{ marginBottom: '0.75rem' }}>Manual Intro</h2>
+        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: '0.75rem' }}>
+          {(['A', 'B'] as const).map((side) => {
+            const query = side === 'A' ? manualQueryA : manualQueryB
+            const setQuery = side === 'A' ? setManualQueryA : setManualQueryB
+            const selected = side === 'A' ? manualUserA : manualUserB
+            const setSelected = side === 'A' ? setManualUserA : setManualUserB
+            const open = side === 'A' ? manualDropdownA : manualDropdownB
+            const setOpen = side === 'A' ? setManualDropdownA : setManualDropdownB
+            const results = filteredUsers(query)
+            return (
+              <div key={side} style={{ position: 'relative', flex: '1 1 200px', minWidth: 180 }}>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 13 }}>
+                  <span style={{ fontWeight: 600, color: '#555' }}>Person {side}</span>
+                  <input
+                    className="auth-input"
+                    value={selected ? (selected.first_name ?? '') : query}
+                    placeholder="Search by name…"
+                    style={{ width: '100%' }}
+                    onFocus={() => { loadAllUsers(); setOpen(true); if (selected) { setSelected(null); setQuery('') } }}
+                    onChange={(e) => { setQuery(e.target.value); setSelected(null); setOpen(true) }}
+                    onBlur={() => setTimeout(() => setOpen(false), 150)}
+                  />
+                </label>
+                {open && results.length > 0 && (
+                  <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.1)', marginTop: 2, maxHeight: 240, overflowY: 'auto' }}>
+                    {results.map(u => (
+                      <div
+                        key={u.id}
+                        style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 13, borderBottom: '1px solid #f3f4f6' }}
+                        onMouseDown={() => { setSelected(u); setQuery(''); setOpen(false) }}
+                      >
+                        <div style={{ fontWeight: 600 }}>{u.first_name}</div>
+                        {(u.market || u.city) && <div style={{ fontSize: 11, color: '#888' }}>{u.market ?? u.city?.split(',')[0]}</div>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+          <button
+            className="admin-btn admin-btn-primary"
+            onClick={runManualPair}
+            disabled={!manualUserA || !manualUserB || manualRunning}
+            style={{ alignSelf: 'flex-end' }}
+          >
+            {manualRunning ? 'Previewing…' : 'Preview pair'}
+          </button>
+        </div>
+
+        {manualError && <p className="admin-error admin-error-inline">{manualError}</p>}
+
+        {manualPair && (() => {
+          const p = manualPair
+          const key = `${p.userAId}:${p.userBId}`
+          const topicsLine = p.aiSharedTopics?.length ? p.aiSharedTopics.join(' · ') : null
+          return (
+            <div className="admin-table-wrap">
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: 46 }}>Score</th>
+                    <th>Person A</th>
+                    <th>Person B</th>
+                    <th>Why · topics</th>
+                    <th>Venue</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td style={{ fontWeight: 700, fontSize: 15, textAlign: 'center', verticalAlign: 'top', paddingTop: 10 }}>{p.score}</td>
+                    <td style={{ minWidth: 130, verticalAlign: 'top' }}>
+                      <div style={{ display: 'flex', alignItems: 'center' }}>
+                        <AvatarThumb url={p.userAAvatar} name={p.userAName} onExpand={setLightboxUrl} />
+                        <div style={{ fontWeight: 600 }}>{p.userAName}</div>
+                      </div>
+                      <div style={{ fontSize: 12, color: '#666' }}>{[p.userAAge != null ? `${p.userAAge}` : null, p.userAPronouns ?? p.userAGender].filter(Boolean).join(' · ')}</div>
+                      {p.userAWorkLabel && <div style={{ fontSize: 12, color: '#888' }}>{p.userAWorkLabel}</div>}
+                      {p.userACity && <div style={{ fontSize: 11, color: '#aaa' }}>{p.userACity.split(',')[0]}</div>}
+                      {p.userALastFeedback && <div style={{ marginTop: 3 }}><SentimentChip sentiment={p.userALastFeedback.sentiment} /></div>}
+                    </td>
+                    <td style={{ minWidth: 130, verticalAlign: 'top' }}>
+                      <div style={{ display: 'flex', alignItems: 'center' }}>
+                        <AvatarThumb url={p.userBAvatar} name={p.userBName} onExpand={setLightboxUrl} />
+                        <div style={{ fontWeight: 600 }}>{p.userBName}</div>
+                      </div>
+                      <div style={{ fontSize: 12, color: '#666' }}>{[p.userBAge != null ? `${p.userBAge}` : null, p.userBPronouns ?? p.userBGender].filter(Boolean).join(' · ')}</div>
+                      {p.userBWorkLabel && <div style={{ fontSize: 12, color: '#888' }}>{p.userBWorkLabel}</div>}
+                      {p.userBCity && <div style={{ fontSize: 11, color: '#aaa' }}>{p.userBCity.split(',')[0]}</div>}
+                      {p.userBLastFeedback && <div style={{ marginTop: 3 }}><SentimentChip sentiment={p.userBLastFeedback.sentiment} /></div>}
+                    </td>
+                    <td style={{ maxWidth: 240, verticalAlign: 'top' }}>
+                      {p.llmReason && <div style={{ fontSize: 12, color: '#444', marginBottom: 4 }}>{p.llmReason}</div>}
+                      {topicsLine && <div style={{ fontSize: 11, color: '#888', fontStyle: 'italic' }}>{topicsLine}</div>}
+                      {p.introMessages && (
+                        <details style={{ marginTop: 5 }}>
+                          <summary style={{ fontSize: 11, color: '#2563eb', cursor: 'pointer', userSelect: 'none' }}>Preview messages</summary>
+                          <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                            <div>
+                              <div style={{ fontSize: 11, fontWeight: 600, color: '#888', marginBottom: 2 }}>→ {p.userAName.split(' ')[0]}</div>
+                              <div style={{ fontSize: 12, color: '#222', lineHeight: 1.5, fontStyle: 'italic' }}>&ldquo;{p.introMessages.messageForA}&rdquo;</div>
+                            </div>
+                            <div>
+                              <div style={{ fontSize: 11, fontWeight: 600, color: '#888', marginBottom: 2 }}>→ {p.userBName.split(' ')[0]}</div>
+                              <div style={{ fontSize: 12, color: '#222', lineHeight: 1.5, fontStyle: 'italic' }}>&ldquo;{p.introMessages.messageForB}&rdquo;</div>
+                            </div>
+                          </div>
+                        </details>
+                      )}
+                    </td>
+                    <td style={{ fontSize: 12, whiteSpace: 'nowrap', verticalAlign: 'top' }}>
+                      {p.projectedVenue ? (
+                        <>
+                          <div style={{ fontWeight: 600 }}>{p.projectedVenue.name}</div>
+                          <div style={{ color: '#888' }}>{p.projectedVenue.neighborhood ?? p.projectedVenue.city}</div>
+                        </>
+                      ) : <span style={{ color: '#bbb' }}>TBD</span>}
+                    </td>
+                    <td style={{ verticalAlign: 'top' }}>
+                      <button
+                        className="admin-btn admin-btn-primary"
+                        style={{ fontSize: 12, padding: '4px 12px', whiteSpace: 'nowrap' }}
+                        onClick={() => fireIntro(p)}
+                        disabled={firingKey === key}
+                      >
+                        {firingKey === key ? '…' : 'Fire intro'}
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+              {fireMsg && (
+                <p style={{ fontSize: 13, fontWeight: 600, color: fireMsg.ok ? '#065f46' : '#991b1b', background: fireMsg.ok ? '#d1fae5' : '#fee2e2', padding: '6px 12px', borderRadius: 6, marginTop: '0.5rem' }}>
+                  {fireMsg.text}
+                </p>
+              )}
+            </div>
+          )
+        })()}
+      </div>}
+
       {/* ── Simulator ── */}
-      <div className="admin-card" style={{ marginBottom: '1.25rem' }}>
+      {tab === 'sim' && <div className="admin-card" style={{ marginBottom: '1.25rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: simOpen ? '1rem' : 0 }}>
           <div>
             <h2 className="admin-title" style={{ marginBottom: 2 }}>Match Simulator</h2>
@@ -305,113 +563,91 @@ export default function AdminIntrosPage() {
                 <table className="admin-table">
                   <thead>
                     <tr>
-                      <th style={{ width: 52 }}>Score</th>
+                      <th style={{ width: 46 }}>Score</th>
                       <th>Person A</th>
                       <th>Person B</th>
-                      <th>Why matched</th>
-                      <th>Intro preview</th>
+                      <th>Why · topics</th>
                       <th>Venue</th>
-                      <th>Last feedback</th>
                       <th></th>
                     </tr>
                   </thead>
                   <tbody>
                     {simPairs.map((p) => {
                       const key = `${p.userAId}:${p.userBId}`
-                      // Build shared topics sentence from overlapping data
-                      const sharedTopics = [
-                        ...(p.overlapLikeTalkingAbout ?? []),
-                        ...p.overlapInterests,
-                        ...p.overlapGreatFika,
-                      ].filter(Boolean).slice(0, 5)
-                      const sharedLine = sharedTopics.length > 0
-                        ? `You both may enjoy talking about ${sharedTopics.join(', ')}, based on your responses.`
+                      const topicsLine = p.aiSharedTopics?.length
+                        ? p.aiSharedTopics.join(' · ')
                         : null
                       return (
-                        <tr key={key}>
-                          <td style={{ fontWeight: 700, fontSize: 15, textAlign: 'center' }}>{p.score}</td>
-                          <td style={{ minWidth: 140 }}>
-                            <div style={{ fontWeight: 600 }}>{p.userAName}</div>
-                            <div style={{ fontSize: 12, color: '#666' }}>
-                              {[p.userAAge != null ? `${p.userAAge}` : null, p.userAPronouns ?? p.userAGender].filter(Boolean).join(' · ')}
-                            </div>
-                            {p.userAWorkLabel && <div style={{ fontSize: 12, color: '#888' }}>{p.userAWorkLabel}</div>}
-                            {p.userACity && <div style={{ fontSize: 11, color: '#aaa' }}>{p.userACity}</div>}
-                          </td>
-                          <td style={{ minWidth: 140 }}>
-                            <div style={{ fontWeight: 600 }}>{p.userBName}</div>
-                            <div style={{ fontSize: 12, color: '#666' }}>
-                              {[p.userBAge != null ? `${p.userBAge}` : null, p.userBPronouns ?? p.userBGender].filter(Boolean).join(' · ')}
-                            </div>
-                            {p.userBWorkLabel && <div style={{ fontSize: 12, color: '#888' }}>{p.userBWorkLabel}</div>}
-                            {p.userBCity && <div style={{ fontSize: 11, color: '#aaa' }}>{p.userBCity}</div>}
-                          </td>
-                          <td style={{ fontSize: 12, color: '#555', maxWidth: 220 }}>{p.llmReason || '—'}</td>
-                          <td style={{ fontSize: 12, maxWidth: 300 }}>
-                            {p.introMessages ? (
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                                <div>
-                                  <div style={{ fontWeight: 600, color: '#888', fontSize: 11, marginBottom: 2 }}>
-                                    → {p.userAName.split(' ')[0]}
-                                  </div>
-                                  <div style={{ color: '#222', lineHeight: 1.5, fontStyle: 'italic' }}>
-                                    &ldquo;{p.introMessages.messageForA}&rdquo;
-                                  </div>
-                                </div>
-                                <div>
-                                  <div style={{ fontWeight: 600, color: '#888', fontSize: 11, marginBottom: 2 }}>
-                                    → {p.userBName.split(' ')[0]}
-                                  </div>
-                                  <div style={{ color: '#222', lineHeight: 1.5, fontStyle: 'italic' }}>
-                                    &ldquo;{p.introMessages.messageForB}&rdquo;
-                                  </div>
-                                </div>
-                                {sharedLine && (
-                                  <div style={{ fontSize: 11, color: '#888', borderTop: '1px solid #eee', paddingTop: 4 }}>
-                                    {sharedLine}
-                                  </div>
-                                )}
+                        <>
+                          <tr key={key}>
+                            <td style={{ fontWeight: 700, fontSize: 15, textAlign: 'center', verticalAlign: 'top', paddingTop: 10 }}>{p.score}</td>
+                            <td style={{ minWidth: 130, verticalAlign: 'top' }}>
+                              <div style={{ display: 'flex', alignItems: 'center' }}>
+                                <AvatarThumb url={p.userAAvatar} name={p.userAName} onExpand={setLightboxUrl} />
+                                <div style={{ fontWeight: 600 }}>{p.userAName}</div>
                               </div>
-                            ) : (
-                              <span style={{ color: '#bbb' }}>—</span>
-                            )}
-                          </td>
-                          <td style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
-                            {p.projectedVenue ? (
-                              <>
-                                <div style={{ fontWeight: 600 }}>{p.projectedVenue.name}</div>
-                                <div style={{ color: '#888' }}>{p.projectedVenue.neighborhood ?? p.projectedVenue.city}</div>
-                              </>
-                            ) : (
-                              <span style={{ color: '#bbb' }}>TBD</span>
-                            )}
-                          </td>
-                          <td style={{ fontSize: 12 }}>
-                            {p.userALastFeedback && (
-                              <div style={{ marginBottom: 2 }}>
-                                <SentimentChip sentiment={p.userALastFeedback.sentiment} />
-                                <span style={{ marginLeft: 4, color: '#666' }}>{p.userAName.split(' ')[0]}</span>
+                              <div style={{ fontSize: 12, color: '#666' }}>
+                                {[p.userAAge != null ? `${p.userAAge}` : null, p.userAPronouns ?? p.userAGender].filter(Boolean).join(' · ')}
                               </div>
-                            )}
-                            {p.userBLastFeedback && (
-                              <div>
-                                <SentimentChip sentiment={p.userBLastFeedback.sentiment} />
-                                <span style={{ marginLeft: 4, color: '#666' }}>{p.userBName.split(' ')[0]}</span>
+                              {p.userAWorkLabel && <div style={{ fontSize: 12, color: '#888' }}>{p.userAWorkLabel}</div>}
+                              {p.userACity && <div style={{ fontSize: 11, color: '#aaa' }}>{p.userACity.split(',')[0]}</div>}
+                              {p.userALastFeedback && <div style={{ marginTop: 3 }}><SentimentChip sentiment={p.userALastFeedback.sentiment} /></div>}
+                            </td>
+                            <td style={{ minWidth: 130, verticalAlign: 'top' }}>
+                              <div style={{ display: 'flex', alignItems: 'center' }}>
+                                <AvatarThumb url={p.userBAvatar} name={p.userBName} onExpand={setLightboxUrl} />
+                                <div style={{ fontWeight: 600 }}>{p.userBName}</div>
                               </div>
-                            )}
-                            {!p.userALastFeedback && !p.userBLastFeedback && <span style={{ color: '#bbb' }}>—</span>}
-                          </td>
-                          <td>
-                            <button
-                              className="admin-btn admin-btn-primary"
-                              style={{ fontSize: 12, padding: '4px 12px', whiteSpace: 'nowrap' }}
-                              onClick={() => fireIntro(p)}
-                              disabled={firingKey === key}
-                            >
-                              {firingKey === key ? '…' : 'Fire intro'}
-                            </button>
-                          </td>
-                        </tr>
+                              <div style={{ fontSize: 12, color: '#666' }}>
+                                {[p.userBAge != null ? `${p.userBAge}` : null, p.userBPronouns ?? p.userBGender].filter(Boolean).join(' · ')}
+                              </div>
+                              {p.userBWorkLabel && <div style={{ fontSize: 12, color: '#888' }}>{p.userBWorkLabel}</div>}
+                              {p.userBCity && <div style={{ fontSize: 11, color: '#aaa' }}>{p.userBCity.split(',')[0]}</div>}
+                              {p.userBLastFeedback && <div style={{ marginTop: 3 }}><SentimentChip sentiment={p.userBLastFeedback.sentiment} /></div>}
+                            </td>
+                            <td style={{ maxWidth: 240, verticalAlign: 'top' }}>
+                              {p.llmReason && <div style={{ fontSize: 12, color: '#444', marginBottom: 4 }}>{p.llmReason}</div>}
+                              {topicsLine && (
+                                <div style={{ fontSize: 11, color: '#888', fontStyle: 'italic' }}>{topicsLine}</div>
+                              )}
+                              {p.introMessages && (
+                                <details style={{ marginTop: 5 }}>
+                                  <summary style={{ fontSize: 11, color: '#2563eb', cursor: 'pointer', userSelect: 'none' }}>Preview messages</summary>
+                                  <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                    <div>
+                                      <div style={{ fontSize: 11, fontWeight: 600, color: '#888', marginBottom: 2 }}>→ {p.userAName.split(' ')[0]}</div>
+                                      <div style={{ fontSize: 12, color: '#222', lineHeight: 1.5, fontStyle: 'italic' }}>&ldquo;{p.introMessages.messageForA}&rdquo;</div>
+                                    </div>
+                                    <div>
+                                      <div style={{ fontSize: 11, fontWeight: 600, color: '#888', marginBottom: 2 }}>→ {p.userBName.split(' ')[0]}</div>
+                                      <div style={{ fontSize: 12, color: '#222', lineHeight: 1.5, fontStyle: 'italic' }}>&ldquo;{p.introMessages.messageForB}&rdquo;</div>
+                                    </div>
+                                  </div>
+                                </details>
+                              )}
+                            </td>
+                            <td style={{ fontSize: 12, whiteSpace: 'nowrap', verticalAlign: 'top' }}>
+                              {p.projectedVenue ? (
+                                <>
+                                  <div style={{ fontWeight: 600 }}>{p.projectedVenue.name}</div>
+                                  <div style={{ color: '#888' }}>{p.projectedVenue.neighborhood ?? p.projectedVenue.city}</div>
+                                </>
+                              ) : (
+                                <span style={{ color: '#bbb' }}>TBD</span>
+                              )}
+                            </td>
+                            <td style={{ verticalAlign: 'top' }}>
+                              <button
+                                className="admin-btn admin-btn-primary"
+                                style={{ fontSize: 12, padding: '4px 12px', whiteSpace: 'nowrap' }}
+                                onClick={() => fireIntro(p)}
+                                disabled={firingKey === key}
+                              >
+                                {firingKey === key ? '…' : 'Fire intro'}
+                              </button>
+                            </td>
+                          </tr>
+                        </>
                       )
                     })}
                   </tbody>
@@ -420,10 +656,10 @@ export default function AdminIntrosPage() {
             )}
           </>
         )}
-      </div>
+      </div>}
 
       {/* ── Active Intros ── */}
-      <div className="admin-card" style={{ marginBottom: '1.25rem' }}>
+      {tab === 'active' && <div className="admin-card" style={{ marginBottom: '1.25rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
           <h2 className="admin-title" style={{ marginBottom: 0 }}>
             Active Intros
@@ -488,10 +724,10 @@ export default function AdminIntrosPage() {
             </table>
           </div>
         )}
-      </div>
+      </div>}
 
       {/* ── Completed Fikas ── */}
-      <div className="admin-card">
+      {tab === 'completed' && <div className="admin-card">
         <h2 className="admin-title" style={{ marginBottom: '0.75rem' }}>
           Completed Fikas
           {data && <span style={{ fontSize: 14, fontWeight: 400, color: '#888', marginLeft: 8 }}>({data.completed.length})</span>}
@@ -548,7 +784,7 @@ export default function AdminIntrosPage() {
             </table>
           </div>
         )}
-      </div>
+      </div>}
     </main>
   )
 }

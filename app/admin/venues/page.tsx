@@ -17,13 +17,12 @@ type VenueRow = {
   created_at: string | null
 }
 
-type GooglePlaceSearchRow = {
-  place_id: string
+type ResolvedPlace = {
   name: string
   formatted_address: string
   lat: number
   lng: number
-  business_status: string | null
+  place_id: string
 }
 
 async function getAuthHeaders(): Promise<HeadersInit> {
@@ -55,12 +54,13 @@ export default function AdminVenuesPage() {
   const [submitting, setSubmitting] = useState(false)
   const [geocoding, setGeocoding] = useState(false)
 
-  const [placeSearchQ, setPlaceSearchQ] = useState('')
-  const [googlePlaceResults, setGooglePlaceResults] = useState<GooglePlaceSearchRow[]>([])
-  const [placeSearchLoading, setPlaceSearchLoading] = useState(false)
-  const [placeSearchError, setPlaceSearchError] = useState<string | null>(null)
-  const [placeSearchSuccess, setPlaceSearchSuccess] = useState<string | null>(null)
-  const [importingPlaceId, setImportingPlaceId] = useState<string | null>(null)
+  const [mapsUrl, setMapsUrl] = useState('')
+  const [resolvedPlace, setResolvedPlace] = useState<ResolvedPlace | null>(null)
+  const [resolvedAlreadyExists, setResolvedAlreadyExists] = useState(false)
+  const [urlResolving, setUrlResolving] = useState(false)
+  const [urlImporting, setUrlImporting] = useState(false)
+  const [urlError, setUrlError] = useState<string | null>(null)
+  const [urlSuccess, setUrlSuccess] = useState<string | null>(null)
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 400)
@@ -96,49 +96,49 @@ export default function AdminVenuesPage() {
     void loadVenues()
   }, [loadVenues])
 
-  async function searchGooglePlaces() {
-    setPlaceSearchError(null)
-    setPlaceSearchSuccess(null)
-    const q = placeSearchQ.trim()
-    if (q.length < 2) {
-      setPlaceSearchError('Enter at least 2 characters.')
+  async function resolveMapsUrl(overrideUrl?: string) {
+    setUrlError(null)
+    setUrlSuccess(null)
+    setResolvedPlace(null)
+    const url = (overrideUrl ?? mapsUrl).trim()
+    if (!url) {
+      setUrlError('Paste a Google Maps link first.')
       return
     }
-    setPlaceSearchLoading(true)
+    setUrlResolving(true)
     try {
-      const res = await fetch('/api/admin/venues/google-text-search', {
+      const res = await fetch('/api/admin/venues/resolve-maps-url', {
         method: 'POST',
         credentials: 'include',
         headers: await getAuthHeaders(),
-        body: JSON.stringify({ q }),
+        body: JSON.stringify({ url }),
       })
       const json = await res.json().catch(() => ({}))
       if (res.status === 403 && json?.code === 'NOT_ADMIN') {
         window.location.href = '/login?next=/admin/venues'
         return
       }
-      if (!res.ok) throw new Error(json?.error ?? 'Search failed')
-      const rows = (json.places ?? []) as GooglePlaceSearchRow[]
-      setGooglePlaceResults(rows)
-      if (rows.length === 0) setPlaceSearchSuccess('No results. Try a fuller address or business name.')
+      if (!res.ok) throw new Error(json?.error ?? 'Could not resolve URL')
+      setResolvedPlace(json.place as ResolvedPlace)
+      setResolvedAlreadyExists(!!json.already_exists)
     } catch (e) {
-      setGooglePlaceResults([])
-      setPlaceSearchError(e instanceof Error ? e.message : 'Search failed')
+      setUrlError(e instanceof Error ? e.message : 'Could not resolve URL')
     } finally {
-      setPlaceSearchLoading(false)
+      setUrlResolving(false)
     }
   }
 
-  async function importGooglePlace(placeId: string) {
-    setPlaceSearchError(null)
-    setPlaceSearchSuccess(null)
-    setImportingPlaceId(placeId)
+  async function importResolvedPlace() {
+    if (!resolvedPlace) return
+    setUrlError(null)
+    setUrlSuccess(null)
+    setUrlImporting(true)
     try {
       const res = await fetch('/api/admin/venues/import-google-place', {
         method: 'POST',
         credentials: 'include',
         headers: await getAuthHeaders(),
-        body: JSON.stringify({ place_id: placeId }),
+        body: JSON.stringify({ place_id: resolvedPlace.place_id }),
       })
       const json = await res.json().catch(() => ({}))
       if (res.status === 403 && json?.code === 'NOT_ADMIN') {
@@ -147,12 +147,18 @@ export default function AdminVenuesPage() {
       }
       if (!res.ok) throw new Error(json?.error ?? 'Import failed')
       const v = json.venue as { id?: string; name?: string } | undefined
-      setPlaceSearchSuccess(`Saved: ${v?.name ?? 'venue'} (${v?.id ?? '—'})`)
-      await loadVenues()
+      if (json.already_exists) {
+        setUrlSuccess(`${v?.name ?? 'This venue'} is already in the system.`)
+      } else {
+        setUrlSuccess(`Added: ${v?.name ?? 'venue'}`)
+        setResolvedPlace(null)
+        setMapsUrl('')
+        await loadVenues()
+      }
     } catch (e) {
-      setPlaceSearchError(e instanceof Error ? e.message : 'Import failed')
+      setUrlError(e instanceof Error ? e.message : 'Import failed')
     } finally {
-      setImportingPlaceId(null)
+      setUrlImporting(false)
     }
   }
 
@@ -232,9 +238,7 @@ export default function AdminVenuesPage() {
     <main className="admin-markets-page" style={{ maxWidth: 960, margin: '0 auto', padding: '1.25rem 1rem 3rem' }}>
       <h1 style={{ fontSize: '1.35rem', marginBottom: '0.35rem' }}>Venues</h1>
       <p style={{ color: 'var(--color-textSecondary, #666)', marginBottom: '1.25rem', fontSize: '0.95rem' }}>
-        Search by address or business name; Google Places fills name, address, latitude, longitude, and place id. Enable
-        Places API (New) on your Google Cloud project and set <code>GOOGLE_MAPS_API_KEY</code> (or{' '}
-        <code>NEXT_PUBLIC_GOOGLE_MAPS_API_KEY</code>).
+        Paste a Google Maps business link to auto-fill name, address, lat/lng, and place ID.
       </p>
 
       <section
@@ -245,70 +249,57 @@ export default function AdminVenuesPage() {
           marginBottom: '1.5rem',
         }}
       >
-        <h2 style={{ fontSize: '1.05rem', marginBottom: '0.75rem' }}>Add from Google Places</h2>
+        <h2 style={{ fontSize: '1.05rem', marginBottom: '0.75rem' }}>Add from Google Maps link</h2>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'flex-end', marginBottom: '0.75rem' }}>
-          <label style={{ flex: '1 1 240px', minWidth: 0 }}>
-            <span style={{ display: 'block', fontSize: '0.8rem', marginBottom: 2 }}>Search (address or place name)</span>
+          <label style={{ flex: '1 1 320px', minWidth: 0 }}>
+            <span style={{ display: 'block', fontSize: '0.8rem', marginBottom: 2 }}>Google Maps URL</span>
             <input
-              value={placeSearchQ}
-              onChange={(e) => setPlaceSearchQ(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
+              value={mapsUrl}
+              onChange={(e) => { setMapsUrl(e.target.value); setResolvedPlace(null); setResolvedAlreadyExists(false); setUrlError(null); setUrlSuccess(null) }}
+              onPaste={(e) => {
+                const pasted = e.clipboardData.getData('text').trim()
+                if (pasted) {
                   e.preventDefault()
-                  void searchGooglePlaces()
+                  setMapsUrl(pasted)
+                  setResolvedPlace(null)
+                  setUrlError(null)
+                  setUrlSuccess(null)
+                  setTimeout(() => void resolveMapsUrl(pasted), 0)
                 }
               }}
-              placeholder="e.g. Blue Bottle Venice CA"
+              placeholder="https://maps.app.goo.gl/… or https://www.google.com/maps/place/…"
               style={{ width: '100%' }}
             />
           </label>
-          <button type="button" className="admin-btn admin-btn-primary" disabled={placeSearchLoading} onClick={() => void searchGooglePlaces()}>
-            {placeSearchLoading ? 'Searching…' : 'Search'}
+          <button type="button" className="admin-btn admin-btn-primary" disabled={urlResolving} onClick={() => void resolveMapsUrl()}>
+            {urlResolving ? 'Looking up…' : 'Look up'}
           </button>
         </div>
-        {placeSearchError ? (
-          <p style={{ color: '#b00020', marginBottom: '0.75rem' }} role="alert">
-            {placeSearchError}
-          </p>
+        {urlError ? (
+          <p style={{ color: '#b00020', marginBottom: '0.75rem' }} role="alert">{urlError}</p>
         ) : null}
-        {placeSearchSuccess ? (
-          <p style={{ color: 'var(--color-success, #0a0)', marginBottom: '0.75rem' }}>{placeSearchSuccess}</p>
+        {urlSuccess ? (
+          <p style={{ color: 'var(--color-success, #0a0)', marginBottom: '0.75rem' }}>{urlSuccess}</p>
         ) : null}
-        {googlePlaceResults.length > 0 ? (
-          <div className="admin-table-wrap">
-            <table className="admin-table" style={{ fontSize: '0.85rem' }}>
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Address</th>
-                  <th className="admin-table-num">Lat</th>
-                  <th className="admin-table-num">Lng</th>
-                  <th>Status</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {googlePlaceResults.map((p) => (
-                  <tr key={p.place_id}>
-                    <td>{p.name}</td>
-                    <td style={{ maxWidth: 280 }}>{p.formatted_address}</td>
-                    <td className="admin-table-num">{String(p.lat).slice(0, 9)}</td>
-                    <td className="admin-table-num">{String(p.lng).slice(0, 10)}</td>
-                    <td>{p.business_status ?? '—'}</td>
-                    <td>
-                      <button
-                        type="button"
-                        className="admin-btn admin-btn-primary"
-                        disabled={importingPlaceId !== null}
-                        onClick={() => void importGooglePlace(p.place_id)}
-                      >
-                        {importingPlaceId === p.place_id ? 'Saving…' : 'Add to database'}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        {resolvedPlace ? (
+          <div style={{ background: 'var(--color-surfaceAlt, #f5f5f5)', borderRadius: 6, padding: '0.75rem', marginBottom: '0.75rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
+              <span style={{ fontWeight: 600 }}>{resolvedPlace.name}</span>
+              {resolvedAlreadyExists ? (
+                <span style={{ fontSize: '0.75rem', background: '#d4edda', color: '#155724', borderRadius: 4, padding: '1px 7px', fontWeight: 500 }}>
+                  ✓ Previously added
+                </span>
+              ) : null}
+            </div>
+            <div style={{ fontSize: '0.85rem', color: 'var(--color-textSecondary, #555)', marginBottom: '0.35rem' }}>{resolvedPlace.formatted_address}</div>
+            <div style={{ fontSize: '0.8rem', color: 'var(--color-textSecondary, #888)', marginBottom: '0.65rem' }}>
+              {resolvedPlace.lat.toFixed(6)}, {resolvedPlace.lng.toFixed(6)} · place_id: {resolvedPlace.place_id}
+            </div>
+            {!resolvedAlreadyExists ? (
+              <button type="button" className="admin-btn admin-btn-primary" disabled={urlImporting} onClick={() => void importResolvedPlace()}>
+                {urlImporting ? 'Saving…' : 'Add to database'}
+              </button>
+            ) : null}
           </div>
         ) : null}
       </section>

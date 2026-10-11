@@ -31,6 +31,7 @@ export function buildUserProfileText(
   let locationStr = neighborhood && city ? `${neighborhood}, ${city}` : city
   if (tenure) locationStr += locationStr ? ` (${tenure} in the city)` : tenure
 
+  const aboutMe = getIntakeSingle(responses, 'q_about_me')
   const work = getIntakeSingle(responses, 'q_work')
 
   // Interests: web onboarding chips (q_interests) + SMS free text (q_interests_freetext, q_on_mind)
@@ -42,22 +43,18 @@ export function buildUserProfileText(
   const talkChips = getIntakeMulti(responses, 'q_like_talking_about')
   const talkForever = getIntakeSingle(responses, 'q_talk_forever')
 
-  // Curiosity: web chips (q_curiosity) + SMS free text (q_want_to_try)
-  const curiosityChips = getIntakeMulti(responses, 'q_curiosity')
-  const wantToTry = getIntakeSingle(responses, 'q_want_to_try')
+  const wouldDoMoreOf = getIntakeSingle(responses, 'q_would_do_more_of')
+  const bucketList = getIntakeSingle(responses, 'q_bucket_list')
+  const relationshipStatus = getIntakeSingle(responses, 'q_relationship_status')
 
-  // Web-only multi-select fields
-  const greatFika = getIntakeMulti(responses, 'q_what_makes_great_fika')
-  const lifeChapter = getIntakeMulti(responses, 'q_life_chapter')
-  const everydayAnchor = getIntakeMulti(responses, 'q_everyday_anchor')
-
-  // Goal: web uses q_hoping_for; SMS uses q_social_goal
-  const goal = getIntakeSingle(responses, 'q_hoping_for') || getIntakeSingle(responses, 'q_social_goal')
+  // Goal: SMS uses q_social_goal (multi); web uses q_hoping_for (single)
+  const goalParts = getIntakeMulti(responses, 'q_social_goal')
+  const goal = goalParts.length ? goalParts.join(', ') : getIntakeSingle(responses, 'q_hoping_for')
+  const kids = getIntakeSingle(responses, 'q_kids')
 
   const headline = `${name}${ageStr}${pronounStr}`
   const lines: string[] = [locationStr ? `${headline} — ${locationStr}.` : `${headline}.`]
-  if (lifeChapter.length) lines.push(`Life chapter: ${lifeChapter.join(', ')}.`)
-  if (everydayAnchor.length) lines.push(`Day-to-day anchor: ${everydayAnchor.join(', ')}.`)
+  if (aboutMe) lines.push(`About them: ${aboutMe}`)
   if (work) lines.push(`Works as: ${work}.`)
 
   // Interests — combine chips and free-text so LLM has the full picture
@@ -73,13 +70,10 @@ export function buildUserProfileText(
   if (talkForever) talkParts.push(talkForever)
   if (talkParts.length) lines.push(`Enjoys talking about: ${talkParts.join(' | ')}.`)
 
-  if (greatFika.length) lines.push(`What makes a great Fika for them: ${greatFika.join(', ')}.`)
-
-  // Curiosity — combine chips and free-text
-  const curioParts: string[] = []
-  if (curiosityChips.length) curioParts.push(curiosityChips.join(', '))
-  if (wantToTry) curioParts.push(wantToTry)
-  if (curioParts.length) lines.push(`Curious to try: ${curioParts.join(' | ')}.`)
+  if (wouldDoMoreOf) lines.push(`Would do more of: ${wouldDoMoreOf}.`)
+  if (bucketList) lines.push(`Bucket list: ${bucketList}.`)
+  if (relationshipStatus) lines.push(`Relationship status: ${relationshipStatus}.`)
+  if (kids) lines.push(`Kids: ${kids}.`)
 
   if (goal) lines.push(`Looking to get out of Fika: ${goal}.`)
   if (feedbackContext?.lastSentiment === 'negative') lines.push('Note: rated their last Fika poorly — look for a stronger match on interests.')
@@ -196,12 +190,12 @@ export async function generateMatchIntroCopy(
     headers: { Authorization: `Bearer ${openaiKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: 'gpt-4o-mini',
-      temperature: 0.7,
+      temperature: 0.4,
       response_format: { type: 'json_object' },
       messages: [
         {
           role: 'system',
-          content: `You write friendly, natural intro SMS messages for Fika coffee match introductions. Given two user profiles, write the message ${nameA} receives (introducing them to ${nameB}) and the message ${nameB} receives (introducing them to ${nameA}). Each message: 2–3 sentences, conversational tone, reference something specific and genuine about the other person. End with a simple call to action like "Interested?" or "Up for it?". No em dashes. Return JSON: {"messageForA": string, "messageForB": string}.`,
+          content: `You write factual intro messages for Fika coffee meetups. The recipient already knows the other person's profession from a prior message — do not repeat it, and do not mention their job or field at all. Write the message ${nameA} receives (about ${nameB}) and the message ${nameB} receives (about ${nameA}). Each message is 3–4 sentences. Sentence 1: list 2–3 interests or topics this person is into, using ONLY words from their profile. Format: "[Name] is into [interest], [interest], and [interest]." Do not rephrase, combine, or embellish — if the profile says "photography and hiking", write "photography and hiking", not "capturing landscapes on hikes". Sentences 2–4: add 2–3 specific details from their profile — what they could talk about for hours, what's on their bucket list, what they're excited about right now, or what they'd do more of. Use their actual words and natural contractions (she's, he'd, they've). Prefer "she's been wanting to" over "she is excited about", "she could talk about X for hours" over "she enjoys talking about X". If a detail is not explicitly in the profile, do not write it. FILTER: never mention serious health conditions (cancer, chemo, therapy, hospitalization) or financial hardship. Do NOT mention what they're looking for or what they hope to get out of the meetup. Do not predict what conversations with them will be like. Do not use: "passionate about", "unique perspective", "huge fan", "stunning", "really engaging", "love for", "background in". Each sentence covers one idea only — no "while", "blending", or "as well as". No pleasantries, no em dashes, no call to action. Return JSON: {"messageForA": string, "messageForB": string}.`,
         },
         {
           role: 'user',
@@ -218,5 +212,51 @@ export async function generateMatchIntroCopy(
   return {
     messageForA: typeof parsed.messageForA === 'string' ? parsed.messageForA.trim() : '',
     messageForB: typeof parsed.messageForB === 'string' ? parsed.messageForB.trim() : '',
+  }
+}
+
+/**
+ * Use AI to identify 3–5 specific topics two people would genuinely enjoy talking about,
+ * derived from their full profile context rather than mechanical keyword overlap.
+ * Returns an empty array on failure so callers can fall back gracefully.
+ */
+export async function generateSharedTopics(
+  textA: string,
+  textB: string,
+  openaiKey: string
+): Promise<string[]> {
+  try {
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${openaiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        temperature: 0.4,
+        response_format: { type: 'json_object' },
+        messages: [
+          {
+            role: 'system',
+            content: 'Given two people meeting for coffee, identify 2–3 topics they\'d genuinely enjoy talking about. Each must be a short noun phrase, 1–4 words max (e.g. "photography", "life in LA", "career pivots"). No sentences, no generic labels. Return JSON only: {"topics": string[]}.',
+          },
+          {
+            role: 'user',
+            content: `Person A:\n${textA}\n\nPerson B:\n${textB}`,
+          },
+        ],
+      }),
+    })
+    if (!res.ok) return []
+    const data = await res.json() as { choices?: Array<{ message?: { content?: string } }> }
+    const raw = data.choices?.[0]?.message?.content
+    if (!raw) return []
+    const parsed = JSON.parse(raw) as { topics?: unknown }
+    if (!Array.isArray(parsed.topics)) return []
+    return (parsed.topics as unknown[])
+      .filter((t): t is string => typeof t === 'string')
+      .map((t) => t.trim())
+      .filter(Boolean)
+      .slice(0, 3)
+  } catch {
+    return []
   }
 }

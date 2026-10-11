@@ -18,6 +18,7 @@ export type AdminMatchProfileRow = {
   age_preference: string | null
   languages: string[] | null
   is_active: boolean | null
+  avatar_url?: string | null
 }
 
 export type AdminMatchIntakeRow = {
@@ -60,7 +61,7 @@ export type AdminScoredPairPayload = {
 }
 
 export const ADMIN_MATCH_PROFILE_SELECT =
-  'id, first_name, market, city, lat, lng, birthdate, gender, pronouns, gender_preference, age_preference, languages, is_active'
+  'id, first_name, market, city, lat, lng, birthdate, gender, pronouns, gender_preference, age_preference, languages, is_active, avatar_url'
 
 export function ageFromBirthdate(birthdate: string | null | undefined): number | null {
   if (!birthdate || typeof birthdate !== 'string') return null
@@ -290,10 +291,11 @@ export function computeAdminPairPayload(
       const chips = intakeMulti(intake, 'q_interests')
       if (chips.length > 0) return chips.map((x) => x.toLowerCase())
       const sources = [
+        getIntakeSingle(intake.responses, 'q_about_me'),
         getIntakeSingle(intake.responses, 'q_interests_freetext'),
         getIntakeSingle(intake.responses, 'q_on_mind'),
       ].filter(Boolean).join(', ')
-      return sources.split(/[,;]/).map((x) => x.trim().toLowerCase()).filter((x) => x.length > 2)
+      return sources.split(/[,;.\s]+/).map((x) => x.trim().toLowerCase()).filter((x) => x.length > 3)
     }
     const tokensA = extractFreeTextTokens(ca.intake)
     const tokensB = extractFreeTextTokens(cb.intake)

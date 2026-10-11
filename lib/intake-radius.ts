@@ -19,5 +19,5 @@ function getIntakeNumericValue(responses: unknown, questionId: string): number |
   return null
 }
 
-/** Fixed travel radius: 10 miles in km. */
-export const DEFAULT_RADIUS_KM = 16
+/** Fixed travel radius: ~6 miles in km. */
+export const DEFAULT_RADIUS_KM = 10

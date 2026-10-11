@@ -14,7 +14,7 @@ import {
   computeAdminPairPayload,
 } from '@/lib/match/admin-match-pair'
 import { MATCH_SCORING_VERSION, MATCH_SCORING_VERSION_LLM } from '@/lib/match/weights'
-import { buildUserProfileText, generateFikaQuestions, generateMatchIntroCopy, scorePairWithLLM } from '@/lib/match/llm-pair-score'
+import { buildUserProfileText, generateFikaQuestions, generateMatchIntroCopy, generateSharedTopics, scorePairWithLLM } from '@/lib/match/llm-pair-score'
 import { pickVenueFromDatabase } from '@/lib/sms-agent'
 
 /** Admin simulation: config-driven structured matcher (eligibility + feasibility + compatibility). */
@@ -90,6 +90,67 @@ export async function POST(request: Request) {
   if (!isAdmin) return NextResponse.json({ error: 'Admin role required', code: 'NOT_ADMIN' }, { status: 403 })
 
   const body = await request.json().catch(() => ({} as Record<string, unknown>))
+
+  // ── Manual pair fast path: score two specific users, bypass all eligibility ──
+  const manualPair = body.manual_pair as { user_a_id?: string; user_b_id?: string } | undefined
+  if (manualPair?.user_a_id && manualPair?.user_b_id) {
+    const ids = [manualPair.user_a_id.trim(), manualPair.user_b_id.trim()]
+    const [{ data: profileRows }, { data: intakeRows }, { data: feedbackRows }] = await Promise.all([
+      supabase.from('profiles').select(ADMIN_MATCH_PROFILE_SELECT).in('id', ids),
+      supabase.from('intake_responses_v5').select('user_id, responses').in('user_id', ids),
+      supabase.from('fika_feedback').select('user_id, content, sentiment, created_at').in('user_id', ids).order('created_at', { ascending: false }),
+    ])
+    const intakeById = new Map((intakeRows ?? []).map((r: IntakeRow) => [r.user_id, r]))
+    type FeedbackEntry = { user_id: string; content: string; sentiment: string | null; created_at: string }
+    const latestFeedbackByUser = new Map<string, FeedbackEntry>()
+    for (const f of (feedbackRows ?? []) as FeedbackEntry[]) {
+      if (!latestFeedbackByUser.has(f.user_id)) latestFeedbackByUser.set(f.user_id, f)
+    }
+    const profA = (profileRows ?? []).find((p: ProfileRow) => p.id === ids[0]) as ProfileRow | undefined
+    const profB = (profileRows ?? []).find((p: ProfileRow) => p.id === ids[1]) as ProfileRow | undefined
+    if (!profA || !profB) return NextResponse.json({ error: 'One or both users not found' }, { status: 404 })
+    const intakeA = intakeById.get(ids[0])
+    const intakeB = intakeById.get(ids[1])
+    if (!intakeA || !intakeB) return NextResponse.json({ error: 'One or both users have no intake data' }, { status: 404 })
+    const ca = adminSimCandidateFromProfileRow(profA, intakeA)
+    const cb = adminSimCandidateFromProfileRow(profB, intakeB)
+    const textA = buildUserProfileText(ca.profile, ca.intake.responses, { lastSentiment: latestFeedbackByUser.get(ca.profile.id)?.sentiment ?? null })
+    const textB = buildUserProfileText(cb.profile, cb.intake.responses, { lastSentiment: latestFeedbackByUser.get(cb.profile.id)?.sentiment ?? null })
+    const openaiKey = (process.env.EXPO_PUBLIC_OPENAI_API_KEY || process.env.OPENAI_API_KEY)?.trim() || ''
+    // Score with distanceOverride: 1 to bypass all eligibility/distance gates
+    const p = computeAdminPairPayload(ca, cb, { distanceOverride: 1 })
+    const [llm, venue, questions, introCopy, sharedTopics] = await Promise.all([
+      openaiKey ? scorePairWithLLM(textA, textB, openaiKey).catch(() => ({ score: Math.round(p.score * 100), reason: '' })) : Promise.resolve({ score: Math.round(p.score * 100), reason: '' }),
+      pickVenueFromDatabase(supabase, { lat: ca.profile.lat, lng: ca.profile.lng, radius_km: 100 }, { lat: cb.profile.lat, lng: cb.profile.lng, radius_km: 100 }).catch(() => null),
+      openaiKey ? generateFikaQuestions(textA, textB, openaiKey).catch(() => null) : Promise.resolve(null),
+      openaiKey ? generateMatchIntroCopy(ca.profile.first_name?.trim() || 'them', textA, cb.profile.first_name?.trim() || 'them', textB, openaiKey).catch(() => null) : Promise.resolve(null),
+      openaiKey ? generateSharedTopics(textA, textB, openaiKey) : Promise.resolve([] as string[]),
+    ])
+    const manualStructuredScore = Math.round(p.score * 100)
+    const manualLlmRan = openaiKey && llm.reason !== ''
+    const manualScore = manualLlmRan
+      ? Math.round(0.7 * llm.score + 0.3 * manualStructuredScore)
+      : manualStructuredScore
+    const pair = {
+      userAId: ca.profile.id, userAName: ca.profile.first_name?.trim() || 'Unknown', userAAge: ca.age, userAGender: ca.profile.gender ?? null, userAPronouns: ca.profile.pronouns ?? null,
+      userAWorkLabel: getIntakeSingle(ca.intake.responses, 'q_work'), userACity: ca.profile.city ?? null, userAAvatar: ca.profile.avatar_url ?? null,
+      userBId: cb.profile.id, userBName: cb.profile.first_name?.trim() || 'Unknown', userBAge: cb.age, userBGender: cb.profile.gender ?? null, userBPronouns: cb.profile.pronouns ?? null,
+      userBWorkLabel: getIntakeSingle(cb.intake.responses, 'q_work'), userBCity: cb.profile.city ?? null, userBAvatar: cb.profile.avatar_url ?? null,
+      score: manualScore, structuredScore: manualStructuredScore, llmScore: manualLlmRan ? llm.score : null, llmReason: llm.reason, distanceKm: p.distanceKm, sharedLanguages: p.sharedLanguages,
+      likeTalkingAboutA: p.likeTalkingAboutA, likeTalkingAboutB: p.likeTalkingAboutB,
+      overlapGreatFika: p.overlapGreatFika, overlapLikeTalkingAbout: p.overlapLikeTalkingAbout,
+      overlapInterests: p.overlapInterests, overlapCuriosity: p.overlapCuriosity,
+      overlapLifeChapter: p.overlapLifeChapter, overlapEverydayAnchor: p.overlapEverydayAnchor,
+      textureOverlap: p.textureOverlap, topCopyDimensions: p.topCopyDimensions,
+      compareRows: buildComparisonRows(ca, cb), sectionScores: p.sectionScores, matchBreakdown: p.breakdown,
+      userALastFeedback: latestFeedbackByUser.get(ca.profile.id) ?? null,
+      userBLastFeedback: latestFeedbackByUser.get(cb.profile.id) ?? null,
+      projectedVenue: venue ? { id: venue.id, name: venue.name, neighborhood: venue.neighborhood, city: venue.city } : null,
+      projectedQuestions: questions ?? null, introMessages: introCopy ?? null, aiSharedTopics: sharedTopics,
+    }
+    return NextResponse.json({ pairs: [pair], manual: true })
+  }
+
   const market = typeof body.market === 'string' ? body.market.trim() : null
   const maxUsers = Math.min(300, Math.max(20, typeof body.maxUsers === 'number' ? Math.floor(body.maxUsers) : 120))
   const topN = Math.min(300, Math.max(10, typeof body.topN === 'number' ? Math.floor(body.topN) : 100))
@@ -274,7 +335,7 @@ export async function POST(request: Request) {
   }
 
   // Score all eligible pairs in parallel via LLM; fall back to structured score on failure
-  const [llmResults, venueResults, questionResults, introCopyResults] = await Promise.all([
+  const [llmResults, venueResults, questionResults, introCopyResults, sharedTopicsResults] = await Promise.all([
     Promise.all(
       eligibleIntermediate.map(({ textA, textB, p }) =>
         openaiKey
@@ -284,7 +345,7 @@ export async function POST(request: Request) {
     ),
     Promise.all(
       eligibleIntermediate.map(({ ca, cb }) =>
-        pickVenueFromDatabase(supabase, { lat: ca.profile.lat, lng: ca.profile.lng }, { lat: cb.profile.lat, lng: cb.profile.lng }).catch(() => null)
+        pickVenueFromDatabase(supabase, { lat: ca.profile.lat, lng: ca.profile.lng, radius_km: 100 }, { lat: cb.profile.lat, lng: cb.profile.lng, radius_km: 100 }).catch(() => null)
       )
     ),
     Promise.all(
@@ -310,6 +371,13 @@ export async function POST(request: Request) {
           : Promise.resolve(null)
       )
     ),
+    Promise.all(
+      eligibleIntermediate.map(({ textA, textB }) =>
+        openaiKey
+          ? generateSharedTopics(textA, textB, openaiKey)
+          : Promise.resolve([] as string[])
+      )
+    ),
   ])
 
   const pairs = eligibleIntermediate.map(({ ca, cb, p, compareRows, userAWorkLabel, userBWorkLabel }, idx) => {
@@ -317,6 +385,13 @@ export async function POST(request: Request) {
     const venue = venueResults[idx] ?? null
     const projectedQuestions = questionResults[idx] ?? null
     const introMessages = introCopyResults[idx] ?? null
+    const aiSharedTopics = sharedTopicsResults[idx] ?? []
+    const structuredScore = Math.round(p.score * 100)
+    // Blend: LLM is primary (70%), structured fills in when LLM ran successfully
+    const llmRan = openaiKey && llm.reason !== ''
+    const score = llmRan
+      ? Math.round(0.7 * llm.score + 0.3 * structuredScore)
+      : structuredScore
     return {
       userAId: ca.profile.id,
       userAName: ca.profile.first_name?.trim() || 'Unknown',
@@ -325,6 +400,7 @@ export async function POST(request: Request) {
       userAPronouns: ca.profile.pronouns ?? null,
       userAWorkLabel,
       userACity: ca.profile.city ?? null,
+      userAAvatar: ca.profile.avatar_url ?? null,
       userBId: cb.profile.id,
       userBName: cb.profile.first_name?.trim() || 'Unknown',
       userBAge: cb.age,
@@ -332,7 +408,10 @@ export async function POST(request: Request) {
       userBPronouns: cb.profile.pronouns ?? null,
       userBWorkLabel,
       userBCity: cb.profile.city ?? null,
-      score: llm.score,
+      userBAvatar: cb.profile.avatar_url ?? null,
+      score,
+      structuredScore,
+      llmScore: llmRan ? llm.score : null,
       llmReason: llm.reason,
       distanceKm: p.distanceKm,
       sharedLanguages: p.sharedLanguages,
@@ -354,6 +433,7 @@ export async function POST(request: Request) {
       projectedVenue: venue ? { id: venue.id, name: venue.name, neighborhood: venue.neighborhood, city: venue.city } : null,
       projectedQuestions,
       introMessages,
+      aiSharedTopics,
     }
   })
 

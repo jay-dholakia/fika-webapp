@@ -2,18 +2,8 @@ import { getSupabase } from './supabase'
 import type { IntakeResponseItem, ProfileRow, IntakeResponsesV5Row } from './db-types'
 import { INTAKE_STEPS, type ProfileStep } from './onboarding-data'
 
-// Current SMS onboarding question IDs — used to detect missing answers for existing users
-const SMS_REQUIRED_QUESTION_IDS = [
-  'q_market_tenure',
-  'q_neighborhood',
-  'q_relationship_status',
-  'q_kids',
-  'q_work',
-  'q_interests_freetext',
-  'q_on_mind',
-  'q_social_goal',
-  'q_fika_time_pref',
-]
+// SMS onboarding collects only identity/location — intake is filled post-call by admin
+const SMS_REQUIRED_QUESTION_IDS: string[] = []
 
 function getStringAnswerFromResponses(responses: IntakeResponseItem[], questionId: string): string | null {
   const r = responses.find((x) => x.question_id === questionId)

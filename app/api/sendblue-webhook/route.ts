@@ -748,7 +748,7 @@ export async function POST(request: Request) {
 
     const cancelMatch = async () => {
       // Load other user's state and profile before deleting rows
-      const NOTIFIABLE_STATES = ['1v1_accepted', '1v1_awaiting_availability', '1v1_proposed', '1v1_confirmed', '1v1_morning_reminder', '1v1_feedback']
+      const NOTIFIABLE_STATES = ['1v1_offered', '1v1_accepted', '1v1_awaiting_availability', '1v1_proposed', '1v1_confirmed', '1v1_morning_reminder', '1v1_feedback']
       let otherShouldBeNotified = false
       let otherPhone: string | null = null
       let otherFirstName: string | null = null
@@ -854,17 +854,25 @@ export async function POST(request: Request) {
           const listLines = slotOptions.map((s, i) => `${i + 1}. ${s.label}`).join('\n')
           const sharedPayload = { both_accepted_at: new Date().toISOString(), window_start: windowStart, slot_options: slotOptions, ...venuePayload }
 
+          const venueIntro = venueLine && venue?.city
+            ? `Looks like ${venueLine}, ${venue.city} is a convenient spot for your Fika ☕\n\n`
+            : venueLine
+              ? `Looks like ${venueLine} is a convenient spot for your Fika ☕\n\n`
+              : ''
           const availMsg = (partnerName: string) =>
-            `Which of these work for a Fika with ${partnerName}?\n\n${listLines}\n\nReply with the numbers that work — if we find a match, we'll lock it in!`
+            `${venueIntro}Here are some times that could fit for a Fika with ${partnerName}:\n\n${listLines}\n\nReply with the numbers that work — e.g. 1, 3 or "all". If nothing works, just say "none".`
 
           await Promise.all([
             setPerMatchSmsState({ userId, matchId: activeMatchId, state: '1v1_awaiting_availability', payload: sharedPayload }),
             otherUserId ? setPerMatchSmsState({ userId: otherUserId, matchId: activeMatchId, state: '1v1_awaiting_availability', payload: sharedPayload }) : Promise.resolve(),
             sendConciergeAndLog(fromNumber, availMsg(otherFirstName), 'match_both_accepted_avail_ask', { userId, matchId: activeMatchId }),
-            otherPhone && otherUserId
-              ? sendConciergeAndLog(otherPhone, availMsg(myFirstName), 'match_both_accepted_avail_ask', { userId: otherUserId, matchId: activeMatchId })
-              : Promise.resolve(),
           ])
+          // First acceptor (waiting user) gets a heads-up before the slot ask
+          if (otherPhone && otherUserId) {
+            await sendConciergeAndLog(otherPhone, `${myFirstName} is down to meet up ☕`, 'match_both_accepted_partner_in', { userId: otherUserId, matchId: activeMatchId })
+            await sleepForSmsPacing(SMS_PACING_MS.quickAck)
+            await sendConciergeAndLog(otherPhone, availMsg(myFirstName), 'match_both_accepted_avail_ask', { userId: otherUserId, matchId: activeMatchId })
+          }
         } else {
           // Other person hasn't accepted yet — tell this user we're checking
           await sendConciergeAndLog(
@@ -944,26 +952,53 @@ export async function POST(request: Request) {
         ? (matchPayload.day_options as { label: string; date: string }[])
         : []
 
+      const lc = content.trim().toLowerCase()
+
+      // "none" → bank the match as scheduling_stalled, free both users, notify both
+      const isNone = /^(none|nothing|no|nope|none of (them|these)|nothing works)[!.]?$/.test(lc)
+      if (isNone) {
+        await Promise.all([
+          supabase.from('match_candidates').update({ status: 'scheduling_stalled' }).eq('id', activeMatchId),
+          supabase.from('sms_conversation_states').delete().eq('user_id', userId).eq('match_id', activeMatchId),
+          sendConciergeAndLog(fromNumber, `No worries — we'll hold onto this one and circle back when timing opens up ☕`, 'avail_none', { userId, matchId: activeMatchId }),
+        ])
+        if (otherUserId) {
+          const { data: otherProfNone } = await supabase.from('profiles').select('phone').eq('id', otherUserId).maybeSingle()
+          const otherPhoneNone = (otherProfNone?.phone as string | null)?.trim() ?? null
+          await supabase.from('sms_conversation_states').delete().eq('user_id', otherUserId).eq('match_id', activeMatchId)
+          if (otherPhoneNone) {
+            await sendConciergeAndLog(otherPhoneNone, `Timing didn't work out for this one — but we'll try to schedule you again soon ☕`, 'avail_none_other', { userId: otherUserId, matchId: activeMatchId })
+          }
+        }
+        return NextResponse.json({ ok: true })
+      }
+
       let windows: TimeWindow[]
       if (slotOptions) {
+        // "all" → select every slot
+        const isAll = /^all(\s+(of\s+)?(them|the above|work))?[!.]?$/.test(lc)
         const max = slotOptions.length
         const seen = new Set<number>()
         const chosenSlots: SlotOption[] = []
-        const re = /\b([1-9])\b/g
-        let m: RegExpExecArray | null
-        while ((m = re.exec(content)) !== null) {
-          const n = parseInt(m[1])
-          if (n >= 1 && n <= max && !seen.has(n)) { seen.add(n); chosenSlots.push(slotOptions[n - 1]) }
+        if (isAll) {
+          slotOptions.forEach(s => chosenSlots.push(s))
+        } else {
+          const re = /\b([1-9])\b/g
+          let m: RegExpExecArray | null
+          while ((m = re.exec(content)) !== null) {
+            const n = parseInt(m[1])
+            if (n >= 1 && n <= max && !seen.has(n)) { seen.add(n); chosenSlots.push(slotOptions[n - 1]) }
+          }
         }
         if (chosenSlots.length === 0) {
-          await sendConciergeAndLog(fromNumber, `Just reply with the numbers that work — e.g. 1, 3`, 'avail_parse_failed', { userId, matchId: activeMatchId })
+          await sendConciergeAndLog(fromNumber, `Just reply with the numbers that fit — e.g. 1, 3`, 'avail_parse_failed', { userId, matchId: activeMatchId })
           return NextResponse.json({ ok: true })
         }
         windows = chosenSlots.map(s => ({ date: s.date, startHour: s.startHour, endHour: s.endHour }))
       } else {
         const chosenDates = extractChosenDates(content, dayOptions)
         if (chosenDates.length === 0) {
-          await sendConciergeAndLog(fromNumber, `Just reply with the numbers that work — e.g. 1, 3`, 'avail_parse_failed', { userId, matchId: activeMatchId })
+          await sendConciergeAndLog(fromNumber, `Just reply with the numbers that fit — e.g. 1, 3`, 'avail_parse_failed', { userId, matchId: activeMatchId })
           return NextResponse.json({ ok: true })
         }
         windows = chosenDates.map(date => ({ date, startHour: 18, endHour: 20 }))
@@ -1032,8 +1067,17 @@ export async function POST(request: Request) {
         ? (venueNeighborhoodStored ? `${venueNameStored} (${venueNeighborhoodStored})` : venueNameStored)
         : 'the venue'
       const confirmedPayload = { ...matchPayload, proposed_slot: slot }
-      const slotTimeLabel = slot.startHour < 12 ? `${slot.startHour}am` : `${slot.startHour - 12}pm`
-      const confirmMsg = `You're both free on ${matchedLabel ?? formatProposedTime(slot)} — you're set ☕ ${slotTimeLabel} at ${venueLine2}. Let me know if anything comes up.`
+      const confirmMsg = `You're on for ${matchedLabel ?? formatProposedTime(slot)} — ${venueLine2} ☕ Let me know if anything comes up.`
+
+      // Fetch Maps link via google_place_id
+      const payloadVenueId = typeof matchPayload.venue_id === 'string' ? matchPayload.venue_id : null
+      const mapsUrl = await (async () => {
+        if (!payloadVenueId) return null
+        const { data: vr } = await supabase.from('venues').select('google_place_id, name, city').eq('id', payloadVenueId).maybeSingle()
+        if (vr?.google_place_id) return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${(vr?.name as string ?? '')}${vr?.city ? ', ' + (vr.city as string) : ''}`)}&query_place_id=${vr.google_place_id}`
+        if (vr?.name) return `https://maps.google.com/?q=${encodeURIComponent(`${(vr.name as string)}${vr.city ? ', ' + (vr.city as string) : ''}`)}`
+        return null
+      })()
 
       await Promise.all([
         setPerMatchSmsState({ userId, matchId: activeMatchId, state: '1v1_confirmed', payload: confirmedPayload }),
@@ -1043,12 +1087,19 @@ export async function POST(request: Request) {
           ? sendConciergeAndLog(otherPhone2, confirmMsg, 'fika_confirmed', { userId: otherUserId, matchId: activeMatchId })
           : Promise.resolve(),
       ])
+      if (mapsUrl) {
+        await Promise.all([
+          sendConciergeAndLog(fromNumber, mapsUrl, 'fika_confirmed_maps', { userId, matchId: activeMatchId }),
+          otherPhone2 && otherUserId
+            ? sendConciergeAndLog(otherPhone2, mapsUrl, 'fika_confirmed_maps', { userId: otherUserId, matchId: activeMatchId })
+            : Promise.resolve(),
+        ])
+      }
 
       // Write event_starts_at into match_candidates.reasons for crons
       const { data: mcRow } = await supabase.from('match_candidates').select('reasons').eq('id', activeMatchId).maybeSingle()
       const existingReasons = (mcRow?.reasons as Record<string, unknown>) ?? {}
       const slotUtc = windowStartToUtc(slot)
-      const payloadVenueId = typeof matchPayload.venue_id === 'string' ? matchPayload.venue_id : null
       await supabase.from('match_candidates').update({
         reasons: {
           ...existingReasons,
@@ -1089,13 +1140,31 @@ export async function POST(request: Request) {
           const proposedSlot = matchPayload.proposed_slot as { date: string; startHour: number; endHour: number } | undefined
           const timeStr = proposedSlot ? formatProposedTime(proposedSlot) : 'soon'
           const venueNameC = typeof matchPayload.venue_name === 'string' ? matchPayload.venue_name : 'the venue'
-          const confirmMsg = `You're all set ☕ See you ${timeStr} at ${venueNameC}.`
+          const venueNeighborhoodC = typeof matchPayload.venue_neighborhood === 'string' ? matchPayload.venue_neighborhood : null
+          const venueLine3 = venueNeighborhoodC ? `${venueNameC} (${venueNeighborhoodC})` : venueNameC
+          const confirmMsg = `You're on for ${timeStr} — ${venueLine3} ☕ Let me know if anything comes up.`
+          const payloadVenueIdC = typeof matchPayload.venue_id === 'string' ? matchPayload.venue_id : null
+          const mapsUrlC = await (async () => {
+            if (!payloadVenueIdC) return null
+            const { data: vr } = await supabase.from('venues').select('google_place_id, name, city').eq('id', payloadVenueIdC).maybeSingle()
+            if (vr?.google_place_id) return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${(vr?.name as string ?? '')}${vr?.city ? ', ' + (vr.city as string) : ''}`)}&query_place_id=${vr.google_place_id}`
+            if (vr?.name) return `https://maps.google.com/?q=${encodeURIComponent(`${(vr.name as string)}${vr.city ? ', ' + (vr.city as string) : ''}`)}`
+            return null
+          })()
           await Promise.all([
             sendConciergeAndLog(fromNumber, confirmMsg, 'fika_confirmed', { userId, matchId: activeMatchId }),
             otherPhone3 && otherUserId
               ? sendConciergeAndLog(otherPhone3, confirmMsg, 'fika_confirmed', { userId: otherUserId, matchId: activeMatchId })
               : Promise.resolve(),
           ])
+          if (mapsUrlC) {
+            await Promise.all([
+              sendConciergeAndLog(fromNumber, mapsUrlC, 'fika_confirmed_maps', { userId, matchId: activeMatchId }),
+              otherPhone3 && otherUserId
+                ? sendConciergeAndLog(otherPhone3, mapsUrlC, 'fika_confirmed_maps', { userId: otherUserId, matchId: activeMatchId })
+                : Promise.resolve(),
+            ])
+          }
           // Write event_starts_at into match_candidates.reasons so morning/reveals crons can fire
           if (proposedSlot && activeMatchId) {
             const { data: mcRow } = await supabase.from('match_candidates').select('reasons').eq('id', activeMatchId).maybeSingle()
@@ -1391,6 +1460,12 @@ export async function POST(request: Request) {
   }
 
   const appBase = getAppBase()
+
+  // pending_call: Jay handles replies manually — no bot response
+  if (!matchId && state === SMS_STATES.PENDING_CALL) {
+    console.log('[sendblue-webhook] pending_call state — no auto-reply, Jay handles manually', { userId })
+    return NextResponse.json({ ok: true })
+  }
 
   if (!matchId && state === SMS_STATES.GLOBAL_READY && isCancellationSignal(content)) {
     const nowIso = new Date().toISOString()

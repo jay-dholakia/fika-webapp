@@ -38,6 +38,8 @@ type PairInput = {
   user_a_work?: string | null
   user_b_work?: string | null
   pregenerated_questions?: { qForA: string; qForB: string } | null
+  pregenerated_copy?: { messageForA: string; messageForB: string } | null
+  ai_shared_topics?: string[]
 }
 
 /** POST /api/admin/matches — create 1v1 match_candidates rows and fire intro SMS */
@@ -116,6 +118,9 @@ export async function POST(request: Request) {
     const [copyResults, questionResults] = await Promise.all([
       Promise.all(
         eligiblePairs.map(async (pair) => {
+          if (pair.pregenerated_copy?.messageForA && pair.pregenerated_copy?.messageForB) {
+            return pair.pregenerated_copy
+          }
           if (!openaiKey) return null
           const profA = profileMapForCopy.get(pair.user_a.trim()) as { id: string; first_name?: string | null; birthdate?: string | null; pronouns?: string | null; city?: string | null } | undefined
           const profB = profileMapForCopy.get(pair.user_b.trim()) as { id: string; first_name?: string | null; birthdate?: string | null; pronouns?: string | null; city?: string | null } | undefined
@@ -154,9 +159,13 @@ export async function POST(request: Request) {
     const insertRows = eligiblePairs.map((pair, idx) => {
       const copy = copyResults[idx]
       const questions = questionResults[idx]
+      // unique_pair CHECK requires user_a < user_b — sort to match canonical order
+      const swapped = pair.user_a.trim() > pair.user_b.trim()
+      const ua = swapped ? pair.user_b.trim() : pair.user_a.trim()
+      const ub = swapped ? pair.user_a.trim() : pair.user_b.trim()
       return {
-        user_a: pair.user_a.trim(),
-        user_b: pair.user_b.trim(),
+        user_a: ua,
+        user_b: ub,
         status: 'active',
         admin_approval_status: 'approved',
         reasons: {
@@ -165,10 +174,17 @@ export async function POST(request: Request) {
           ...(eventStartsAt ? { event_starts_at: eventStartsAt } : {}),
           ...(areaLabel ? { area_label: areaLabel } : {}),
           signals: Array.isArray(pair.signals) ? pair.signals.filter(s => typeof s === 'string') : [],
-          user_a_work: pair.user_a_work ?? null,
-          user_b_work: pair.user_b_work ?? null,
-          ...(copy ? { copy: { messageForA: copy.messageForA, messageForB: copy.messageForB, llm_generated: true } } : {}),
+          user_a_work: swapped ? (pair.user_b_work ?? null) : (pair.user_a_work ?? null),
+          user_b_work: swapped ? (pair.user_a_work ?? null) : (pair.user_b_work ?? null),
+          ...(copy ? { copy: {
+            // When user_a/user_b are swapped to satisfy the UUID sort constraint, swap the
+            // messages too so messageForA always means "what user_a receives (about user_b)".
+            messageForA: swapped ? copy.messageForB : copy.messageForA,
+            messageForB: swapped ? copy.messageForA : copy.messageForB,
+            llm_generated: true,
+          } } : {}),
           ...(questions ? { questions } : {}),
+          ...(Array.isArray(pair.ai_shared_topics) && pair.ai_shared_topics.length ? { aiSharedTopics: pair.ai_shared_topics } : {}),
         },
       }
     })

@@ -56,6 +56,14 @@ export async function POST(request: Request) {
     )
   }
 
+  // Check if already in the database before fetching from Google
+  const { data: existing } = await auth.supabase
+    .from('venues')
+    .select('id, name, neighborhood, city')
+    .eq('google_place_id', placeId)
+    .maybeSingle()
+  if (existing) return NextResponse.json({ venue: existing, already_exists: true })
+
   const candidate = await fetchGooglePlaceAsVenueCandidate(placeId)
   if (!candidate) {
     return NextResponse.json(
@@ -75,5 +83,5 @@ export async function POST(request: Request) {
     )
   }
 
-  return NextResponse.json({ venue })
+  return NextResponse.json({ venue, already_exists: false })
 }

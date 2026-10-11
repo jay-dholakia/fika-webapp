@@ -9,6 +9,10 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const SENDBLUE_URL = 'https://api.sendblue.co/api/send-message'
 
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
 function getSubjectPronoun(pronouns: string | null): { cap: string; haveBeen: string } {
   const p = (pronouns ?? '').toLowerCase().trim()
   if (p.startsWith('she')) return { cap: 'She', haveBeen: "She's been" }
@@ -31,77 +35,65 @@ function joinList(items: string[]): string {
   return items.slice(0, -1).join(', ') + ' and ' + items[items.length - 1]
 }
 
+// Keywords that flag a free-text field as too personal to surface in an intro message.
+const SENSITIVE_TERMS = /cancer|chemo|chemotherapy|tumor|radiation|depress|anxiety disorder|mental illness|hospital|therapist|therapy|psychiatric|eating disorder|laid\s+off|job\s+loss|fired|bankrupt|bankruptcy|debt|broke\b/i
+
+function safe(text: string | null | undefined): string | null {
+  if (!text?.trim()) return null
+  return SENSITIVE_TERMS.test(text) ? null : text.trim()
+}
+
 function buildIntroMessage(params: {
   otherFirstName: string
   otherPronouns: string | null
-  otherWork: string | null
-  otherCurrentInterest: string | null
-  otherFriendDescription: string | null
   sharedInterests: string[]
   sharedTopics: string[]
-  sharedSignals: string[]
+  // free-text fields — all run through sensitive filter before use
+  onMind: string | null
+  wantToTry: string | null
+  talkForever: string | null
+  interestsFreetext: string | null
 }): string {
-  const {
-    otherFirstName, otherPronouns, otherWork, otherCurrentInterest,
-    otherFriendDescription, sharedInterests, sharedTopics, sharedSignals,
-  } = params
-
+  const { otherFirstName, otherPronouns, sharedInterests, sharedTopics, onMind, wantToTry, talkForever, interestsFreetext } = params
   const name = otherFirstName.trim() || 'Someone'
   const { cap, haveBeen } = getSubjectPronoun(otherPronouns)
 
-  const aboutParts: string[] = []
+  // Sentence 1: shared interests/topics (chip data — not sensitive)
+  const shared = [
+    ...sharedInterests.slice(0, 3).map(s => s.toLowerCase()),
+    ...sharedTopics.slice(0, 2).map(s => s.toLowerCase()),
+  ].slice(0, 3)
 
-  const workClean = otherWork?.trim() || null
-  const showWork = workClean && !WORK_SKIP_IN_INTRO.has(workClean.toLowerCase())
+  const line1 = shared.length > 0
+    ? `${name} is into ${joinList(shared)}.`
+    : `${name} is someone I thought you'd connect well with.`
 
-  if (showWork && otherCurrentInterest?.trim()) {
-    const art = articleFor(workClean)
-    const interest = otherCurrentInterest.trim().replace(/\.$/, '')
-    const lc = interest.charAt(0).toLowerCase() + interest.slice(1)
-    aboutParts.push(`${name} is ${art} ${workClean} and ${haveBeen.toLowerCase()} ${lc}.`)
-  } else {
-    if (showWork) {
-      const art = articleFor(workClean)
-      aboutParts.push(`${name} is ${art} ${workClean}.`)
-    }
-    if (otherCurrentInterest?.trim()) {
-      const interest = otherCurrentInterest.trim().replace(/\.$/, '')
-      const lc = interest.charAt(0).toLowerCase() + interest.slice(1)
-      aboutParts.push(`${haveBeen} ${lc}.`)
-    }
+  // Additional sentences from free-text (filtered) — include up to 3 for a fuller picture
+  const safeOnMind      = safe(onMind)
+  const safeWantToTry   = safe(wantToTry)
+  const safeTalkForever = safe(talkForever)
+  const safeFreetext    = safe(interestsFreetext)
+
+  const extras: string[] = []
+
+  if (safeOnMind) {
+    const lc = safeOnMind.replace(/\.$/, '')
+    extras.push(`${haveBeen} ${lc.charAt(0).toLowerCase() + lc.slice(1)}.`)
+  }
+  if (safeWantToTry && extras.length < 3) {
+    const lc = safeWantToTry.replace(/\.$/, '').toLowerCase()
+    extras.push(`${cap} has been wanting to get into ${lc}.`)
+  }
+  if (safeTalkForever && extras.length < 3) {
+    const lc = safeTalkForever.replace(/\.$/, '').toLowerCase()
+    extras.push(`${cap} could talk about ${lc} for hours.`)
+  }
+  if (safeFreetext && extras.length < 3) {
+    const lc = safeFreetext.replace(/\.$/, '')
+    extras.push(`Outside of work, ${name.toLowerCase()} is into ${lc.charAt(0).toLowerCase() + lc.slice(1)}.`)
   }
 
-  if (otherFriendDescription?.trim()) {
-    const desc = otherFriendDescription.trim().replace(/\.$/, '')
-    const lc = desc.charAt(0).toLowerCase() + desc.slice(1)
-    const firstWord = lc.split(' ')[0] ?? ''
-    const pronounWords = ['she', 'he', 'they', 'i']
-    if (pronounWords.includes(firstWord)) {
-      aboutParts.push(`A close friend would say ${lc}.`)
-    } else {
-      aboutParts.push(`A close friend would describe ${cap.toLowerCase()} as: ${lc}.`)
-    }
-  }
-
-  if (sharedInterests.length > 0) {
-    const items = sharedInterests.slice(0, 3).map(s => s.toLowerCase())
-    aboutParts.push(`You both enjoy ${joinList(items)}.`)
-  }
-
-  if (sharedTopics.length > 0) {
-    const items = sharedTopics.slice(0, 2).map(s => s.toLowerCase())
-    aboutParts.push(`You're both into talking about ${joinList(items)}.`)
-  }
-
-  if (sharedSignals.length > 0) {
-    aboutParts.push(`You both ${joinList(sharedSignals)}.`)
-  }
-
-  return [
-    `We'd love to introduce you to ${name} ☕`,
-    '',
-    ...aboutParts,
-  ].join('\n')
+  return [line1, ...extras].filter(Boolean).join(' ')
 }
 
 async function sendSms(params: {
@@ -198,7 +190,7 @@ serve(async (req: Request) => {
       }
 
       if (isBusy(userAId) || isBusy(userBId)) {
-        await supabase.from('match_candidates').update({ status: 'cancelled' }).eq('id', matchId)
+        await supabase.from('match_candidates').update({ status: 'expired' }).eq('id', matchId)
         skipped.push(matchId)
         continue
       }
@@ -210,14 +202,14 @@ serve(async (req: Request) => {
       // Load profiles for both users
       const { data: profileRows } = await supabase
         .from('profiles')
-        .select('id, first_name, phone, pronouns, avatar_url, last_fika_at')
+        .select('id, first_name, phone, pronouns, avatar_url, last_fika_at, birthdate')
         .in('id', [userAId, userBId])
 
       const profA = (profileRows ?? []).find((p: { id: string }) => p.id === userAId) as {
-        id: string; first_name: string | null; phone: string | null; pronouns: string | null; avatar_url: string | null; last_fika_at: string | null
+        id: string; first_name: string | null; phone: string | null; pronouns: string | null; avatar_url: string | null; last_fika_at: string | null; birthdate: string | null
       } | undefined
       const profB = (profileRows ?? []).find((p: { id: string }) => p.id === userBId) as {
-        id: string; first_name: string | null; phone: string | null; pronouns: string | null; avatar_url: string | null; last_fika_at: string | null
+        id: string; first_name: string | null; phone: string | null; pronouns: string | null; avatar_url: string | null; last_fika_at: string | null; birthdate: string | null
       } | undefined
 
       const phoneA = profA?.phone?.trim()
@@ -227,7 +219,7 @@ serve(async (req: Request) => {
       // Cooldown: skip if either user had a fika in the last 24h
       const cutoff24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
       if ((profA?.last_fika_at && profA.last_fika_at > cutoff24h) || (profB?.last_fika_at && profB.last_fika_at > cutoff24h)) {
-        await supabase.from('match_candidates').update({ status: 'cancelled' }).eq('id', matchId)
+        await supabase.from('match_candidates').update({ status: 'expired' }).eq('id', matchId)
         skipped.push(matchId)
         continue
       }
@@ -259,10 +251,6 @@ serve(async (req: Request) => {
 
       const workA = getIntakeAnswer(userAId, 'q_work')
       const workB = getIntakeAnswer(userBId, 'q_work')
-      const currentInterestA = getIntakeAnswer(userAId, 'q_current_interest')
-      const friendDescA = getIntakeAnswer(userAId, 'q_friend_description')
-      const currentInterestB = getIntakeAnswer(userBId, 'q_current_interest')
-      const friendDescB = getIntakeAnswer(userBId, 'q_friend_description')
 
       const interestsA = getIntakeAnswerMulti(userAId, 'q_interests')
       const interestsB = getIntakeAnswerMulti(userBId, 'q_interests')
@@ -272,10 +260,46 @@ serve(async (req: Request) => {
       const topicsB = getIntakeAnswerMulti(userBId, 'q_like_talking_about')
       const sharedTopics = topicsA.filter(x => topicsB.includes(x))
 
+      // Additional free-text fields for richer message — both web and SMS paths
+      // q_about_me is the new SMS free-text field; falls back to legacy per-question fields
+      const aboutMeA   = getIntakeAnswer(userAId, 'q_about_me')
+      const aboutMeB   = getIntakeAnswer(userBId, 'q_about_me')
+      const onMindA    = getIntakeAnswer(userAId, 'q_on_mind') ?? getIntakeAnswer(userAId, 'q_current_interest') ?? aboutMeA
+      const onMindB    = getIntakeAnswer(userBId, 'q_on_mind') ?? getIntakeAnswer(userBId, 'q_current_interest') ?? aboutMeB
+      const wantTryA   = getIntakeAnswer(userAId, 'q_want_to_try')
+      const wantTryB   = getIntakeAnswer(userBId, 'q_want_to_try')
+      const talkForA   = getIntakeAnswer(userAId, 'q_talk_forever') ?? (aboutMeA && !onMindA ? aboutMeA : null)
+      const talkForB   = getIntakeAnswer(userBId, 'q_talk_forever') ?? (aboutMeB && !onMindB ? aboutMeB : null)
+      const freeTextA  = getIntakeAnswer(userAId, 'q_interests_freetext') ?? (aboutMeA && !onMindA && !talkForA ? aboutMeA : null)
+      const freeTextB  = getIntakeAnswer(userBId, 'q_interests_freetext') ?? (aboutMeB && !onMindB && !talkForB ? aboutMeB : null)
+
       const nameA = profA?.first_name?.trim() || 'Someone'
       const nameB = profB?.first_name?.trim() || 'Someone'
-      const avatarA = profA?.avatar_url ?? undefined
-      const avatarB = profB?.avatar_url ?? undefined
+
+      function calcAge(birthdate: string | null): string | null {
+        if (!birthdate) return null
+        const d = new Date(birthdate)
+        const today = new Date()
+        let age = today.getFullYear() - d.getFullYear()
+        const m = today.getMonth() - d.getMonth()
+        if (m < 0 || (m === 0 && today.getDate() < d.getDate())) age--
+        return age >= 18 && age < 120 ? String(age) : null
+      }
+
+      const appBase = (Deno.env.get('APP_CANONICAL_URL') ?? 'https://letsfika.vercel.app').replace(/\/$/, '')
+
+      function introCardUrl(avatarUrl: string | null | undefined, firstName: string, birthdate: string | null): string | undefined {
+        if (!avatarUrl) return undefined
+        const u = new URL('/api/intro-card', appBase)
+        u.searchParams.set('avatar', avatarUrl)
+        u.searchParams.set('name', firstName)
+        const age = calcAge(birthdate)
+        if (age) u.searchParams.set('age', age)
+        return u.toString()
+      }
+
+      const avatarA = introCardUrl(profA?.avatar_url, nameA, profA?.birthdate ?? null)
+      const avatarB = introCardUrl(profB?.avatar_url, nameB, profB?.birthdate ?? null)
 
       // Use LLM-generated copy if stored, otherwise fall back to template
       const llmCopy = reasons.copy as { messageForA?: string; messageForB?: string; llm_generated?: boolean } | undefined
@@ -286,12 +310,12 @@ serve(async (req: Request) => {
         : buildIntroMessage({
             otherFirstName: nameB,
             otherPronouns: profB?.pronouns ?? null,
-            otherWork: workB,
-            otherCurrentInterest: currentInterestB,
-            otherFriendDescription: friendDescB,
             sharedInterests,
             sharedTopics,
-            sharedSignals: signals,
+            onMind: onMindB,
+            wantToTry: wantTryB,
+            talkForever: talkForB,
+            interestsFreetext: freeTextB,
           })
 
       const msgForB = useLlmCopy
@@ -299,37 +323,56 @@ serve(async (req: Request) => {
         : buildIntroMessage({
             otherFirstName: nameA,
             otherPronouns: profA?.pronouns ?? null,
-            otherWork: workA,
-            otherCurrentInterest: currentInterestA,
-            otherFriendDescription: friendDescA,
             sharedInterests,
             sharedTopics,
-            sharedSignals: signals,
+            onMind: onMindA,
+            wantToTry: wantTryA,
+            talkForever: talkForA,
+            interestsFreetext: freeTextA,
           })
 
-      // Send 2 messages per user: intro text → photo (LLM copy ends with CTA, no separate opt-in needed)
+      const teaserForA = workB && !WORK_SKIP_IN_INTRO.has(workB.toLowerCase())
+        ? `Hey ${nameA}, I have a Fika intro for you — ${nameB} is a ${workB} and I think you two would have a great conversation.`
+        : `Hey ${nameA}, I have a Fika intro for you that I thought was worth sharing.`
+
+      const teaserForB = workA && !WORK_SKIP_IN_INTRO.has(workA.toLowerCase())
+        ? `Hey ${nameB}, I have a Fika intro for you — ${nameA} is a ${workA} and I think you two would have a great conversation.`
+        : `Hey ${nameB}, I have a Fika intro for you that I thought was worth sharing.`
+
+      // 3-message sequence per user: teaser → intro + photo → 24h ask
+      await sendSms({ apiKeyId, apiSecret, phone: phoneA, content: teaserForA })
+      await sleep(1500)
       const sentA = await sendSms({ apiKeyId, apiSecret, phone: phoneA, content: msgForA })
       if (avatarB) await sendSms({ apiKeyId, apiSecret, phone: phoneA, content: ' ', mediaUrl: avatarB })
+      await sleep(1500)
+      await sendSms({ apiKeyId, apiSecret, phone: phoneA, content: `Let me know if you'd want to meet with ${nameB} for Fika? You've got 24 hours — reply yes or no.` })
 
+      await sendSms({ apiKeyId, apiSecret, phone: phoneB, content: teaserForB })
+      await sleep(1500)
       const sentB = await sendSms({ apiKeyId, apiSecret, phone: phoneB, content: msgForB })
       if (avatarA) await sendSms({ apiKeyId, apiSecret, phone: phoneB, content: ' ', mediaUrl: avatarA })
+      await sleep(1500)
+      await sendSms({ apiKeyId, apiSecret, phone: phoneB, content: `Let me know if you'd want to meet with ${nameA} for Fika? You've got 24 hours — reply yes or no.` })
 
       if (sentA || sentB) {
         const now = new Date().toISOString()
-        // Upsert per-match state for both users
-        for (const userId of [userAId, userBId]) {
+        // Write per-match state for both users. Delete first to avoid any stale row,
+        // then insert fresh — avoids relying on upsert/onConflict with partial indexes.
+        for (const uid of [userAId, userBId]) {
           await supabase
             .from('sms_conversation_states')
-            .upsert(
-              {
-                user_id: userId,
-                match_id: matchId,
-                state: '1v1_offered',
-                payload: { intro_offer_sent_at: now },
-                last_sendblue_message_handle: null,
-              },
-              { onConflict: 'user_id,match_id' }
-            )
+            .delete()
+            .eq('user_id', uid)
+            .eq('match_id', matchId)
+          await supabase
+            .from('sms_conversation_states')
+            .insert({
+              user_id: uid,
+              match_id: matchId,
+              state: '1v1_offered',
+              payload: { intro_offer_sent_at: now },
+              last_sendblue_message_handle: null,
+            })
         }
         sent++
       }

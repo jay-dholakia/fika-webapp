@@ -41,6 +41,10 @@ npm run lint      # ESLint
 | `supabase/migrations/` | 87+ Postgres migrations |
 | `docs/` | Protocol and schema docs (see below) |
 
+## User-facing language rules
+
+- **Never use the word "match" or "matched" in any user-facing text** — this includes SMS messages, onboarding copy, website copy, AI-generated prompts sent to users, and any LLM system prompts that produce user-visible output. Internally the concept exists (match_candidates table, admin UI, etc.) but users must never see it. Use "intro", "Fika", "set you up", "connect you", "pair" instead.
+
 ## Architecture rules
 
 - **All crons belong on Supabase.** Never add entries to `vercel.json` crons. Use pg_cron → Edge Functions.

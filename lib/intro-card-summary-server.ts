@@ -14,14 +14,17 @@ function factsPayloadForPrompt(responses: IntakeResponseItem[]): Record<string, 
   }
   const workRaw = str('q_work')
   return {
-    life_chapter: str('q_life_chapter'),
+    about_me: str('q_about_me'),
     work: workRaw && !isSensitiveWorkIntakeLabel(workRaw) ? workRaw : null,
-    everyday_anchor: str('q_everyday_anchor'),
     interests: str('q_interests'),
-    curiosity: str('q_curiosity'),
+    interests_freetext: str('q_interests_freetext'),
+    on_mind: str('q_on_mind'),
     like_talking_about: str('q_like_talking_about'),
-    openness: str('q_openness'),
-    what_makes_great_fika: str('q_what_makes_great_fika'),
+    talk_forever: str('q_talk_forever'),
+    would_do_more_of: str('q_would_do_more_of'),
+    bucket_list: str('q_bucket_list'),
+    relationship_status: str('q_relationship_status'),
+    kids: str('q_kids'),
   }
 }
 
@@ -45,9 +48,16 @@ async function fetchOpenAiIntroSummary(
           content: `You write short intro cards for people meeting in person. Rules:
 - Use ONLY facts present in the user JSON. Never invent employer, job title, city, education, or relationship details.
 - If a field is null or missing, omit it; do not guess.
+- "about_me" is a free-text self-description covering work, interests, and current life — treat it as the primary source when present.
 - If work describes unemployment, between jobs, caregiving, career break, visa limits, or similar sensitive employment situations, omit work entirely from paragraph and bullets — never lead with job loss or judgmental framing.
+- "interests_freetext" and "interests" are both about hobbies/passions — combine them naturally.
+- "talk_forever" and "like_talking_about" are both conversation topics — use whichever is present.
+- "would_do_more_of" means something they'd do more of right now if they could — phrase as "would love more time doing X" or "wants more of X", never "curious about X".
+- "bucket_list" is something they aspire to do — phrase naturally ("has X on their bucket list").
+- "relationship_status" and "kids" give life stage context — include only if it adds color, never lead with it.
 - Output valid JSON with keys: paragraph (string, max 2 short sentences), bullets (array of 2-4 short strings, each one scannable line).
-- Friendly, warm, third person ("they"). No marketing hype.`,
+- Friendly, warm, third person ("they"). No marketing hype.
+- Never use: "conversationalist", "passionate about", "adventurous", "lover of", "enthusiast", "aficionado", "dedicated", "driven", "vibrant", or any hollow descriptor that could apply to anyone.`,
         },
         {
           role: 'user',

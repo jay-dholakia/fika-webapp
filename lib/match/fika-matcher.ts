@@ -122,11 +122,17 @@ function intakeFieldPresent(responses: unknown, questionId: string): boolean {
   // SMS onboarding equivalents for structured fields
   if (questionId === 'q_interests') {
     return (
+      (getIntakeSingle(responses, 'q_about_me') ?? '').length > 0 ||
       (getIntakeSingle(responses, 'q_interests_freetext') ?? '').length > 0 ||
       (getIntakeSingle(responses, 'q_on_mind') ?? '').length > 0
     )
   }
-  if (questionId === 'q_like_talking_about') return (getIntakeSingle(responses, 'q_talk_forever') ?? '').length > 0
+  if (questionId === 'q_like_talking_about') {
+    return (
+      (getIntakeSingle(responses, 'q_about_me') ?? '').length > 0 ||
+      (getIntakeSingle(responses, 'q_talk_forever') ?? '').length > 0
+    )
+  }
   if (questionId === 'q_social_goal') return (getIntakeSingle(responses, 'q_hoping_for') ?? '').length > 0
   const s = getIntakeSingle(responses, questionId)
   return s != null && s.length > 0
@@ -254,8 +260,22 @@ export function checkPairEligibility(
     reasons.push('confirm_intent')
   }
 
+  // Age gap hard filter: reject if gap > 5 years (both ages required)
   if (a.age != null && b.age != null && Math.abs(a.age - b.age) > 5) {
     reasons.push('age_gap')
+  }
+
+  // Time pref hard filter: morning-only vs evening-only = no overlap
+  const timeA = getIntakeSingle(a.responses, 'q_fika_time_pref')
+  const timeB = getIntakeSingle(b.responses, 'q_fika_time_pref')
+  if (timeA && timeB) {
+    const bothOk = (t: string) => t.toLowerCase().includes('both')
+    const morningA = timeA.toLowerCase().includes('morning')
+    const morningB = timeB.toLowerCase().includes('morning')
+    const eveningA = timeA.toLowerCase().includes('evening')
+    const eveningB = timeB.toLowerCase().includes('evening')
+    const noOverlap = !bothOk(timeA) && !bothOk(timeB) && ((morningA && eveningB) || (eveningA && morningB))
+    if (noOverlap) reasons.push('time_pref')
   }
 
   return {

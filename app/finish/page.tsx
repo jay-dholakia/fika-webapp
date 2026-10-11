@@ -169,9 +169,9 @@ function FinishContent() {
     return (
       <div style={{ maxWidth: 400, margin: '0 auto', padding: '3rem 1.5rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1.5rem', textAlign: 'center' }}>
         <span style={{ fontSize: '3rem' }}>☕</span>
-        <h1 style={{ fontSize: '1.5rem', fontWeight: 700, margin: 0 }}>You're in!</h1>
+        <h1 style={{ fontSize: '1.5rem', fontWeight: 700, margin: 0 }}>You&apos;re in ☕</h1>
         <p style={{ color: 'var(--color-textSecondary)', margin: 0, lineHeight: 1.5 }}>
-          Head back to your texts with Fika — we'll be in touch soon.
+          Check your texts — Jay will reach out shortly to set up a quick chat before your first Fika.
         </p>
         <a
           href={`sms:${CONCIERGE_NUMBER}`}

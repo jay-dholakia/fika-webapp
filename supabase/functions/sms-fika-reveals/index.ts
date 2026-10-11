@@ -186,14 +186,13 @@ serve(async (_req: Request) => {
 
         const intakeA = (intakeRows ?? []).find((r: { user_id: string }) => r.user_id === userA)
         const intakeB = (intakeRows ?? []).find((r: { user_id: string }) => r.user_id === userB)
-        const workA = (() => {
-          const r = (intakeA?.responses as Record<string, unknown> | null) ?? {}
-          return typeof r.q_work === 'string' ? r.q_work.trim() : null
-        })()
-        const workB = (() => {
-          const r = (intakeB?.responses as Record<string, unknown> | null) ?? {}
-          return typeof r.q_work === 'string' ? r.q_work.trim() : null
-        })()
+        const getIntakeField = (intake: { responses?: unknown } | undefined, questionId: string): string | null => {
+          const responses = Array.isArray(intake?.responses) ? intake.responses as Array<{ question_id: string; answer: unknown }> : []
+          const item = responses.find(r => r.question_id === questionId)
+          return typeof item?.answer === 'string' ? item.answer.trim() || null : null
+        }
+        const workA = getIntakeField(intakeA, 'q_work') ?? getIntakeField(intakeA, 'q_about_me')
+        const workB = getIntakeField(intakeB, 'q_work') ?? getIntakeField(intakeB, 'q_about_me')
 
         const msgForA = buildRevealMessage({
           otherFirstName: nameB,

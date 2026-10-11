@@ -2,23 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { computeAndStoreIntakeEmbedding } from '@/lib/intake-embed-server'
 
 export const EDITABLE_QUESTIONS: Record<string, { label: string; choices?: string[] }> = {
-  q_neighborhood:        { label: 'Neighborhood' },
-  q_kids:                { label: 'Kids' },
-  q_work:                { label: 'Work' },
-  q_interests_freetext:  { label: 'Life outside work' },
-  q_anything_else:       { label: 'Anything else' },
-  q_relationship_status: { label: 'Relationship status' },
-  q_market_tenure:       { label: 'Time in the city' },
-  q_social_goal: {
-    label: 'What you want from Fika',
-    choices: [
-      'Expand my circle',
-      'Find activity buddies',
-      'Have more interesting conversations',
-      'Make actual friends',
-      "Just see who's out there",
-    ],
-  },
+  q_anything_else: { label: 'Anything else' },
 }
 
 function parseChoice(text: string, choices: string[]): string | null {

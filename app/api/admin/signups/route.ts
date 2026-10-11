@@ -44,7 +44,7 @@ export async function GET(request: Request) {
 
   const signupsQuery = supabase
     .from('profiles')
-    .select('id, first_name, city, market, created_at')
+    .select('id, first_name, city, market, created_at, call_completed_at')
     .not('market', 'is', null)
     .order('created_at', { ascending: false })
 
@@ -91,6 +91,7 @@ export async function GET(request: Request) {
     city: (p as { city?: string | null }).city ?? null,
     market: (p as { market?: string | null }).market ?? null,
     createdAt: (p as { created_at?: string }).created_at ?? null,
+    callCompletedAt: (p as { call_completed_at?: string | null }).call_completed_at ?? null,
   }))
 
   return NextResponse.json({ signups, dashboard })
