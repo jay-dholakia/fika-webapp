@@ -286,7 +286,7 @@ export async function handleSmsOnboarding(params: {
   if (step >= FINISH_STEP) {
     const finishLink = `${appBase}/finish?token=${session.token}`
     const firstName = payload.first_name ? `, ${payload.first_name}` : ''
-    await send(`That's everything${firstName} ✨ Last step — add a photo and confirm your account: ${finishLink}`, 'onboarding_finish_resend')
+    await send(`Almost there${firstName} — add a photo to confirm your account, then we'll set up your call: ${finishLink}`, 'onboarding_finish_resend')
     return
   }
 
@@ -425,7 +425,7 @@ async function finishOnboarding(
 ): Promise<void> {
   await updateSession(supabase, fromPhone, { ...patch, onboarding_step: FINISH_STEP, onboarding_retry_count: 0 })
   const firstName = payload.first_name ? `, ${payload.first_name}` : ''
-  const finishMsg = `That's everything${firstName} — add a photo here to finish up: ${appBase}/finish?token=${session.token}`
+  const finishMsg = `Almost there${firstName} — add a photo to confirm your account, then we'll set up your call: ${appBase}/finish?token=${session.token}`
   await sleepForSmsPacing(SMS_PACING_MS.beat)
   await prepareOutboundAiPresence(fromPhone)
   await sleepForSmsPacing(typingDurationMs(finishMsg))

@@ -270,10 +270,10 @@ export function checkPairEligibility(
   const timeB = getIntakeSingle(b.responses, 'q_fika_time_pref')
   if (timeA && timeB) {
     const bothOk = (t: string) => t.toLowerCase().includes('both')
-    const morningA = timeA.toLowerCase().includes('morning')
-    const morningB = timeB.toLowerCase().includes('morning')
-    const eveningA = timeA.toLowerCase().includes('evening')
-    const eveningB = timeB.toLowerCase().includes('evening')
+    const morningA = timeA.toLowerCase().includes('morning') || timeA.includes('10am')
+    const morningB = timeB.toLowerCase().includes('morning') || timeB.includes('10am')
+    const eveningA = timeA.toLowerCase().includes('evening') || timeA.includes('6pm')
+    const eveningB = timeB.toLowerCase().includes('evening') || timeB.includes('6pm')
     const noOverlap = !bothOk(timeA) && !bothOk(timeB) && ((morningA && eveningB) || (eveningA && morningB))
     if (noOverlap) reasons.push('time_pref')
   }
