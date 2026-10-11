@@ -132,6 +132,33 @@ function tryParseDateLocally(text: string): string | null {
     const date = new Date(`${y}-${mm}-${dd}`)
     if (!isNaN(date.getTime())) return `${y}-${mm}-${dd}`
   }
+  // Month-name formats: "May 13 1993", "May 13, 1993", "13 May 1993"
+  const MONTH: Record<string, string> = {
+    january: '01', february: '02', march: '03', april: '04', may: '05', june: '06',
+    july: '07', august: '08', september: '09', october: '10', november: '11', december: '12',
+    jan: '01', feb: '02', mar: '03', apr: '04', jun: '06', jul: '07', aug: '08',
+    sep: '09', oct: '10', nov: '11', dec: '12',
+  }
+  const mdy = t.match(/^([a-zA-Z]+)\s+(\d{1,2}),?\s+(\d{2,4})$/)
+  if (mdy) {
+    const mm = MONTH[mdy[1].toLowerCase()]
+    if (mm) {
+      const y = mdy[3].length === 2 ? `19${mdy[3]}` : mdy[3]
+      const dd = mdy[2].padStart(2, '0')
+      const date = new Date(`${y}-${mm}-${dd}`)
+      if (!isNaN(date.getTime())) return `${y}-${mm}-${dd}`
+    }
+  }
+  const dmy = t.match(/^(\d{1,2})\s+([a-zA-Z]+)\s+(\d{2,4})$/)
+  if (dmy) {
+    const mm = MONTH[dmy[2].toLowerCase()]
+    if (mm) {
+      const y = dmy[3].length === 2 ? `19${dmy[3]}` : dmy[3]
+      const dd = dmy[1].padStart(2, '0')
+      const date = new Date(`${y}-${mm}-${dd}`)
+      if (!isNaN(date.getTime())) return `${y}-${mm}-${dd}`
+    }
+  }
   return null
 }
 
@@ -342,7 +369,7 @@ async function processAnswer(params: {
         await advanceTo(supabase, fromPhone, send, payload, {}, 3)
         return
       }
-      await send("Hmm, I didn't catch that — what's your birthday? (e.g. June 12, 1992 or 6/12/92)", 'onboarding_q2_reask')
+      await send("Hmm, I didn't catch that — what's your birthday? Something like June 12, 1992 or 6/12/92.", 'onboarding_q2_reask')
       await updateSession(supabase, fromPhone, { onboarding_retry_count: 1 })
       return
     }
