@@ -252,10 +252,10 @@ function FinishContent() {
   return (
     <div style={{ maxWidth: 400, margin: '0 auto', padding: '2.5rem 1.5rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1.5rem' }}>
       <h1 style={{ fontSize: '1.5rem', fontWeight: 700, textAlign: 'center', margin: 0 }}>
-        One last step ☕
+        Almost there ☕
       </h1>
       <p style={{ color: 'var(--color-textSecondary)', textAlign: 'center', margin: 0, lineHeight: 1.5 }}>
-        Add a photo so your match knows who to look for, then verify with a quick code to your phone.
+        Add a photo so people know who to look for, then verify with a quick code to your phone.
       </p>
 
       {/* Avatar picker */}
