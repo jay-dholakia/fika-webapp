@@ -201,6 +201,7 @@ async function parseBirthdate(text: string, openaiKey: string): Promise<string |
 
 async function sendIntro(send: OnboardingSendFn, fromPhone: string): Promise<void> {
   const text = "Hey! I'm Jay from Fika ☕ I'll ask 4 quick questions, then we'll set up a short call so I can intro you to people nearby you'd genuinely enjoy — ready to go?"
+  await sleepForSmsPacing(SMS_PACING_MS.beat)
   await prepareOutboundAiPresence(fromPhone)
   await sleepForSmsPacing(typingDurationMs(text))
   await send(text, 'onboarding_intro')

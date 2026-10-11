@@ -12,5 +12,5 @@ export async function sleepForSmsPacing(delayMs: number): Promise<void> {
 
 /** How long to hold the typing indicator before sending, scaled to message length. */
 export function typingDurationMs(text: string): number {
-  return Math.min(Math.max(Math.ceil(text.length * 28), 900), 3500)
+  return Math.min(Math.max(Math.ceil(text.length * 28), 900), 2000)
 }
