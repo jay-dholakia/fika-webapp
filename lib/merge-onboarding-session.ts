@@ -7,16 +7,8 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { sendMessage } from '@/lib/sendblue'
 import { geocodeZip } from '@/lib/geocode'
 import { insertMessageLedger } from '@/lib/message-ledger'
-import {
-  getOrCreateSmsState,
-  messageEntryFirstTimeMessages,
-  messageEntryFirstTimeMessagesInactiveMarket,
-  SMS_STATES,
-} from '@/lib/sms-agent'
-import { getTimezoneFromLatLng, getNextMondayPhrase } from '@/lib/sms-day-aware'
-import { isPastOptInDeadline } from '@/lib/onboarding'
-import { getMarketFromCityOrLatLngWithDb, getMarketBySlug } from '@/lib/markets'
-import { getActiveMarketSlugs } from '@/lib/admin-markets'
+import { getOrCreateSmsState, SMS_STATES } from '@/lib/sms-agent'
+import { getMarketFromCityOrLatLngWithDb } from '@/lib/markets'
 import { computeAndStoreIntakeEmbedding } from '@/lib/intake-embed-server'
 import { SMS_PACING_MS, sleepForSmsPacing } from '@/lib/sms-pacing'
 
@@ -26,19 +18,7 @@ function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
   return Promise.race([p, t]).finally(() => { if (id) clearTimeout(id) })
 }
 
-const SMS_INTAKE_FIELDS: Array<{ key: string; question_id: string; question_text: string }> = [
-  { key: 'q_market_tenure',       question_id: 'q_market_tenure',       question_text: 'How long have you lived there?' },
-  { key: 'q_neighborhood',        question_id: 'q_neighborhood',        question_text: 'What neighborhood are you in?' },
-  { key: 'q_relationship_status', question_id: 'q_relationship_status', question_text: 'Relationship status' },
-  { key: 'q_kids',                question_id: 'q_kids',                question_text: 'Do you have kids?' },
-  { key: 'q_work',                question_id: 'q_work',                question_text: 'What do you do for work?' },
-  { key: 'q_interests_freetext',  question_id: 'q_interests_freetext',  question_text: 'Tell me about your life outside of work' },
-  { key: 'q_social_goal',         question_id: 'q_social_goal',         question_text: 'What are you hoping to get out of Fika?' },
-  { key: 'q_on_mind',             question_id: 'q_on_mind',             question_text: "What's been on your mind lately?" },
-  { key: 'q_talk_forever',        question_id: 'q_talk_forever',        question_text: "What's a topic you could talk about for hours?" },
-  { key: 'q_want_to_try',         question_id: 'q_want_to_try',         question_text: "What's something you've been wanting to try or do more of?" },
-  { key: 'q_fika_time_pref',      question_id: 'q_fika_time_pref',      question_text: 'What times work best for your Fika meetups?' },
-]
+const SMS_INTAKE_FIELDS: Array<{ key: string; question_id: string; question_text: string }> = []
 
 export async function mergeOnboardingSession(
   supabase: SupabaseClient,
@@ -134,31 +114,18 @@ export async function mergeOnboardingSession(
 
   if (session.phone && process.env.SENDBLUE_API_KEY_ID) {
     try {
-      await getOrCreateSmsState(supabase, userId, SMS_STATES.GLOBAL_READY, {})
-      const appBase = (process.env.APP_CANONICAL_URL ?? '').trim().replace(/\/$/, '') || 'https://letsfika.vercel.app'
-      const activeSlugs = await getActiveMarketSlugs(supabase)
-      const isActiveMarket = market != null && activeSlugs.includes(market)
-      const messages = isActiveMarket
-        ? (() => {
-            const timezone = getTimezoneFromLatLng(lat, lng)
-            return messageEntryFirstTimeMessages(isPastOptInDeadline(), getNextMondayPhrase(timezone), appBase)
-          })()
-        : messageEntryFirstTimeMessagesInactiveMarket(appBase, getMarketBySlug(market)?.label ?? market)
-
-      let lastHandle: string | undefined
-      for (let i = 0; i < messages.length; i++) {
-        const sent = await withTimeout(sendMessage(session.phone, messages[i].content, { fromNumber: 'concierge' }), 6000, 'sendMessage').catch(() => null)
-        if (sent?.message_handle) lastHandle = sent.message_handle
-        await insertMessageLedger(supabase, { user_id: userId, direction: 'outbound', peer_phone: session.phone, content_snippet: messages[i].content, context: 'first_time_entry_merge', message_handle: sent?.message_handle ?? null })
-        if (i < messages.length - 1) await sleepForSmsPacing(messages[i].delayAfterMs ?? SMS_PACING_MS.quickAck)
+      await getOrCreateSmsState(supabase, userId, SMS_STATES.PENDING_CALL, {})
+      const bookingLink = process.env.BOOKING_LINK_JAY ?? 'https://calendly.com/letsfika/15mins'
+      const nameGreeting = first_name ? ` ${first_name}` : ''
+      const msg1 = `Thanks${nameGreeting}! Ready to set up that call? Pick a time here 👇`
+      const s1 = await withTimeout(sendMessage(session.phone, msg1, { fromNumber: 'concierge' }), 6000, 'sendMsg1').catch(() => null)
+      await insertMessageLedger(supabase, { user_id: userId, direction: 'outbound', peer_phone: session.phone, content_snippet: msg1, context: 'pending_call_cta', message_handle: s1?.message_handle ?? null })
+      await sleepForSmsPacing(SMS_PACING_MS.beat)
+      const s2 = await withTimeout(sendMessage(session.phone, bookingLink, { fromNumber: 'concierge' }), 6000, 'sendMsg2').catch(() => null)
+      await insertMessageLedger(supabase, { user_id: userId, direction: 'outbound', peer_phone: session.phone, content_snippet: bookingLink, context: 'pending_call_booking_link', message_handle: s2?.message_handle ?? null })
+      if (s2?.message_handle) {
+        await supabase.from('sms_conversation_states').update({ last_sendblue_message_handle: s2.message_handle, updated_at: new Date().toISOString() }).eq('user_id', userId).is('match_id', null)
       }
-      if (lastHandle) {
-        await supabase.from('sms_conversation_states').update({ last_sendblue_message_handle: lastHandle, updated_at: new Date().toISOString() }).eq('user_id', userId).is('match_id', null)
-      }
-      await sleepForSmsPacing(SMS_PACING_MS.quickAck)
-      await sendMessage(session.phone, "Save our contact so you don't miss your intro 👇", { fromNumber: 'concierge' }).catch(() => {})
-      await sleepForSmsPacing(SMS_PACING_MS.quickAck)
-      await sendMessage(session.phone, '', { fromNumber: 'concierge', mediaUrl: `${appBase}/fika.vcf` }).catch(() => {})
     } catch { /* non-fatal */ }
   }
 

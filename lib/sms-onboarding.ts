@@ -6,12 +6,13 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { geocodeZip } from '@/lib/geocode'
 import { sleepForSmsPacing, SMS_PACING_MS } from '@/lib/sms-pacing'
+import { prepareOutboundAiPresence } from '@/lib/sendblue'
 
 export type OnboardingSendFn = (content: string, context: string, opts?: { mediaUrl?: string }) => Promise<void>
 
 // ─── Questions ───────────────────────────────────────────────────────────────
 
-type QuestionType = 'free' | 'birthdate' | 'zip' | 'choice' | 'multi_choice' | 'anything_else'
+type QuestionType = 'free' | 'birthdate' | 'zip'
 
 interface Question {
   step: number
@@ -26,69 +27,19 @@ const QUESTIONS: Question[] = [
   { step: 3, text: "What gender do you identify as? (e.g. female, male, non-binary)", type: 'free' },
   {
     step: 4,
-    text: "Do you speak any languages besides English? (e.g. Spanish, Mandarin — or just say 'No')",
-    type: 'free',
-  },
-  {
-    step: 5,
-    text: "What's your zip code? (This helps us match you with people nearby)",
+    text: "What's your zip code? (This helps us connect you with people nearby)",
     type: 'zip',
-  },
-  {
-    step: 6,
-    text: "How long have you lived there? (e.g. just moved, 3 years, born and raised)",
-    type: 'free',
-  },
-  {
-    step: 7,
-    text: "What's your relationship status? (e.g. single, married, it's complicated)",
-    type: 'free',
-  },
-  {
-    step: 8,
-    text: "Do you have kids? (ages, genders, whatever you'd like — or just say 'No')",
-    type: 'free',
-  },
-  { step: 9, text: "What do you do for work? (be as specific as you want)", type: 'free' },
-  { step: 10, text: "What are you into outside of work? (hobbies, how you spend your time)", type: 'free' },
-  { step: 11, text: "What are you most excited about right now?", type: 'free' },
-  { step: 12, text: "What's something on your bucket list?", type: 'free' },
-  { step: 13, text: "What's a topic you could talk about for hours?", type: 'free' },
-  { step: 14, text: "What would you do more of if you had extra time?", type: 'free' },
-  {
-    step: 15,
-    text: "What are you hoping to get out of Fika? Reply with all that apply:\n1. Just a good coffee conversation\n2. Someone to hang out with\n3. A friend I haven't met yet\n4. Someone in a similar life stage\n5. Someone to explore the city with\n6. A creative collaborator\n7. A coworking buddy\n\n(e.g. reply 1, 3)",
-    type: 'multi_choice',
-    choices: [
-      'Just a good coffee conversation',
-      'Someone to hang out with',
-      "A friend I haven't met yet",
-      'Someone in a similar life stage',
-      'Someone to explore the city with',
-      'A creative collaborator',
-      'A coworking buddy',
-    ],
-  },
-  {
-    step: 16,
-    text: "Last one — what times typically work best for your Fika meetups?\n1. Weekday mornings at 10am\n2. Weekday evenings at 6pm\n3. Both work for me\n\n(reply 1, 2, or 3)",
-    type: 'choice',
-    choices: ['Weekday mornings at 10am', 'Weekday evenings at 6pm', 'Both work for me'],
   },
 ]
 
-const TOTAL_STEPS = 16
+const TOTAL_STEPS = 4
 const FINISH_STEP = TOTAL_STEPS + 1
 
 function getQuestion(step: number): Question | null {
   return QUESTIONS.find(q => q.step === step) ?? null
 }
 
-function getQuestionText(step: number, payload: OnboardingPayload): string {
-  if (step === 6) {
-    const place = payload.city ?? 'there'
-    return `How long have you lived in ${place}? (e.g. just moved, 3 years, born and raised)`
-  }
+function getQuestionText(step: number, _payload: OnboardingPayload): string {
   return getQuestion(step)?.text ?? ''
 }
 
@@ -101,22 +52,10 @@ export interface OnboardingPayload {
   first_name?: string
   birthdate?: string
   gender?: string
-  languages?: string[] | null
   zip?: string
   city?: string
   lat?: number
   lng?: number
-  q_market_tenure?: string
-  q_relationship_status?: string
-  q_kids?: string
-  q_work?: string
-  q_interests_freetext?: string
-  q_on_mind?: string
-  q_surprising_fact?: string
-  q_talk_forever?: string
-  q_want_to_try?: string
-  q_social_goal?: string
-  q_fika_time_pref?: string
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -133,10 +72,6 @@ function isValidName(name: string): boolean {
   return !NAME_BLOCKLIST.has(name.toLowerCase())
 }
 
-function isMeaningfulResponse(text: string): boolean {
-  return text.replace(/[^a-zA-Z0-9]/g, '').length >= 2
-}
-
 const RE_ENTRY_TRIGGERS = new Set([
   'hi', 'hey', 'hello', 'yo', 'sup', 'continue', 'ready', 'start', 'back',
   'resume', 'still there', 'still here', 'ok', 'okay', 'yes', 'yep', 'sure',
@@ -145,86 +80,6 @@ const RE_ENTRY_TRIGGERS = new Set([
 function isReEntry(text: string): boolean {
   const t = text.toLowerCase().trim().replace(/[!?.]+$/, '')
   return RE_ENTRY_TRIGGERS.has(t)
-}
-
-const SKIP_KEYWORDS = new Set(['no', 'nope', 'skip', 'nothing', 'n/a', 'pass', 'none', 'nah', 'not really'])
-
-function isSkip(text: string): boolean {
-  return SKIP_KEYWORDS.has(text.toLowerCase().trim())
-}
-
-const ENGLISH_ONLY_PHRASES = new Set([
-  'no', 'nope', 'nah', 'none', 'just english', 'english only', 'only english',
-  'no other', 'no others', 'n/a', 'na', 'not really', 'just english',
-])
-
-function isEnglishOnly(text: string): boolean {
-  return ENGLISH_ONLY_PHRASES.has(text.toLowerCase().trim())
-}
-
-const KNOWN_LANGUAGES = [
-  'spanish', 'mandarin', 'cantonese', 'chinese', 'french', 'german', 'italian',
-  'portuguese', 'japanese', 'korean', 'arabic', 'hindi', 'russian', 'tagalog',
-  'vietnamese', 'thai', 'polish', 'turkish', 'dutch', 'swedish', 'norwegian',
-  'danish', 'finnish', 'greek', 'hebrew', 'persian', 'farsi', 'urdu', 'bengali',
-  'punjabi', 'gujarati', 'tamil', 'telugu', 'kannada', 'malayalam', 'marathi',
-  'swahili', 'amharic', 'somali', 'hausa', 'yoruba', 'igbo', 'zulu', 'afrikaans',
-  'indonesian', 'malay', 'filipino', 'cebuano', 'ilocano', 'czech', 'slovak',
-  'hungarian', 'romanian', 'ukrainian', 'serbian', 'croatian', 'bosnian',
-  'bulgarian', 'slovenian', 'albanian', 'latvian', 'lithuanian', 'estonian',
-  'catalan', 'galician', 'welsh', 'irish', 'gaelic', 'asl', 'bsl', 'sign language',
-  'creole', 'haitian', 'wolof', 'twi', 'yoruba', 'tigrinya', 'oromo',
-]
-
-function looksLikeLanguageResponse(text: string): boolean {
-  const lower = text.toLowerCase()
-  return KNOWN_LANGUAGES.some(lang => lower.includes(lang))
-}
-
-function parseLanguages(text: string): string[] {
-  return text
-    .split(/[,\/&]|\band\b/i)
-    .map(s => s.trim())
-    .filter(s => s.length > 0 && s.toLowerCase() !== 'english')
-}
-
-function parseMultiChoice(text: string, choices: string[]): string[] {
-  const max = choices.length
-  const seen = new Set<number>()
-  const result: string[] = []
-  const re = /\b([1-9])\b/g
-  let m: RegExpExecArray | null
-  while ((m = re.exec(text)) !== null) {
-    const n = parseInt(m[1])
-    if (n >= 1 && n <= max && !seen.has(n)) { seen.add(n); result.push(choices[n - 1]) }
-  }
-  return result
-}
-
-function parseChoice(text: string, choices: string[]): number | null {
-  const t = text.trim().toLowerCase()
-
-  const num = parseInt(t, 10)
-  if (!isNaN(num) && num >= 1 && num <= choices.length) return num - 1
-
-  const match = t.match(/(?:option|choice|number|#)\s*(\d+)/)
-  if (match) {
-    const n = parseInt(match[1], 10)
-    if (!isNaN(n) && n >= 1 && n <= choices.length) return n - 1
-  }
-
-  const ordinals = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth']
-  const ordIdx = ordinals.indexOf(t)
-  if (ordIdx >= 0 && ordIdx < choices.length) return ordIdx
-
-  const exact = choices.findIndex(c => c.toLowerCase() === t)
-  if (exact >= 0) return exact
-
-  // Partial match: does the text start with the choice label?
-  const partial = choices.findIndex(c => c.toLowerCase().startsWith(t) || t.startsWith(c.toLowerCase()))
-  if (partial >= 0) return partial
-
-  return null
 }
 
 async function generateContextualAck(
@@ -321,17 +176,10 @@ async function parseBirthdate(text: string, openaiKey: string): Promise<string |
 
 // ─── Intro messages ───────────────────────────────────────────────────────────
 
-async function sendIntro(send: OnboardingSendFn): Promise<void> {
-  await send("Hey! Welcome to Fika ☕", 'onboarding_intro_1')
-  await sleepForSmsPacing(SMS_PACING_MS.quickAck)
+async function sendIntro(send: OnboardingSendFn, _fromPhone: string): Promise<void> {
   await send(
-    "Fika connects you with someone new for coffee — we make the intro, find a time that works for both of you, and pick a cafe nearby.",
-    'onboarding_intro_2'
-  )
-  await sleepForSmsPacing(SMS_PACING_MS.quickAck)
-  await send(
-    "16 quick questions so we can intro you to someone you'd actually enjoy connecting with — most take 5 seconds. Ready to start?",
-    'onboarding_intro_3'
+    "Hey! I'm Jay from Fika ☕ I'll ask 4 quick questions, then we'll set up a short call so I can intro you to people nearby you'd genuinely enjoy — ready to go?",
+    'onboarding_intro'
   )
 }
 
@@ -371,7 +219,7 @@ export async function handleSmsOnboarding(params: {
       console.error('[sms-onboarding] session insert failed', error.message)
       return
     }
-    await sendIntro(send)
+    await sendIntro(send, fromPhone)
     // Stay at step 0 — wait for user confirmation before firing Q1
     return
   }
@@ -411,7 +259,8 @@ export async function handleSmsOnboarding(params: {
   // ── Already finished ──────────────────────────────────────────────────────
   if (step >= FINISH_STEP) {
     const finishLink = `${appBase}/finish?token=${session.token}`
-    await send(`Last step — add a photo and verify with your Gmail to finish: ${finishLink}`, 'onboarding_finish_resend')
+    const firstName = payload.first_name ? `, ${payload.first_name}` : ''
+    await send(`That's everything${firstName} ✨ Last step — add a photo and confirm your account: ${finishLink}`, 'onboarding_finish_resend')
     return
   }
 
@@ -448,8 +297,7 @@ async function processAnswer(params: {
   const text = content.trim()
 
   // ── Confusion detection: if they're asking a question, re-send the current Q ─
-  const isChoiceStep = q.type === 'choice' || q.type === 'multi_choice'
-  if (!isChoiceStep && text.includes('?')) {
+  if (text.includes('?')) {
     await send("Just reply with your answer and we'll keep moving!", `onboarding_q${step}_confusion`)
     await sleepForSmsPacing(SMS_PACING_MS.quickAck)
     await send(getQuestionText(step, payload), `onboarding_q${step}_resend`)
@@ -461,6 +309,7 @@ async function processAnswer(params: {
     const firstName = text.split(/\s+/)[0]
     if (!isValidName(firstName)) {
       if (retryCount >= 1) {
+        await send("No worries — we'll come back to that.", 'onboarding_q1_skip')
         await advanceTo(supabase, fromPhone, send, payload, {}, 2)
         return
       }
@@ -510,226 +359,48 @@ async function processAnswer(params: {
     return
   }
 
-  // ── Q4: Languages ─────────────────────────────────────────────────────────
+  // ── Q4: Zip code ──────────────────────────────────────────────────────────
   if (step === 4) {
-    if (!isEnglishOnly(text) && !looksLikeLanguageResponse(text)) {
-      await sendReAsk(send, q, step, retryCount, payload, supabase, fromPhone)
-      return
-    }
-    const langs = isEnglishOnly(text) ? null : parseLanguages(text)
-    await advanceTo(supabase, fromPhone, send, payload, { languages: langs }, 5)
-    return
-  }
-
-  // ── Q5: Zip code ──────────────────────────────────────────────────────────
-  if (step === 5) {
     const zip = text.replace(/\D/g, '').slice(0, 10)
     if (zip.length < 5) {
       if (retryCount >= 1) {
-        await advanceTo(supabase, fromPhone, send, payload, { zip: text }, 6)
+        await finishOnboarding(supabase, fromPhone, send, payload, { zip: text }, session, appBase)
         return
       }
-      await send("Could you double-check that zip code?", 'onboarding_q5_reask')
+      await send("Could you double-check that zip code?", 'onboarding_q4_reask')
       await updateSession(supabase, fromPhone, { onboarding_retry_count: 1 })
       return
     }
     const geo = await geocodeZip(zip)
     if (!geo) {
       if (retryCount >= 1) {
-        await advanceTo(supabase, fromPhone, send, payload, { zip }, 6)
+        await finishOnboarding(supabase, fromPhone, send, payload, { zip }, session, appBase)
         return
       }
-      await send("Hmm, I couldn't find that zip code — could you double-check it?", 'onboarding_q5_reask')
+      await send("Hmm, I couldn't find that zip code — could you double-check it?", 'onboarding_q4_reask')
       await updateSession(supabase, fromPhone, { onboarding_retry_count: 1 })
       return
     }
-    await advanceTo(supabase, fromPhone, send, payload, {
-      zip,
-      city: geo.city,
-      lat: geo.lat,
-      lng: geo.lng,
-    }, 6)
-    return
-  }
-
-  // ── Q6: Time in area (city injected dynamically via getQuestionText) ────────
-  if (step === 6) {
-    if (!isMeaningfulResponse(text)) {
-      await sendReAsk(send, q, step, retryCount, payload, supabase, fromPhone)
-      return
-    }
-    await advanceTo(supabase, fromPhone, send, payload, { q_market_tenure: text }, 7)
-    return
-  }
-
-  // ── Q7: Relationship status ───────────────────────────────────────────────
-  if (step === 7) {
-    if (!isMeaningfulResponse(text)) {
-      await sendReAsk(send, q, step, retryCount, payload, supabase, fromPhone)
-      return
-    }
-    await advanceTo(supabase, fromPhone, send, payload, { q_relationship_status: text }, 8)
-    return
-  }
-
-  // ── Q8: Kids ──────────────────────────────────────────────────────────────
-  if (step === 8) {
-    const kids = isSkip(text) ? null : text
-    await advanceTo(supabase, fromPhone, send, payload, { q_kids: kids ?? undefined }, 9)
-    return
-  }
-
-  // ── Q9: Work ──────────────────────────────────────────────────────────────
-  if (step === 9) {
-    if (!isMeaningfulResponse(text)) {
-      await sendReAsk(send, q, step, retryCount, payload, supabase, fromPhone)
-      return
-    }
-    const ack = openaiKey
-      ? await generateContextualAck(
-          'Someone just texted you what they do for work. Reply like a real friend would — pick up on one specific thing they said and react to it genuinely. Short, natural, no filler. Never say "Nice!", "That\'s cool!", "Awesome!", "Great!" or anything hollow. Never ask a question. No question marks. No em dashes (—). Max 8 words.',
-          text,
-          'Respect.',
-          openaiKey
-        )
-      : 'Respect.'
-    await send(ack, 'onboarding_q9_ack')
-    await advanceTo(supabase, fromPhone, send, payload, { q_work: text }, 10)
-    return
-  }
-
-  // ── Q10: What are you into outside work ──────────────────────────────────
-  if (step === 10) {
-    if (!isMeaningfulResponse(text)) {
-      await sendReAsk(send, q, step, retryCount, payload, supabase, fromPhone)
-      return
-    }
-    const ack = openaiKey
-      ? await generateContextualAck(
-          'Someone just texted you their hobbies and interests. Reply like a real friend — pick up on one specific thing they mentioned and react to it naturally. Could be a short observation, a connection, even a little dry humor. Never say "Love that!", "That\'s awesome!", "So cool!" or anything that sounds like a bot. Never ask a question. No question marks. No em dashes (—). Max 8 words.',
-          text,
-          'Good mix.',
-          openaiKey
-        )
-      : 'Good mix.'
-    await send(ack, 'onboarding_q10_ack')
-    await advanceTo(supabase, fromPhone, send, payload, { q_interests_freetext: text }, 11)
-    return
-  }
-
-  // ── Q11: What's on your mind ──────────────────────────────────────────────
-  if (step === 11) {
-    if (!isMeaningfulResponse(text)) {
-      await sendReAsk(send, q, step, retryCount, payload, supabase, fromPhone)
-      return
-    }
-    const ack = openaiKey
-      ? await generateContextualAck(
-          'Someone just texted you what they\'re most excited about right now. Reply like a real friend — engage with the actual thing they said, not just acknowledge that they said something. Could be curiosity, a take, even light humor. Never say "That\'s exciting!", "Love that!", "So cool!" or anything hollow. Never ask a question. No question marks. No em dashes (—). Max 8 words.',
-          text,
-          'That tracks.',
-          openaiKey
-        )
-      : "That tracks."
-    await send(ack, 'onboarding_q11_ack')
-    await advanceTo(supabase, fromPhone, send, payload, { q_on_mind: text }, 12)
-    return
-  }
-
-  // ── Q12: Something most people are surprised to find out ─────────────────
-  if (step === 12) {
-    if (!isMeaningfulResponse(text)) {
-      await sendReAsk(send, q, step, retryCount, payload, supabase, fromPhone)
-      return
-    }
-    await advanceTo(supabase, fromPhone, send, payload, { q_surprising_fact: text }, 13)
-    return
-  }
-
-  // ── Q13: Topic you could talk about for hours ─────────────────────────────
-  if (step === 13) {
-    if (!isMeaningfulResponse(text)) {
-      await sendReAsk(send, q, step, retryCount, payload, supabase, fromPhone)
-      return
-    }
-    await advanceTo(supabase, fromPhone, send, payload, { q_talk_forever: text }, 14)
-    return
-  }
-
-  // ── Q14: Something you've been wanting to try ─────────────────────────────
-  if (step === 14) {
-    if (!isMeaningfulResponse(text)) {
-      await sendReAsk(send, q, step, retryCount, payload, supabase, fromPhone)
-      return
-    }
-    await advanceTo(supabase, fromPhone, send, payload, { q_want_to_try: text }, 15)
-    return
-  }
-
-  // ── Q15: Social goal (multi-select) ───────────────────────────────────────
-  if (step === 15) {
-    const selected = parseMultiChoice(text, q.choices!)
-    if (selected.length === 0) {
-      await sendChoiceReAsk(send, q, step, retryCount, payload, supabase, fromPhone)
-      return
-    }
-    await advanceTo(supabase, fromPhone, send, payload, { q_social_goal: selected.join(', ') }, 16)
-    return
-  }
-
-  // ── Q16: Fika time preference ─────────────────────────────────────────────
-  if (step === 16) {
-    const q16 = getQuestion(16)!
-    const idx = parseChoice(text, q16.choices!)
-    if (idx === null) {
-      await sendChoiceReAsk(send, q16, step, retryCount, payload, supabase, fromPhone)
-      return
-    }
-    const timePref = q16.choices![idx]
-    await updateSession(supabase, fromPhone, { q_fika_time_pref: timePref, onboarding_step: FINISH_STEP, onboarding_retry_count: 0 })
-    const firstName = payload.first_name ? `, ${payload.first_name}` : ''
-    await sleepForSmsPacing(SMS_PACING_MS.quickAck)
-    await send(`Last step${firstName} — add a photo and verify with your Gmail to finish: ${appBase}/finish?token=${session.token}`, 'onboarding_finish')
+    await finishOnboarding(supabase, fromPhone, send, payload, { zip, city: geo.city, lat: geo.lat, lng: geo.lng }, session, appBase)
     return
   }
 }
 
-// ─── Re-ask helpers ───────────────────────────────────────────────────────────
+// ─── Finish helper ────────────────────────────────────────────────────────────
 
-async function sendReAsk(
-  send: OnboardingSendFn,
-  _q: Question,
-  step: number,
-  retryCount: number,
-  payload: OnboardingPayload,
+async function finishOnboarding(
   supabase: SupabaseClient,
-  fromPhone: string
-) {
-  if (retryCount >= 1) {
-    await send("No worries, we'll skip that one!", `onboarding_q${step}_skip`)
-    await advanceTo(supabase, fromPhone, send, payload, {}, step + 1)
-    return
-  }
-  await send("I didn't catch that — could you try again?", `onboarding_q${step}_reask`)
-  await updateSession(supabase, fromPhone, { onboarding_retry_count: 1 })
-}
-
-async function sendChoiceReAsk(
+  fromPhone: string,
   send: OnboardingSendFn,
-  q: Question,
-  step: number,
-  retryCount: number,
   payload: OnboardingPayload,
-  supabase: SupabaseClient,
-  fromPhone: string
-) {
-  if (retryCount >= 1) {
-    await send("No worries, we'll skip that one!", `onboarding_q${step}_skip`)
-    await advanceTo(supabase, fromPhone, send, payload, {}, step + 1)
-    return
-  }
-  await send("Just reply with a number from the list 👆", `onboarding_q${step}_reask`)
-  await updateSession(supabase, fromPhone, { onboarding_retry_count: 1 })
+  patch: Partial<OnboardingPayload>,
+  session: { token: string },
+  appBase: string
+): Promise<void> {
+  await updateSession(supabase, fromPhone, { ...patch, onboarding_step: FINISH_STEP, onboarding_retry_count: 0 })
+  const firstName = payload.first_name ? `, ${payload.first_name}` : ''
+  await sleepForSmsPacing(SMS_PACING_MS.beat)
+  await send(`That's everything${firstName} ✨ Last step — add a photo and confirm your account: ${appBase}/finish?token=${session.token}`, 'onboarding_finish')
 }
 
 // ─── State helpers ────────────────────────────────────────────────────────────
@@ -764,7 +435,8 @@ async function advanceTo(
   send: OnboardingSendFn,
   currentPayload: OnboardingPayload,
   patch: Partial<OnboardingPayload>,
-  nextStep: number
+  nextStep: number,
+  pacingMs?: number
 ): Promise<void> {
   const updatedPayload = { ...currentPayload, ...patch, onboarding_step: nextStep, onboarding_retry_count: 0 }
   await updateSession(supabase, fromPhone, updatedPayload)
@@ -772,6 +444,7 @@ async function advanceTo(
   if (nextStep > TOTAL_STEPS) return // finish link is sent by the caller
 
   const questionText = getQuestionText(nextStep, updatedPayload)
-  await sleepForSmsPacing(SMS_PACING_MS.quickAck)
+  await sleepForSmsPacing(pacingMs ?? SMS_PACING_MS.beat)
+  await prepareOutboundAiPresence(fromPhone)
   await send(questionText, `onboarding_q${nextStep}`)
 }
