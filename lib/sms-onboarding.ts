@@ -5,7 +5,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { geocodeZip } from '@/lib/geocode'
-import { sleepForSmsPacing, SMS_PACING_MS } from '@/lib/sms-pacing'
+import { sleepForSmsPacing, SMS_PACING_MS, typingDurationMs } from '@/lib/sms-pacing'
 import { prepareOutboundAiPresence } from '@/lib/sendblue'
 
 export type OnboardingSendFn = (content: string, context: string, opts?: { mediaUrl?: string }) => Promise<void>
@@ -23,13 +23,9 @@ interface Question {
 
 const QUESTIONS: Question[] = [
   { step: 1, text: "What's your first name?", type: 'free' },
-  { step: 2, text: "When's your birthday? (month, day, and year — e.g. June 12, 1992)", type: 'birthdate' },
-  { step: 3, text: "What gender do you identify as? (e.g. female, male, non-binary)", type: 'free' },
-  {
-    step: 4,
-    text: "What's your zip code? (This helps us connect you with people nearby)",
-    type: 'zip',
-  },
+  { step: 2, text: "When's your birthday? Like June 12, 1992.", type: 'birthdate' },
+  { step: 3, text: "How do you identify — male, female, non-binary, or something else?", type: 'free' },
+  { step: 4, text: "What's your zip code? We'll use it to find people near you.", type: 'zip' },
 ]
 
 const TOTAL_STEPS = 4
@@ -176,11 +172,11 @@ async function parseBirthdate(text: string, openaiKey: string): Promise<string |
 
 // ─── Intro messages ───────────────────────────────────────────────────────────
 
-async function sendIntro(send: OnboardingSendFn, _fromPhone: string): Promise<void> {
-  await send(
-    "Hey! I'm Jay from Fika ☕ I'll ask 4 quick questions, then we'll set up a short call so I can intro you to people nearby you'd genuinely enjoy — ready to go?",
-    'onboarding_intro'
-  )
+async function sendIntro(send: OnboardingSendFn, fromPhone: string): Promise<void> {
+  const text = "Hey! I'm Jay from Fika ☕ I'll ask 4 quick questions, then we'll set up a short call so I can intro you to people nearby you'd genuinely enjoy — ready to go?"
+  await prepareOutboundAiPresence(fromPhone)
+  await sleepForSmsPacing(typingDurationMs(text))
+  await send(text, 'onboarding_intro')
 }
 
 // ─── Main handler ─────────────────────────────────────────────────────────────
@@ -252,6 +248,8 @@ export async function handleSmsOnboarding(params: {
     // Any reply at step=0 is treated as confirmation — fire Q1
     await updateSession(supabase, fromPhone, { onboarding_step: 1, onboarding_retry_count: 0 })
     await sleepForSmsPacing(SMS_PACING_MS.quickAck)
+    await prepareOutboundAiPresence(fromPhone)
+    await sleepForSmsPacing(typingDurationMs(QUESTIONS[0].text))
     await send(QUESTIONS[0].text, 'onboarding_q1')
     return
   }
@@ -399,8 +397,11 @@ async function finishOnboarding(
 ): Promise<void> {
   await updateSession(supabase, fromPhone, { ...patch, onboarding_step: FINISH_STEP, onboarding_retry_count: 0 })
   const firstName = payload.first_name ? `, ${payload.first_name}` : ''
+  const finishMsg = `That's everything${firstName} ✨ Last step — add a photo and confirm your account: ${appBase}/finish?token=${session.token}`
   await sleepForSmsPacing(SMS_PACING_MS.beat)
-  await send(`That's everything${firstName} ✨ Last step — add a photo and confirm your account: ${appBase}/finish?token=${session.token}`, 'onboarding_finish')
+  await prepareOutboundAiPresence(fromPhone)
+  await sleepForSmsPacing(typingDurationMs(finishMsg))
+  await send(finishMsg, 'onboarding_finish')
 }
 
 // ─── State helpers ────────────────────────────────────────────────────────────
@@ -446,5 +447,6 @@ async function advanceTo(
   const questionText = getQuestionText(nextStep, updatedPayload)
   await sleepForSmsPacing(pacingMs ?? SMS_PACING_MS.beat)
   await prepareOutboundAiPresence(fromPhone)
+  await sleepForSmsPacing(typingDurationMs(questionText))
   await send(questionText, `onboarding_q${nextStep}`)
 }
