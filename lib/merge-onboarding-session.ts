@@ -115,7 +115,7 @@ export async function mergeOnboardingSession(
   if (session.phone && process.env.SENDBLUE_API_KEY_ID) {
     try {
       await getOrCreateSmsState(supabase, userId, SMS_STATES.PENDING_CALL, {})
-      const bookingLink = process.env.BOOKING_LINK_JAY ?? 'https://calendly.com/letsfika/15mins'
+      const bookingLink = process.env.BOOKING_LINK_JAY ?? 'https://calendar.app.google/ust81a3V9er5F7h37'
       const nameGreeting = first_name ? ` ${first_name}` : ''
       const msg1 = `You're signed up${nameGreeting}! One last step — schedule a call with me so we can get your intros going 👇`
       const s1 = await withTimeout(sendMessage(session.phone, msg1, { fromNumber: 'concierge' }), 6000, 'sendMsg1').catch(() => null)
