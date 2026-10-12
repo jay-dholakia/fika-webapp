@@ -318,6 +318,14 @@ a {
   margin-bottom: 2rem;
   line-height: 1.65;
 }
+.hero-cta-mobile {
+  margin-bottom: 0;
+}
+@media (min-width: 900px) {
+  .hero-cta-mobile {
+    display: none;
+  }
+}
 .hero-coffee-graphic {
   display: flex;
   justify-content: center;

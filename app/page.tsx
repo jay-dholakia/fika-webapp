@@ -27,6 +27,14 @@ export default function Home() {
                   <p className="hero-sub">
                     A coffee meetup, set up by text. Show up and have a real conversation.
                   </p>
+                  <p className="hero-cta-mobile">
+                    <a
+                      href={CONCIERGE_NUMBER ? `sms:${CONCIERGE_NUMBER}?body=${encodeURIComponent('Hi — set me up for Fika.')}` : '/#cta'}
+                      className="btn btn-primary home-mobile-cta"
+                    >
+                      Sign up
+                    </a>
+                  </p>
                 </div>
               </section>
 
