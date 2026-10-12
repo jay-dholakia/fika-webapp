@@ -16,7 +16,7 @@ const WINDOW_MAX_MINUTES = 75
 function buildMessage(firstName: string | null | undefined): string {
   const name = (firstName ?? '').trim()
   const greeting = name ? `Hey ${name}!` : 'Hey!'
-  return `${greeting} I'm Jay, the founder of Fika. Thanks for signing up — we're growing in your city and hope to have a great intro for you soon. Feel free to text me here anytime if you have questions. I read everything.`
+  return `${greeting} I'm Jay, the founder of Fika. Thanks for signing up — we're growing in your city and hope to have a great intro for you soon. Feel free to text me here anytime if you have questions.`
 }
 
 serve(async () => {
