@@ -1517,62 +1517,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true })
     }
 
-    const aiCountGr = await countGlobalReadyAiRepliesLast24h(supabase, userId)
-    if (aiCountGr >= getSmsAiMaxGlobalReadyPer24h()) {
-      const rateResult = await sendConciergeAndLog(fromNumber, messageEntryReminder(), 'global_ready_match_first', { userId })
-      await setGlobalSmsState({
-        userId,
-        state,
-        payload,
-        lastSendblueMessageHandle: rateResult.message_handle ?? messageHandle ?? null,
-      })
-      return NextResponse.json({ ok: true })
-    }
-
-    const apiKeyGr = getOpenAiKeyForSms()
-    if (!apiKeyGr) {
-      const noKeyResult = await sendConciergeAndLog(fromNumber, messageEntryReminder(), 'global_ready_match_first', { userId })
-      await setGlobalSmsState({
-        userId,
-        state,
-        payload,
-        lastSendblueMessageHandle: noKeyResult.message_handle ?? messageHandle ?? null,
-      })
-      return NextResponse.json({ ok: true })
-    }
-
-    await prepareOutboundAiPresence(fromNumber)
-
-    const appUrlGr = getAppBase()
-    const firstNameGr = (profileForGlobal as { first_name?: string | null })?.first_name?.trim() ?? ''
-    const marketLabelGr = profileMarketGr ? getMarketBySlug(profileMarketGr)?.label ?? profileMarketGr : undefined
-    const aiReplyGr = await fetchGlobalReadyConciergeReply({
-      apiKey: apiKeyGr,
-      userMessage: content,
-      firstName: firstNameGr || undefined,
-      marketLabel: marketLabelGr,
-      appBaseUrl: appUrlGr,
-    })
-    if (!aiReplyGr.ok) {
-      console.error('[sendblue-webhook] global ready concierge AI failed', aiReplyGr.error)
-      const errResult = await sendConciergeAndLog(fromNumber, messageEntryReminder(), 'global_ready_match_first', { userId })
-      await setGlobalSmsState({
-        userId,
-        state,
-        payload,
-        lastSendblueMessageHandle: errResult.message_handle ?? messageHandle ?? null,
-      })
-      return NextResponse.json({ ok: true })
-    }
-    const sendResultGr = await sendConciergeAndLog(fromNumber, aiReplyGr.text, GLOBAL_READY_CONCIERGE_AI_CONTEXT, {
-      userId,
-    })
-    await setGlobalSmsState({
-      userId,
-      state,
-      payload,
-      lastSendblueMessageHandle: sendResultGr.message_handle ?? messageHandle ?? null,
-    })
+    // AI auto-reply disabled — Jay reads and responds personally
     return NextResponse.json({ ok: true })
   }
 
