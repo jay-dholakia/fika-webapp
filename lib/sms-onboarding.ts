@@ -12,7 +12,7 @@ export type OnboardingSendFn = (content: string, context: string, opts?: { media
 
 // ─── Questions ───────────────────────────────────────────────────────────────
 
-type QuestionType = 'free' | 'birthdate' | 'zip'
+type QuestionType = 'free' | 'birthdate' | 'zip' | 'choice' | 'multi_choice'
 
 interface Question {
   step: number
@@ -26,9 +26,30 @@ const QUESTIONS: Question[] = [
   { step: 2, text: "When's your birthday? Like June 12, 1992.", type: 'birthdate' },
   { step: 3, text: "How do you identify — male, female, non-binary, or something else?", type: 'free' },
   { step: 4, text: "What's your zip code? We'll use it to find people near you.", type: 'zip' },
+  { step: 5, text: "Tell me a bit about yourself — what do you do, what are you into?", type: 'free' },
+  {
+    step: 6,
+    text: "What are you hoping to get out of Fika? Reply with all that apply:\n1. Just a good coffee conversation\n2. Someone to hang out with\n3. A friend I haven't met yet\n4. Someone in a similar life stage\n5. Someone to explore the city with\n6. A creative collaborator\n7. A coworking buddy\n\n(e.g. reply 1, 3)",
+    type: 'multi_choice',
+    choices: [
+      'Just a good coffee conversation',
+      'Someone to hang out with',
+      "A friend I haven't met yet",
+      'Someone in a similar life stage',
+      'Someone to explore the city with',
+      'A creative collaborator',
+      'A coworking buddy',
+    ],
+  },
+  {
+    step: 7,
+    text: "Last one — what times typically work best for your Fika meetups?\n1. Weekday mornings at 10am\n2. Weekday evenings at 6pm\n3. Both work for me\n\n(reply 1, 2, or 3)",
+    type: 'choice',
+    choices: ['Weekday mornings at 10am', 'Weekday evenings at 6pm', 'Both work for me'],
+  },
 ]
 
-const TOTAL_STEPS = 4
+const TOTAL_STEPS = 7
 const FINISH_STEP = TOTAL_STEPS + 1
 
 function getQuestion(step: number): Question | null {
@@ -52,6 +73,9 @@ export interface OnboardingPayload {
   city?: string
   lat?: number
   lng?: number
+  q_about_me?: string
+  q_social_goal?: string
+  q_fika_time_pref?: string
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -197,12 +221,64 @@ async function parseBirthdate(text: string, openaiKey: string): Promise<string |
   }
 }
 
+// ─── Choice parsers ───────────────────────────────────────────────────────────
+
+function parseMultiChoice(text: string, choices: string[]): string[] {
+  const max = choices.length
+  const seen = new Set<number>()
+  const result: string[] = []
+  const re = /\b([1-9])\b/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(text)) !== null) {
+    const n = parseInt(m[1])
+    if (n >= 1 && n <= max && !seen.has(n)) { seen.add(n); result.push(choices[n - 1]) }
+  }
+  return result
+}
+
+function parseChoice(text: string, choices: string[]): number | null {
+  const t = text.trim().toLowerCase()
+  const num = parseInt(t, 10)
+  if (!isNaN(num) && num >= 1 && num <= choices.length) return num - 1
+  const match = t.match(/(?:option|choice|number|#)\s*(\d+)/)
+  if (match) {
+    const n = parseInt(match[1], 10)
+    if (!isNaN(n) && n >= 1 && n <= choices.length) return n - 1
+  }
+  const ordinals = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth']
+  const ordIdx = ordinals.indexOf(t)
+  if (ordIdx >= 0 && ordIdx < choices.length) return ordIdx
+  const exact = choices.findIndex(c => c.toLowerCase() === t)
+  if (exact >= 0) return exact
+  const partial = choices.findIndex(c => c.toLowerCase().startsWith(t) || t.startsWith(c.toLowerCase()))
+  if (partial >= 0) return partial
+  return null
+}
+
+async function sendChoiceReAsk(
+  send: OnboardingSendFn,
+  q: Question,
+  step: number,
+  retryCount: number,
+  payload: OnboardingPayload,
+  supabase: SupabaseClient,
+  fromPhone: string
+) {
+  if (retryCount >= 1) {
+    await send("No worries, we'll skip that one!", `onboarding_q${step}_skip`)
+    await advanceTo(supabase, fromPhone, send, payload, {}, step + 1)
+    return
+  }
+  await send("Just reply with a number from the list 👆", `onboarding_q${step}_reask`)
+  await updateSession(supabase, fromPhone, { onboarding_retry_count: 1 })
+}
+
 // ─── Intro messages ───────────────────────────────────────────────────────────
 
 async function sendIntro(send: OnboardingSendFn, fromPhone: string): Promise<void> {
   const m1 = "Hey! Welcome to Fika ☕"
   const m2 = "We connect people nearby for casual conversations over coffee — no apps, no swiping."
-  const m3 = "4 quick questions, then a short call with Jay (our founder) to learn more about you so we can get your intros going. Ready?"
+  const m3 = "7 quick questions, then we'll reach out when we have a great intro for you. Ready?"
   await sleepForSmsPacing(SMS_PACING_MS.beat)
   await prepareOutboundAiPresence(fromPhone)
   await sleepForSmsPacing(typingDurationMs(m1))
@@ -398,7 +474,7 @@ async function processAnswer(params: {
     const zip = text.replace(/\D/g, '').slice(0, 10)
     if (zip.length < 5) {
       if (retryCount >= 1) {
-        await finishOnboarding(supabase, fromPhone, send, payload, { zip: text }, session, appBase)
+        await advanceTo(supabase, fromPhone, send, payload, { zip: text }, 5)
         return
       }
       await send("Could you double-check that zip code?", 'onboarding_q4_reask')
@@ -408,14 +484,54 @@ async function processAnswer(params: {
     const geo = await geocodeZip(zip)
     if (!geo) {
       if (retryCount >= 1) {
-        await finishOnboarding(supabase, fromPhone, send, payload, { zip }, session, appBase)
+        await advanceTo(supabase, fromPhone, send, payload, { zip }, 5)
         return
       }
       await send("Hmm, I couldn't find that zip code — could you double-check it?", 'onboarding_q4_reask')
       await updateSession(supabase, fromPhone, { onboarding_retry_count: 1 })
       return
     }
-    await finishOnboarding(supabase, fromPhone, send, payload, { zip, city: geo.city, lat: geo.lat, lng: geo.lng }, session, appBase)
+    await advanceTo(supabase, fromPhone, send, payload, { zip, city: geo.city, lat: geo.lat, lng: geo.lng }, 5)
+    return
+  }
+
+  // ── Q5: About me (free text) ──────────────────────────────────────────────
+  if (step === 5) {
+    if (!text || text.length < 3) {
+      if (retryCount >= 1) {
+        await advanceTo(supabase, fromPhone, send, payload, {}, 6)
+        return
+      }
+      await send("Just a sentence or two is great!", 'onboarding_q5_reask')
+      await updateSession(supabase, fromPhone, { onboarding_retry_count: 1 })
+      return
+    }
+    await advanceTo(supabase, fromPhone, send, payload, { q_about_me: text }, 6)
+    return
+  }
+
+  // ── Q6: Social goal (multi-select) ────────────────────────────────────────
+  if (step === 6) {
+    const q6 = getQuestion(6)!
+    const selected = parseMultiChoice(text, q6.choices!)
+    if (selected.length === 0) {
+      await sendChoiceReAsk(send, q6, step, retryCount, payload, supabase, fromPhone)
+      return
+    }
+    await advanceTo(supabase, fromPhone, send, payload, { q_social_goal: selected.join(', ') }, 7)
+    return
+  }
+
+  // ── Q7: Fika time preference ──────────────────────────────────────────────
+  if (step === 7) {
+    const q7 = getQuestion(7)!
+    const idx = parseChoice(text, q7.choices!)
+    if (idx === null) {
+      await sendChoiceReAsk(send, q7, step, retryCount, payload, supabase, fromPhone)
+      return
+    }
+    const timePref = q7.choices![idx]
+    await finishOnboarding(supabase, fromPhone, send, payload, { q_fika_time_pref: timePref }, session, appBase)
     return
   }
 }

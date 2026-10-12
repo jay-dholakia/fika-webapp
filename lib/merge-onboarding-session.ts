@@ -10,7 +10,7 @@ import { insertMessageLedger } from '@/lib/message-ledger'
 import { getOrCreateSmsState, SMS_STATES } from '@/lib/sms-agent'
 import { getMarketFromCityOrLatLngWithDb } from '@/lib/markets'
 import { computeAndStoreIntakeEmbedding } from '@/lib/intake-embed-server'
-import { SMS_PACING_MS, sleepForSmsPacing } from '@/lib/sms-pacing'
+import type { } from '@/lib/sms-pacing' // sleepForSmsPacing available if call-path is re-enabled
 
 function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
   let id: ReturnType<typeof setTimeout> | null = null
@@ -114,20 +114,23 @@ export async function mergeOnboardingSession(
 
   if (session.phone && process.env.SENDBLUE_API_KEY_ID) {
     try {
-      await getOrCreateSmsState(supabase, userId, SMS_STATES.PENDING_CALL, {})
-      const bookingLink = process.env.BOOKING_LINK_JAY ?? 'https://calendar.app.google/ust81a3V9er5F7h37'
+      await getOrCreateSmsState(supabase, userId, SMS_STATES.GLOBAL_READY, {})
       const nameGreeting = first_name ? ` ${first_name}` : ''
-      const msg1 = `You're signed up${nameGreeting}! One last step — book a quick call with Jay so we can get your intros going 👇`
+      const msg1 = `You're in${nameGreeting}! We'll reach out when we have a great intro for you ☕`
       const s1 = await withTimeout(sendMessage(session.phone, msg1, { fromNumber: 'concierge' }), 6000, 'sendMsg1').catch(() => null)
-      await insertMessageLedger(supabase, { user_id: userId, direction: 'outbound', peer_phone: session.phone, content_snippet: msg1, context: 'pending_call_cta', message_handle: s1?.message_handle ?? null })
-      await sleepForSmsPacing(SMS_PACING_MS.beat)
-      const s2 = await withTimeout(sendMessage(session.phone, bookingLink, { fromNumber: 'concierge' }), 6000, 'sendMsg2').catch(() => null)
-      await insertMessageLedger(supabase, { user_id: userId, direction: 'outbound', peer_phone: session.phone, content_snippet: bookingLink, context: 'pending_call_booking_link', message_handle: s2?.message_handle ?? null })
-      if (s2?.message_handle) {
-        await supabase.from('sms_conversation_states').update({ last_sendblue_message_handle: s2.message_handle, updated_at: new Date().toISOString() }).eq('user_id', userId).is('match_id', null)
+      await insertMessageLedger(supabase, { user_id: userId, direction: 'outbound', peer_phone: session.phone, content_snippet: msg1, context: 'global_ready_confirmation', message_handle: s1?.message_handle ?? null })
+      if (s1?.message_handle) {
+        await supabase.from('sms_conversation_states').update({ last_sendblue_message_handle: s1.message_handle, updated_at: new Date().toISOString() }).eq('user_id', userId).is('match_id', null)
       }
     } catch { /* non-fatal */ }
   }
+
+  // ── PENDING_CALL path (preserved for future use) ──────────────────────────
+  // To re-enable the call booking flow, replace the block above with:
+  //   await getOrCreateSmsState(supabase, userId, SMS_STATES.PENDING_CALL, {})
+  //   const bookingLink = process.env.BOOKING_LINK_JAY ?? 'https://calendar.app.google/ust81a3V9er5F7h37'
+  //   const msg1 = `You're signed up! One last step — book a quick call with Jay so we can get your intros going 👇`
+  //   ... send msg1 then bookingLink
 
   return { ok: true }
 }
