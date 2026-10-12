@@ -244,7 +244,7 @@ export async function handleSmsOnboarding(params: {
     const { error } = await supabase.from('onboarding_sessions').insert({
       token,
       phone: fromPhone,
-      payload: { onboarding_step: 0, onboarding_retry_count: 0 },
+      payload: { onboarding_step: 0, onboarding_retry_count: 0, ...(messageHandle ? { last_message_handle: messageHandle } : {}) },
       updated_at: new Date().toISOString(),
     })
     if (error) {
