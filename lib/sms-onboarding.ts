@@ -26,7 +26,7 @@ const QUESTIONS: Question[] = [
   { step: 2, text: "When's your birthday? Like June 12, 1992.", type: 'birthdate' },
   { step: 3, text: "How do you identify — male, female, non-binary, or something else?", type: 'free' },
   { step: 4, text: "What's your zip code? We'll use it to find people near you.", type: 'zip' },
-  { step: 5, text: "Tell me a bit about yourself — what do you do, what are you into?", type: 'free' },
+  { step: 5, text: "What should someone know about you before sitting down for coffee?", type: 'free' },
   {
     step: 6,
     text: "What are you hoping to get out of Fika? Reply with all that apply:\n1. Just a good coffee conversation\n2. Someone to hang out with\n3. A friend I haven't met yet\n4. Someone in a similar life stage\n5. Someone to explore the city with\n6. A creative collaborator\n7. A coworking buddy\n\n(e.g. reply 1, 3)",
@@ -475,6 +475,8 @@ async function processAnswer(params: {
     if (zip.length < 5) {
       if (retryCount >= 1) {
         await advanceTo(supabase, fromPhone, send, payload, { zip: text }, 5)
+        await sleepForSmsPacing(SMS_PACING_MS.beat)
+        await send("Feel free to share what you do, your interests, your life story — anything you're comfortable with.", 'onboarding_q5_guidance')
         return
       }
       await send("Could you double-check that zip code?", 'onboarding_q4_reask')
@@ -485,6 +487,8 @@ async function processAnswer(params: {
     if (!geo) {
       if (retryCount >= 1) {
         await advanceTo(supabase, fromPhone, send, payload, { zip }, 5)
+        await sleepForSmsPacing(SMS_PACING_MS.beat)
+        await send("Feel free to share what you do, your interests, your life story — anything you're comfortable with.", 'onboarding_q5_guidance')
         return
       }
       await send("Hmm, I couldn't find that zip code — could you double-check it?", 'onboarding_q4_reask')
@@ -492,6 +496,8 @@ async function processAnswer(params: {
       return
     }
     await advanceTo(supabase, fromPhone, send, payload, { zip, city: geo.city, lat: geo.lat, lng: geo.lng }, 5)
+    await sleepForSmsPacing(SMS_PACING_MS.beat)
+    await send("Feel free to share what you do, your interests, your life story — anything you're comfortable with.", 'onboarding_q5_guidance')
     return
   }
 
