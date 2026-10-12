@@ -117,7 +117,7 @@ export async function mergeOnboardingSession(
       await getOrCreateSmsState(supabase, userId, SMS_STATES.PENDING_CALL, {})
       const bookingLink = process.env.BOOKING_LINK_JAY ?? 'https://calendar.app.google/ust81a3V9er5F7h37'
       const nameGreeting = first_name ? ` ${first_name}` : ''
-      const msg1 = `You're signed up${nameGreeting}! One last step — schedule a call with me so we can get your intros going 👇`
+      const msg1 = `You're signed up${nameGreeting}! One last step — book a quick call with Jay so we can get your intros going 👇`
       const s1 = await withTimeout(sendMessage(session.phone, msg1, { fromNumber: 'concierge' }), 6000, 'sendMsg1').catch(() => null)
       await insertMessageLedger(supabase, { user_id: userId, direction: 'outbound', peer_phone: session.phone, content_snippet: msg1, context: 'pending_call_cta', message_handle: s1?.message_handle ?? null })
       await sleepForSmsPacing(SMS_PACING_MS.beat)

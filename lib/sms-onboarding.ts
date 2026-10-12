@@ -200,11 +200,19 @@ async function parseBirthdate(text: string, openaiKey: string): Promise<string |
 // ─── Intro messages ───────────────────────────────────────────────────────────
 
 async function sendIntro(send: OnboardingSendFn, fromPhone: string): Promise<void> {
-  const text = "Hey! I'm Jay from Fika ☕ I'll ask 4 quick questions, then we'll set up a short call so I can intro you to people nearby you'd genuinely enjoy — ready to go?"
+  const m1 = "Hey! Welcome to Fika ☕"
+  const m2 = "We connect people nearby for casual conversations over coffee — no apps, no swiping."
+  const m3 = "4 quick questions, then a short call with Jay (our founder) to learn more about you so we can get your intros going. Ready?"
   await sleepForSmsPacing(SMS_PACING_MS.beat)
   await prepareOutboundAiPresence(fromPhone)
-  await sleepForSmsPacing(typingDurationMs(text))
-  await send(text, 'onboarding_intro')
+  await sleepForSmsPacing(typingDurationMs(m1))
+  await send(m1, 'onboarding_intro')
+  await sleepForSmsPacing(SMS_PACING_MS.beat)
+  await sleepForSmsPacing(typingDurationMs(m2))
+  await send(m2, 'onboarding_intro')
+  await sleepForSmsPacing(SMS_PACING_MS.beat)
+  await sleepForSmsPacing(typingDurationMs(m3))
+  await send(m3, 'onboarding_intro')
 }
 
 // ─── Main handler ─────────────────────────────────────────────────────────────
